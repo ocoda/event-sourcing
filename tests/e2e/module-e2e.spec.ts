@@ -22,8 +22,7 @@ describe('EventSourcingModule - e2e', () => {
 
     const command = new FooCommand();
 
-    // await expect(commandBus.execute(command)).resolves.toBe(true);
-    expect(true).toBe(true);
+    await expect(commandBus.execute(command)).resolves.toBe(true);
   });
 
   // it(`should emit a "test-event" event to controllers`, async () => {
