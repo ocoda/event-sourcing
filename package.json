@@ -1,0 +1,55 @@
+{
+  "name": "@ocoda/event-sourcing",
+  "version": "0.0.1",
+  "description": "NestJS Event Sourcing Library",
+  "author": "Dries Hooghe <dries@drieshooghe.com>",
+  "private": true,
+  "license": "UNLICENSED",
+  "scripts": {
+    "test": "jest",
+    "build": "tsc -p tsconfig.json",
+    "format": "prettier --write \"**/*.ts\"",
+    "lint": "eslint \"src/**/*.ts\" --fix"
+  },
+  "dependencies": {},
+  "peerDependencies": {
+    "@nestjs/common": "^9.0.0",
+    "@nestjs/core": "^9.0.0",
+    "reflect-metadata": "^0.1.13",
+    "rxjs": "^7.2.0"
+  },
+  "devDependencies": {
+    "@nestjs/common": "^9.0.0",
+    "@nestjs/core": "^9.0.0",
+    "@types/node": "16.11.45",
+    "@types/jest": "28.1.6",
+    "@typescript-eslint/eslint-plugin": "5.30.7",
+    "@typescript-eslint/parser": "5.30.7",
+    "eslint": "8.20.0",
+    "eslint-config-prettier": "8.5.0",
+    "eslint-plugin-import": "2.26.0",
+    "jest": "28.1.3",
+    "prettier": "2.7.1",
+    "reflect-metadata": "0.1.13",
+    "rxjs": "7.5.6",
+    "ts-jest": "28.0.7",
+    "typescript": "4.7.4"
+  },
+  "jest": {
+    "moduleFileExtensions": [
+      "js",
+      "json",
+      "ts"
+    ],
+    "rootDir": "lib",
+    "testRegex": ".*\\.spec\\.ts$",
+    "transform": {
+      "^.+\\.(t|j)s$": "ts-jest"
+    },
+    "collectCoverageFrom": [
+      "**/*.(t|j)s"
+    ],
+    "coverageDirectory": "../coverage",
+    "testEnvironment": "node"
+  }
+}
