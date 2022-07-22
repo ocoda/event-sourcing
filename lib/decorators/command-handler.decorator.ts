@@ -1,4 +1,4 @@
-import { ICommand } from '../interfaces';
+import { ICommand, CommandMetadata } from '../interfaces';
 import 'reflect-metadata';
 import { COMMAND_HANDLER_METADATA, COMMAND_METADATA } from './constants';
 import { randomUUID } from 'crypto';
@@ -14,7 +14,11 @@ import { randomUUID } from 'crypto';
 export const CommandHandler = (command: ICommand): ClassDecorator => {
   return (target: object) => {
     if (!Reflect.hasMetadata(COMMAND_METADATA, command)) {
-      Reflect.defineMetadata(COMMAND_METADATA, { id: randomUUID() }, command);
+      Reflect.defineMetadata(
+        COMMAND_METADATA,
+        { id: randomUUID() } as CommandMetadata,
+        command,
+      );
     }
     Reflect.defineMetadata(COMMAND_HANDLER_METADATA, command, target);
   };
