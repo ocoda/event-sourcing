@@ -1,12 +1,8 @@
 import { Injectable, Type } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import 'reflect-metadata';
-import {
-  COMMAND_HANDLER_METADATA,
-  COMMAND_METADATA,
-} from './decorators/constants';
-import { InvalidCommandHandlerException } from './exceptions';
-import { CommandHandlerNotFoundException } from './exceptions/command-handler-not-found.exception';
+import { COMMAND_METADATA } from './decorators';
+import { CommandHandlerNotFoundException } from './exceptions';
 import { DefaultCommandPubSub, ObservableBus } from './helpers';
 import {
   ICommand,
@@ -14,7 +10,7 @@ import {
   ICommandHandler,
   ICommandPublisher,
 } from './interfaces';
-import { CommandMetadata } from './interfaces/commands/command-metadata.interface';
+import { CommandMetadata } from './interfaces';
 
 export type CommandHandlerType = Type<ICommandHandler<ICommand>>;
 
