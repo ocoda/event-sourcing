@@ -1,4 +1,8 @@
-export const COMMAND_METADATA = '__command__';
-export const COMMAND_HANDLER_METADATA = '__commandHandler__';
-export const QUERY_METADATA = '__query__';
-export const QUERY_HANDLER_METADATA = '__queryHandler__';
+import { REQUEST } from '@nestjs/core';
+
+export const COMMAND_HANDLER_METADATA = 'COMMAND_HANDLER_METADATA';
+export const COMMAND_METADATA = 'COMMAND_METADATA';
+export const EVENT_LISTENER_METADATA = 'EVENT_LISTENER_METADATA';
+export const EVENT_PAYLOAD = REQUEST;
+export const QUERY_HANDLER_METADATA = 'QUERY_HANDLER_METADATA';
+export const QUERY_METADATA = 'QUERY_METADATA';
