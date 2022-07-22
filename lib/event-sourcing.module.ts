@@ -1,7 +1,8 @@
-import { DynamicModule, Module } from '@nestjs/common';
+import { DynamicModule, Module, Provider } from '@nestjs/common';
 import { DiscoveryModule } from '@nestjs/core';
-import { EventEmitterModule } from '@nestjs/event-emitter';
+import { EventEmitter2, EventEmitterModule } from '@nestjs/event-emitter';
 import { CommandBus } from './command-bus';
+import { EventPublisher } from './event-publisher';
 import { HandlersLoader } from './handlers.loader';
 import { EventSourcingModuleOptions } from './interfaces';
 import { QueryBus } from './query-bus';
@@ -12,8 +13,8 @@ export class EventSourcingModule {
     return {
       module: EventSourcingModule,
       imports: [DiscoveryModule, EventEmitterModule.forRoot()],
-      providers: [CommandBus, QueryBus, HandlersLoader],
-      exports: [CommandBus, QueryBus],
+      providers: [CommandBus, QueryBus, HandlersLoader, EventPublisher],
+      exports: [CommandBus, QueryBus, EventPublisher],
     };
   }
 }

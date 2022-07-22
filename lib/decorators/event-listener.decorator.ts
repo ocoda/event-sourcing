@@ -12,8 +12,9 @@ import { EVENT_LISTENER_METADATA } from './constants';
 export const EventListener = (
   event: Type<IEvent>,
   options?: OnEventOptions,
-): MethodDecorator =>
-  SetMetadata(EVENT_LISTENER_METADATA, {
+): MethodDecorator => {
+  return SetMetadata(EVENT_LISTENER_METADATA, {
     event: event.name,
     options,
   } as EventListenerMetadata);
+};

@@ -1,4 +1,4 @@
-import { FooQueryHandler } from './bar.query';
+import { FooQueryHandler } from './foo.query';
 import { FooCommandHandler } from './foo.command';
 
 export const TestCommandHandlers = [FooCommandHandler];

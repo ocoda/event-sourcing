@@ -1,4 +1,4 @@
-import { IEvent, IEventHandler } from '../interfaces';
+import { IEvent } from '../interfaces';
 import { EVENT_LISTENER_METADATA } from './constants';
 import { EventListener } from './event-listener.decorator';
 
@@ -6,7 +6,7 @@ describe('@EventListener', () => {
   class TestCreatedEvent implements IEvent {}
   class TestUpdatedEvent implements IEvent {}
 
-  class EventHandler implements IEventHandler {
+  class EventHandler {
     @EventListener(TestCreatedEvent)
     static onTestCreated() {
       return;
