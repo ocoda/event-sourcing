@@ -2,8 +2,7 @@ import { DynamicModule, Module } from '@nestjs/common';
 import { DiscoveryModule } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { CommandBus } from './command-bus';
-// import { CommandHandlersMetadataAccessor } from './command-handler-metadata.accessor';
-// import { CommandHandlersLoader } from './command-handlers.loader';
+import { CommandHandlersLoader } from './command-handlers.loader';
 import { EventSourcingModuleOptions } from './interfaces';
 
 @Module({})
@@ -14,8 +13,7 @@ export class EventSourcingModule {
       imports: [DiscoveryModule, EventEmitterModule.forRoot()],
       providers: [
         CommandBus,
-        // CommandHandlersLoader,
-        // CommandHandlersMetadataAccessor,
+        CommandHandlersLoader,
         //     {
         //       provide: EventEmitter2,
         //       useValue: new EventEmitter2(options),

@@ -53,22 +53,6 @@ export class CommandBus<CommandBase extends ICommand = ICommand>
     this.handlers.set(id, handler);
   }
 
-  register(handlers: CommandHandlerType[] = []) {
-    handlers.forEach((handler) => this.registerHandler(handler));
-  }
-
-  protected registerHandler(handler: CommandHandlerType) {
-    const instance = this.moduleRef.get(handler, { strict: false });
-    if (!instance) {
-      return;
-    }
-    const target = this.reflectCommandId(handler);
-    if (!target) {
-      throw new InvalidCommandHandlerException();
-    }
-    this.bind(instance as ICommandHandler<CommandBase>, target);
-  }
-
   private getCommandId(command: CommandBase): string {
     const { constructor: commandType } = Object.getPrototypeOf(command);
     const commandMetadata: CommandMetadata = Reflect.getMetadata(
@@ -79,18 +63,6 @@ export class CommandBus<CommandBase extends ICommand = ICommand>
       throw new CommandHandlerNotFoundException(commandType.name);
     }
 
-    return commandMetadata.id;
-  }
-
-  private reflectCommandId(handler: CommandHandlerType): string | undefined {
-    const command: Type<ICommand> = Reflect.getMetadata(
-      COMMAND_HANDLER_METADATA,
-      handler,
-    );
-    const commandMetadata: CommandMetadata = Reflect.getMetadata(
-      COMMAND_METADATA,
-      command,
-    );
     return commandMetadata.id;
   }
 

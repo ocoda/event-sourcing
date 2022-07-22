@@ -1,89 +1,52 @@
-// import {
-//   Injectable,
-//   OnApplicationBootstrap,
-//   OnApplicationShutdown,
-// } from '@nestjs/common';
-// import {
-//   ContextIdFactory,
-//   DiscoveryService,
-//   MetadataScanner,
-//   ModuleRef,
-// } from '@nestjs/core';
-// import { Injector } from '@nestjs/core/injector/injector';
-// import {
-//   ContextId,
-//   InstanceWrapper,
-// } from '@nestjs/core/injector/instance-wrapper';
-// import { Module } from '@nestjs/core/injector/module';
-// import { CommandHandlersMetadataAccessor } from './command-handler-metadata.accessor';
+import { Injectable, OnApplicationBootstrap, Type } from '@nestjs/common';
+import { DiscoveryService } from '@nestjs/core';
+import { Injector } from '@nestjs/core/injector/injector';
+import { InstanceWrapper } from '@nestjs/core/injector/instance-wrapper';
+import { CommandBus, CommandHandlerType } from './command-bus';
+import {
+  COMMAND_HANDLER_METADATA,
+  COMMAND_METADATA,
+} from './decorators/constants';
+import { InvalidCommandHandlerException } from './exceptions';
+import { CommandMetadata, ICommand, ICommandHandler } from './interfaces';
 
-// @Injectable()
-// export class CommandHandlersLoader implements OnApplicationBootstrap {
-//   private readonly injector = new Injector();
+@Injectable()
+export class CommandHandlersLoader implements OnApplicationBootstrap {
+  private readonly injector = new Injector();
 
-//   constructor(
-//     private readonly discoveryService: DiscoveryService,
-//     private readonly metadataAccessor: CommandHandlersMetadataAccessor,
-//     private readonly metadataScanner: MetadataScanner,
-//     private readonly moduleRef: ModuleRef,
-//   ) {}
+  constructor(
+    private readonly discoveryService: DiscoveryService,
+    private readonly commandBus: CommandBus,
+  ) {}
 
-//   onApplicationBootstrap() {
-//     this.loadCommandHandlers();
-//   }
+  onApplicationBootstrap() {
+    this.loadCommandHandlers();
+  }
 
-//   loadCommandHandlers() {
-//     const providers = this.discoveryService.getProviders();
-//     providers
-//       .filter((wrapper) => wrapper.instance)
-//       .forEach((wrapper: InstanceWrapper) => {
-//         const { instance } = wrapper;
-//         const prototype = Object.getPrototypeOf(instance) || {};
-//         const isRequestScoped = !wrapper.isDependencyTreeStatic();
-//         this.metadataScanner.scanFromPrototype(
-//           instance,
-//           prototype,
-//           (methodKey: string) =>
-//             this.subscribeToCommandIfHandler(
-//               instance,
-//               methodKey,
-//               isRequestScoped,
-//               wrapper.host as Module,
-//             ),
-//         );
-//       });
-//   }
+  loadCommandHandlers() {
+    const providers = this.discoveryService.getProviders();
 
-//   private subscribeToCommandIfHandler(
-//     instance: Record<string, any>,
-//     methodKey: string,
-//     isRequestScoped: boolean,
-//     moduleRef: Module,
-//   ) {
-//     const commandHandlerMetadata =
-//       this.metadataAccessor.getEventHandlerMetadata(instance[methodKey]);
-//     if (!commandHandlerMetadata) {
-//       return;
-//     }
+    const handlers: InstanceWrapper[] = providers.filter(
+      ({ metatype }) =>
+        metatype && Reflect.hasMetadata(COMMAND_HANDLER_METADATA, metatype),
+    );
 
-//     const handler = commandHandlerMetadata;
-//     const listenerMethod = this.getRegisterListenerMethodBasedOn(options);
+    handlers.forEach(({ metatype, instance }) => {
+      const command: CommandHandlerType = Reflect.getMetadata(
+        COMMAND_HANDLER_METADATA,
+        metatype,
+      );
 
-//     if (isRequestScoped) {
-//       this.registerRequestScopedListener({
-//         event,
-//         eventListenerInstance: instance,
-//         listenerMethod,
-//         listenerMethodKey: methodKey,
-//         moduleRef,
-//         options,
-//       });
-//     } else {
-//       listenerMethod(
-//         event,
-//         (...args: unknown[]) => instance[methodKey].call(instance, ...args),
-//         options,
-//       );
-//     }
-//   }
-// }
+      const { id }: CommandMetadata = Reflect.getMetadata(
+        COMMAND_METADATA,
+        command,
+      );
+
+      if (!id) {
+        throw new InvalidCommandHandlerException();
+      }
+
+      this.commandBus.bind(instance, id);
+    });
+  }
+}

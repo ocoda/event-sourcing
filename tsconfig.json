@@ -16,6 +16,14 @@
     "noImplicitAny": false,
     "strictBindCallApply": false,
     "forceConsistentCasingInFileNames": false,
-    "noFallthroughCasesInSwitch": false
+    "noFallthroughCasesInSwitch": false,
+    "paths": {
+      "@ocoda/event-sourcing": [
+        "lib",
+      ],
+      "@ocoda/event-sourcing/*": [
+        "lib/*",
+      ],
+    }
   }
 }
