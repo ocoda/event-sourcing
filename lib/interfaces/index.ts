@@ -1,4 +1,5 @@
-export * from './event-sourcing-options.interface';
 export * from './commands';
-export * from './queries';
+export * from './event-sourcing-options.interface';
 export * from './events';
+export * from './queries';
+export * from './snapshot-metadata.interface';
