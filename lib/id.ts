@@ -7,12 +7,22 @@ interface Props {
   value: string;
 }
 
-export abstract class Id extends ValueObject<Props> {
+export class Id extends ValueObject<Props> {
   protected constructor(id: string = randomUUID()) {
-    if (typeof id !== 'string') {
-      throw InvalidIdError.withString('Id is not a string');
+    const format =
+      /^[0-9a-fA-F]{8}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{12}$/gi;
+    if (!format.test(id)) {
+      throw InvalidIdError.becauseInvalid(id);
     }
     super({ value: id });
+  }
+
+  public static generate(): Id {
+    return new this();
+  }
+
+  public static from(id: string): Id {
+    return new this(id);
   }
 
   get value(): string {
