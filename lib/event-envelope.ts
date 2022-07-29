@@ -14,15 +14,11 @@ export class EventEnvelope<T extends IEvent = IEvent> {
   private constructor(
     aggregateId: string,
     sequence: number,
-    event: T,
+    eventName: string,
     payload: Record<string, unknown>,
   ) {
-    const eventMetadata = Reflect.getMetadata(
-      EVENT_METADATA,
-      event.constructor,
-    );
     this.eventId = randomUUID();
-    this.eventName = eventMetadata.name;
+    this.eventName = eventName;
     this.payload = payload;
     this.metadata = { aggregateId, sequence, occurredOn: Date.now() };
   }
@@ -30,9 +26,14 @@ export class EventEnvelope<T extends IEvent = IEvent> {
   static new<T extends IEvent = IEvent>(
     aggregateId: Id,
     sequence: number,
-    event: T,
+    eventName: string,
     payload: Record<string, unknown>,
   ): EventEnvelope<T> {
-    return new EventEnvelope<T>(aggregateId.value, sequence, event, payload);
+    return new EventEnvelope<T>(
+      aggregateId.value,
+      sequence,
+      eventName,
+      payload,
+    );
   }
 }

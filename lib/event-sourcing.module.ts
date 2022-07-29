@@ -13,7 +13,7 @@ export class EventSourcingModule {
   static forRoot(options: EventSourcingModuleOptions): DynamicModule {
     const eventTransformerProvider: Provider = {
       provide: EventTransformer,
-      useValue: () => new EventTransformer(options.eventMap),
+      useValue: new EventTransformer(options.eventMap),
     };
 
     return {

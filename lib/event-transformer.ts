@@ -16,19 +16,21 @@ export class EventTransformer implements IEventTransformer {
     });
   }
 
-  wrap(
+  wrap<BaseEvent extends IEvent = IEvent>(
     aggregateId: Id,
     sequence: number,
-    event: IEvent,
-  ): EventEnvelope<IEvent> {
-    const name = EventTransformer.getEventName(event);
-    const payload = this.serializers.get(name).serialize(event);
+    event: BaseEvent,
+  ): EventEnvelope<BaseEvent> {
+    const eventName = EventTransformer.getEventName(event);
+    const payload = this.serializers.get(eventName).serialize(event);
 
-    return EventEnvelope.new(aggregateId, sequence, event, payload);
+    return EventEnvelope.new(aggregateId, sequence, eventName, payload);
   }
-  unwrap(envelope: EventEnvelope<IEvent>): IEvent {
+  unwrap<BaseEvent extends IEvent = IEvent>(
+    envelope: EventEnvelope<BaseEvent>,
+  ) {
     const { eventName, payload } = envelope;
-    return this.serializers.get(eventName).deserialize(payload);
+    return this.serializers.get(eventName).deserialize(payload) as BaseEvent;
   }
 
   static getEventName(event: IEvent | Type<IEvent>): string {
