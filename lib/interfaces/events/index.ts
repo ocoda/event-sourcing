@@ -3,5 +3,4 @@ export * from './event-listener-metadata.interface';
 export * from './event-publisher.interface';
 export * from './event-serializer.interface';
 export * from './event-store.interface';
-export * from './event-transformer.interface';
 export * from './event.interface';

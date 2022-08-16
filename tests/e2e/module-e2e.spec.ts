@@ -1,12 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import {
-  CommandBus,
-  EventTransformer,
-  QueryBus,
-  EventPublisher,
-  Id,
-} from '@ocoda/event-sourcing';
+import { CommandBus, QueryBus, EventPublisher } from '@ocoda/event-sourcing';
 import { FooCommand } from '../src/foo.command';
 import { AppModule } from '../src/app.module';
 import { FooEvent } from '../src/foo.event';
@@ -73,35 +67,6 @@ describe('EventSourcingModule - e2e', () => {
 
     expect(fooHandling).toHaveBeenCalled();
     expect(barHandling).toHaveBeenCalled();
-  });
-
-  it(`should make the event-transformer wrap and unwrap events`, async () => {
-    const moduleRef = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
-
-    app = moduleRef.createNestApplication();
-    await app.init();
-
-    const registrationDate = new Date();
-    const event = new FooEvent('Waregem', registrationDate);
-    const eventTransformer = app.get<EventTransformer>(EventTransformer);
-
-    const aggregateId = Id.generate();
-    const wrappedEvent = eventTransformer.wrap<FooEvent>(aggregateId, 1, event);
-
-    expect(wrappedEvent.eventName).toBe('foo-event');
-    expect(wrappedEvent.payload).toEqual({
-      location: 'Waregem',
-      registration: registrationDate.toISOString(),
-    });
-    expect(wrappedEvent.metadata.aggregateId).toEqual(aggregateId.value);
-    expect(wrappedEvent.metadata.sequence).toEqual(1);
-
-    const unwrappedEvent = eventTransformer.unwrap(wrappedEvent);
-    expect(unwrappedEvent.constructor).toBe(FooEvent);
-    expect(unwrappedEvent.location).toEqual('Waregem');
-    expect(unwrappedEvent.registration).toEqual(registrationDate);
   });
 
   afterEach(async () => {

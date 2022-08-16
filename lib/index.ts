@@ -4,7 +4,6 @@ export * from './decorators';
 export * from './event-envelope';
 export * from './event-publisher';
 export * from './event-sourcing.module';
-export * from './event-transformer';
 export * from './exceptions';
 export * from './id';
 export * from './interfaces';
