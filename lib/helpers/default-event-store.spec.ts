@@ -3,7 +3,10 @@ import { EventEnvelope } from '../event-envelope';
 import { EventStream } from '../event-stream';
 import { Id } from '../id';
 import { IEvent } from '../interfaces';
-import { DefaultEventStore } from './default-event-store';
+import {
+  DefaultEventStore,
+  StreamReadingDirection,
+} from './default-event-store';
 
 class Account extends Aggregate {}
 class AccountId extends Id {}
@@ -15,6 +18,7 @@ class MoneyDepositedEvent implements IEvent {
 class MoneyWithdrawnEvent implements IEvent {
   constructor(public readonly amount: number) {}
 }
+class AccountClosedEvent implements IEvent {}
 
 describe(DefaultEventStore, () => {
   const accountId = AccountId.generate();
@@ -43,11 +47,12 @@ describe(DefaultEventStore, () => {
       accountId,
       5,
       'money-withdrawn',
-      new MoneyWithdrawnEvent(15),
+      new MoneyWithdrawnEvent(35),
     ),
+    EventEnvelope.new(accountId, 6, 'account-closed', new AccountClosedEvent()),
   ];
 
-  it('should store and retrieve events', async () => {
+  it('should retrieve events forward', async () => {
     const eventStore = new DefaultEventStore();
     const eventStream = EventStream.for(Account, accountId);
 
@@ -61,7 +66,25 @@ describe(DefaultEventStore, () => {
     expect(resolvedEvents).toEqual(events);
   });
 
-  it('should retrieve events from a certain version', async () => {
+  it('should retrieve events backward', async () => {
+    const eventStore = new DefaultEventStore();
+    const eventStream = EventStream.for(Account, accountId);
+
+    events.forEach((event) => eventStore.appendEvent(eventStream, event));
+
+    const resolvedEvents = [];
+    for await (const event of eventStore.getEvents(
+      eventStream,
+      null,
+      StreamReadingDirection.BACKWARD,
+    )) {
+      resolvedEvents.push(event);
+    }
+
+    expect(resolvedEvents).toEqual(events.slice().reverse());
+  });
+
+  it('should retrieve events forward from a certain version', async () => {
     const eventStore = new DefaultEventStore();
     const eventStream = EventStream.for(Account, accountId);
 
@@ -72,10 +95,28 @@ describe(DefaultEventStore, () => {
       resolvedEvents.push(event);
     }
 
-    console.warn(resolvedEvents);
-
     expect(resolvedEvents).toEqual(
       events.filter(({ metadata }) => metadata.sequence >= 3),
+    );
+  });
+
+  it('should retrieve events backwards from a certain version', async () => {
+    const eventStore = new DefaultEventStore();
+    const eventStream = EventStream.for(Account, accountId);
+
+    events.forEach((event) => eventStore.appendEvent(eventStream, event));
+
+    const resolvedEvents = [];
+    for await (const event of eventStore.getEvents(
+      eventStream,
+      4,
+      StreamReadingDirection.BACKWARD,
+    )) {
+      resolvedEvents.push(event);
+    }
+
+    expect(resolvedEvents).toEqual(
+      events.filter(({ metadata }) => metadata.sequence >= 4).reverse(),
     );
   });
 });

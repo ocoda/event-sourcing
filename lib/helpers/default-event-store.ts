@@ -2,16 +2,34 @@ import { EventEnvelope } from '../event-envelope';
 import { EventStream } from '../event-stream';
 import { IEventStore } from '../interfaces';
 
+export enum StreamReadingDirection {
+  FORWARD,
+  BACKWARD,
+}
+
 export class InMemoryIterator {
   constructor(
     private readonly events: EventEnvelope[],
     private readonly fromVersion?: number,
+    private readonly readingDirection: StreamReadingDirection = StreamReadingDirection.FORWARD,
   ) {}
 
   async *[Symbol.asyncIterator](): AsyncGenerator<EventEnvelope> {
-    for (const event of this.events) {
-      if (!this.fromVersion || event.metadata.sequence >= this.fromVersion)
-        yield event;
+    let eventStream = this.events;
+
+    if (this.fromVersion) {
+      const startEventIndex = eventStream.findIndex(
+        ({ metadata }) => metadata.sequence === this.fromVersion,
+      );
+      eventStream = eventStream.slice(startEventIndex);
+    }
+
+    if (this.readingDirection === StreamReadingDirection.BACKWARD) {
+      eventStream = eventStream.reverse();
+    }
+
+    for (const event of eventStream) {
+      yield event;
     }
   }
 }
@@ -22,10 +40,12 @@ export class DefaultEventStore implements IEventStore {
   getEvents(
     eventStream: EventStream,
     fromVersion?: number,
+    direction: StreamReadingDirection = StreamReadingDirection.FORWARD,
   ): AsyncIterable<EventEnvelope> {
     return new InMemoryIterator(
       this.eventCollection.get(eventStream),
       fromVersion,
+      direction,
     );
   }
 
