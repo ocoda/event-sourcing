@@ -1,34 +1,42 @@
-import { Type } from '@nestjs/common';
-import { Subject } from 'rxjs';
-import { Aggregate } from '../aggregate';
 import { EventEnvelope } from '../event-envelope';
-import { Id } from '../id';
-import { IEvent, IEventStore } from '../interfaces';
+import { EventStream } from '../event-stream';
+import { IEventStore } from '../interfaces';
 
-type EventStream = `${string}-${string}`;
+export class InMemoryIterator {
+  constructor(
+    private readonly events: EventEnvelope[],
+    private readonly fromVersion?: number,
+  ) {}
+
+  async *[Symbol.asyncIterator](): AsyncGenerator<EventEnvelope> {
+    for (const event of this.events) {
+      if (!this.fromVersion || event.metadata.sequence >= this.fromVersion)
+        yield event;
+    }
+  }
+}
 
 export class DefaultEventStore implements IEventStore {
   private eventCollection: Map<EventStream, EventEnvelope[]> = new Map();
 
   getEvents(
-    aggregate: Type<Aggregate>,
-    id: Id,
+    eventStream: EventStream,
     fromVersion?: number,
-  ): IEvent[] | Promise<IEvent[]> {
-    throw new Error('Method not implemented.');
-  }
-  getEvent(version: number): IEvent | Promise<IEvent> {
-    throw new Error('Method not implemented.');
-  }
-
-  store(...events: IEvent[]): void {
-    events.forEach((event) => {
-      const stream = this.getEventStream(event);
-      this.store[stream] = event;
-    });
+  ): AsyncIterable<EventEnvelope> {
+    return new InMemoryIterator(
+      this.eventCollection.get(eventStream),
+      fromVersion,
+    );
   }
 
-  private getEventStream(aggregate: Type<Aggregate>, id: Id): EventStream {
-    return `${aggregate.constructor.name}-${id.value}`;
+  getEvent(eventStream: EventStream, version: number): EventEnvelope {
+    return this.eventCollection
+      .get(eventStream)
+      .find(({ metadata }) => metadata.sequence === version);
+  }
+
+  appendEvent(eventStream: EventStream, event: EventEnvelope): void {
+    const events = this.eventCollection.get(eventStream) || [];
+    this.eventCollection.set(eventStream, [...events, event]);
   }
 }
