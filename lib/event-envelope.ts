@@ -1,21 +1,18 @@
 import { randomUUID } from 'crypto';
-import { Aggregate } from './aggregate';
-import { EVENT_METADATA } from './decorators';
 import { Id } from './id';
-import { IEvent } from './interfaces';
 import { EventEnvelopeMetadata } from './interfaces';
 
-export class EventEnvelope<T extends IEvent = IEvent> {
+export class EventEnvelope {
   public readonly eventId: string;
   public readonly eventName: string;
-  readonly payload: Record<string, unknown>;
+  readonly payload: unknown;
   readonly metadata: EventEnvelopeMetadata;
 
   private constructor(
     aggregateId: string,
     sequence: number,
     eventName: string,
-    payload: Record<string, unknown>,
+    payload: unknown,
   ) {
     this.eventId = randomUUID();
     this.eventName = eventName;
@@ -23,17 +20,12 @@ export class EventEnvelope<T extends IEvent = IEvent> {
     this.metadata = { aggregateId, sequence, occurredOn: Date.now() };
   }
 
-  static new<T extends IEvent = IEvent>(
+  static new(
     aggregateId: Id,
     sequence: number,
     eventName: string,
-    payload: Record<string, unknown>,
-  ): EventEnvelope<T> {
-    return new EventEnvelope<T>(
-      aggregateId.value,
-      sequence,
-      eventName,
-      payload,
-    );
+    payload: unknown,
+  ): EventEnvelope {
+    return new EventEnvelope(aggregateId.value, sequence, eventName, payload);
   }
 }

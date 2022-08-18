@@ -1,14 +1,17 @@
-import { Type } from '@nestjs/common';
-import { Aggregate } from '../../aggregate';
-import { Id } from '../../id';
-import { IEvent } from '..';
+import { EventEnvelope } from '../../event-envelope';
+import { EventStream } from '@ocoda/event-sourcing/event-stream';
 
-export interface IEventStore<AggregateBase extends Aggregate = Aggregate> {
+export interface IEventStore {
   getEvents(
-    aggregate: Type<AggregateBase>,
-    id: Id,
+    eventStream: EventStream,
     fromVersion?: number,
-  ): IEvent[] | Promise<IEvent[]>;
-  getEvent(version: number): IEvent | Promise<IEvent>;
-  store(...events: IEvent[]): void | Promise<void>;
+  ): AsyncIterable<EventEnvelope> | Promise<AsyncIterable<EventEnvelope>>;
+  getEvent(
+    eventStream: EventStream,
+    version: number,
+  ): EventEnvelope | Promise<EventEnvelope>;
+  appendEvent(
+    eventStream: EventStream,
+    event: EventEnvelope,
+  ): void | Promise<void>;
 }
