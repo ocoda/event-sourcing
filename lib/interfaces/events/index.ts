@@ -4,3 +4,4 @@ export * from './event-publisher.interface';
 export * from './event-serializer.interface';
 export * from './event-store.interface';
 export * from './event.interface';
+export * from './snapshot.interface';
