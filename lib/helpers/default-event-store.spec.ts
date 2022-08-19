@@ -3,6 +3,7 @@ import { EventEnvelope } from '../event-envelope';
 import { EventStream } from '../event-stream';
 import { Id } from '../id';
 import { IEvent } from '../interfaces';
+import { SnapshotEnvelope } from '../snapshot-envelope';
 import {
   DefaultEventStore,
   StreamReadingDirection,
@@ -118,5 +119,17 @@ describe(DefaultEventStore, () => {
     expect(resolvedEvents).toEqual(
       events.filter(({ metadata }) => metadata.sequence >= 4).reverse(),
     );
+  });
+
+  it('should retrieve snapshots', async () => {
+    const eventStore = new DefaultEventStore();
+    const eventStream = EventStream.for(Account, accountId);
+
+    const snapshot = SnapshotEnvelope.new(accountId, 5, { balance: 45 });
+    eventStore.appendSnapshot(eventStream, snapshot);
+
+    const resolvedSnapshot = eventStore.getSnapshot(eventStream, 5);
+
+    expect(resolvedSnapshot.payload).toEqual({ balance: 45 });
   });
 });

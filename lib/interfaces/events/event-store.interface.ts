@@ -1,5 +1,6 @@
+import { EventStream } from '../../event-stream';
 import { EventEnvelope } from '../../event-envelope';
-import { EventStream } from '@ocoda/event-sourcing/event-stream';
+import { SnapshotEnvelope } from '../../snapshot-envelope';
 
 export interface IEventStore {
   getEvents(
@@ -10,8 +11,16 @@ export interface IEventStore {
     eventStream: EventStream,
     version: number,
   ): EventEnvelope | Promise<EventEnvelope>;
+  getSnapshot?(
+    eventStream: EventStream,
+    version: number,
+  ): SnapshotEnvelope | Promise<SnapshotEnvelope>;
   appendEvent(
     eventStream: EventStream,
     event: EventEnvelope,
+  ): void | Promise<void>;
+  appendSnapshot?(
+    eventStream: EventStream,
+    event: SnapshotEnvelope,
   ): void | Promise<void>;
 }

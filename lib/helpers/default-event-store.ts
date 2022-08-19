@@ -1,6 +1,7 @@
 import { EventEnvelope } from '../event-envelope';
 import { EventStream } from '../event-stream';
 import { IEventStore } from '../interfaces';
+import { SnapshotEnvelope } from '../snapshot-envelope';
 
 export enum StreamReadingDirection {
   FORWARD,
@@ -36,6 +37,7 @@ export class InMemoryIterator {
 
 export class DefaultEventStore implements IEventStore {
   private eventCollection: Map<EventStream, EventEnvelope[]> = new Map();
+  private snapshotCollection: Map<EventStream, SnapshotEnvelope[]> = new Map();
 
   getEvents(
     eventStream: EventStream,
@@ -55,8 +57,22 @@ export class DefaultEventStore implements IEventStore {
       .find(({ metadata }) => metadata.sequence === version);
   }
 
+  getSnapshot(eventStream: EventStream, version: number): SnapshotEnvelope {
+    return this.snapshotCollection
+      .get(eventStream)
+      .find(({ metadata }) => metadata.sequence === version);
+  }
+
   appendEvent(eventStream: EventStream, event: EventEnvelope): void {
     const events = this.eventCollection.get(eventStream) || [];
     this.eventCollection.set(eventStream, [...events, event]);
+  }
+
+  appendSnapshot(
+    eventStream: EventStream,
+    snapshot: SnapshotEnvelope,
+  ): void | Promise<void> {
+    const snapshots = this.snapshotCollection.get(eventStream) || [];
+    this.snapshotCollection.set(eventStream, [...snapshots, snapshot]);
   }
 }
