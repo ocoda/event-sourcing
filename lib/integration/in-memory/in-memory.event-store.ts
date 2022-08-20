@@ -1,14 +1,9 @@
-import { EventEnvelope } from '../event-envelope';
-import { EventStream } from '../event-stream';
-import { IEventStore } from '../interfaces';
-import { SnapshotEnvelope } from '../snapshot-envelope';
+import { EventStream } from '../../event-stream';
+import { EventStore, StreamReadingDirection } from '../../event-store';
+import { EventEnvelope } from '../../event-envelope';
+import { SnapshotEnvelope } from '../../snapshot-envelope';
 
-export enum StreamReadingDirection {
-  FORWARD,
-  BACKWARD,
-}
-
-export class InMemoryIterator {
+class InMemoryIterator {
   constructor(
     private readonly events: EventEnvelope[],
     private readonly fromVersion?: number,
@@ -35,7 +30,7 @@ export class InMemoryIterator {
   }
 }
 
-export class DefaultEventStore implements IEventStore {
+export class InMemoryEventStore extends EventStore {
   private eventCollection: Map<EventStream, EventEnvelope[]> = new Map();
   private snapshotCollection: Map<EventStream, SnapshotEnvelope[]> = new Map();
 

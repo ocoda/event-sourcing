@@ -1,24 +1,29 @@
-import { EventStream } from '../../event-stream';
-import { EventEnvelope } from '../../event-envelope';
-import { SnapshotEnvelope } from '../../snapshot-envelope';
+import { EventEnvelope } from './event-envelope';
+import { EventStream } from './event-stream';
+import { SnapshotEnvelope } from './snapshot-envelope';
 
-export interface IEventStore {
-  getEvents(
+export enum StreamReadingDirection {
+  FORWARD,
+  BACKWARD,
+}
+
+export abstract class EventStore {
+  abstract getEvents(
     eventStream: EventStream,
     fromVersion?: number,
   ): AsyncIterable<EventEnvelope> | Promise<AsyncIterable<EventEnvelope>>;
-  getEvent(
+  abstract getEvent(
     eventStream: EventStream,
     version: number,
   ): EventEnvelope | Promise<EventEnvelope>;
+  abstract appendEvent(
+    eventStream: EventStream,
+    event: EventEnvelope,
+  ): void | Promise<void>;
   getSnapshot?(
     eventStream: EventStream,
     version: number,
   ): SnapshotEnvelope | Promise<SnapshotEnvelope>;
-  appendEvent(
-    eventStream: EventStream,
-    event: EventEnvelope,
-  ): void | Promise<void>;
   appendSnapshot?(
     eventStream: EventStream,
     event: SnapshotEnvelope,

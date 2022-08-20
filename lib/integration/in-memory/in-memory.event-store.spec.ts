@@ -1,13 +1,10 @@
-import { Aggregate } from '../aggregate';
-import { EventEnvelope } from '../event-envelope';
-import { EventStream } from '../event-stream';
-import { Id } from '../id';
-import { IEvent } from '../interfaces';
-import { SnapshotEnvelope } from '../snapshot-envelope';
-import {
-  DefaultEventStore,
-  StreamReadingDirection,
-} from './default-event-store';
+import { EventStream } from '../../event-stream';
+import { Id } from '../../id';
+import { Aggregate, IEvent } from '../../interfaces';
+import { SnapshotEnvelope } from '../../snapshot-envelope';
+import { EventEnvelope } from '../../event-envelope';
+import { InMemoryEventStore } from './in-memory.event-store';
+import { StreamReadingDirection } from '../../event-store';
 
 class Account extends Aggregate {}
 class AccountId extends Id {}
@@ -21,7 +18,7 @@ class MoneyWithdrawnEvent implements IEvent {
 }
 class AccountClosedEvent implements IEvent {}
 
-describe(DefaultEventStore, () => {
+describe(InMemoryEventStore, () => {
   const accountId = AccountId.generate();
 
   const events = [
@@ -54,7 +51,7 @@ describe(DefaultEventStore, () => {
   ];
 
   it('should retrieve events forward', async () => {
-    const eventStore = new DefaultEventStore();
+    const eventStore = new InMemoryEventStore();
     const eventStream = EventStream.for(Account, accountId);
 
     events.forEach((event) => eventStore.appendEvent(eventStream, event));
@@ -68,7 +65,7 @@ describe(DefaultEventStore, () => {
   });
 
   it('should retrieve events backward', async () => {
-    const eventStore = new DefaultEventStore();
+    const eventStore = new InMemoryEventStore();
     const eventStream = EventStream.for(Account, accountId);
 
     events.forEach((event) => eventStore.appendEvent(eventStream, event));
@@ -86,7 +83,7 @@ describe(DefaultEventStore, () => {
   });
 
   it('should retrieve events forward from a certain version', async () => {
-    const eventStore = new DefaultEventStore();
+    const eventStore = new InMemoryEventStore();
     const eventStream = EventStream.for(Account, accountId);
 
     events.forEach((event) => eventStore.appendEvent(eventStream, event));
@@ -102,7 +99,7 @@ describe(DefaultEventStore, () => {
   });
 
   it('should retrieve events backwards from a certain version', async () => {
-    const eventStore = new DefaultEventStore();
+    const eventStore = new InMemoryEventStore();
     const eventStream = EventStream.for(Account, accountId);
 
     events.forEach((event) => eventStore.appendEvent(eventStream, event));
@@ -122,7 +119,7 @@ describe(DefaultEventStore, () => {
   });
 
   it('should retrieve snapshots', async () => {
-    const eventStore = new DefaultEventStore();
+    const eventStore = new InMemoryEventStore();
     const eventStream = EventStream.for(Account, accountId);
 
     const snapshot = SnapshotEnvelope.new(accountId, 5, { balance: 45 });
