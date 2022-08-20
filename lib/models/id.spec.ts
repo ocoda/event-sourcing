@@ -1,7 +1,7 @@
 import { Aggregate } from './aggregate';
-import { InvalidIdError } from './exceptions';
+import { InvalidIdError } from '../exceptions';
 import { Id } from './id';
-import { IEvent } from './interfaces';
+import { IEvent } from '../interfaces';
 
 describe(Aggregate, () => {
   class AccountId extends Id {}

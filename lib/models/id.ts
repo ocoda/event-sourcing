@@ -1,6 +1,5 @@
 import { randomUUID } from 'crypto';
-
-import { InvalidIdError } from './exceptions';
+import { InvalidIdError } from '../exceptions';
 import { ValueObject } from './value-object';
 
 interface Props {

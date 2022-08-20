@@ -1,9 +1,8 @@
 import { Aggregate } from './aggregate';
 import { EventStream } from './event-stream';
 import { Id } from './id';
-import { IEvent } from './interfaces';
 
-describe(Aggregate, () => {
+describe(EventStream, () => {
   class Account extends Aggregate {}
   class AccountId extends Id {}
 
