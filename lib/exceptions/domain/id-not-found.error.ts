@@ -1,4 +1,4 @@
-import { Id } from '../../id';
+import { Id } from '../../models';
 
 export class IdNotFoundError extends Error {
   public static withId(id: Id): IdNotFoundError {

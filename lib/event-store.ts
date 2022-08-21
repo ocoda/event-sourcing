@@ -1,6 +1,7 @@
-import { EventEnvelope } from './event-envelope';
-import { EventStream } from './event-stream';
-import { SnapshotEnvelope } from './snapshot-envelope';
+import { EventMap } from './event-map';
+import { EventEnvelope } from './models/event-envelope';
+import { EventStream } from './models/event-stream';
+import { SnapshotEnvelope } from './models/snapshot-envelope';
 
 export enum StreamReadingDirection {
   FORWARD,

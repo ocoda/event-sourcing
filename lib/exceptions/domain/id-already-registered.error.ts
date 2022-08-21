@@ -1,4 +1,4 @@
-import { Id } from '../../id';
+import { Id } from '../../models';
 
 export class IdAlreadyRegisteredError extends Error {
   public static withId(id: Id): IdAlreadyRegisteredError {
