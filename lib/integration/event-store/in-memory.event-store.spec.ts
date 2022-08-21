@@ -1,10 +1,10 @@
-import { EventStream } from '../../event-stream';
-import { Id } from '../../id';
-import { Aggregate, IEvent } from '../../interfaces';
-import { SnapshotEnvelope } from '../../snapshot-envelope';
-import { EventEnvelope } from '../../event-envelope';
+import { EventStream } from '../../models/event-stream';
+import { IEvent } from '../../interfaces';
+import { SnapshotEnvelope } from '../../models/snapshot-envelope';
+import { EventEnvelope } from '../../models/event-envelope';
 import { InMemoryEventStore } from './in-memory.event-store';
 import { StreamReadingDirection } from '../../event-store';
+import { Aggregate, Id } from '../../models';
 
 class Account extends Aggregate {}
 class AccountId extends Id {}

@@ -1,7 +1,8 @@
-import { EventStream } from '../../event-stream';
+import { EventStream } from '../../models/event-stream';
 import { EventStore, StreamReadingDirection } from '../../event-store';
-import { EventEnvelope } from '../../event-envelope';
-import { SnapshotEnvelope } from '../../snapshot-envelope';
+import { EventEnvelope } from '../../models/event-envelope';
+import { SnapshotEnvelope } from '../../models/snapshot-envelope';
+import { EventMap } from '@ocoda/event-sourcing/event-map';
 
 class InMemoryIterator {
   constructor(
