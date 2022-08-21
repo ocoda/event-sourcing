@@ -1,4 +1,3 @@
-export * from './aggregates';
 export * from './commands';
 export * from './event-sourcing-options.interface';
 export * from './events';

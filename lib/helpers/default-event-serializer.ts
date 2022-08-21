@@ -1,12 +1,9 @@
 import { instanceToPlain, plainToInstance } from 'class-transformer';
-import { Type } from '@nestjs/common';
-import { EventSerializer } from '../event-serializer';
+import { Injectable, Type } from '@nestjs/common';
 import { IEvent, IEventSerializer } from '../interfaces';
 
-export class DefaultEventSerializer
-  extends EventSerializer
-  implements IEventSerializer
-{
+@Injectable()
+export class DefaultEventSerializer implements IEventSerializer {
   serialize(event: IEvent): Record<string, any> {
     return instanceToPlain(event);
   }

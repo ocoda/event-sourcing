@@ -22,19 +22,12 @@ describe(EventMap, () => {
   }
 
   it('registers and returns events', () => {
-    const eventMap = new EventMap(defaultSerializer);
+    const eventMap = new EventMap();
     eventMap.register(AccountOpenedEvent);
     eventMap.register(AccountClosedEvent);
 
     expect(eventMap.getEvent('account-opened')).toBe(AccountOpenedEvent);
     expect(eventMap.getEvent('account-closed')).toBe(AccountClosedEvent);
-  });
-
-  it('returns the default event serializer', () => {
-    const eventMap = new EventMap(defaultSerializer);
-    eventMap.register(AccountOpenedEvent);
-
-    expect(eventMap.getSerializer('account-opened')).toBe(defaultSerializer);
   });
 
   it('returns a registered custom event serializer', () => {
@@ -46,7 +39,7 @@ describe(EventMap, () => {
         new AccountOpenedEvent(new Date(opened)),
     };
 
-    const eventMap = new EventMap(defaultSerializer);
+    const eventMap = new EventMap();
     eventMap.register(AccountOpenedEvent, customEventSerializer);
 
     expect(eventMap.getSerializer('account-opened')).toBe(
@@ -55,7 +48,7 @@ describe(EventMap, () => {
   });
 
   it('returns if an event-map has a certain event', () => {
-    const eventMap = new EventMap(defaultSerializer);
+    const eventMap = new EventMap();
 
     expect(eventMap.has('foo-created')).toBe(false);
   });
@@ -63,7 +56,7 @@ describe(EventMap, () => {
   it('throws when registering an event without an event-name', () => {
     class FooCreatedEvent implements IEvent {}
 
-    const eventMap = new EventMap(defaultSerializer);
+    const eventMap = new EventMap();
 
     expect(() => eventMap.register(FooCreatedEvent)).toThrowError(
       MissingEventMetadataException,
@@ -71,7 +64,7 @@ describe(EventMap, () => {
   });
 
   it('throws when retrieving an unregistered event', () => {
-    const eventMap = new EventMap(defaultSerializer);
+    const eventMap = new EventMap();
 
     expect(() => eventMap.getEvent('foo')).toThrowError(
       UnregisteredEventException,

@@ -1,6 +1,7 @@
 import { Type } from '@nestjs/common';
-import { IEvent, IEventSerializer } from './events';
+import { IEvent } from './events';
 
 export interface EventSourcingModuleOptions {
-  events: [Type<IEvent>, IEventSerializer?][];
+  events: Type<IEvent>[];
+  disableDefaultSerializer?: boolean;
 }

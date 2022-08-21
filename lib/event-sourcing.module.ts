@@ -1,9 +1,10 @@
-import { DynamicModule, Module, Provider, Type } from '@nestjs/common';
+import { DynamicModule, Module, Provider } from '@nestjs/common';
 import { DiscoveryModule } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { CommandBus } from './command-bus';
+import { EVENT_SOURCING_MODULE_OPTIONS } from './constants';
+import { EventMap } from './event-map';
 import { EventPublisher } from './event-publisher';
-import { EventSerializer } from './event-serializer';
 import { EventStore } from './event-store';
 import { HandlersLoader } from './handlers.loader';
 import { DefaultEventSerializer } from './helpers/default-event-serializer';
@@ -20,8 +21,13 @@ export class EventSourcingModule {
       HandlersLoader,
       EventPublisher,
       { provide: EventStore, useClass: InMemoryEventStore },
-      { provide: EventSerializer, useClass: DefaultEventSerializer },
+      { provide: EVENT_SOURCING_MODULE_OPTIONS, useValue: options },
+      EventMap,
     ];
+
+    if (!options.disableDefaultSerializer) {
+      providers.push(DefaultEventSerializer);
+    }
 
     return {
       module: EventSourcingModule,

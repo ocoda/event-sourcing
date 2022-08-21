@@ -1,31 +1,50 @@
-import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  OnApplicationBootstrap,
+  Optional,
+} from '@nestjs/common';
 import { DiscoveryService } from '@nestjs/core';
 import { InstanceWrapper } from '@nestjs/core/injector/instance-wrapper';
 import { CommandBus, CommandHandlerType } from './command-bus';
+import { EVENT_SOURCING_MODULE_OPTIONS } from './constants';
 import {
   COMMAND_HANDLER_METADATA,
   COMMAND_METADATA,
+  EVENT_SERIALIZER_METADATA,
   QUERY_HANDLER_METADATA,
   QUERY_METADATA,
 } from './decorators';
+import { EventMap } from './event-map';
 import {
   InvalidCommandHandlerException,
   InvalidQueryHandlerException,
 } from './exceptions';
-import { CommandMetadata, QueryMetadata } from './interfaces';
+import { DefaultEventSerializer } from './helpers';
+import {
+  CommandMetadata,
+  EventSourcingModuleOptions,
+  QueryMetadata,
+} from './interfaces';
 import { QueryBus, QueryHandlerType } from './query-bus';
 
 enum HandlerType {
   COMMANDS,
   QUERIES,
+  SERIALIZATION,
 }
 
 @Injectable()
 export class HandlersLoader implements OnApplicationBootstrap {
   constructor(
+    @Inject(EVENT_SOURCING_MODULE_OPTIONS)
+    private readonly options: EventSourcingModuleOptions,
     private readonly discoveryService: DiscoveryService,
     private readonly commandBus: CommandBus,
     private readonly queryBus: QueryBus,
+    private readonly eventMap: EventMap,
+    @Optional()
+    private readonly defaultEventSerializer: DefaultEventSerializer,
   ) {}
 
   onApplicationBootstrap() {
@@ -33,6 +52,7 @@ export class HandlersLoader implements OnApplicationBootstrap {
 
     this.registerCommandHandlers(handlers.get(HandlerType.COMMANDS));
     this.registerQueryHandlers(handlers.get(HandlerType.QUERIES));
+    this.registerEvents(handlers.get(HandlerType.SERIALIZATION));
   }
 
   private loadHandlers() {
@@ -50,6 +70,12 @@ export class HandlersLoader implements OnApplicationBootstrap {
         if (Reflect.hasMetadata(QUERY_HANDLER_METADATA, wrapper.metatype)) {
           handlers.set(HandlerType.QUERIES, [
             ...(handlers.get(HandlerType.QUERIES) || []),
+            wrapper,
+          ]);
+        }
+        if (Reflect.hasMetadata(EVENT_SERIALIZER_METADATA, wrapper.metatype)) {
+          handlers.set(HandlerType.SERIALIZATION, [
+            ...(handlers.get(HandlerType.SERIALIZATION) || []),
             wrapper,
           ]);
         }
@@ -93,6 +119,20 @@ export class HandlersLoader implements OnApplicationBootstrap {
       }
 
       this.queryBus.bind(instance, id);
+    });
+  }
+
+  private registerEvents(handlers: InstanceWrapper[]) {
+    this.options?.events.forEach((event) => {
+      const handler = handlers.find(
+        ({ metatype }) =>
+          Reflect.getMetadata(EVENT_SERIALIZER_METADATA, metatype) === event,
+      );
+
+      return this.eventMap.register(
+        event,
+        handler?.instance || this.defaultEventSerializer,
+      );
     });
   }
 }
