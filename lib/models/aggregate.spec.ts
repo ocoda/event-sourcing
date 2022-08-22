@@ -26,10 +26,11 @@ describe(Aggregate, () => {
     }
 
     createSnapshot(): ISnapshot {
-      return { balance: this.balance };
+      return { version: this.version, balance: this.balance };
     }
 
-    loadSnapshot(snapshot: { balance: number }) {
+    loadSnapshot(snapshot: { version: number; balance: number }) {
+      this.version = snapshot.version;
       this.balance = snapshot.balance;
     }
   }
@@ -38,12 +39,15 @@ describe(Aggregate, () => {
     const account = new Account();
 
     account.apply(new AccountOpenedEvent());
+    expect(account.version).toBe(1);
     expect(account.balance).toBe(0);
 
     account.apply(new MoneyDepositedEvent(50));
+    expect(account.version).toBe(2);
     expect(account.balance).toBe(50);
 
     account.apply(new MoneyWithdrawnEvent(20));
+    expect(account.version).toBe(3);
     expect(account.balance).toBe(30);
   });
 
@@ -56,15 +60,16 @@ describe(Aggregate, () => {
 
     const snapshot = account.createSnapshot();
 
-    expect(snapshot).toEqual({ balance: 30 });
+    expect(snapshot).toEqual({ version: 3, balance: 30 });
   });
 
   it('should apply snapshots', () => {
     const account = new Account();
 
-    const snapshot = { balance: 123 };
+    const snapshot = { version: 5, balance: 123 };
     account.loadSnapshot(snapshot);
 
+    expect(account.version).toBe(5);
     expect(account.balance).toBe(123);
   });
 });
