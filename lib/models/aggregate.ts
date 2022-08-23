@@ -45,7 +45,7 @@ export abstract class Aggregate<
   }
 
   commit(): IEvent[] {
-    const events = Array.from(this[EVENTS]);
+    const events = [...this[EVENTS]];
     this[EVENTS].length = 0;
 
     return events;
