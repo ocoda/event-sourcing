@@ -1,7 +1,6 @@
 import { Type } from '@nestjs/common';
 import { IEvent, ISnapshot } from '../interfaces';
 
-const VERSION = Symbol();
 const EVENTS = Symbol();
 const USE_SNAPSHOTS = Symbol();
 
@@ -9,28 +8,28 @@ export abstract class Aggregate<
   EventBase extends IEvent = IEvent,
   SnapshotBase extends ISnapshot = ISnapshot,
 > {
-  private [VERSION] = 0;
+  private _version: number = 0;
   private readonly [USE_SNAPSHOTS] = true;
   private readonly [EVENTS]: EventBase[] = [];
 
   set version(version: number) {
-    this[VERSION] = version;
+    this._version = version;
   }
 
   get version(): number {
-    return this[VERSION];
+    return this._version;
   }
 
   createSnapshot?(): SnapshotBase;
   loadSnapshot?(snapshot: SnapshotBase): void;
 
   apply<T extends EventBase = EventBase>(event: T) {
+    this._version++;
+
     this[EVENTS].push(event);
 
     const handler = this.getEventHandler(event);
     handler && handler.call(this, event);
-
-    this[VERSION]++;
   }
 
   protected getEventHandler<T extends EventBase = EventBase>(
@@ -43,6 +42,13 @@ export abstract class Aggregate<
   protected getEventName(event: EventBase): string {
     const { constructor } = Object.getPrototypeOf(event);
     return constructor.name;
+  }
+
+  commit(): IEvent[] {
+    const events = Array.from(this[EVENTS]);
+    this[EVENTS].length = 0;
+
+    return events;
   }
 
   loadFromHistory(events: EventBase[], snapshot?: SnapshotBase) {

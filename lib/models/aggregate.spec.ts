@@ -72,4 +72,18 @@ describe(Aggregate, () => {
     expect(account.version).toBe(5);
     expect(account.balance).toBe(123);
   });
+
+  it('should commit events', () => {
+    const account = new Account();
+
+    const events = [
+      new AccountOpenedEvent(),
+      new MoneyDepositedEvent(50),
+      new MoneyWithdrawnEvent(20),
+    ];
+
+    events.forEach((event) => account.apply(event));
+
+    expect(account.commit()).toEqual(events);
+  });
 });
