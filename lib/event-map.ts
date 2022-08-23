@@ -46,13 +46,26 @@ export class EventMap {
     return this.get(event) !== undefined;
   }
 
-  // public createEnvelope(
-  //   aggregateId: Id,
-  //   version: number,
-  //   event: IEvent,
-  // ): EventEnvelope {
-  //   return EventEnvelope.new(aggregateId, version);
-  // }
+  public createEnvelopes(
+    aggregateId: Id,
+    aggregateVersion: number,
+    events: IEvent[],
+  ): EventEnvelope[] {
+    let sequence = aggregateVersion - events.length + 1;
+    return events.map((event) => {
+      const { name, serializer } = this.get(event.constructor as Type<IEvent>);
+      const envelope = EventEnvelope.new(
+        aggregateId,
+        sequence,
+        name,
+        serializer?.serialize(event) || event,
+      );
+
+      sequence++;
+
+      return envelope;
+    });
+  }
 
   public getConstructor<E extends Type<IEvent>>(eventName: string): E {
     const helper = this.get(eventName);
