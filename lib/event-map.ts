@@ -5,17 +5,19 @@ import {
   UnregisteredEventException,
 } from './exceptions';
 import { IEvent, IEventSerializer } from './interfaces';
+import { EventEnvelope, Id } from './models';
 
 export type EventSerializerType = Type<IEventSerializer<IEvent>>;
 
 interface EventHelpers {
+  name: string;
   event: Type<IEvent>;
   serializer?: IEventSerializer<IEvent>;
 }
 
 @Injectable()
 export class EventMap {
-  private readonly eventMap: Map<string, EventHelpers> = new Map();
+  private readonly eventMap: Set<EventHelpers> = new Set();
 
   public register<E extends Type<IEvent>>(
     event: E,
@@ -26,28 +28,60 @@ export class EventMap {
       throw new MissingEventMetadataException(event);
     }
 
-    this.eventMap.set(name, { event, serializer });
+    this.eventMap.add({ name, event, serializer });
   }
 
-  public has(eventName: string): boolean {
-    return this.eventMap.has(eventName);
+  private get<E extends Type<IEvent>>(target: string | E): EventHelpers {
+    for (const helper of this.eventMap) {
+      if (typeof target === 'string' && target === helper.name) {
+        return helper;
+      }
+      if (typeof target === 'function' && target === helper.event) {
+        return helper;
+      }
+    }
   }
 
-  public getEvent<E extends Type<IEvent>>(eventName: string): E {
-    if (!this.eventMap.has(eventName)) {
+  public has<E extends Type<IEvent>>(event: string | E): boolean {
+    return this.get(event) !== undefined;
+  }
+
+  // public createEnvelope(
+  //   aggregateId: Id,
+  //   version: number,
+  //   event: IEvent,
+  // ): EventEnvelope {
+  //   return EventEnvelope.new(aggregateId, version);
+  // }
+
+  public getConstructor<E extends Type<IEvent>>(eventName: string): E {
+    const helper = this.get(eventName);
+    if (!helper) {
       throw new UnregisteredEventException(eventName);
     }
 
-    return this.eventMap.get(eventName).event as E;
+    return helper.event as E;
+  }
+
+  public getName<E extends Type<IEvent>>(cls: E): string {
+    const helper = this.get(cls);
+    if (!helper) {
+      throw new UnregisteredEventException(cls.name);
+    }
+
+    return helper.name;
   }
 
   public getSerializer<E extends Type<IEvent>>(
-    eventName: string,
+    event: string | E,
   ): IEventSerializer<E> {
-    if (!this.eventMap.has(eventName)) {
-      throw new UnregisteredEventException(eventName);
+    const helper = this.get(event);
+    if (!helper) {
+      throw new UnregisteredEventException(
+        typeof event === 'string' ? event : event.name,
+      );
     }
 
-    return this.eventMap.get(eventName).serializer as IEventSerializer<E>;
+    return helper.serializer as IEventSerializer<E>;
   }
 }
