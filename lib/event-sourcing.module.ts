@@ -33,7 +33,7 @@ export class EventSourcingModule {
       module: EventSourcingModule,
       imports: [DiscoveryModule, EventEmitterModule.forRoot()],
       providers,
-      exports: [CommandBus, QueryBus, EventPublisher, EventStore],
+      exports: [CommandBus, QueryBus, EventPublisher, EventStore, EventMap],
     };
   }
 }
