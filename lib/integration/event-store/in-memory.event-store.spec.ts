@@ -54,7 +54,7 @@ describe(InMemoryEventStore, () => {
     const eventStore = new InMemoryEventStore();
     const eventStream = EventStream.for(Account, accountId);
 
-    events.forEach((event) => eventStore.appendEvent(eventStream, event));
+    events.forEach((event) => eventStore.appendEvents(eventStream, event));
 
     const resolvedEvents = [];
     for await (const event of eventStore.getEvents(eventStream)) {
@@ -68,7 +68,7 @@ describe(InMemoryEventStore, () => {
     const eventStore = new InMemoryEventStore();
     const eventStream = EventStream.for(Account, accountId);
 
-    events.forEach((event) => eventStore.appendEvent(eventStream, event));
+    events.forEach((event) => eventStore.appendEvents(eventStream, event));
 
     const resolvedEvents = [];
     for await (const event of eventStore.getEvents(
@@ -86,7 +86,7 @@ describe(InMemoryEventStore, () => {
     const eventStore = new InMemoryEventStore();
     const eventStream = EventStream.for(Account, accountId);
 
-    events.forEach((event) => eventStore.appendEvent(eventStream, event));
+    events.forEach((event) => eventStore.appendEvents(eventStream, event));
 
     const resolvedEvents = [];
     for await (const event of eventStore.getEvents(eventStream, 3)) {
@@ -102,7 +102,7 @@ describe(InMemoryEventStore, () => {
     const eventStore = new InMemoryEventStore();
     const eventStream = EventStream.for(Account, accountId);
 
-    events.forEach((event) => eventStore.appendEvent(eventStream, event));
+    events.forEach((event) => eventStore.appendEvents(eventStream, event));
 
     const resolvedEvents = [];
     for await (const event of eventStore.getEvents(

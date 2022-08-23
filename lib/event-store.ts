@@ -17,9 +17,9 @@ export abstract class EventStore {
     eventStream: EventStream,
     version: number,
   ): EventEnvelope | Promise<EventEnvelope>;
-  abstract appendEvent(
+  abstract appendEvents(
     eventStream: EventStream,
-    event: EventEnvelope,
+    ...envelopes: EventEnvelope[]
   ): void | Promise<void>;
   getSnapshot?(
     eventStream: EventStream,
@@ -27,6 +27,6 @@ export abstract class EventStore {
   ): SnapshotEnvelope | Promise<SnapshotEnvelope>;
   appendSnapshot?(
     eventStream: EventStream,
-    event: SnapshotEnvelope,
+    envelope: SnapshotEnvelope,
   ): void | Promise<void>;
 }

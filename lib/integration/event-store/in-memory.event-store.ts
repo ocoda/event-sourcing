@@ -59,9 +59,9 @@ export class InMemoryEventStore extends EventStore {
       .find(({ metadata }) => metadata.sequence === version);
   }
 
-  appendEvent(eventStream: EventStream, event: EventEnvelope): void {
-    const events = this.eventCollection.get(eventStream) || [];
-    this.eventCollection.set(eventStream, [...events, event]);
+  appendEvents(eventStream: EventStream, ...envelopes: EventEnvelope[]): void {
+    const existingEnvelopes = this.eventCollection.get(eventStream) || [];
+    this.eventCollection.set(eventStream, [...existingEnvelopes, ...envelopes]);
   }
 
   appendSnapshot(
