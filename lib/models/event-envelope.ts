@@ -5,7 +5,7 @@ import { Id } from './id';
 export class EventEnvelope {
   public readonly eventId: string;
   public readonly eventName: string;
-  readonly payload: unknown;
+  readonly payload: Record<string, any>;
   readonly metadata: EventEnvelopeMetadata;
 
   private constructor(
