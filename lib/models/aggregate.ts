@@ -23,10 +23,14 @@ export abstract class Aggregate<
   createSnapshot?(): SnapshotBase;
   loadSnapshot?(snapshot: SnapshotBase): void;
 
-  apply<T extends EventBase = EventBase>(event: T) {
+  apply<T extends EventBase = EventBase>(event: T, fromHistory = false) {
     this._version++;
 
-    this[EVENTS].push(event);
+    // If we're just hydrating the aggregate with events,
+    // don't push the event to the internal event collection to be committed
+    if (!fromHistory) {
+      this[EVENTS].push(event);
+    }
 
     const handler = this.getEventHandler(event);
     handler && handler.call(this, event);
@@ -55,6 +59,7 @@ export abstract class Aggregate<
     if (this[USE_SNAPSHOTS] && snapshot) {
       this.loadSnapshot(snapshot);
     }
-    events.forEach((event) => this.apply(event));
+
+    events.forEach((event) => this.apply(event, true));
   }
 }
