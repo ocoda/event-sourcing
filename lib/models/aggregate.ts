@@ -9,7 +9,7 @@ export abstract class Aggregate<
   SnapshotBase extends ISnapshot = ISnapshot,
 > {
   private _version: number = 0;
-  private readonly [USE_SNAPSHOTS] = true;
+  private readonly [USE_SNAPSHOTS] = false;
   private readonly [EVENTS]: EventBase[] = [];
 
   set version(version: number) {
@@ -52,7 +52,9 @@ export abstract class Aggregate<
   }
 
   loadFromHistory(events: EventBase[], snapshot?: SnapshotBase) {
-    this[USE_SNAPSHOTS] && this.loadSnapshot(snapshot);
+    if (this[USE_SNAPSHOTS] && snapshot) {
+      this.loadSnapshot(snapshot);
+    }
     events.forEach((event) => this.apply(event));
   }
 }
