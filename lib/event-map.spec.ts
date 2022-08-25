@@ -10,8 +10,6 @@ import { IEvent, IEventSerializer } from './interfaces';
 import { Id } from './models';
 
 describe(EventMap, () => {
-  const defaultSerializer = new DefaultEventSerializer();
-
   @EventName('account-opened')
   class AccountOpenedEvent implements IEvent {
     constructor(public readonly opened: Date) {}
@@ -126,10 +124,22 @@ describe(EventMap, () => {
     class AccountId extends Id {}
 
     const eventMap = new EventMap();
-    eventMap.register(AccountOpenedEvent, defaultSerializer);
-    eventMap.register(AccountCreditedEvent, defaultSerializer);
-    eventMap.register(AccountDebitedEvent, defaultSerializer);
-    eventMap.register(AccountClosedEvent, defaultSerializer);
+    eventMap.register(
+      AccountOpenedEvent,
+      DefaultEventSerializer.for(AccountOpenedEvent),
+    );
+    eventMap.register(
+      AccountCreditedEvent,
+      DefaultEventSerializer.for(AccountCreditedEvent),
+    );
+    eventMap.register(
+      AccountDebitedEvent,
+      DefaultEventSerializer.for(AccountDebitedEvent),
+    );
+    eventMap.register(
+      AccountClosedEvent,
+      DefaultEventSerializer.for(AccountClosedEvent),
+    );
 
     const accountId = AccountId.generate();
 
