@@ -4,10 +4,7 @@ import { IEvent, ISnapshot } from '../interfaces';
 const EVENTS = Symbol();
 const USE_SNAPSHOTS = Symbol();
 
-export abstract class Aggregate<
-  EventBase extends IEvent = IEvent,
-  SnapshotBase extends ISnapshot = ISnapshot,
-> {
+export abstract class Aggregate<EventBase extends IEvent = IEvent> {
   private _version: number = 0;
   private readonly [USE_SNAPSHOTS] = false;
   private readonly [EVENTS]: EventBase[] = [];
@@ -19,9 +16,6 @@ export abstract class Aggregate<
   get version(): number {
     return this._version;
   }
-
-  createSnapshot?(): SnapshotBase;
-  loadSnapshot?(snapshot: SnapshotBase): void;
 
   apply<T extends EventBase = EventBase>(event: T, fromHistory = false) {
     this._version++;
@@ -36,14 +30,14 @@ export abstract class Aggregate<
     handler && handler.call(this, event);
   }
 
-  protected getEventHandler<T extends EventBase = EventBase>(
+  private getEventHandler<T extends EventBase = EventBase>(
     event: T,
   ): Type<typeof Aggregate> | undefined {
     const handler = `on${this.getEventName(event)}`;
     return this[handler];
   }
 
-  protected getEventName(event: EventBase): string {
+  private getEventName(event: EventBase): string {
     const { constructor } = Object.getPrototypeOf(event);
     return constructor.name;
   }
@@ -55,11 +49,7 @@ export abstract class Aggregate<
     return events;
   }
 
-  loadFromHistory(events: EventBase[], snapshot?: SnapshotBase) {
-    if (this[USE_SNAPSHOTS] && snapshot) {
-      this.loadSnapshot(snapshot);
-    }
-
+  loadFromHistory(events: EventBase[]) {
     events.forEach((event) => this.apply(event, true));
   }
 }
