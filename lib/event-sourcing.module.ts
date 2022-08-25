@@ -7,7 +7,6 @@ import { EventMap } from './event-map';
 import { EventPublisher } from './event-publisher';
 import { EventStore } from './event-store';
 import { HandlersLoader } from './handlers.loader';
-import { DefaultEventSerializer } from './helpers/default-event-serializer';
 import { InMemoryEventStore } from './integration/event-store';
 import { EventSourcingModuleOptions } from './interfaces';
 import { QueryBus } from './query-bus';
@@ -24,10 +23,6 @@ export class EventSourcingModule {
       { provide: EVENT_SOURCING_MODULE_OPTIONS, useValue: options },
       EventMap,
     ];
-
-    if (!options.disableDefaultSerializer) {
-      providers.push(DefaultEventSerializer);
-    }
 
     return {
       module: EventSourcingModule,

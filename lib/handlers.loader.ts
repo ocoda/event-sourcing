@@ -43,8 +43,6 @@ export class HandlersLoader implements OnApplicationBootstrap {
     private readonly commandBus: CommandBus,
     private readonly queryBus: QueryBus,
     private readonly eventMap: EventMap,
-    @Optional()
-    private readonly defaultEventSerializer: DefaultEventSerializer,
   ) {}
 
   onApplicationBootstrap() {
@@ -124,15 +122,17 @@ export class HandlersLoader implements OnApplicationBootstrap {
 
   private registerEvents(handlers: InstanceWrapper[]) {
     this.options?.events.forEach((event) => {
-      const handler = handlers.find(
+      const handler = handlers?.find(
         ({ metatype }) =>
           Reflect.getMetadata(EVENT_SERIALIZER_METADATA, metatype) === event,
       );
 
-      return this.eventMap.register(
-        event,
-        handler?.instance || this.defaultEventSerializer,
-      );
+      const serializer =
+        handler?.instance ||
+        (!this.options.disableDefaultSerializer &&
+          DefaultEventSerializer.for(event));
+
+      return this.eventMap.register(event, serializer);
     });
   }
 }
