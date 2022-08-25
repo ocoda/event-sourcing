@@ -2,8 +2,12 @@ import { Type } from '@nestjs/common';
 import { Aggregate } from './aggregate';
 import { Id } from './id';
 
-export class EventStream extends String {
-  static for(aggregate: Aggregate | Type<Aggregate>, id: Id) {
+declare const __aggregate__: unique symbol;
+
+export class EventStream<A extends Aggregate = Aggregate> extends String {
+  readonly [__aggregate__]: A;
+
+  static for<A extends Aggregate = Aggregate>(aggregate: A | Type<A>, id: Id) {
     const className =
       aggregate instanceof Function
         ? aggregate.name
