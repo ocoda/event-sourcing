@@ -1,23 +1,24 @@
 import { instanceToPlain, plainToInstance } from 'class-transformer';
 import { Type } from '@nestjs/common';
 import { ISnapshot, ISnapshotSerializer } from '../interfaces';
+import { Aggregate } from '../models';
 
-export class DefaultSnapshotSerializer<E extends ISnapshot = ISnapshot>
+export class DefaultSnapshotSerializer<A extends Aggregate = Aggregate>
   implements ISnapshotSerializer
 {
-  private constructor(private readonly snapshotType: Type<E>) {}
+  private constructor(private readonly snapshotType: Type<A>) {}
 
-  static for<E extends ISnapshot = ISnapshot>(
-    cls: Type<E>,
-  ): DefaultSnapshotSerializer<E> {
+  static for<A extends Aggregate = Aggregate>(
+    cls: Type<A>,
+  ): DefaultSnapshotSerializer<A> {
     return new DefaultSnapshotSerializer(cls);
   }
 
-  serialize(snapshot: ISnapshot): Record<string, any> {
-    return instanceToPlain(snapshot);
+  serialize(cls: A): ISnapshot<A> {
+    return instanceToPlain(cls) as ISnapshot<A>;
   }
 
-  deserialize(payload: Record<string, any>): E {
-    return plainToInstance<E, Record<string, any>>(this.snapshotType, payload);
+  deserialize(payload: ISnapshot<A>): A {
+    return plainToInstance<A, ISnapshot<A>>(this.snapshotType, payload);
   }
 }
