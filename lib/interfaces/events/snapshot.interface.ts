@@ -1,4 +1,5 @@
-// eslint-disable-next-line @typescript-eslint/no-empty-interface
-export interface ISnapshot {
-  [key: string]: any;
-}
+import { Aggregate } from '@ocoda/event-sourcing/models';
+
+export type ISnapshot<A extends Aggregate = Aggregate> = {
+  [key in keyof A]: any;
+};
