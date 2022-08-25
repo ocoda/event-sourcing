@@ -1,10 +1,6 @@
 import { IEvent } from '../interfaces';
 import 'reflect-metadata';
-import {
-  COMMAND_HANDLER_METADATA,
-  COMMAND_METADATA,
-  EVENT_SERIALIZER_METADATA,
-} from './constants';
+import { EVENT_SERIALIZER_METADATA } from './constants';
 
 /**
  * Decorator that marks a class as an event serializer. An event serializer

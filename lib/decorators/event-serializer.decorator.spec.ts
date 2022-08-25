@@ -1,10 +1,5 @@
-import { ICommand, IEvent } from '../interfaces';
-import { CommandHandler } from './command-handler.decorator';
-import {
-  COMMAND_HANDLER_METADATA,
-  COMMAND_METADATA,
-  EVENT_SERIALIZER_METADATA,
-} from './constants';
+import { IEvent } from '../interfaces';
+import { EVENT_SERIALIZER_METADATA } from './constants';
 import { EventSerializer } from './event-serializer.decorator';
 
 describe('@EventSerializer', () => {
