@@ -56,10 +56,7 @@ describe(InMemoryEventStore, () => {
 
     events.forEach((event) => eventStore.appendEvents(eventStream, event));
 
-    const resolvedEvents = [];
-    for await (const event of eventStore.getEvents(eventStream)) {
-      resolvedEvents.push(event);
-    }
+    const resolvedEvents = eventStore.getEvents(eventStream);
 
     expect(resolvedEvents).toEqual(events);
   });
@@ -70,14 +67,11 @@ describe(InMemoryEventStore, () => {
 
     events.forEach((event) => eventStore.appendEvents(eventStream, event));
 
-    const resolvedEvents = [];
-    for await (const event of eventStore.getEvents(
+    const resolvedEvents = eventStore.getEvents(
       eventStream,
       null,
       StreamReadingDirection.BACKWARD,
-    )) {
-      resolvedEvents.push(event);
-    }
+    );
 
     expect(resolvedEvents).toEqual(events.slice().reverse());
   });
@@ -88,10 +82,7 @@ describe(InMemoryEventStore, () => {
 
     events.forEach((event) => eventStore.appendEvents(eventStream, event));
 
-    const resolvedEvents = [];
-    for await (const event of eventStore.getEvents(eventStream, 3)) {
-      resolvedEvents.push(event);
-    }
+    const resolvedEvents = eventStore.getEvents(eventStream, 3);
 
     expect(resolvedEvents).toEqual(
       events.filter(({ metadata }) => metadata.sequence >= 3),
@@ -104,14 +95,11 @@ describe(InMemoryEventStore, () => {
 
     events.forEach((event) => eventStore.appendEvents(eventStream, event));
 
-    const resolvedEvents = [];
-    for await (const event of eventStore.getEvents(
+    const resolvedEvents = eventStore.getEvents(
       eventStream,
       4,
       StreamReadingDirection.BACKWARD,
-    )) {
-      resolvedEvents.push(event);
-    }
+    );
 
     expect(resolvedEvents).toEqual(
       events.filter(({ metadata }) => metadata.sequence >= 4).reverse(),

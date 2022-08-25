@@ -4,33 +4,6 @@ import { EventEnvelope } from '../../models/event-envelope';
 import { SnapshotEnvelope } from '../../models/snapshot-envelope';
 import { EventMap } from '@ocoda/event-sourcing/event-map';
 
-class InMemoryIterator {
-  constructor(
-    private readonly events: EventEnvelope[],
-    private readonly fromVersion?: number,
-    private readonly readingDirection: StreamReadingDirection = StreamReadingDirection.FORWARD,
-  ) {}
-
-  async *[Symbol.asyncIterator](): AsyncGenerator<EventEnvelope> {
-    let eventStream = this.events;
-
-    if (this.fromVersion) {
-      const startEventIndex = eventStream.findIndex(
-        ({ metadata }) => metadata.sequence === this.fromVersion,
-      );
-      eventStream = eventStream.slice(startEventIndex);
-    }
-
-    if (this.readingDirection === StreamReadingDirection.BACKWARD) {
-      eventStream = eventStream.reverse();
-    }
-
-    for (const event of eventStream) {
-      yield event;
-    }
-  }
-}
-
 export class InMemoryEventStore extends EventStore {
   private eventCollection: Map<EventStream, EventEnvelope[]> = new Map();
   private snapshotCollection: Map<EventStream, SnapshotEnvelope[]> = new Map();
@@ -39,12 +12,21 @@ export class InMemoryEventStore extends EventStore {
     eventStream: EventStream,
     fromVersion?: number,
     direction: StreamReadingDirection = StreamReadingDirection.FORWARD,
-  ): AsyncIterable<EventEnvelope> {
-    return new InMemoryIterator(
-      this.eventCollection.get(eventStream),
-      fromVersion,
-      direction,
-    );
+  ): EventEnvelope[] {
+    let events = this.eventCollection.get(eventStream);
+
+    if (fromVersion) {
+      const startEventIndex = events.findIndex(
+        ({ metadata }) => metadata.sequence === fromVersion,
+      );
+      events = events.slice(startEventIndex);
+    }
+
+    if (direction === StreamReadingDirection.BACKWARD) {
+      events = events.reverse();
+    }
+
+    return events;
   }
 
   getEvent(eventStream: EventStream, version: number): EventEnvelope {

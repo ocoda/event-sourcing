@@ -12,7 +12,7 @@ export abstract class EventStore {
   abstract getEvents(
     eventStream: EventStream,
     fromVersion?: number,
-  ): AsyncIterable<EventEnvelope> | Promise<AsyncIterable<EventEnvelope>>;
+  ): EventEnvelope[] | Promise<EventEnvelope[]>;
   abstract getEvent(
     eventStream: EventStream,
     version: number,
