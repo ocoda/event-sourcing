@@ -1,13 +1,21 @@
 import { IEvent, ISnapshot } from '../interfaces';
+import { Aggregate } from './aggregate';
 import { Id } from './id';
 import { SnapshotEnvelope } from './snapshot-envelope';
 
 describe(SnapshotEnvelope, () => {
   const now = new Date();
 
-  class FooId extends Id {}
-  interface FooSnapshot extends ISnapshot {
-    bar: string;
+  class AccountId extends Id {}
+  class Account extends Aggregate {
+    constructor(
+      public id: AccountId,
+      public balance: number,
+      public openedOn: Date,
+      public closedOn: Date,
+    ) {
+      super();
+    }
   }
 
   beforeAll(() =>
@@ -15,14 +23,19 @@ describe(SnapshotEnvelope, () => {
   );
 
   it('should create a snapshot-envelope', () => {
-    const fooId = FooId.generate();
-    const fooSnapshot: FooSnapshot = { bar: 'bar' };
+    const accountId = AccountId.generate();
+    const accountSnapshot: ISnapshot<Account> = {
+      id: accountId,
+      balance: 0,
+      openedOn: new Date(),
+      closedOn: undefined,
+    };
 
-    const envelope = SnapshotEnvelope.new(fooId, 1, fooSnapshot);
+    const envelope = SnapshotEnvelope.new(accountId, 1, accountSnapshot);
 
     expect(envelope.snapshotId).toBeDefined();
-    expect(envelope.payload).toEqual({ bar: 'bar' });
-    expect(envelope.metadata.aggregateId).toEqual(fooId.value);
+    expect(envelope.payload).toEqual(accountSnapshot);
+    expect(envelope.metadata.aggregateId).toEqual(accountId.value);
     expect(envelope.metadata.sequence).toBe(1);
     expect(envelope.metadata.registeredOn).toEqual(now.valueOf());
   });
