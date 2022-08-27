@@ -1,24 +1,39 @@
 import { Type } from '@nestjs/common';
 import { IEvent, ISnapshot } from '../interfaces';
 
+const VERSION = Symbol();
 const EVENTS = Symbol();
 const USE_SNAPSHOTS = Symbol();
 
 export abstract class Aggregate<EventBase extends IEvent = IEvent> {
-  private _version: number = 0;
-  private readonly [USE_SNAPSHOTS] = false;
+  private [VERSION]: number = 0;
+  private [USE_SNAPSHOTS] = false;
   private readonly [EVENTS]: EventBase[] = [];
 
+  useSnapshots() {
+    this[USE_SNAPSHOTS] = true;
+  }
+
+  get snapshot(): ISnapshot<Aggregate> {
+    const snapshot = { version: this[VERSION] };
+
+    for (const prop in this as Aggregate) {
+      snapshot[prop] = this[prop];
+    }
+
+    return snapshot;
+  }
+
   set version(version: number) {
-    this._version = version;
+    this[VERSION] = version;
   }
 
   get version(): number {
-    return this._version;
+    return this[VERSION];
   }
 
-  apply<T extends EventBase = EventBase>(event: T, fromHistory = false) {
-    this._version++;
+  applyEvent<T extends EventBase = EventBase>(event: T, fromHistory = false) {
+    this[VERSION]++;
 
     // If we're just hydrating the aggregate with events,
     // don't push the event to the internal event collection to be committed
@@ -49,7 +64,16 @@ export abstract class Aggregate<EventBase extends IEvent = IEvent> {
     return events;
   }
 
-  loadFromHistory(events: EventBase[]) {
-    events.forEach((event) => this.apply(event, true));
+  loadFromHistory(events: EventBase[], snapshot?: ISnapshot<Aggregate>) {
+    if (this[USE_SNAPSHOTS] && snapshot) {
+      for (const prop in snapshot) {
+        if (prop === 'version') {
+          this[VERSION] = snapshot[prop];
+          continue;
+        }
+        this[prop] = snapshot[prop];
+      }
+    }
+    events.forEach((event) => this.applyEvent(event, true));
   }
 }

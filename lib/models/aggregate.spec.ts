@@ -24,29 +24,20 @@ describe(Aggregate, () => {
     onMoneyWithdrawnEvent(event: MoneyWithdrawnEvent) {
       this.balance -= event.amount;
     }
-
-    createSnapshot(): ISnapshot {
-      return { version: this.version, balance: this.balance };
-    }
-
-    loadSnapshot(snapshot: { version: number; balance: number }) {
-      this.version = snapshot.version;
-      this.balance = snapshot.balance;
-    }
   }
 
   it('should apply events', () => {
     const account = new Account();
 
-    account.apply(new AccountOpenedEvent());
+    account.applyEvent(new AccountOpenedEvent());
     expect(account.version).toBe(1);
     expect(account.balance).toBe(0);
 
-    account.apply(new MoneyDepositedEvent(50));
+    account.applyEvent(new MoneyDepositedEvent(50));
     expect(account.version).toBe(2);
     expect(account.balance).toBe(50);
 
-    account.apply(new MoneyWithdrawnEvent(20));
+    account.applyEvent(new MoneyWithdrawnEvent(20));
     expect(account.version).toBe(3);
     expect(account.balance).toBe(30);
   });
@@ -54,20 +45,21 @@ describe(Aggregate, () => {
   it('should create snapshots', () => {
     const account = new Account();
 
-    account.apply(new AccountOpenedEvent());
-    account.apply(new MoneyDepositedEvent(50));
-    account.apply(new MoneyWithdrawnEvent(20));
+    account.applyEvent(new AccountOpenedEvent());
+    account.applyEvent(new MoneyDepositedEvent(50));
+    account.applyEvent(new MoneyWithdrawnEvent(20));
 
-    const snapshot = account.createSnapshot();
+    const snapshot = account.snapshot;
 
     expect(snapshot).toEqual({ version: 3, balance: 30 });
   });
 
   it('should apply snapshots', () => {
     const account = new Account();
+    account.useSnapshots();
 
     const snapshot = { version: 5, balance: 123 };
-    account.loadSnapshot(snapshot);
+    account.loadFromHistory([], snapshot);
 
     expect(account.version).toBe(5);
     expect(account.balance).toBe(123);
@@ -82,7 +74,7 @@ describe(Aggregate, () => {
       new MoneyWithdrawnEvent(20),
     ];
 
-    events.forEach((event) => account.apply(event));
+    events.forEach((event) => account.applyEvent(event));
 
     expect(account.commit()).toEqual(events);
   });
