@@ -1,5 +1,14 @@
 import { Aggregate } from '@ocoda/event-sourcing/models';
 
-export type ISnapshot<A extends Aggregate, D = Omit<A, keyof Aggregate>> = {
-  [key in keyof D]: any;
+type AggregatePropertyNames<T> = {
+  [Key in keyof T]: T[Key] extends Function ? never : Key;
+}[keyof T];
+
+export type ISnapshot<
+  TAggregate extends Aggregate,
+  TDerivedAggregate = Omit<TAggregate, keyof Aggregate>,
+> = {
+  [Key in AggregatePropertyNames<TDerivedAggregate>]: TDerivedAggregate[Key] extends Function
+    ? never
+    : TDerivedAggregate[Key];
 };
