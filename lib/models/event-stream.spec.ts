@@ -6,18 +6,20 @@ describe(EventStream, () => {
   class Account extends Aggregate {}
   class AccountId extends Id {}
 
-  it('should create an event-stream from an Aggregate class', () => {
+  it('should create an EventStream from an Aggregate class', () => {
     const accountId = AccountId.generate();
     const eventStream = EventStream.for(Account, accountId);
 
-    expect(eventStream).toBe(`Account-${accountId.value}`);
+    expect(eventStream).toEqual({ aggregate: Account, id: accountId });
+    expect(eventStream.name).toBe(`Account-${accountId.value}`);
   });
 
-  it('should create an event-stream from an Aggregate instance', () => {
+  it('should create an EventStream from an Aggregate instance', () => {
     const account = new Account();
     const accountId = AccountId.generate();
     const eventStream = EventStream.for(account, accountId);
 
-    expect(eventStream).toBe(`Account-${accountId.value}`);
+    expect(eventStream).toEqual({ aggregate: Account, id: accountId });
+    expect(eventStream.name).toBe(`Account-${accountId.value}`);
   });
 });

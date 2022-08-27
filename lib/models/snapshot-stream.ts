@@ -2,16 +2,21 @@ import { Type } from '@nestjs/common';
 import { Aggregate } from './aggregate';
 import { Id } from './id';
 
-declare const __aggregate__: unique symbol;
+export class SnapshotStream<A extends Aggregate = Aggregate> {
+  private constructor(private aggregate: Type<A>, private id: Id) {}
 
-export class SnapshotStream<A extends Aggregate = Aggregate> extends String {
-  readonly [__aggregate__]: A;
+  get name(): string {
+    return `${this.aggregate.name}-${this.id.value}`;
+  }
 
-  static for<A extends Aggregate = Aggregate>(aggregate: A | Type<A>, id: Id) {
-    const className =
+  static for<A extends Aggregate<any> = Aggregate<any>>(
+    aggregate: A | Type<A>,
+    id: Id,
+  ): SnapshotStream<A> {
+    const cls =
       aggregate instanceof Function
-        ? aggregate.name
-        : aggregate.constructor.name;
-    return `${className}-${id.value}`;
+        ? aggregate
+        : (aggregate.constructor as Type<A>);
+    return new SnapshotStream<A>(cls, id);
   }
 }
