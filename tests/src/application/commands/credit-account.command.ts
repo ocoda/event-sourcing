@@ -3,26 +3,25 @@ import {
   ICommand,
   ICommandHandler,
 } from '@ocoda/event-sourcing';
-import { AccountId, AccountOwnerId } from '../../domain/models';
+import { AccountId } from '../../domain/models';
 import { AccountRepository } from '../repositories';
 
-export class AddAccountOwnerCommand implements ICommand {
+export class CreditAccountCommand implements ICommand {
   constructor(
     public readonly accountId: string,
-    public readonly accountOwnerId: string,
+    public readonly amount: number,
   ) {}
 }
 
-@CommandHandler(AddAccountOwnerCommand)
-export class AddAccountOwnerCommandHandler implements ICommandHandler {
+@CommandHandler(CreditAccountCommand)
+export class CreditAccountCommandHandler implements ICommandHandler {
   constructor(private readonly accountRepository: AccountRepository) {}
 
-  async execute(command: AddAccountOwnerCommand): Promise<boolean> {
+  async execute(command: CreditAccountCommand): Promise<boolean> {
     const accountId = AccountId.from(command.accountId);
     const account = await this.accountRepository.getById(accountId);
 
-    const accountOwnerId = AccountOwnerId.from(command.accountOwnerId);
-    account.addOwner(accountOwnerId);
+    account.credit(command.amount);
 
     await this.accountRepository.save(account);
 

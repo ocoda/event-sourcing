@@ -9,24 +9,33 @@ import {
 import { AccountSnapshotHandler } from './domain/models/account.snapshot-handler';
 import {
   AddAccountOwnerCommandHandler,
+  CloseAccountCommandHandler,
+  CreditAccountCommandHandler,
+  DebitAccountCommandHandler,
   OpenAccountCommandHandler,
+  RemoveAccountOwnerCommandHandler,
 } from './application/commands';
 import {
   ICommandHandler,
   IQueryHandler,
-  ISnapshotHandler,
+  SnapshotHandler,
 } from '@ocoda/event-sourcing';
 import { Type } from '@nestjs/common';
 import { AccountRepository } from './application/repositories';
 
 export const CommandHandlers: Type<ICommandHandler>[] = [
-  OpenAccountCommandHandler,
   AddAccountOwnerCommandHandler,
+  CloseAccountCommandHandler,
+  CloseAccountCommandHandler,
+  CreditAccountCommandHandler,
+  DebitAccountCommandHandler,
+  OpenAccountCommandHandler,
+  RemoveAccountOwnerCommandHandler,
 ];
 
 export const QueryHandlers: Type<IQueryHandler>[] = [];
 
-export const SnapshotHandlers: Type<ISnapshotHandler>[] = [
+export const SnapshotHandlers: Type<SnapshotHandler>[] = [
   AccountSnapshotHandler,
 ];
 

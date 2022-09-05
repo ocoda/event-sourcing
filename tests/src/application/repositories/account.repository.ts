@@ -18,11 +18,11 @@ export class AccountRepository {
     const account = new Account();
     const eventStream = EventStream.for<Account>(Account, accountId);
 
-    await this.accountSnapshotHandler.loadFromSnapshot(account);
+    await this.accountSnapshotHandler.hydrate(accountId, account);
 
     const eventEnvelopes = await this.eventStore.getEvents(
       eventStream,
-      account.version,
+      account.version + 1,
     );
 
     let events = eventEnvelopes.map(({ eventName, payload }) => {
@@ -44,9 +44,12 @@ export class AccountRepository {
       events,
     );
 
-    await this.eventStore.appendEvents(
-      EventStream.for<Account>(Account, account.id),
-      ...envelopes,
-    );
+    await Promise.all([
+      this.accountSnapshotHandler.save(account.id, account),
+      this.eventStore.appendEvents(
+        EventStream.for<Account>(Account, account.id),
+        ...envelopes,
+      ),
+    ]);
   }
 }

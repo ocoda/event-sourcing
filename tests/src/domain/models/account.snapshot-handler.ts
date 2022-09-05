@@ -1,52 +1,14 @@
 import {
   ISnapshot,
-  ISnapshotHandler,
-  SnapshotEnvelope,
+  ISnapshotPayload,
+  Snapshot,
   SnapshotHandler,
   SnapshotStore,
-  SnapshotStream,
 } from '@ocoda/event-sourcing';
 import { Account, AccountId, AccountOwnerId } from './account.aggregate';
 
-interface AccountPayload {
-  id: string;
-  ownerIds: string[];
-  balance: number;
-  openedOn: number;
-  closedOn: number;
-}
-
-@SnapshotHandler(Account)
-export class AccountSnapshotHandler implements ISnapshotHandler {
-  constructor(private readonly snapshotStore: SnapshotStore) {}
-
-  async saveSnapshot(account: Account): Promise<void> {
-    // TODO: make configurable
-    if (account.version % 10 === 0) {
-      const snapshotStream = SnapshotStream.for(Account, account.id);
-      const payload = this.serialize(account.snapshot as ISnapshot<Account>);
-
-      await this.snapshotStore.appendSnapshots(
-        snapshotStream,
-        SnapshotEnvelope.new(account.id, account.version, 'account', payload),
-      );
-    }
-  }
-
-  async loadFromSnapshot(account: Account): Promise<void> {
-    const snapshotStream = SnapshotStream.for(Account, account.id);
-    const snapshotEnvelope = await this.snapshotStore.getLastSnapshot(
-      snapshotStream,
-    );
-
-    if (!snapshotEnvelope) {
-      return;
-    }
-
-    const snapshot = this.deserialize(snapshotEnvelope.payload);
-    account.loadFromSnapshot(snapshot);
-  }
-
+@Snapshot(Account, { name: 'account', interval: 5 })
+export class AccountSnapshotHandler extends SnapshotHandler<Account> {
   serialize({ id, ownerIds, balance, openedOn, closedOn }: ISnapshot<Account>) {
     return {
       id: id.value,
@@ -62,7 +24,7 @@ export class AccountSnapshotHandler implements ISnapshotHandler {
     balance,
     openedOn,
     closedOn,
-  }: AccountPayload): ISnapshot<Account> {
+  }: ISnapshotPayload<Account>): ISnapshot<Account> {
     return {
       id: AccountId.from(id),
       ownerIds: ownerIds.map((id) => AccountOwnerId.from(id)),

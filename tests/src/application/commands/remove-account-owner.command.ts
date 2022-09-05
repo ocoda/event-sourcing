@@ -3,26 +3,27 @@ import {
   ICommand,
   ICommandHandler,
 } from '@ocoda/event-sourcing';
-import { AccountId, AccountOwnerId } from '../../domain/models';
+
+import { Account, AccountId, AccountOwnerId } from '../../domain/models';
 import { AccountRepository } from '../repositories';
 
-export class AddAccountOwnerCommand implements ICommand {
+export class RemoveAccountOwnerCommand implements ICommand {
   constructor(
     public readonly accountId: string,
     public readonly accountOwnerId: string,
   ) {}
 }
 
-@CommandHandler(AddAccountOwnerCommand)
-export class AddAccountOwnerCommandHandler implements ICommandHandler {
+@CommandHandler(RemoveAccountOwnerCommand)
+export class RemoveAccountOwnerCommandHandler implements ICommandHandler {
   constructor(private readonly accountRepository: AccountRepository) {}
 
-  async execute(command: AddAccountOwnerCommand): Promise<boolean> {
+  async execute(command: RemoveAccountOwnerCommand): Promise<boolean> {
     const accountId = AccountId.from(command.accountId);
     const account = await this.accountRepository.getById(accountId);
 
     const accountOwnerId = AccountOwnerId.from(command.accountOwnerId);
-    account.addOwner(accountOwnerId);
+    account.removeOwner(accountOwnerId);
 
     await this.accountRepository.save(account);
 

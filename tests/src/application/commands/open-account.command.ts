@@ -1,17 +1,10 @@
 import {
   CommandHandler,
-  EventEnvelope,
-  EventStream,
   ICommand,
   ICommandHandler,
 } from '@ocoda/event-sourcing';
-import { EventStore } from '@ocoda/event-sourcing/event-store';
 
-import {
-  Account,
-  AccountId,
-  AccountOwnerId,
-} from '../../domain/models/account.aggregate';
+import { Account, AccountId, AccountOwnerId } from '../../domain/models';
 import { AccountRepository } from '../repositories';
 
 export class OpenAccountCommand implements ICommand {
