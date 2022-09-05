@@ -103,4 +103,13 @@ describe(InMemorySnapshotStore, () => {
 
     expect(resolvedSnapshot).toEqual(snapshots[snapshots.length - 1]);
   });
+
+  it('should return undefined if there are no snapshots', async () => {
+    const snapshotStore = new InMemorySnapshotStore();
+    const snapshotStream = SnapshotStream.for(Account, accountId);
+
+    expect(snapshotStore.getSnapshots(snapshotStream)).toBeUndefined();
+    expect(snapshotStore.getSnapshot(snapshotStream, 50)).toBeUndefined();
+    expect(snapshotStore.getLastSnapshot(snapshotStream)).toBeUndefined();
+  });
 });

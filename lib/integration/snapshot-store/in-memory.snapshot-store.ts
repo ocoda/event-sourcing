@@ -16,11 +16,11 @@ export class InMemorySnapshotStore extends SnapshotStore {
       const startSnapshotIndex = snapshots.findIndex(
         ({ metadata }) => metadata.sequence === fromVersion,
       );
-      snapshots = snapshots.slice(startSnapshotIndex);
+      snapshots = snapshots?.slice(startSnapshotIndex);
     }
 
     if (direction === StreamReadingDirection.BACKWARD) {
-      snapshots = snapshots.reverse();
+      snapshots = snapshots?.reverse();
     }
 
     return snapshots;
@@ -32,7 +32,7 @@ export class InMemorySnapshotStore extends SnapshotStore {
   ): SnapshotEnvelope<A> {
     return this.snapshotCollection
       .get(snapshotStream.name)
-      .find(({ metadata }) => metadata.sequence === version);
+      ?.find(({ metadata }) => metadata.sequence === version);
   }
 
   appendSnapshots<A extends Aggregate>(
@@ -51,11 +51,8 @@ export class InMemorySnapshotStore extends SnapshotStore {
     snapshotStream: SnapshotStream<A>,
   ): SnapshotEnvelope<A> {
     const snapshots = this.snapshotCollection.get(snapshotStream.name);
-    if (!snapshots) {
-      return;
-    }
 
-    return snapshots.reduce((previous, current) => {
+    return snapshots?.reduce((previous, current) => {
       return previous.metadata.sequence > current.metadata.sequence
         ? previous
         : current;
