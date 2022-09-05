@@ -9,3 +9,4 @@ export * from './models';
 export * from './models/event-envelope';
 export * from './models/value-object';
 export * from './query-bus';
+export * from './snapshot-store';
