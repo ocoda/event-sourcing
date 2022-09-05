@@ -3,7 +3,7 @@ import { Id } from './id';
 import { ISnapshot, SnapshotEnvelopeMetadata } from '../interfaces';
 import { Aggregate } from './aggregate';
 
-export class SnapshotEnvelope<A extends Aggregate> {
+export class SnapshotEnvelope<A extends Aggregate = Aggregate> {
   public readonly snapshotId: string;
   readonly payload: ISnapshot<A>;
   readonly metadata: SnapshotEnvelopeMetadata;
