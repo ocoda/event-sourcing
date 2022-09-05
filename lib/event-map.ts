@@ -9,34 +9,34 @@ import { EventEnvelope, Id } from './models';
 
 export type EventSerializerType = Type<IEventSerializer<IEvent>>;
 
-interface EventHelpers {
+interface EventData {
   name: string;
-  event: Type<IEvent>;
+  cls: Type<IEvent>;
   serializer?: IEventSerializer<IEvent>;
 }
 
 @Injectable()
 export class EventMap {
-  private readonly eventMap: Set<EventHelpers> = new Set();
+  private readonly eventMap: Set<EventData> = new Set();
 
   public register<E extends Type<IEvent>>(
-    event: E,
+    cls: E,
     serializer?: IEventSerializer,
   ): void {
-    const name: string = Reflect.getMetadata(EVENT_NAME_METADATA, event);
+    const name: string = Reflect.getMetadata(EVENT_NAME_METADATA, cls);
     if (!name) {
-      throw new MissingEventMetadataException(event);
+      throw new MissingEventMetadataException(cls);
     }
 
-    this.eventMap.add({ name, event, serializer });
+    this.eventMap.add({ name, cls, serializer });
   }
 
-  private get<E extends Type<IEvent>>(target: string | E): EventHelpers {
+  private get<E extends Type<IEvent>>(target: string | E): EventData {
     for (const helper of this.eventMap) {
       if (typeof target === 'string' && target === helper.name) {
         return helper;
       }
-      if (typeof target === 'function' && target === helper.event) {
+      if (typeof target === 'function' && target === helper.cls) {
         return helper;
       }
     }
@@ -73,7 +73,7 @@ export class EventMap {
       throw new UnregisteredEventException(eventName);
     }
 
-    return helper.event as E;
+    return helper.cls as E;
   }
 
   public getName<E extends Type<IEvent>>(cls: E): string {
