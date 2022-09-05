@@ -1,22 +1,18 @@
+import { Aggregate } from './models';
 import { EventEnvelope } from './models/event-envelope';
 import { EventStream } from './models/event-stream';
 
-export enum StreamReadingDirection {
-  FORWARD,
-  BACKWARD,
-}
-
 export abstract class EventStore {
-  abstract getEvents(
-    eventStream: EventStream,
+  abstract getEvents<A extends Aggregate = Aggregate>(
+    eventStream: EventStream<A>,
     fromVersion?: number,
   ): EventEnvelope[] | Promise<EventEnvelope[]>;
-  abstract getEvent(
-    eventStream: EventStream,
+  abstract getEvent<A extends Aggregate = Aggregate>(
+    eventStream: EventStream<A>,
     version: number,
   ): EventEnvelope | Promise<EventEnvelope>;
-  abstract appendEvents(
-    eventStream: EventStream,
+  abstract appendEvents<A extends Aggregate = Aggregate>(
+    eventStream: EventStream<A>,
     ...envelopes: EventEnvelope[]
   ): void | Promise<void>;
 }
