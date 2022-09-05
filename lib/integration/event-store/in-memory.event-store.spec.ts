@@ -54,6 +54,18 @@ describe(InMemoryEventStore, () => {
     EventEnvelope.new(accountId, 6, 'account-closed', new AccountClosedEvent()),
   ];
 
+  it('should append events', async () => {
+    const eventStore = new InMemoryEventStore();
+    const eventStream = EventStream.for(Account, accountId);
+
+    eventStore.appendEvents(eventStream, ...events);
+
+    expect(eventStore).toHaveProperty(
+      'eventCollection',
+      new Map([[eventStream.name, events]]),
+    );
+  });
+
   it('should retrieve events forward', async () => {
     const eventStore = new InMemoryEventStore();
     const eventStream = EventStream.for(Account, accountId);
