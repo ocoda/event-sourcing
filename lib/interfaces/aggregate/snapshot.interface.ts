@@ -1,4 +1,4 @@
-import { Aggregate } from '@ocoda/event-sourcing/models';
+import { Aggregate } from '../../models';
 
 type AggregatePropertyNames<T> = {
   [Key in keyof T]: T[Key] extends Function ? never : Key;

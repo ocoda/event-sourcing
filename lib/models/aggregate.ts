@@ -3,16 +3,10 @@ import { IEvent, ISnapshot } from '../interfaces';
 
 const VERSION = Symbol();
 const EVENTS = Symbol();
-const USE_SNAPSHOTS = Symbol();
 
 export abstract class Aggregate<EventBase extends IEvent = IEvent> {
   private [VERSION]: number = 0;
-  private [USE_SNAPSHOTS] = false;
   private readonly [EVENTS]: EventBase[] = [];
-
-  useSnapshots() {
-    this[USE_SNAPSHOTS] = true;
-  }
 
   get snapshot(): ISnapshot<Aggregate> {
     const snapshot = { version: this[VERSION] };
@@ -64,16 +58,17 @@ export abstract class Aggregate<EventBase extends IEvent = IEvent> {
     return events;
   }
 
-  loadFromHistory(events: EventBase[], snapshot?: ISnapshot<Aggregate>) {
-    if (this[USE_SNAPSHOTS] && snapshot) {
-      for (const prop in snapshot) {
-        if (prop === 'version') {
-          this[VERSION] = snapshot[prop];
-          continue;
-        }
-        this[prop] = snapshot[prop];
+  loadFromSnapshot(snapshot: ISnapshot<Aggregate>) {
+    for (const prop in snapshot) {
+      if (prop === 'version') {
+        this[VERSION] = snapshot[prop];
+        continue;
       }
+      this[prop] = snapshot[prop];
     }
+  }
+
+  loadFromHistory(events: EventBase[]) {
     events.forEach((event) => this.applyEvent(event, true));
   }
 }

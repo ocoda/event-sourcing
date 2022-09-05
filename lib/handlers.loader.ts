@@ -84,7 +84,7 @@ export class HandlersLoader implements OnApplicationBootstrap {
   }
 
   private registerCommandHandlers(handlers: InstanceWrapper[]) {
-    handlers.forEach(({ metatype, instance }) => {
+    handlers?.forEach(({ metatype, instance }) => {
       const command: CommandHandlerType = Reflect.getMetadata(
         COMMAND_HANDLER_METADATA,
         metatype,
@@ -104,7 +104,7 @@ export class HandlersLoader implements OnApplicationBootstrap {
   }
 
   private registerQueryHandlers(handlers: InstanceWrapper[]) {
-    handlers.forEach(({ metatype, instance }) => {
+    handlers?.forEach(({ metatype, instance }) => {
       const query: QueryHandlerType = Reflect.getMetadata(
         QUERY_HANDLER_METADATA,
         metatype,

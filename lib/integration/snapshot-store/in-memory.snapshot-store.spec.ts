@@ -17,12 +17,12 @@ describe(InMemorySnapshotStore, () => {
   const accountId = AccountId.generate();
 
   const snapshots = [
-    SnapshotEnvelope.new<Account>(accountId, 10, { balance: 50 }),
-    SnapshotEnvelope.new<Account>(accountId, 20, { balance: 20 }),
-    SnapshotEnvelope.new<Account>(accountId, 30, { balance: 60 }),
-    SnapshotEnvelope.new<Account>(accountId, 40, { balance: 100 }),
-    SnapshotEnvelope.new<Account>(accountId, 50, { balance: 70 }),
-    SnapshotEnvelope.new<Account>(accountId, 60, { balance: 150 }),
+    SnapshotEnvelope.new<Account>(accountId, 10, 'account', { balance: 50 }),
+    SnapshotEnvelope.new<Account>(accountId, 20, 'account', { balance: 20 }),
+    SnapshotEnvelope.new<Account>(accountId, 30, 'account', { balance: 60 }),
+    SnapshotEnvelope.new<Account>(accountId, 40, 'account', { balance: 100 }),
+    SnapshotEnvelope.new<Account>(accountId, 50, 'account', { balance: 70 }),
+    SnapshotEnvelope.new<Account>(accountId, 60, 'account', { balance: 150 }),
   ];
 
   it('should append snapshots', async () => {

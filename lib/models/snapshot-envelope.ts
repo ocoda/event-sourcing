@@ -6,14 +6,14 @@ import { Aggregate } from './aggregate';
 export class SnapshotEnvelope<A extends Aggregate = Aggregate> {
   public readonly snapshotId: string;
   public readonly snapshotName: string;
-  readonly payload: ISnapshot<A>;
+  readonly payload: Record<keyof ISnapshot<A>, any>;
   readonly metadata: SnapshotEnvelopeMetadata;
 
   private constructor(
     aggregateId: string,
     sequence: number,
     snapshotName: string,
-    payload: ISnapshot<A>,
+    payload: Record<keyof ISnapshot<A>, any>,
   ) {
     this.snapshotId = randomUUID();
     this.snapshotName = snapshotName;
@@ -25,7 +25,7 @@ export class SnapshotEnvelope<A extends Aggregate = Aggregate> {
     aggregateId: Id,
     sequence: number,
     snapshotName: string,
-    payload: ISnapshot<A>,
+    payload: Record<keyof ISnapshot<A>, any>,
   ): SnapshotEnvelope<A> {
     return new SnapshotEnvelope(
       aggregateId.value,

@@ -1,9 +1,24 @@
 import { Module } from '@nestjs/common';
 import { EventSourcingModule } from '@ocoda/event-sourcing';
-import { TestCommandHandlers, TestQueryHandlers } from './app.providers';
+import {
+  Events,
+  CommandHandlers,
+  QueryHandlers,
+  SnapshotHandlers,
+  AggregateRepositories,
+} from './app.providers';
 
 @Module({
-  imports: [EventSourcingModule.forRoot()],
-  providers: [...TestCommandHandlers, ...TestQueryHandlers],
+  imports: [
+    EventSourcingModule.forRoot({
+      events: [...Events],
+    }),
+  ],
+  providers: [
+    ...AggregateRepositories,
+    ...CommandHandlers,
+    ...QueryHandlers,
+    ...SnapshotHandlers,
+  ],
 })
 export class AppModule {}
