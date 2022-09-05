@@ -5,15 +5,18 @@ import { Aggregate } from './aggregate';
 
 export class SnapshotEnvelope<A extends Aggregate = Aggregate> {
   public readonly snapshotId: string;
+  public readonly snapshotName: string;
   readonly payload: ISnapshot<A>;
   readonly metadata: SnapshotEnvelopeMetadata;
 
   private constructor(
     aggregateId: string,
     sequence: number,
+    snapshotName: string,
     payload: ISnapshot<A>,
   ) {
     this.snapshotId = randomUUID();
+    this.snapshotName = snapshotName;
     this.payload = payload;
     this.metadata = { aggregateId, sequence, registeredOn: Date.now() };
   }
@@ -21,8 +24,14 @@ export class SnapshotEnvelope<A extends Aggregate = Aggregate> {
   static new<A extends Aggregate>(
     aggregateId: Id,
     sequence: number,
+    snapshotName: string,
     payload: ISnapshot<A>,
   ): SnapshotEnvelope<A> {
-    return new SnapshotEnvelope(aggregateId.value, sequence, payload);
+    return new SnapshotEnvelope(
+      aggregateId.value,
+      sequence,
+      snapshotName,
+      payload,
+    );
   }
 }
