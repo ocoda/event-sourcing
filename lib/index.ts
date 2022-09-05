@@ -1,4 +1,5 @@
 export * from './command-bus';
+export * from './constants';
 export * from './decorators';
 export * from './event-publisher';
 export * from './event-sourcing.module';
