@@ -3,12 +3,13 @@ import { SNAPSHOT_METADATA } from './constants';
 import { Snapshot } from './snapshot.decorator';
 
 describe('@Snapshot', () => {
-  @Snapshot({ interval: 10 })
+  @Snapshot({ name: 'foo', interval: 10 })
   class Foo extends Aggregate {}
 
   it('should specify after how many events a snapshot should be made', () => {
-    const { interval } = Reflect.getMetadata(SNAPSHOT_METADATA, Foo);
+    const { name, interval } = Reflect.getMetadata(SNAPSHOT_METADATA, Foo);
 
+    expect(name).toEqual('foo');
     expect(interval).toEqual(10);
   });
 });
