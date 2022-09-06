@@ -41,7 +41,7 @@ describe(MongoDBSnapshotStore, () => {
 		async () =>
 			client
 				.db()
-				.collection(`${snapshotStream.subject}-snapshot`)
+				.collection(snapshotStream.subject)
 				.deleteMany({}),
 	);
 
@@ -54,7 +54,7 @@ describe(MongoDBSnapshotStore, () => {
 		await snapshotStore.appendSnapshots(snapshotStream, snapshots);
 		const storedSnapshots = await client
 			.db()
-			.collection(`${snapshotStream.subject}-snapshot`)
+			.collection(snapshotStream.subject)
 			.find()
 			.toArray();
 

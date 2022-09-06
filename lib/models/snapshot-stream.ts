@@ -6,7 +6,7 @@ export class SnapshotStream<A extends Aggregate = Aggregate> {
 	private constructor(private _subject: Type<A>, private _id: Id) {}
 
 	get subject(): string {
-		return this._subject.name.toLowerCase();
+		return `${this._subject.name.toLowerCase()}-snapshot`;
 	}
 
 	get name(): string {

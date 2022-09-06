@@ -23,7 +23,7 @@ export class MongoDBSnapshotStore extends SnapshotStore {
 		fromVersion?: number,
 		direction: StreamReadingDirection = StreamReadingDirection.FORWARD,
 	): Promise<SnapshotEnvelope<A>[]> {
-		const entities = await this.database.collection<SnapshotEnvelopeEntity<A>>(`${subject}-snapshot`).find(
+		const entities = await this.database.collection<SnapshotEnvelopeEntity<A>>(subject).find(
 			{
 				stream: name,
 				...(fromVersion && { 'metadata.sequence': { $gte: fromVersion } }),
@@ -42,7 +42,7 @@ export class MongoDBSnapshotStore extends SnapshotStore {
 		{ name, subject }: SnapshotStream,
 		version: number,
 	): Promise<SnapshotEnvelope<A>> {
-		const entity = await this.database.collection<SnapshotEnvelopeEntity<A>>(`${subject}-snapshot`).findOne({
+		const entity = await this.database.collection<SnapshotEnvelopeEntity<A>>(subject).findOne({
 			stream: name,
 			'metadata.sequence': version,
 		});
@@ -58,14 +58,14 @@ export class MongoDBSnapshotStore extends SnapshotStore {
 		{ name, subject }: SnapshotStream,
 		envelopes: SnapshotEnvelope<A>[],
 	): Promise<void> {
-		await this.database.collection<SnapshotEnvelopeEntity<A>>(`${subject}-snapshot`).insertMany(
+		await this.database.collection<SnapshotEnvelopeEntity<A>>(subject).insertMany(
 			envelopes.map(({ snapshotId, ...rest }) => ({ stream: name, _id: snapshotId, ...rest })),
 		);
 	}
 
 	async getLastSnapshot<A extends Aggregate>({ name, subject }: SnapshotStream<A>): Promise<SnapshotEnvelope<A>> {
 		const [entity] = await this.database
-			.collection<SnapshotEnvelopeEntity<A>>(`${subject}-snapshot`)
+			.collection<SnapshotEnvelopeEntity<A>>(subject)
 			.find(
 				{
 					stream: name,
@@ -75,7 +75,7 @@ export class MongoDBSnapshotStore extends SnapshotStore {
 			.toArray();
 
 		if (entity) {
-			return SnapshotEnvelope.from<A>(entity._id, entity.snapshotName, entity.payload, entity.metadata)
-		};
+			return SnapshotEnvelope.from<A>(entity._id, entity.snapshotName, entity.payload, entity.metadata);
+		}
 	}
 }

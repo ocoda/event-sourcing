@@ -11,8 +11,8 @@ describe(SnapshotStream, () => {
 		const snapshotStream = SnapshotStream.for(Account, accountId);
 
 		expect(snapshotStream).toEqual({ _subject: Account, _id: accountId });
-		expect(snapshotStream.subject).toBe('account');
-		expect(snapshotStream.name).toBe(`account-${accountId.value}`);
+		expect(snapshotStream.subject).toBe('account-snapshot');
+		expect(snapshotStream.name).toBe(`account-snapshot-${accountId.value}`);
 	});
 
 	it('should create a SnapshotStream from an Aggregate instance', () => {
@@ -21,7 +21,7 @@ describe(SnapshotStream, () => {
 		const snapshotStream = SnapshotStream.for(account, accountId);
 
 		expect(snapshotStream).toEqual({ _subject: Account, _id: accountId });
-		expect(snapshotStream.subject).toBe('account');
-		expect(snapshotStream.name).toBe(`account-${accountId.value}`);
+		expect(snapshotStream.subject).toBe('account-snapshot');
+		expect(snapshotStream.name).toBe(`account-snapshot-${accountId.value}`);
 	});
 });
