@@ -58,14 +58,11 @@ export abstract class Aggregate<EventBase extends IEvent = IEvent> {
     return events;
   }
 
-  loadFromSnapshot(snapshot: ISnapshot<Aggregate>) {
+  loadFromSnapshot(snapshot: ISnapshot<Aggregate>, version: number) {
     for (const prop in snapshot) {
-      if (prop === 'version') {
-        this[VERSION] = snapshot[prop];
-        continue;
-      }
       this[prop] = snapshot[prop];
     }
+    this[VERSION] = version;
   }
 
   loadFromHistory(events: EventBase[]) {

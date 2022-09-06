@@ -12,3 +12,8 @@ export type ISnapshot<
     ? never
     : TDerivedAggregate[Key];
 };
+
+export type ISnapshotPayload<TAggregate extends Aggregate> = Record<
+  keyof ISnapshot<TAggregate>,
+  any
+>;

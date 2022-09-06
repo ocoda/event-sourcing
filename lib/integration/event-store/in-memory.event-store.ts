@@ -17,7 +17,7 @@ export class InMemoryEventStore extends EventStore {
       const startEventIndex = events.findIndex(
         ({ metadata }) => metadata.sequence === fromVersion,
       );
-      events = events.slice(startEventIndex);
+      events = startEventIndex === -1 ? [] : events.slice(startEventIndex);
     }
 
     if (direction === StreamReadingDirection.BACKWARD) {
