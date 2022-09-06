@@ -9,7 +9,8 @@
     "test": "jest",
     "test:e2e": "jest --config ./tests/jest-e2e.json --runInBand",
     "build": "tsc -p tsconfig.json",
-    "format": "rome format ."
+    "format": "rome format .",
+    "lint": "rome check ."
   },
   "dependencies": {
     "@nestjs/event-emitter": "^1.3.0",
