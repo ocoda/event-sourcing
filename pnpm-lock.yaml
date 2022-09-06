@@ -18,6 +18,7 @@ specifiers:
   jest-mock: ^28.1.3
   prettier: 2.7.1
   reflect-metadata: 0.1.13
+  rome: 0.8.0-next.ff4153b
   rxjs: 7.5.6
   ts-jest: 28.0.7
   typescript: 4.7.4
@@ -42,6 +43,7 @@ devDependencies:
   jest-mock: 28.1.3
   prettier: 2.7.1
   reflect-metadata: 0.1.13
+  rome: 0.8.0-next.ff4153b
   rxjs: 7.5.6
   ts-jest: 28.0.7_bi2kohzqnxavgozw3csgny5hju
   typescript: 4.7.4
@@ -805,6 +807,54 @@ packages:
       node-fetch: 2.6.7
     transitivePeerDependencies:
       - encoding
+
+  /@rometools/cli-darwin-arm64/0.8.0-next.ff4153b:
+    resolution: {integrity: sha512-P0BCJyN50Go7U5AG2Ujh8rIwmnaGpOqYqpsmF2J9hRX8zdMiIpYdbmAG6q0B6kibmwYcwS0+JgIdrYn4bl9Hpg==}
+    cpu: [arm64]
+    os: [darwin]
+    requiresBuild: true
+    dev: true
+    optional: true
+
+  /@rometools/cli-darwin-x64/0.8.0-next.ff4153b:
+    resolution: {integrity: sha512-d9PuyMo4Nc16/YrWaskU+2mygYK1+Vg5GjHJswX51fkUsNlVbNFqDtYLce6m1Oe7UAh0GcsViOvF3jw7fDncbQ==}
+    cpu: [x64]
+    os: [darwin]
+    requiresBuild: true
+    dev: true
+    optional: true
+
+  /@rometools/cli-linux-arm64/0.8.0-next.ff4153b:
+    resolution: {integrity: sha512-evoUPlk5t6LshpGA9bLB1+42sakKZspyAOJP5P5Fp9HQc9Lvg7c3H5dSosSPSsKK3EVk9ClNVNJq9XMKS5qABQ==}
+    cpu: [arm64]
+    os: [linux]
+    requiresBuild: true
+    dev: true
+    optional: true
+
+  /@rometools/cli-linux-x64/0.8.0-next.ff4153b:
+    resolution: {integrity: sha512-vjMS1l32GC1YZC0ed9Ryr85IDYWKb4gcLgLaGTiaGEgB8tjlWAvB4h8IdomT8bJYSYjgdZOHuV5lTJ5pI2VfKg==}
+    cpu: [x64]
+    os: [linux]
+    requiresBuild: true
+    dev: true
+    optional: true
+
+  /@rometools/cli-win32-arm64/0.8.0-next.ff4153b:
+    resolution: {integrity: sha512-W5sUoDXuE7+bK/hNtafctYT+lfxlLacqeGsw7apFczXa8c7H+SrcHneveTwzl0iUxY2R+XY9wUe4aDa+v+zYlw==}
+    cpu: [arm64]
+    os: [win32]
+    requiresBuild: true
+    dev: true
+    optional: true
+
+  /@rometools/cli-win32-x64/0.8.0-next.ff4153b:
+    resolution: {integrity: sha512-zpEhtqM5K3WfxDv2/bgyXOU6R33lfwuDbehM7eMsaRgwMIA7vbLenxX7Y/hpgPqhZ2MpodJhFLuK8m9yIQ7Rxw==}
+    cpu: [x64]
+    os: [win32]
+    requiresBuild: true
+    dev: true
+    optional: true
 
   /@sinclair/typebox/0.24.20:
     resolution: {integrity: sha512-kVaO5aEFZb33nPMTZBxiPEkY+slxiPtqC7QX8f9B3eGOMBvEfuMfxp9DSTTCsRJPumPKjrge4yagyssO4q6qzQ==}
@@ -3391,6 +3441,20 @@ packages:
     hasBin: true
     dependencies:
       glob: 7.2.3
+    dev: true
+
+  /rome/0.8.0-next.ff4153b:
+    resolution: {integrity: sha512-Hf1gx01l+6JRRKK4XSThLC7d7f8QuFTU5OyaSnGdCd0M//uBVBKSt5b9v9TWK6fT98ZjKMvmMOcZItHwLVJx7g==}
+    engines: {node: '>=14.*'}
+    hasBin: true
+    requiresBuild: true
+    optionalDependencies:
+      '@rometools/cli-darwin-arm64': 0.8.0-next.ff4153b
+      '@rometools/cli-darwin-x64': 0.8.0-next.ff4153b
+      '@rometools/cli-linux-arm64': 0.8.0-next.ff4153b
+      '@rometools/cli-linux-x64': 0.8.0-next.ff4153b
+      '@rometools/cli-win32-arm64': 0.8.0-next.ff4153b
+      '@rometools/cli-win32-x64': 0.8.0-next.ff4153b
     dev: true
 
   /run-parallel/1.2.0:
