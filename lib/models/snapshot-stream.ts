@@ -3,10 +3,14 @@ import { Aggregate } from './aggregate';
 import { Id } from './id';
 
 export class SnapshotStream<A extends Aggregate = Aggregate> {
-	private constructor(private aggregate: Type<A>, private id: Id) {}
+	private constructor(private _subject: Type<A>, private _id: Id) {}
+
+	get subject(): string {
+		return this._subject.name.toLowerCase();
+	}
 
 	get name(): string {
-		return `${this.aggregate.name}-${this.id.value}`;
+		return `${this.subject}-${this._id.value}`;
 	}
 
 	static for<A extends Aggregate<any> = Aggregate<any>>(aggregate: A | Type<A>, id: Id): SnapshotStream<A> {

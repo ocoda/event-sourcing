@@ -10,8 +10,9 @@ describe(EventStream, () => {
 		const accountId = AccountId.generate();
 		const eventStream = EventStream.for(Account, accountId);
 
-		expect(eventStream).toEqual({ aggregate: Account, id: accountId });
-		expect(eventStream.name).toBe(`Account-${accountId.value}`);
+		expect(eventStream).toEqual({ _subject: Account, _id: accountId });
+		expect(eventStream.subject).toBe('account');
+		expect(eventStream.name).toBe(`account-${accountId.value}`);
 	});
 
 	it('should create an EventStream from an Aggregate instance', () => {
@@ -19,7 +20,8 @@ describe(EventStream, () => {
 		const accountId = AccountId.generate();
 		const eventStream = EventStream.for(account, accountId);
 
-		expect(eventStream).toEqual({ aggregate: Account, id: accountId });
-		expect(eventStream.name).toBe(`Account-${accountId.value}`);
+		expect(eventStream).toEqual({ _subject: Account, _id: accountId });
+		expect(eventStream.subject).toBe('account');
+		expect(eventStream.name).toBe(`account-${accountId.value}`);
 	});
 });
