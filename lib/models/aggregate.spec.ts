@@ -67,7 +67,7 @@ describe(Aggregate, () => {
 
 	it('should apply snapshots', () => {
 		const account = Account.open();
-		
+
 		for (let i = 0; i < 4; i++) {
 			account.credit(10);
 		}
@@ -84,6 +84,10 @@ describe(Aggregate, () => {
 		account.credit(50);
 		account.debit(20);
 
-		expect(account.commit()).toEqual([new AccountOpenedEvent(), new AccountCreditedEvent(50), new AccountDebitedEvent(20)]);
+		expect(account.commit()).toEqual([
+			new AccountOpenedEvent(),
+			new AccountCreditedEvent(50),
+			new AccountDebitedEvent(20),
+		]);
 	});
 });
