@@ -6,11 +6,11 @@ export class EventStream<A extends Aggregate = Aggregate> {
 	private constructor(private _subject: Type<A>, private _id: Id) {}
 
 	get subject(): string {
-		return this._subject.name;
+		return this._subject.name.toLowerCase();
 	}
 
 	get name(): string {
-		return `${this._subject.name}-${this._id.value}`;
+		return `${this.subject}-${this._id.value}`;
 	}
 
 	static for<A extends Aggregate<any> = Aggregate<any>>(aggregate: A | Type<A>, id: Id): EventStream<A> {
