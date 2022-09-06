@@ -35,7 +35,7 @@ describe(InMemoryEventStore, () => {
 		const eventStore = new InMemoryEventStore();
 		const eventStream = EventStream.for(Account, accountId);
 
-		eventStore.appendEvents(eventStream, ...events);
+		eventStore.appendEvents(eventStream, events);
 
 		expect(eventStore).toHaveProperty('eventCollection', new Map([[eventStream.name, events]]));
 	});
@@ -44,7 +44,7 @@ describe(InMemoryEventStore, () => {
 		const eventStore = new InMemoryEventStore();
 		const eventStream = EventStream.for(Account, accountId);
 
-		events.forEach((event) => eventStore.appendEvents(eventStream, event));
+		events.forEach((event) => eventStore.appendEvents(eventStream, [event]));
 
 		const resolvedEvents = eventStore.getEvents(eventStream);
 
@@ -55,7 +55,7 @@ describe(InMemoryEventStore, () => {
 		const eventStore = new InMemoryEventStore();
 		const eventStream = EventStream.for(Account, accountId);
 
-		events.forEach((event) => eventStore.appendEvents(eventStream, event));
+		events.forEach((event) => eventStore.appendEvents(eventStream, [event]));
 
 		const resolvedEvents = eventStore.getEvents(eventStream, null, StreamReadingDirection.BACKWARD);
 
@@ -66,7 +66,7 @@ describe(InMemoryEventStore, () => {
 		const eventStore = new InMemoryEventStore();
 		const eventStream = EventStream.for(Account, accountId);
 
-		events.forEach((event) => eventStore.appendEvents(eventStream, event));
+		events.forEach((event) => eventStore.appendEvents(eventStream, [event]));
 
 		const resolvedEvents = eventStore.getEvents(eventStream, 3);
 
@@ -77,7 +77,7 @@ describe(InMemoryEventStore, () => {
 		const eventStore = new InMemoryEventStore();
 		const eventStream = EventStream.for(Account, accountId);
 
-		events.forEach((event) => eventStore.appendEvents(eventStream, event));
+		events.forEach((event) => eventStore.appendEvents(eventStream, [event]));
 
 		const resolvedEvents = eventStore.getEvents(eventStream, 4, StreamReadingDirection.BACKWARD);
 
