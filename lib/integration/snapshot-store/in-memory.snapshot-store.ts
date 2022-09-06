@@ -28,7 +28,7 @@ export class InMemorySnapshotStore extends SnapshotStore {
 		return this.snapshotCollection.get(snapshotStream.name)?.find(({ metadata }) => metadata.sequence === version);
 	}
 
-	appendSnapshots<A extends Aggregate>(snapshotStream: SnapshotStream, ...envelopes: SnapshotEnvelope<A>[]): void {
+	appendSnapshots<A extends Aggregate>(snapshotStream: SnapshotStream, envelopes: SnapshotEnvelope<A>[]): void {
 		const existingEnvelopes = this.snapshotCollection.get(snapshotStream.name) || [];
 		this.snapshotCollection.set(snapshotStream.name, [...existingEnvelopes, ...envelopes]);
 	}

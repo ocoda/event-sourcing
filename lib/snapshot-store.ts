@@ -14,6 +14,6 @@ export abstract class SnapshotStore {
 	): SnapshotEnvelope<A> | Promise<SnapshotEnvelope<A>>;
 	abstract appendSnapshots<A extends Aggregate>(
 		snapshotStream: SnapshotStream<A>,
-		...envelopes: SnapshotEnvelope<A>[]
+		envelopes: SnapshotEnvelope<A>[]
 	): void | Promise<void>;
 }

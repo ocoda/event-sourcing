@@ -25,7 +25,7 @@ describe(InMemorySnapshotStore, () => {
 		const snapshotStore = new InMemorySnapshotStore();
 		const snapshotStream = SnapshotStream.for(Account, accountId);
 
-		snapshotStore.appendSnapshots(snapshotStream, ...snapshots);
+		snapshotStore.appendSnapshots(snapshotStream, snapshots);
 
 		expect(snapshotStore).toHaveProperty('snapshotCollection', new Map([[snapshotStream.name, snapshots]]));
 	});
@@ -34,7 +34,7 @@ describe(InMemorySnapshotStore, () => {
 		const snapshotStore = new InMemorySnapshotStore();
 		const snapshotStream = SnapshotStream.for(Account, accountId);
 
-		snapshotStore.appendSnapshots(snapshotStream, ...snapshots);
+		snapshotStore.appendSnapshots(snapshotStream, snapshots);
 
 		const resolvedSnapshots = snapshotStore.getSnapshots(snapshotStream);
 
@@ -45,7 +45,7 @@ describe(InMemorySnapshotStore, () => {
 		const snapshotStore = new InMemorySnapshotStore();
 		const snapshotStream = SnapshotStream.for(Account, accountId);
 
-		snapshotStore.appendSnapshots(snapshotStream, ...snapshots);
+		snapshotStore.appendSnapshots(snapshotStream, snapshots);
 
 		const resolvedSnapshots = snapshotStore.getSnapshots(snapshotStream, null, StreamReadingDirection.BACKWARD);
 
@@ -56,7 +56,7 @@ describe(InMemorySnapshotStore, () => {
 		const snapshotStore = new InMemorySnapshotStore();
 		const snapshotStream = SnapshotStream.for(Account, accountId);
 
-		snapshotStore.appendSnapshots(snapshotStream, ...snapshots);
+		snapshotStore.appendSnapshots(snapshotStream, snapshots);
 
 		const resolvedSnapshots = snapshotStore.getSnapshots(snapshotStream, 40);
 
@@ -67,7 +67,7 @@ describe(InMemorySnapshotStore, () => {
 		const snapshotStore = new InMemorySnapshotStore();
 		const snapshotStream = SnapshotStream.for(Account, accountId);
 
-		snapshotStore.appendSnapshots(snapshotStream, ...snapshots);
+		snapshotStore.appendSnapshots(snapshotStream, snapshots);
 
 		const resolvedSnapshots = snapshotStore.getSnapshots(snapshotStream, 30, StreamReadingDirection.BACKWARD);
 
@@ -78,7 +78,7 @@ describe(InMemorySnapshotStore, () => {
 		const snapshotStore = new InMemorySnapshotStore();
 		const snapshotStream = SnapshotStream.for(Account, accountId);
 
-		snapshotStore.appendSnapshots(snapshotStream, ...snapshots);
+		snapshotStore.appendSnapshots(snapshotStream, snapshots);
 
 		const resolvedSnapshot = snapshotStore.getLastSnapshot(snapshotStream);
 
