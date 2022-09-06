@@ -12,6 +12,6 @@ export abstract class EventStore {
 	): EventEnvelope | Promise<EventEnvelope>;
 	abstract appendEvents<A extends Aggregate = Aggregate>(
 		eventStream: EventStream<A>,
-		envelopes: EventEnvelope[]
+		envelopes: EventEnvelope[],
 	): void | Promise<void>;
 }
