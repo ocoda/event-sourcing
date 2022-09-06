@@ -5,16 +5,16 @@ import { Aggregate } from '../../models';
  * `@Snapshot` decorator metadata
  */
 export interface SnapshotMetadata {
-  /**
+	/**
    * The aggregate type of the snapshot.
    */
-  aggregate: Type<Aggregate>;
-  /**
+	aggregate: Type<Aggregate>;
+	/**
    * The name of the aggregate.
    */
-  name: string;
-  /**
+	name: string;
+	/**
    * Per how many events a snapshot should be taken.
    */
-  interval?: number;
+	interval?: number;
 }

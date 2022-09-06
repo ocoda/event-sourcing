@@ -2,16 +2,16 @@
  * `SnapshotEnvelope` metadata
  */
 export interface SnapshotEnvelopeMetadata {
-  /**
+	/**
    * Aggregate id the message belongs to.
    */
-  aggregateId: string;
-  /**
+	aggregateId: string;
+	/**
    * Version of the aggregate.
    */
-  sequence: number;
-  /**
+	sequence: number;
+	/**
    * Time at which the snapshot was taken.
    */
-  registeredOn: number;
+	registeredOn: number;
 }

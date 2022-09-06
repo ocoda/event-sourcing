@@ -12,10 +12,10 @@ import { randomUUID } from 'crypto';
  * @param query query *type* to be handled by this handler.
  */
 export const QueryHandler = (query: IQuery): ClassDecorator => {
-  return (target: object) => {
-    if (!Reflect.hasMetadata(QUERY_METADATA, query)) {
-      Reflect.defineMetadata(QUERY_METADATA, { id: randomUUID() }, query);
-    }
-    Reflect.defineMetadata(QUERY_HANDLER_METADATA, query, target);
-  };
+	return (target: object) => {
+		if (!Reflect.hasMetadata(QUERY_METADATA, query)) {
+			Reflect.defineMetadata(QUERY_METADATA, { id: randomUUID() }, query);
+		}
+		Reflect.defineMetadata(QUERY_HANDLER_METADATA, query, target);
+	};
 };

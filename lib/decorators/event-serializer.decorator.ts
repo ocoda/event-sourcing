@@ -11,7 +11,7 @@ import { EVENT_SERIALIZER_METADATA } from './constants';
  * @param event event *type* to be handled by this serializer.
  */
 export const EventSerializer = (event: IEvent): ClassDecorator => {
-  return (target: object) => {
-    Reflect.defineMetadata(EVENT_SERIALIZER_METADATA, event, target);
-  };
+	return (target: object) => {
+		Reflect.defineMetadata(EVENT_SERIALIZER_METADATA, event, target);
+	};
 };

@@ -1,3 +1,3 @@
 export interface CommandMetadata {
-  id: string;
+	id: string;
 }

@@ -8,7 +8,5 @@ export * from './event-store';
 export * from './exceptions';
 export * from './interfaces';
 export * from './models';
-export * from './models/event-envelope';
-export * from './models/value-object';
 export * from './query-bus';
 export * from './snapshot-store';

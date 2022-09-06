@@ -4,12 +4,12 @@ import { IEvent, IEventPublisher } from './interfaces';
 
 @Injectable()
 export class EventPublisher implements IEventPublisher {
-  constructor(private readonly eventEmitter: EventEmitter2) {}
+	constructor(private readonly eventEmitter: EventEmitter2) {}
 
-  publish<T extends IEvent = IEvent>(event: T) {
-    this.eventEmitter.emit(event.constructor.name, event);
-  }
-  publishAll?<T extends IEvent = IEvent>(events: T[]) {
-    events.forEach((event) => this.publish(event));
-  }
+	publish<T extends IEvent = IEvent>(event: T) {
+		this.eventEmitter.emit(event.constructor.name, event);
+	}
+	publishAll?<T extends IEvent = IEvent>(events: T[]) {
+		events.forEach((event) => this.publish(event));
+	}
 }

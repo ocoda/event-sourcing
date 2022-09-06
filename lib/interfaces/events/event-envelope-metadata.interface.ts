@@ -2,16 +2,16 @@
  * `EventEnvelope` metadata
  */
 export interface EventEnvelopeMetadata {
-  /**
+	/**
    * Aggregate id the message belongs to.
    */
-  aggregateId: string;
-  /**
+	aggregateId: string;
+	/**
    * Version of the aggregate.
    */
-  sequence: number;
-  /**
+	sequence: number;
+	/**
    * Time at which the event ocurred.
    */
-  occurredOn: number;
+	occurredOn: number;
 }

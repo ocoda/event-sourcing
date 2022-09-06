@@ -12,14 +12,10 @@ import { randomUUID } from 'crypto';
  * @param command command *type* to be handled by this handler.
  */
 export const CommandHandler = (command: ICommand): ClassDecorator => {
-  return (target: object) => {
-    if (!Reflect.hasMetadata(COMMAND_METADATA, command)) {
-      Reflect.defineMetadata(
-        COMMAND_METADATA,
-        { id: randomUUID() } as CommandMetadata,
-        command,
-      );
-    }
-    Reflect.defineMetadata(COMMAND_HANDLER_METADATA, command, target);
-  };
+	return (target: object) => {
+		if (!Reflect.hasMetadata(COMMAND_METADATA, command)) {
+			Reflect.defineMetadata(COMMAND_METADATA, { id: randomUUID() } as CommandMetadata, command);
+		}
+		Reflect.defineMetadata(COMMAND_HANDLER_METADATA, command, target);
+	};
 };

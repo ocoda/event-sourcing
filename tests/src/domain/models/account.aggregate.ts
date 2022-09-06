@@ -1,82 +1,75 @@
 import { Aggregate, Id } from '@ocoda/event-sourcing';
 import {
-  AccountClosedEvent,
-  AccountCreditedEvent,
-  AccountDebitedEvent,
-  AccountOpenedEvent,
-  AccountOwnerAddedEvent,
-  AccountOwnerRemovedEvent,
+	AccountClosedEvent,
+	AccountCreditedEvent,
+	AccountDebitedEvent,
+	AccountOpenedEvent,
+	AccountOwnerAddedEvent,
+	AccountOwnerRemovedEvent,
 } from '../events';
 
 export class AccountId extends Id {}
 export class AccountOwnerId extends Id {}
 
 export class Account extends Aggregate {
-  public id: AccountId;
-  public ownerIds: AccountOwnerId[];
-  public balance: number;
-  public openedOn: Date;
-  public closedOn: Date;
+	public id: AccountId;
+	public ownerIds: AccountOwnerId[];
+	public balance: number;
+	public openedOn: Date;
+	public closedOn: Date;
 
-  public static open(accountId: AccountId, accountOwnerIds?: AccountOwnerId[]) {
-    const account = new Account();
+	public static open(accountId: AccountId, accountOwnerIds?: AccountOwnerId[]) {
+		const account = new Account();
 
-    account.applyEvent(
-      new AccountOpenedEvent(
-        accountId.value,
-        accountOwnerIds?.map(({ value }) => value) || [],
-      ),
-    );
+		account.applyEvent(new AccountOpenedEvent(accountId.value, accountOwnerIds?.map(({ value }) => value) || []));
 
-    return account;
-  }
+		return account;
+	}
 
-  public addOwner(accountOwnerId: AccountOwnerId) {
-    this.applyEvent(new AccountOwnerAddedEvent(accountOwnerId.value));
-  }
+	public addOwner(accountOwnerId: AccountOwnerId) {
+		this.applyEvent(new AccountOwnerAddedEvent(accountOwnerId.value));
+	}
 
-  public removeOwner(accountOwnerId: AccountOwnerId) {
-    this.applyEvent(new AccountOwnerRemovedEvent(accountOwnerId.value));
-  }
+	public removeOwner(accountOwnerId: AccountOwnerId) {
+		this.applyEvent(new AccountOwnerRemovedEvent(accountOwnerId.value));
+	}
 
-  public credit(amount: number) {
-    this.applyEvent(new AccountCreditedEvent(amount));
-  }
+	public credit(amount: number) {
+		this.applyEvent(new AccountCreditedEvent(amount));
+	}
 
-  public debit(amount: number) {
-    this.applyEvent(new AccountDebitedEvent(amount));
-  }
+	public debit(amount: number) {
+		this.applyEvent(new AccountDebitedEvent(amount));
+	}
 
-  public close() {
-    this.applyEvent(new AccountClosedEvent());
-  }
+	public close() {
+		this.applyEvent(new AccountClosedEvent());
+	}
 
-  onAccountOpenedEvent(event: AccountOpenedEvent) {
-    this.id = AccountId.from(event.accountId);
-    this.ownerIds = event.accountOwnerIds.map(AccountOwnerId.from);
-    this.balance = 0;
-    this.openedOn = new Date();
-  }
+	onAccountOpenedEvent(event: AccountOpenedEvent) {
+		this.id = AccountId.from(event.accountId);
+		this.ownerIds = event.accountOwnerIds.map(AccountOwnerId.from);
+		this.balance = 0;
+		this.openedOn = new Date();
+	}
 
-  onAccountOwnerAddedEvent(event: AccountOwnerAddedEvent) {
-    this.ownerIds.push(AccountOwnerId.from(event.accountOwnerId));
-  }
+	onAccountOwnerAddedEvent(event: AccountOwnerAddedEvent) {
+		this.ownerIds.push(AccountOwnerId.from(event.accountOwnerId));
+	}
 
-  onAccountOwnerRemovedEvent(event: AccountOwnerAddedEvent) {
-    this.ownerIds = this.ownerIds.filter(
-      ({ value }) => value !== event.accountOwnerId,
-    );
-  }
+	onAccountOwnerRemovedEvent(event: AccountOwnerAddedEvent) {
+		this.ownerIds = this.ownerIds.filter(({ value }) => value !== event.accountOwnerId);
+	}
 
-  onAccountCreditedEvent(event: AccountCreditedEvent) {
-    this.balance += event.amount;
-  }
+	onAccountCreditedEvent(event: AccountCreditedEvent) {
+		this.balance += event.amount;
+	}
 
-  onAccountDebitedEvent(event: AccountDebitedEvent) {
-    this.balance -= event.amount;
-  }
+	onAccountDebitedEvent(event: AccountDebitedEvent) {
+		this.balance -= event.amount;
+	}
 
-  onAccountClosedEvent() {
-    this.closedOn = new Date();
-  }
+	onAccountClosedEvent() {
+		this.closedOn = new Date();
+	}
 }

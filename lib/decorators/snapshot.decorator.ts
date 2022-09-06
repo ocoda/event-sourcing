@@ -1,4 +1,4 @@
-import { IEvent, SnapshotMetadata } from '../interfaces';
+import { SnapshotMetadata } from '../interfaces';
 import 'reflect-metadata';
 import { SNAPSHOT_METADATA } from './constants';
 import { Aggregate } from '../models';
@@ -15,19 +15,16 @@ import { Type } from '@nestjs/common';
  * @param aggregate aggregate *type* to be handled by this handler.
  * @param metadata snapshot metadata.
  */
-export const Snapshot = (
-  aggregate: Type<Aggregate>,
-  options?: Omit<SnapshotMetadata, 'aggregate'>,
-): ClassDecorator => {
-  return (target: object) => {
-    Reflect.defineMetadata(
-      SNAPSHOT_METADATA,
-      {
-        aggregate,
-        name: options?.name || aggregate.name.toLowerCase(),
-        interval: options?.interval || 10,
-      },
-      target,
-    );
-  };
+export const Snapshot = (aggregate: Type<Aggregate>, options?: Omit<SnapshotMetadata, 'aggregate'>): ClassDecorator => {
+	return (target: object) => {
+		Reflect.defineMetadata(
+			SNAPSHOT_METADATA,
+			{
+				aggregate,
+				name: options?.name || aggregate.name.toLowerCase(),
+				interval: options?.interval || 10,
+			},
+			target,
+		);
+	};
 };
