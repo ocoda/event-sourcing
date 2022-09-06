@@ -3,6 +3,7 @@ import { EventStore } from '../../event-store';
 import { StreamReadingDirection } from '../../constants';
 import { Db } from 'mongodb';
 import { EventEnvelopeMetadata } from '../../interfaces';
+import { EventNotFoundException } from '../../exceptions';
 
 export interface EventEnvelopeEntity {
 	_id: string;
@@ -28,7 +29,7 @@ export class MongoDBEventStore extends EventStore {
 				...(fromVersion && { 'metadata.sequence': { $gte: fromVersion } }),
 			},
 			{
-				...(direction === StreamReadingDirection.BACKWARD && { sort: { 'metadata.sequence': -1 } }),
+				sort: { 'metadata.sequence': direction === StreamReadingDirection.FORWARD ? 1 : -1 },
 			},
 		);
 
@@ -38,11 +39,16 @@ export class MongoDBEventStore extends EventStore {
 	}
 
 	async getEvent({ name, subject }: EventStream, version: number): Promise<EventEnvelope> {
-		const { _id, eventName, payload, metadata } = await this.database.collection<EventEnvelopeEntity>(subject).findOne({
+		const entity = await this.database.collection<EventEnvelopeEntity>(subject).findOne({
 			stream: name,
 			'metadata.sequence': version,
 		});
-		return EventEnvelope.from(_id, eventName, payload, metadata);
+
+		if (!entity) {
+			throw EventNotFoundException.withVersion(name, version);
+		}
+
+		return EventEnvelope.from(entity._id, entity.eventName, entity.payload, entity.metadata);
 	}
 
 	async appendEvents({ name, subject }: EventStream, envelopes: EventEnvelope[]): Promise<void> {

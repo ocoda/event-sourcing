@@ -1,6 +1,7 @@
 import { InMemorySnapshotStore } from './in-memory.snapshot-store';
 import { Aggregate, Id, SnapshotStream, SnapshotEnvelope } from '../../models';
 import { StreamReadingDirection } from '../../constants';
+import { SnapshotNotFoundException } from '../../exceptions';
 
 class Account extends Aggregate {
 	constructor(private readonly id: AccountId, private readonly balance: number) {
@@ -11,6 +12,9 @@ class AccountId extends Id {}
 
 describe(InMemorySnapshotStore, () => {
 	const accountId = AccountId.generate();
+	const snapshotStream = SnapshotStream.for(Account, accountId);
+
+	let snapshotStore: InMemorySnapshotStore;
 
 	const snapshots = [
 		SnapshotEnvelope.new<Account>(accountId, 10, 'account', { balance: 50 }),
@@ -21,19 +25,31 @@ describe(InMemorySnapshotStore, () => {
 		SnapshotEnvelope.new<Account>(accountId, 60, 'account', { balance: 150 }),
 	];
 
-	it('should append snapshots', async () => {
-		const snapshotStore = new InMemorySnapshotStore();
-		const snapshotStream = SnapshotStream.for(Account, accountId);
+	beforeEach(() => {
+		snapshotStore = new InMemorySnapshotStore();
+	});
 
+	it('should append snapshots', async () => {
 		snapshotStore.appendSnapshots(snapshotStream, snapshots);
 
 		expect(snapshotStore).toHaveProperty('snapshotCollection', new Map([[snapshotStream.name, snapshots]]));
 	});
 
-	it('should retrieve snapshots forward', async () => {
-		const snapshotStore = new InMemorySnapshotStore();
-		const snapshotStream = SnapshotStream.for(Account, accountId);
+	it('should retrieve a single snapshot', async () => {
+		snapshotStore.appendSnapshots(snapshotStream, snapshots);
 
+		const resolvedSnapshot = snapshotStore.getSnapshot(snapshotStream, snapshots[3].metadata.sequence);
+
+		expect(resolvedSnapshot).toEqual(snapshots[3]);
+	});
+
+	it("should throw when a snapshot isn't found", async () => {
+		expect(() => snapshotStore.getSnapshot(snapshotStream, 5)).toThrow(
+			SnapshotNotFoundException.withVersion(snapshotStream.name, 5),
+		);
+	});
+
+	it('should retrieve snapshots forward', async () => {
 		snapshotStore.appendSnapshots(snapshotStream, snapshots);
 
 		const resolvedSnapshots = snapshotStore.getSnapshots(snapshotStream);
@@ -42,9 +58,6 @@ describe(InMemorySnapshotStore, () => {
 	});
 
 	it('should retrieve snapshots backwards', async () => {
-		const snapshotStore = new InMemorySnapshotStore();
-		const snapshotStream = SnapshotStream.for(Account, accountId);
-
 		snapshotStore.appendSnapshots(snapshotStream, snapshots);
 
 		const resolvedSnapshots = snapshotStore.getSnapshots(snapshotStream, null, StreamReadingDirection.BACKWARD);
@@ -53,9 +66,6 @@ describe(InMemorySnapshotStore, () => {
 	});
 
 	it('should retrieve snapshots forward from a certain version', async () => {
-		const snapshotStore = new InMemorySnapshotStore();
-		const snapshotStream = SnapshotStream.for(Account, accountId);
-
 		snapshotStore.appendSnapshots(snapshotStream, snapshots);
 
 		const resolvedSnapshots = snapshotStore.getSnapshots(snapshotStream, 40);
@@ -64,9 +74,6 @@ describe(InMemorySnapshotStore, () => {
 	});
 
 	it('should retrieve snapshots backwards from a certain version', async () => {
-		const snapshotStore = new InMemorySnapshotStore();
-		const snapshotStream = SnapshotStream.for(Account, accountId);
-
 		snapshotStore.appendSnapshots(snapshotStream, snapshots);
 
 		const resolvedSnapshots = snapshotStore.getSnapshots(snapshotStream, 30, StreamReadingDirection.BACKWARD);
@@ -75,9 +82,6 @@ describe(InMemorySnapshotStore, () => {
 	});
 
 	it('should retrieve the last snapshot', async () => {
-		const snapshotStore = new InMemorySnapshotStore();
-		const snapshotStream = SnapshotStream.for(Account, accountId);
-
 		snapshotStore.appendSnapshots(snapshotStream, snapshots);
 
 		const resolvedSnapshot = snapshotStore.getLastSnapshot(snapshotStream);
@@ -85,12 +89,7 @@ describe(InMemorySnapshotStore, () => {
 		expect(resolvedSnapshot).toEqual(snapshots[snapshots.length - 1]);
 	});
 
-	it('should return undefined if there are no snapshots', async () => {
-		const snapshotStore = new InMemorySnapshotStore();
-		const snapshotStream = SnapshotStream.for(Account, accountId);
-
-		expect(snapshotStore.getSnapshots(snapshotStream)).toBeUndefined();
-		expect(snapshotStore.getSnapshot(snapshotStream, 50)).toBeUndefined();
+	it('should return undefined if there is no last snapshot', async () => {
 		expect(snapshotStore.getLastSnapshot(snapshotStream)).toBeUndefined();
 	});
 });

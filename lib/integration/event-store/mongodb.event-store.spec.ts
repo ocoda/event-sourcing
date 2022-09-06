@@ -4,6 +4,7 @@ import { MongoDBEventStore } from './mongodb.event-store';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { MongoClient } from 'mongodb';
 import { StreamReadingDirection } from '../../constants';
+import { EventNotFoundException } from '../../exceptions';
 
 class Account extends Aggregate {
 	constructor(private readonly id: AccountId, private readonly balance: number) {
@@ -66,6 +67,20 @@ describe(MongoDBEventStore, () => {
 			.toArray();
 
 		expect(storedEvents.map(({ _id }) => _id)).toEqual(events.map(({ eventId }) => eventId));
+	});
+
+	it('should retrieve a single event', async () => {
+		await eventStore.appendEvents(eventStream, events);
+
+		const resolvedEvent = await eventStore.getEvent(eventStream, events[3].metadata.sequence);
+
+		expect(resolvedEvent).toEqual(events[3]);
+	});
+
+	it("should throw when an event isn't found", async () => {
+		await expect(eventStore.getEvent(eventStream, 5)).rejects.toThrow(
+			EventNotFoundException.withVersion(eventStream.name, 5),
+		);
 	});
 
 	it('should retrieve events forward', async () => {

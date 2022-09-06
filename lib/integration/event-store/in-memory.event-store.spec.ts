@@ -2,6 +2,7 @@ import { Aggregate, EventEnvelope, EventStream, Id } from '../../models';
 import { IEvent } from '../../interfaces';
 import { InMemoryEventStore } from './in-memory.event-store';
 import { StreamReadingDirection } from '../../constants';
+import { EventNotFoundException } from '../../exceptions';
 
 class Account extends Aggregate {
 	constructor(private readonly id: AccountId, private readonly balance: number) {
@@ -21,6 +22,9 @@ class AccountClosedEvent implements IEvent {}
 
 describe(InMemoryEventStore, () => {
 	const accountId = AccountId.generate();
+	const eventStream = EventStream.for(Account, accountId);
+
+	let eventStore: InMemoryEventStore;
 
 	const events = [
 		EventEnvelope.new(accountId, 1, 'account-opened', new AccountOpenedEvent()),
@@ -31,20 +35,30 @@ describe(InMemoryEventStore, () => {
 		EventEnvelope.new(accountId, 6, 'account-closed', new AccountClosedEvent()),
 	];
 
-	it('should append events', async () => {
-		const eventStore = new InMemoryEventStore();
-		const eventStream = EventStream.for(Account, accountId);
+	beforeEach(() => {
+		eventStore = new InMemoryEventStore();
+	});
 
+	it('should append events', async () => {
 		eventStore.appendEvents(eventStream, events);
 
 		expect(eventStore).toHaveProperty('eventCollection', new Map([[eventStream.name, events]]));
 	});
 
-	it('should retrieve events forward', async () => {
-		const eventStore = new InMemoryEventStore();
-		const eventStream = EventStream.for(Account, accountId);
+	it('should retrieve a single event', async () => {
+		eventStore.appendEvents(eventStream, events);
 
-		events.forEach((event) => eventStore.appendEvents(eventStream, [event]));
+		const resolvedEvent = eventStore.getEvent(eventStream, events[3].metadata.sequence);
+
+		expect(resolvedEvent).toEqual(events[3]);
+	});
+
+	it("should throw when an event isn't found", async () => {
+		expect(() => eventStore.getEvent(eventStream, 5)).toThrow(EventNotFoundException.withVersion(eventStream.name, 5));
+	});
+
+	it('should retrieve events forward', async () => {
+		eventStore.appendEvents(eventStream, events);
 
 		const resolvedEvents = eventStore.getEvents(eventStream);
 
@@ -52,10 +66,7 @@ describe(InMemoryEventStore, () => {
 	});
 
 	it('should retrieve events backwards', async () => {
-		const eventStore = new InMemoryEventStore();
-		const eventStream = EventStream.for(Account, accountId);
-
-		events.forEach((event) => eventStore.appendEvents(eventStream, [event]));
+		eventStore.appendEvents(eventStream, events);
 
 		const resolvedEvents = eventStore.getEvents(eventStream, null, StreamReadingDirection.BACKWARD);
 
@@ -63,10 +74,7 @@ describe(InMemoryEventStore, () => {
 	});
 
 	it('should retrieve events forward from a certain version', async () => {
-		const eventStore = new InMemoryEventStore();
-		const eventStream = EventStream.for(Account, accountId);
-
-		events.forEach((event) => eventStore.appendEvents(eventStream, [event]));
+		eventStore.appendEvents(eventStream, events);
 
 		const resolvedEvents = eventStore.getEvents(eventStream, 3);
 
@@ -74,10 +82,7 @@ describe(InMemoryEventStore, () => {
 	});
 
 	it('should retrieve events backwards from a certain version', async () => {
-		const eventStore = new InMemoryEventStore();
-		const eventStream = EventStream.for(Account, accountId);
-
-		events.forEach((event) => eventStore.appendEvents(eventStream, [event]));
+		eventStore.appendEvents(eventStream, events);
 
 		const resolvedEvents = eventStore.getEvents(eventStream, 4, StreamReadingDirection.BACKWARD);
 
