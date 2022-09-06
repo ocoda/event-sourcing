@@ -1,53 +1,64 @@
 import { Aggregate } from './aggregate';
-import { IEvent } from '../interfaces';
+import { IEvent, ISnapshot } from '../interfaces';
 
 describe(Aggregate, () => {
 	class AccountOpenedEvent implements IEvent {}
-	class MoneyDepositedEvent implements IEvent {
+	class AccountCreditedEvent implements IEvent {
 		constructor(public readonly amount: number) {}
 	}
-	class MoneyWithdrawnEvent implements IEvent {
+	class AccountDebitedEvent implements IEvent {
 		constructor(public readonly amount: number) {}
 	}
 
 	class Account extends Aggregate {
 		public balance: number;
 
-		onAccountOpenedEvent(event: AccountOpenedEvent) {
+		static open() {
+			const account = new Account();
+			account.applyEvent(new AccountOpenedEvent());
+			return account;
+		}
+
+		public credit(amount: number) {
+			this.applyEvent(new AccountCreditedEvent(amount));
+		}
+
+		public debit(amount: number) {
+			this.applyEvent(new AccountDebitedEvent(amount));
+		}
+
+		onAccountOpenedEvent() {
 			this.balance = 0;
 		}
 
-		onMoneyDepositedEvent(event: MoneyDepositedEvent) {
+		onAccountCreditedEvent(event: AccountCreditedEvent) {
 			this.balance += event.amount;
 		}
 
-		onMoneyWithdrawnEvent(event: MoneyWithdrawnEvent) {
+		onAccountDebitedEvent(event: AccountDebitedEvent) {
 			this.balance -= event.amount;
 		}
 	}
 
 	it('should apply events', () => {
-		const account = new Account();
-
-		account.applyEvent(new AccountOpenedEvent());
+		const account = Account.open();
 		expect(account.version).toBe(1);
 		expect(account.balance).toBe(0);
 
-		account.applyEvent(new MoneyDepositedEvent(50));
+		account.credit(50);
 		expect(account.version).toBe(2);
 		expect(account.balance).toBe(50);
 
-		account.applyEvent(new MoneyWithdrawnEvent(20));
+		account.debit(20);
 		expect(account.version).toBe(3);
 		expect(account.balance).toBe(30);
 	});
 
 	it('should create snapshots', () => {
-		const account = new Account();
+		const account = Account.open();
 
-		account.applyEvent(new AccountOpenedEvent());
-		account.applyEvent(new MoneyDepositedEvent(50));
-		account.applyEvent(new MoneyWithdrawnEvent(20));
+		account.credit(50);
+		account.debit(20);
 
 		const snapshot = account.snapshot;
 
@@ -55,23 +66,24 @@ describe(Aggregate, () => {
 	});
 
 	it('should apply snapshots', () => {
-		const account = new Account();
-		account.useSnapshots();
+		const account = Account.open();
+		
+		for (let i = 0; i < 4; i++) {
+			account.credit(10);
+		}
 
-		const snapshot = { version: 5, balance: 123 };
-		account.loadFromHistory([], snapshot);
+		const accountFromSnapshot = new Account();
+		accountFromSnapshot.loadFromSnapshot(account.snapshot, account.version);
 
-		expect(account.version).toBe(5);
-		expect(account.balance).toBe(123);
+		expect(accountFromSnapshot.version).toBe(account.version);
+		expect(accountFromSnapshot.balance).toBe(account.balance);
 	});
 
 	it('should commit events', () => {
-		const account = new Account();
+		const account = Account.open();
+		account.credit(50);
+		account.debit(20);
 
-		const events = [new AccountOpenedEvent(), new MoneyDepositedEvent(50), new MoneyWithdrawnEvent(20)];
-
-		events.forEach((event) => account.applyEvent(event));
-
-		expect(account.commit()).toEqual(events);
+		expect(account.commit()).toEqual([new AccountOpenedEvent(), new AccountCreditedEvent(50), new AccountDebitedEvent(20)]);
 	});
 });
