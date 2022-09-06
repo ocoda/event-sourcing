@@ -25,7 +25,7 @@ export abstract class SnapshotHandler<A extends Aggregate = Aggregate> {
 
 			await this.snapshotStore.appendSnapshots(
 				snapshotStream,
-				SnapshotEnvelope.new(id, aggregate.version, this.snapshotName, payload),
+				[SnapshotEnvelope.new(id, aggregate.version, this.snapshotName, payload)],
 			);
 		}
 	}
