@@ -1,11 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { EventStore, EventStream, EventMap } from '@ocoda/event-sourcing';
+import { EventStore, EventStream } from '@ocoda/event-sourcing';
 import { Account, AccountId, AccountSnapshotHandler } from '../../domain/models';
 
 @Injectable()
 export class AccountRepository {
 	constructor(
-		private readonly eventMap: EventMap,
 		private readonly eventStore: EventStore,
 		private readonly accountSnapshotHandler: AccountSnapshotHandler,
 	) {}
@@ -16,12 +15,7 @@ export class AccountRepository {
 
 		await this.accountSnapshotHandler.hydrate(accountId, account);
 
-		const eventEnvelopes = await this.eventStore.getEvents(eventStream, account.version + 1);
-
-		let events = eventEnvelopes.map(({ eventName, payload }) => {
-			const eventSerializer = this.eventMap.getSerializer(eventName);
-			return eventSerializer.deserialize(payload);
-		});
+		const events = await this.eventStore.getEvents(eventStream, account.version + 1);
 
 		account.loadFromHistory(events);
 
@@ -30,12 +24,11 @@ export class AccountRepository {
 
 	async save(account: Account): Promise<void> {
 		const events = account.commit();
-
-		const envelopes = this.eventMap.createEnvelopes(account.id, account.version, events);
+		const stream = EventStream.for<Account>(Account, account.id);
 
 		await Promise.all([
 			this.accountSnapshotHandler.save(account.id, account),
-			this.eventStore.appendEvents(EventStream.for<Account>(Account, account.id), envelopes),
+			this.eventStore.appendEvents(account.id, account.version, stream, events),
 		]);
 	}
 }

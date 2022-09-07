@@ -68,7 +68,7 @@ describe(MongoDBEventStore, () => {
 			EventEnvelope.new(accountId, 4, 'account-credited', eventMap.serializeEvent(events[3])),
 			EventEnvelope.new(accountId, 5, 'account-debited', eventMap.serializeEvent(events[4])),
 			EventEnvelope.new(accountId, 6, 'account-closed', eventMap.serializeEvent(events[5])),
-			];
+		];
 
 		mongod = await MongoMemoryServer.create();
 		client = new MongoClient(mongod.getUri());

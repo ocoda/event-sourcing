@@ -1,7 +1,7 @@
 import { EventName } from './decorators';
 import { EventMap } from './event-map';
 import { MissingEventMetadataException, UnregisteredEventException } from './exceptions';
-import { DefaultEventSerializer } from "./helpers";
+import { DefaultEventSerializer } from './helpers';
 import { IEvent, IEventPayload, IEventSerializer } from './interfaces';
 
 describe(EventMap, () => {
@@ -69,7 +69,9 @@ describe(EventMap, () => {
 		const eventMap = new EventMap();
 
 		expect(() => eventMap.getName(UnregisteredEvent)).toThrowError(new UnregisteredEventException(UnregisteredEvent));
-		expect(() => eventMap.getName(new UnregisteredEvent())).toThrowError(new UnregisteredEventException(new UnregisteredEvent()));
+		expect(() => eventMap.getName(new UnregisteredEvent())).toThrowError(
+			new UnregisteredEventException(new UnregisteredEvent()),
+		);
 	});
 
 	it('returns the serializer of a registered event by its name, constructor or an instance', () => {
@@ -93,11 +95,11 @@ describe(EventMap, () => {
 		eventMap.register(AccountOpenedEvent, DefaultEventSerializer.for(AccountOpenedEvent));
 
 		const event = new AccountOpenedEvent(new Date());
-		const payload = eventMap.serializeEvent<AccountOpenedEvent>(event)
+		const payload = eventMap.serializeEvent<AccountOpenedEvent>(event);
 
-		expect(payload).toBeInstanceOf(Object)
-		expect(payload).toEqual(event)
-	})
+		expect(payload).toBeInstanceOf(Object);
+		expect(payload).toEqual(event);
+	});
 
 	it('deserializes a registered event', () => {
 		const eventMap = new EventMap();
@@ -106,7 +108,7 @@ describe(EventMap, () => {
 		const payload = { opened: new Date() };
 		const event = eventMap.deserializeEvent<AccountOpenedEvent>('account-opened', payload);
 
-		expect(event).toBeInstanceOf(AccountOpenedEvent)
-		expect(event).toEqual(event)
-	})
+		expect(event).toBeInstanceOf(AccountOpenedEvent);
+		expect(event).toEqual(event);
+	});
 });

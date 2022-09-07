@@ -1,19 +1,19 @@
-import { IEventMapTarget } from "../../event-map";
+import { IEventMapTarget } from '../../event-map';
 
 export class UnregisteredEventException extends Error {
 	constructor(target: IEventMapTarget) {
 		let name: string;
 
-		switch(typeof target) {
+		switch (typeof target) {
 			case 'string':
 				name = target;
-			break;
+				break;
 			case 'object':
 				name = target.constructor.name;
-			break;
+				break;
 			case 'function':
 				name = target.name;
-			break;
+				break;
 		}
 
 		super(`Event '${name}' is not registered. Register it in the EventSourcingModule.`);
