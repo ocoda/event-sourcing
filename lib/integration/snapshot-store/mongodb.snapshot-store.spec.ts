@@ -1,11 +1,8 @@
-import { InMemorySnapshotStore } from './in-memory.snapshot-store';
 import { Aggregate, Id, SnapshotStream, SnapshotEnvelope } from '../../models';
 import { StreamReadingDirection } from '../../constants';
 import { SnapshotNotFoundException } from '../../exceptions';
 import { MongoDBSnapshotStore } from './mongodb.snapshot-store';
-import { MongoMemoryServer } from 'mongodb-memory-server';
 import { MongoClient } from 'mongodb';
-import { MongoDBEventStore } from '../event-store';
 
 class Account extends Aggregate {
 	constructor(private readonly id: AccountId, private readonly balance: number) {
@@ -15,7 +12,6 @@ class Account extends Aggregate {
 class AccountId extends Id {}
 
 describe(MongoDBSnapshotStore, () => {
-	let mongod: MongoMemoryServer;
 	let client: MongoClient;
 	let snapshotStore: MongoDBSnapshotStore;
 
@@ -32,8 +28,7 @@ describe(MongoDBSnapshotStore, () => {
 	];
 
 	beforeAll(async () => {
-		mongod = await MongoMemoryServer.create();
-		client = new MongoClient(mongod.getUri());
+		client = new MongoClient('mongodb://localhost:27017');
 		snapshotStore = new MongoDBSnapshotStore(client.db());
 	});
 
@@ -47,7 +42,6 @@ describe(MongoDBSnapshotStore, () => {
 
 	afterAll(async () => {
 		await client.close();
-		await mongod.stop();
 	});
 
 	it('should append snapshots', async () => {
