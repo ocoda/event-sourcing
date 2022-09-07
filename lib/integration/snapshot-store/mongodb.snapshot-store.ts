@@ -1,5 +1,5 @@
 import { ISnapshotPayload, SnapshotEnvelopeMetadata } from '../../interfaces';
-import { Db } from 'mongodb';
+import { Db, MongoClient } from 'mongodb';
 import { StreamReadingDirection } from '../../constants';
 import { Aggregate, SnapshotEnvelope, SnapshotStream } from '../../models';
 import { SnapshotStore } from '../../snapshot-store';
@@ -14,8 +14,10 @@ export interface MongoSnapshotEnvelopeEntity<A extends Aggregate> {
 }
 
 export class MongoDBSnapshotStore extends SnapshotStore {
-	constructor(protected readonly database: Db) {
+	private readonly database: Db;
+	constructor(readonly client: MongoClient) {
 		super();
+		this.database = client.db();
 	}
 
 	async getSnapshots<A extends Aggregate>(

@@ -24,11 +24,11 @@ export const EventStoreProvider = {
 	useFactory: async (eventMap: EventMap, options: EventSourcingModuleOptions) => {
 		switch (options.database) {
 			case 'elasticsearch':
-				const client = await new Client({ node: options.url });
-				return new ElasticsearchEventStore(eventMap, client);
+				const elasticClient = await new Client({ node: options.url });
+				return new ElasticsearchEventStore(eventMap, elasticClient);
 			case 'mongodb':
-				const { db } = await new MongoClient(options.url).connect();
-				return new MongoDBEventStore(eventMap, db());
+				const mongoClient = await new MongoClient(options.url).connect();
+				return new MongoDBEventStore(eventMap, mongoClient);
 			case 'in-memory':
 			default:
 				return new InMemoryEventStore(eventMap);
@@ -42,11 +42,11 @@ export const SnapshotStoreProvider = {
 	useFactory: async (options: EventSourcingModuleOptions) => {
 		switch (options.database) {
 			case 'elasticsearch':
-				const client = await new Client({ node: options.url });
-				return new ElasticsearchSnapshotStore(client);
+				const elasticClient = await new Client({ node: options.url });
+				return new ElasticsearchSnapshotStore(elasticClient);
 			case 'mongodb':
-				const { db } = await new MongoClient(options.url).connect();
-				return new MongoDBSnapshotStore(db());
+				const mongoClient = await new MongoClient(options.url).connect();
+				return new MongoDBSnapshotStore(mongoClient);
 			case 'in-memory':
 			default:
 				return new InMemorySnapshotStore();

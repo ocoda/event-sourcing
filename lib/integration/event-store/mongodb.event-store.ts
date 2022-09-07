@@ -1,11 +1,10 @@
 import { EventStream, EventEnvelope, Id } from '../../models';
 import { EventStore } from '../../event-store';
 import { StreamReadingDirection } from '../../constants';
-import { Db } from 'mongodb';
+import { Db, MongoClient } from 'mongodb';
 import { EventEnvelopeMetadata, IEvent, IEventPayload } from '../../interfaces';
 import { EventNotFoundException } from '../../exceptions';
 import { EventMap } from '../../event-map';
-import { Type } from '@nestjs/common';
 
 export interface MongoEventEnvelopeEntity {
 	_id: string;
@@ -16,8 +15,10 @@ export interface MongoEventEnvelopeEntity {
 }
 
 export class MongoDBEventStore extends EventStore {
-	constructor(readonly eventMap: EventMap, private readonly database: Db) {
+	private readonly database: Db;
+	constructor(readonly eventMap: EventMap, readonly client: MongoClient) {
 		super();
+		this.database = client.db();
 	}
 
 	async getEvents(
