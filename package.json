@@ -6,11 +6,11 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
-    "test": "jest",
-    "test:e2e": "jest --config ./tests/jest-e2e.json --runInBand",
-    "build": "tsc -p tsconfig.json",
+	"build": "rm -rf dist && tsc -p tsconfig.json",
     "format": "rome format .",
-    "lint": "rome check ."
+    "lint": "rome check .",
+    "test": "jest",
+    "test:e2e": "jest --config ./tests/jest-e2e.json --runInBand"
   },
   "dependencies": {
     "class-transformer": "^0.5.1"
