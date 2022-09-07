@@ -1,7 +1,7 @@
 lockfileVersion: 5.4
 
 specifiers:
-  '@elastic/elasticsearch': ^8.4.0
+  '@elastic/elasticsearch': ^7.15.0
   '@nestjs/common': ^9.0.0
   '@nestjs/core': ^9.0.0
   '@nestjs/platform-express': ^9.0.5
@@ -28,7 +28,7 @@ dependencies:
   class-transformer: 0.5.1
 
 devDependencies:
-  '@elastic/elasticsearch': 8.4.0
+  '@elastic/elasticsearch': 7.17.0
   '@nestjs/common': 9.0.5_aniaiezvefq2fqnommj6u5l4zi
   '@nestjs/core': 9.0.5_kqlsqbigaolinktvzctrbordee
   '@nestjs/platform-express': 9.0.5_yhkp7kxuauoq6imzcegikmb6ju
@@ -375,26 +375,14 @@ packages:
     resolution: {integrity: sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==}
     dev: true
 
-  /@elastic/elasticsearch/8.4.0:
-    resolution: {integrity: sha512-0QZDBePnb5a+d76zjlMYq96IDf0AOuGP7JHugFUYlYwTC7rZvROuZSpoUsvpUjNH2CzMqWgNLIekIR6EHRMIQA==}
-    engines: {node: '>=14'}
-    dependencies:
-      '@elastic/transport': 8.2.0
-      tslib: 2.4.0
-    transitivePeerDependencies:
-      - supports-color
-    dev: true
-
-  /@elastic/transport/8.2.0:
-    resolution: {integrity: sha512-H/HmefMNQfLiBSVTmNExu2lYs5EzwipUnQB53WLr17RCTDaQX0oOLHcWpDsbKQSRhDAMPPzp5YZsZMJxuxPh7A==}
-    engines: {node: '>=14'}
+  /@elastic/elasticsearch/7.17.0:
+    resolution: {integrity: sha512-5QLPCjd0uLmLj1lSuKSThjNpq39f6NmlTy9ROLFwG5gjyTgpwSqufDeYG/Fm43Xs05uF7WcscoO7eguI3HuuYA==}
+    engines: {node: '>=12'}
     dependencies:
       debug: 4.3.4
-      hpagent: 1.0.0
+      hpagent: 0.1.2
       ms: 2.1.3
       secure-json-parse: 2.5.0
-      tslib: 2.4.0
-      undici: 5.10.0
     transitivePeerDependencies:
       - supports-color
     dev: true
@@ -2297,9 +2285,8 @@ packages:
       function-bind: 1.1.1
     dev: true
 
-  /hpagent/1.0.0:
-    resolution: {integrity: sha512-SCleE2Uc1bM752ymxg8QXYGW0TWtAV4ZW3TqH1aOnyi6T6YW2xadCcclm5qeVjvMvfQ2RKNtZxO7uVb9CTPt1A==}
-    engines: {node: '>=14'}
+  /hpagent/0.1.2:
+    resolution: {integrity: sha512-ePqFXHtSQWAFXYmj+JtOTHr84iNrII4/QRlAAPPE+zqnKy4xJo7Ie1Y4kC7AdB+LxLxSTTzBMASsEcy0q8YyvQ==}
     dev: true
 
   /html-escaper/2.0.2:
@@ -4044,11 +4031,6 @@ packages:
       has-bigints: 1.0.2
       has-symbols: 1.0.3
       which-boxed-primitive: 1.0.2
-    dev: true
-
-  /undici/5.10.0:
-    resolution: {integrity: sha512-c8HsD3IbwmjjbLvoZuRI26TZic+TSEe8FPMLLOkN1AfYRhdjnKBU6yL+IwcSCbdZiX4e5t0lfMDLDCqj4Sq70g==}
-    engines: {node: '>=12.18'}
     dev: true
 
   /unpipe/1.0.0:
