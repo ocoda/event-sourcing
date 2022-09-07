@@ -5,7 +5,7 @@ import { EventNotFoundException } from '../../exceptions';
 import { EventMap } from '../../event-map';
 import { EventName } from '../../decorators';
 import { DefaultEventSerializer } from '../../helpers';
-import { ElasticsearchEventStore, EventEnvelopeEntity } from './elasticsearch.event-store';
+import { ElasticsearchEventStore, ElasticsearchEventEnvelopeEntity } from './elasticsearch.event-store';
 import { Client } from '@elastic/elasticsearch';
 
 class Account extends Aggregate {
@@ -94,7 +94,7 @@ describe(ElasticsearchEventStore, () => {
 			body: { query: { match_all: {} } },
 		});
 
-		expect((body.hits.hits as EventEnvelopeEntity[]).map(({ _id, _source }) => _source)).toEqual(
+		expect((body.hits.hits as ElasticsearchEventEnvelopeEntity[]).map(({ _source }) => _source)).toEqual(
 			envelopes.map(({ eventId, ...rest }) => ({ stream: eventStream.name, ...rest })),
 		);
 	});
