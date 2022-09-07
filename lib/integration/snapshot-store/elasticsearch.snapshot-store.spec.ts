@@ -1,6 +1,6 @@
 import { Aggregate, Id, SnapshotStream, SnapshotEnvelope } from '../../models';
-import { Client } from "@elastic/elasticsearch";
-import { ElasticsearchSnapshotEnvelopeEntity, ElasticsearchSnapshotStore } from "./elasticsearch.snapshot-store";
+import { Client } from '@elastic/elasticsearch';
+import { ElasticsearchSnapshotEnvelopeEntity, ElasticsearchSnapshotStore } from './elasticsearch.snapshot-store';
 import { SnapshotNotFoundException } from '../../exceptions';
 import { StreamReadingDirection } from '../../constants';
 

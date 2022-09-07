@@ -69,7 +69,7 @@ describe(MongoDBEventStore, () => {
 		];
 
 		client = new MongoClient('mongodb://localhost:27017');
-		eventStore = new MongoDBEventStore(eventMap, client.db());
+		eventStore = new MongoDBEventStore(eventMap, client);
 	});
 
 	afterEach(

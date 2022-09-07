@@ -1,5 +1,5 @@
 import { Aggregate, SnapshotEnvelope, SnapshotStream } from '../../models';
-import { Client } from "@elastic/elasticsearch";
+import { Client } from '@elastic/elasticsearch';
 import { ISnapshotPayload, SnapshotEnvelopeMetadata } from '../../interfaces';
 import { SnapshotNotFoundException } from '../../exceptions';
 import { SnapshotStore } from '../../snapshot-store';
@@ -13,7 +13,7 @@ export interface ElasticsearchSnapshotEnvelopeEntity<A extends Aggregate> {
 		snapshotName: string;
 		payload: ISnapshotPayload<A>;
 		metadata: SnapshotEnvelopeMetadata;
-	}
+	};
 }
 
 export class ElasticsearchSnapshotStore extends SnapshotStore {
@@ -43,7 +43,10 @@ export class ElasticsearchSnapshotStore extends SnapshotStore {
 			body: { query, sort },
 		});
 
-		return body.hits.hits.map(({ _id, _source: { snapshotName, payload, metadata } }: ElasticsearchSnapshotEnvelopeEntity<A>) => {
+		return body.hits.hits.map(({
+			_id,
+			_source: { snapshotName, payload, metadata },
+		}: ElasticsearchSnapshotEnvelopeEntity<A>) => {
 			return SnapshotEnvelope.from<A>(_id, snapshotName, payload, metadata);
 		});
 	}
@@ -69,7 +72,12 @@ export class ElasticsearchSnapshotStore extends SnapshotStore {
 			throw SnapshotNotFoundException.withVersion(name, version);
 		}
 
-		return SnapshotEnvelope.from<A>(entity._id, entity._source.snapshotName, entity._source.payload, entity._source.metadata);
+		return SnapshotEnvelope.from<A>(
+			entity._id,
+			entity._source.snapshotName,
+			entity._source.payload,
+			entity._source.metadata,
+		);
 	}
 
 	async appendSnapshots<A extends Aggregate>(
@@ -79,7 +87,7 @@ export class ElasticsearchSnapshotStore extends SnapshotStore {
 		const body = envelopes.flatMap(
 			({ snapshotId, ...rest }) => [{ index: { _index: subject, _id: snapshotId } }, { stream: name, ...rest }],
 		);
-		
+
 		await this.client.bulk({ index: subject, body, refresh: 'wait_for' });
 	}
 
@@ -92,7 +100,7 @@ export class ElasticsearchSnapshotStore extends SnapshotStore {
 
 		const { body } = await this.client.search({
 			index: subject,
-			body: { 
+			body: {
 				query,
 				sort: [{ 'metadata.sequence': 'desc' }],
 			},
@@ -102,7 +110,12 @@ export class ElasticsearchSnapshotStore extends SnapshotStore {
 		const entity: ElasticsearchSnapshotEnvelopeEntity<A> = body.hits.hits[0];
 
 		if (entity) {
-			return SnapshotEnvelope.from<A>(entity._id, entity._source.snapshotName, entity._source.payload, entity._source.metadata);
+			return SnapshotEnvelope.from<A>(
+				entity._id,
+				entity._source.snapshotName,
+				entity._source.payload,
+				entity._source.metadata,
+			);
 		}
 	}
 }

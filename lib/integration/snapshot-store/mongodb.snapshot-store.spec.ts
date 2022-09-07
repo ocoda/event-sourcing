@@ -29,7 +29,7 @@ describe(MongoDBSnapshotStore, () => {
 
 	beforeAll(async () => {
 		client = new MongoClient('mongodb://localhost:27017');
-		snapshotStore = new MongoDBSnapshotStore(client.db());
+		snapshotStore = new MongoDBSnapshotStore(client);
 	});
 
 	afterEach(

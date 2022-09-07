@@ -1,4 +1,4 @@
-import { Client } from "@elastic/elasticsearch";
+import { Client } from '@elastic/elasticsearch';
 import { Provider } from '@nestjs/common';
 import { MongoClient } from 'mongodb';
 import { CommandBus } from './command-bus';
@@ -9,7 +9,7 @@ import { EventStore } from './event-store';
 import { HandlersLoader } from './handlers.loader';
 import { ElasticsearchEventStore, InMemoryEventStore, MongoDBEventStore } from './integration/event-store';
 import { InMemorySnapshotStore } from './integration/snapshot-store';
-import { ElasticsearchSnapshotStore } from "./integration/snapshot-store/elasticsearch.snapshot-store";
+import { ElasticsearchSnapshotStore } from './integration/snapshot-store/elasticsearch.snapshot-store';
 import { MongoDBSnapshotStore } from './integration/snapshot-store/mongodb.snapshot-store';
 import { EventSourcingModuleOptions } from './interfaces';
 import { QueryBus } from './query-bus';
