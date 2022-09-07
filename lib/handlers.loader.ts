@@ -1,12 +1,12 @@
-import { Inject, Injectable, OnApplicationBootstrap } from '@nestjs/common';
+import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import { DiscoveryService } from '@nestjs/core';
 import { InstanceWrapper } from '@nestjs/core/injector/instance-wrapper';
 import { CommandBus, CommandHandlerType } from './command-bus';
-import { EVENT_SOURCING_MODULE_OPTIONS } from './constants';
 import {
 	COMMAND_HANDLER_METADATA,
 	COMMAND_METADATA,
 	EVENT_SERIALIZER_METADATA,
+	InjectEventSourcingOptions,
 	QUERY_HANDLER_METADATA,
 	QUERY_METADATA,
 } from './decorators';
@@ -25,7 +25,7 @@ enum HandlerType {
 @Injectable()
 export class HandlersLoader implements OnApplicationBootstrap {
 	constructor(
-		@Inject(EVENT_SOURCING_MODULE_OPTIONS)
+		@InjectEventSourcingOptions()
 		private readonly options: EventSourcingModuleOptions,
 		private readonly discoveryService: DiscoveryService,
 		private readonly commandBus: CommandBus,

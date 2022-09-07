@@ -4,8 +4,11 @@ import { Events, CommandHandlers, QueryHandlers, SnapshotHandlers, AggregateRepo
 
 @Module({
   imports: [
-    EventSourcingModule.forRoot({
-      events: [...Events],
+    EventSourcingModule.forRootAsync({
+      useFactory: () => ({
+		database: 'in-memory',
+		events: [...Events],
+	  }),
     }),
   ],
   providers: [

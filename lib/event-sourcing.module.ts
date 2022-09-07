@@ -2,36 +2,90 @@ import { DynamicModule, Module, Provider } from '@nestjs/common';
 import { DiscoveryModule } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { CommandBus } from './command-bus';
-import { EVENT_SOURCING_MODULE_OPTIONS } from './constants';
+import { EVENT_SOURCING_OPTIONS } from './constants';
 import { EventMap } from './event-map';
 import { EventPublisher } from './event-publisher';
+import { createEventSourcingProviders, EventStoreProvider, SnapshotStoreProvider } from './event-sourcing.providers';
 import { EventStore } from './event-store';
 import { HandlersLoader } from './handlers.loader';
 import { InMemoryEventStore } from './integration/event-store';
 import { InMemorySnapshotStore } from './integration/snapshot-store';
-import { EventSourcingModuleOptions } from './interfaces';
+import { EventSourcingModuleAsyncOptions, EventSourcingModuleOptions, EventSourcingOptionsFactory } from './interfaces';
 import { QueryBus } from './query-bus';
 import { SnapshotStore } from './snapshot-store';
 
 @Module({})
 export class EventSourcingModule {
+	/**
+	 * Register the module synchronously
+	 */
 	static forRoot(options: EventSourcingModuleOptions): DynamicModule {
-		const providers: Provider[] = [
-			{ provide: EVENT_SOURCING_MODULE_OPTIONS, useValue: options },
-			{ provide: EventStore, useClass: InMemoryEventStore },
-			{ provide: SnapshotStore, useClass: InMemorySnapshotStore },
-			CommandBus,
+		const providers = [
+			...createEventSourcingProviders(options),
 			EventMap,
-			EventPublisher,
 			HandlersLoader,
+			CommandBus,
+			EventPublisher,
 			QueryBus,
+			EventStoreProvider,
+			SnapshotStoreProvider,
 		];
 
 		return {
 			module: EventSourcingModule,
 			imports: [DiscoveryModule, EventEmitterModule.forRoot()],
 			providers,
-			exports: [CommandBus, QueryBus, EventPublisher, EventStore, SnapshotStore, EventMap],
+			exports: providers,
+		};
+	}
+
+	/**
+	 * Register the module asynchronously
+	 */
+	static forRootAsync(options: EventSourcingModuleAsyncOptions): DynamicModule {
+		const providers = [
+			...this.createAsyncProviders(options),
+			EventMap,
+			HandlersLoader,
+			CommandBus,
+			EventPublisher,
+			QueryBus,
+			EventStoreProvider,
+			SnapshotStoreProvider,
+		];
+		return {
+			module: EventSourcingModule,
+			imports: [DiscoveryModule, EventEmitterModule.forRoot(), ...(options?.imports || [])],
+			providers: providers,
+			exports: providers,
+		};
+	}
+
+	private static createAsyncProviders(options: EventSourcingModuleAsyncOptions): Provider[] {
+		if (options.useExisting || options.useFactory) {
+			return [this.createAsyncOptionsProvider(options)];
+		}
+		return [
+			this.createAsyncOptionsProvider(options),
+			{
+				provide: options.useClass,
+				useClass: options.useClass,
+			},
+		];
+	}
+
+	private static createAsyncOptionsProvider(options: EventSourcingModuleAsyncOptions): Provider {
+		if (options.useFactory) {
+			return {
+				provide: EVENT_SOURCING_OPTIONS,
+				useFactory: options.useFactory,
+				inject: options.inject || [],
+			};
+		}
+		return {
+			provide: EVENT_SOURCING_OPTIONS,
+			useFactory: async (optionsFactory: EventSourcingOptionsFactory) => await optionsFactory.createEventSourcingOptions(),
+			inject: [options.useExisting || options.useClass],
 		};
 	}
 }

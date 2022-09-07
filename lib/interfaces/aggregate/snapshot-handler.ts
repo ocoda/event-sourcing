@@ -23,10 +23,9 @@ export abstract class SnapshotHandler<A extends Aggregate = Aggregate> {
 			const snapshotStream = SnapshotStream.for(this.aggregate, id);
 			const payload = this.serialize(aggregate.snapshot as ISnapshot<A>);
 
-			await this.snapshotStore.appendSnapshots(
-				snapshotStream,
-				[SnapshotEnvelope.new(id, aggregate.version, this.snapshotName, payload)],
-			);
+			await this.snapshotStore.appendSnapshots(snapshotStream, [
+				SnapshotEnvelope.new(id, aggregate.version, this.snapshotName, payload),
+			]);
 		}
 	}
 
