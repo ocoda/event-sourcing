@@ -1,3 +1,4 @@
+import { Client } from "@elastic/elasticsearch";
 import { Provider } from '@nestjs/common';
 import { MongoClient } from 'mongodb';
 import { CommandBus } from './command-bus';
@@ -6,8 +7,9 @@ import { EventMap } from './event-map';
 import { EventPublisher } from './event-publisher';
 import { EventStore } from './event-store';
 import { HandlersLoader } from './handlers.loader';
-import { InMemoryEventStore, MongoDBEventStore } from './integration/event-store';
+import { ElasticsearchEventStore, InMemoryEventStore, MongoDBEventStore } from './integration/event-store';
 import { InMemorySnapshotStore } from './integration/snapshot-store';
+import { ElasticsearchSnapshotStore } from "./integration/snapshot-store/elasticsearch.snapshot-store";
 import { MongoDBSnapshotStore } from './integration/snapshot-store/mongodb.snapshot-store';
 import { EventSourcingModuleOptions } from './interfaces';
 import { QueryBus } from './query-bus';
@@ -21,6 +23,9 @@ export const EventStoreProvider = {
 	provide: EventStore,
 	useFactory: async (eventMap: EventMap, options: EventSourcingModuleOptions) => {
 		switch (options.database) {
+			case 'elasticsearch':
+				const client = await new Client({ node: options.url });
+				return new ElasticsearchEventStore(eventMap, client);
 			case 'mongodb':
 				const { db } = await new MongoClient(options.url).connect();
 				return new MongoDBEventStore(eventMap, db());
@@ -36,6 +41,9 @@ export const SnapshotStoreProvider = {
 	provide: SnapshotStore,
 	useFactory: async (options: EventSourcingModuleOptions) => {
 		switch (options.database) {
+			case 'elasticsearch':
+				const client = await new Client({ node: options.url });
+				return new ElasticsearchSnapshotStore(client);
 			case 'mongodb':
 				const { db } = await new MongoClient(options.url).connect();
 				return new MongoDBSnapshotStore(db());
