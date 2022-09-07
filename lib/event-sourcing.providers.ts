@@ -19,17 +19,17 @@ export function createEventSourcingProviders(options: EventSourcingModuleOptions
 
 export const EventStoreProvider = {
 	provide: EventStore,
-	useFactory: async (options: EventSourcingModuleOptions) => {
+	useFactory: async (eventMap: EventMap, options: EventSourcingModuleOptions) => {
 		switch (options.database) {
 			case 'mongodb':
 				const { db } = await new MongoClient(options.url).connect();
-				return new MongoDBEventStore(db());
+				return new MongoDBEventStore(eventMap, db());
 			case 'in-memory':
 			default:
-				return new InMemoryEventStore();
+				return new InMemoryEventStore(eventMap);
 		}
 	},
-	inject: [EVENT_SOURCING_OPTIONS],
+	inject: [EventMap, EVENT_SOURCING_OPTIONS],
 };
 
 export const SnapshotStoreProvider = {
