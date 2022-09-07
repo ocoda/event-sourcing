@@ -7,7 +7,7 @@ import { EventNotFoundException } from '../../exceptions';
 import { EventMap } from '../../event-map';
 import { Type } from '@nestjs/common';
 
-export interface EventEnvelopeEntity {
+export interface MongoEventEnvelopeEntity {
 	_id: string;
 	stream: string;
 	eventName: string;
@@ -26,7 +26,7 @@ export class MongoDBEventStore extends EventStore {
 		direction: StreamReadingDirection = StreamReadingDirection.FORWARD,
 	): Promise<IEvent[]> {
 		return this.database
-			.collection<EventEnvelopeEntity>(subject)
+			.collection<MongoEventEnvelopeEntity>(subject)
 			.find(
 				{
 					stream: name,
@@ -41,7 +41,7 @@ export class MongoDBEventStore extends EventStore {
 	}
 
 	async getEvent({ name, subject }: EventStream, version: number): Promise<IEvent> {
-		const entity = await this.database.collection<EventEnvelopeEntity>(subject).findOne({
+		const entity = await this.database.collection<MongoEventEnvelopeEntity>(subject).findOne({
 			stream: name,
 			'metadata.sequence': version,
 		});
@@ -69,7 +69,7 @@ export class MongoDBEventStore extends EventStore {
 
 		const entities = envelopes.map(({ eventId, ...rest }) => ({ stream: name, _id: eventId, ...rest }));
 
-		await this.database.collection<EventEnvelopeEntity>(subject).insertMany(entities);
+		await this.database.collection<MongoEventEnvelopeEntity>(subject).insertMany(entities);
 	}
 
 	async getEnvelopes(
@@ -78,7 +78,7 @@ export class MongoDBEventStore extends EventStore {
 		direction: StreamReadingDirection = StreamReadingDirection.FORWARD,
 	): Promise<EventEnvelope[]> {
 		return this.database
-			.collection<EventEnvelopeEntity>(subject)
+			.collection<MongoEventEnvelopeEntity>(subject)
 			.find(
 				{
 					stream: name,
@@ -96,7 +96,7 @@ export class MongoDBEventStore extends EventStore {
 	}
 
 	async getEnvelope({ name, subject }: EventStream, version: number): Promise<EventEnvelope> {
-		const entity = await this.database.collection<EventEnvelopeEntity>(subject).findOne({
+		const entity = await this.database.collection<MongoEventEnvelopeEntity>(subject).findOne({
 			stream: name,
 			'metadata.sequence': version,
 		});
