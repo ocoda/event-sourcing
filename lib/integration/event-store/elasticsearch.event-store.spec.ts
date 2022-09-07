@@ -72,11 +72,14 @@ describe(ElasticsearchEventStore, () => {
 		eventStore = new ElasticsearchEventStore(eventMap, client);
 	});
 
-	afterEach(async () => await client.deleteByQuery({ 
-		index: eventStream.subject, 
-		body: { query: { match_all: {} } },
-		refresh: true
-	}));
+	afterEach(
+		async () =>
+			await client.deleteByQuery({
+				index: eventStream.subject,
+				body: { query: { match_all: {} } },
+				refresh: true,
+			}),
+	);
 
 	afterAll(async () => {
 		jest.clearAllMocks();

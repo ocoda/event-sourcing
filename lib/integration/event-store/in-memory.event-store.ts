@@ -4,7 +4,6 @@ import { StreamReadingDirection } from '../../constants';
 import { EventNotFoundException } from '../../exceptions';
 import { EventMap } from '../../event-map';
 import { IEvent } from '../../interfaces';
-import { Type } from '@nestjs/common';
 
 export class InMemoryEventStore extends EventStore {
 	private eventCollection: Map<string, EventEnvelope[]> = new Map();
