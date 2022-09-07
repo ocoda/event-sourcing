@@ -1,14 +1,12 @@
-import { EventStream, EventEnvelope, Id } from '../../models';
-import { EventStore } from '../../event-store';
-import { StreamReadingDirection } from '../../constants';
-import { Db } from 'mongodb';
-import { EventEnvelopeMetadata, IEvent, IEventPayload } from '../../interfaces';
-import { EventNotFoundException } from '../../exceptions';
-import { EventMap } from '../../event-map';
-import { ConsoleLogger, Type } from '@nestjs/common';
 import { Client } from '@elastic/elasticsearch';
+import { EventEnvelopeMetadata, IEvent, IEventPayload } from '../../interfaces';
+import { EventMap } from '../../event-map';
+import { EventNotFoundException } from '../../exceptions';
+import { EventStore } from '../../event-store';
+import { EventStream, EventEnvelope, Id } from '../../models';
+import { StreamReadingDirection } from '../../constants';
 
-export interface EventEnvelopeEntity {
+export interface ElasticsearchEventEnvelopeEntity {
 	_index: string;
 	_id: string;
 	_source: {
@@ -46,7 +44,7 @@ export class ElasticsearchEventStore extends EventStore {
 			body: { query, sort },
 		});
 
-		return body.hits.hits.map(({ _source: { eventName, payload } }: EventEnvelopeEntity) => {
+		return body.hits.hits.map(({ _source: { eventName, payload } }: ElasticsearchEventEnvelopeEntity) => {
 			return this.eventMap.deserializeEvent(eventName, payload);
 		});
 	}
@@ -61,10 +59,9 @@ export class ElasticsearchEventStore extends EventStore {
 		const { body } = await this.client.search({
 			index: subject,
 			body: { query },
-			error_trace: false,
 		});
 
-		const entity: EventEnvelopeEntity = body.hits.hits[0];
+		const entity: ElasticsearchEventEnvelopeEntity = body.hits.hits[0];
 
 		if (!entity) {
 			throw EventNotFoundException.withVersion(name, version);
@@ -117,7 +114,7 @@ export class ElasticsearchEventStore extends EventStore {
 		});
 
 		return body.hits.hits.map(
-			({ _id, _source: { eventName, payload, metadata } }: EventEnvelopeEntity) =>
+			({ _id, _source: { eventName, payload, metadata } }: ElasticsearchEventEnvelopeEntity) =>
 				EventEnvelope.from(_id, eventName, this.eventMap.deserializeEvent(eventName, payload), metadata),
 		);
 	}
@@ -132,10 +129,9 @@ export class ElasticsearchEventStore extends EventStore {
 		const { body } = await this.client.search({
 			index: subject,
 			body: { query },
-			error_trace: false,
 		});
 
-		const entity: EventEnvelopeEntity = body.hits.hits[0];
+		const entity: ElasticsearchEventEnvelopeEntity = body.hits.hits[0];
 
 		if (!entity) {
 			throw EventNotFoundException.withVersion(name, version);
