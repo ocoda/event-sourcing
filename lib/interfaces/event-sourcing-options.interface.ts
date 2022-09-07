@@ -1,7 +1,7 @@
 import { ModuleMetadata, Type } from '@nestjs/common';
 import { IEvent } from './events';
 
-type DatabaseType = 'in-memory' | 'mongodb';
+type DatabaseType = 'in-memory' | 'mongodb' | 'elasticsearch';
 
 interface BaseEventSourcingModuleOptions<T extends DatabaseType> {
 	database: T;
@@ -13,9 +13,14 @@ interface MongoDBEventSourcingModuleOptions extends BaseEventSourcingModuleOptio
 	url: string;
 }
 
+interface ElasticsearchEventSourcingModuleOptions extends BaseEventSourcingModuleOptions<'elasticsearch'> {
+	url: string;
+}
+
 export type EventSourcingModuleOptions =
 	| BaseEventSourcingModuleOptions<'in-memory'>
-	| MongoDBEventSourcingModuleOptions;
+	| MongoDBEventSourcingModuleOptions
+	| ElasticsearchEventSourcingModuleOptions;
 
 export interface EventSourcingOptionsFactory {
 	createEventSourcingOptions: () => Promise<EventSourcingModuleOptions> | EventSourcingModuleOptions;
