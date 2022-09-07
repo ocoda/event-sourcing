@@ -1,7 +1,6 @@
 import { Aggregate, EventEnvelope, EventStream, Id } from '../../models';
 import { IEvent } from '../../interfaces';
 import { MongoDBEventStore } from './mongodb.event-store';
-import { MongoMemoryServer } from 'mongodb-memory-server';
 import { MongoClient } from 'mongodb';
 import { StreamReadingDirection } from '../../constants';
 import { EventNotFoundException } from '../../exceptions';
@@ -34,7 +33,6 @@ class AccountClosedEvent implements IEvent {}
 
 describe(MongoDBEventStore, () => {
 	const now = Date.now();
-	let mongod: MongoMemoryServer;
 	let client: MongoClient;
 	let eventStore: MongoDBEventStore;
 	let envelopes: EventEnvelope[];
@@ -70,8 +68,7 @@ describe(MongoDBEventStore, () => {
 			EventEnvelope.new(accountId, 6, 'account-closed', eventMap.serializeEvent(events[5])),
 		];
 
-		mongod = await MongoMemoryServer.create();
-		client = new MongoClient(mongod.getUri());
+		client = new MongoClient('mongodb://localhost:27017');
 		eventStore = new MongoDBEventStore(eventMap, client.db());
 	});
 
@@ -85,9 +82,7 @@ describe(MongoDBEventStore, () => {
 
 	afterAll(async () => {
 		jest.clearAllMocks();
-
 		await client.close();
-		await mongod.stop();
 	});
 
 	it('should append event envelopes', async () => {
