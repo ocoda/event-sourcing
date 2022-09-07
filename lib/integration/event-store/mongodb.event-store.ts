@@ -2,7 +2,7 @@ import { EventStream, EventEnvelope, Id } from '../../models';
 import { EventStore } from '../../event-store';
 import { StreamReadingDirection } from '../../constants';
 import { Db } from 'mongodb';
-import { EventEnvelopeMetadata, IEvent } from '../../interfaces';
+import { EventEnvelopeMetadata, IEvent, IEventPayload } from '../../interfaces';
 import { EventNotFoundException } from '../../exceptions';
 import { EventMap } from '../../event-map';
 import { Type } from '@nestjs/common';
@@ -11,7 +11,7 @@ export interface EventEnvelopeEntity {
 	_id: string;
 	stream: string;
 	eventName: string;
-	payload: Record<string, any>;
+	payload: IEventPayload<IEvent>;
 	metadata: EventEnvelopeMetadata;
 }
 
