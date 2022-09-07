@@ -1,9 +1,6 @@
-import { IEvent } from './event.interface';
+import { IEvent, IEventPayload } from './event.interface';
 
-export interface IEventSerializer<
-	BaseEvent extends IEvent = IEvent,
-	Payload extends Record<string, unknown> = Record<string, unknown>,
-> {
-	serialize: (event: BaseEvent) => Payload;
-	deserialize: (payload: Payload, ...params) => BaseEvent;
+export interface IEventSerializer<E extends IEvent = IEvent> {
+	serialize(event: E): IEventPayload<E>;
+	deserialize(payload: IEventPayload<E>, ...params): E;
 }

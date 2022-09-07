@@ -1,6 +1,6 @@
 import { instanceToPlain, plainToInstance } from 'class-transformer';
 import { Type } from '@nestjs/common';
-import { IEvent, IEventSerializer } from '../interfaces';
+import { IEvent, IEventPayload, IEventSerializer } from '../interfaces';
 
 export class DefaultEventSerializer<E extends IEvent = IEvent> implements IEventSerializer {
 	private constructor(private readonly eventType: Type<E>) {}
@@ -9,11 +9,11 @@ export class DefaultEventSerializer<E extends IEvent = IEvent> implements IEvent
 		return new DefaultEventSerializer(cls);
 	}
 
-	serialize(event: IEvent): Record<string, any> {
-		return instanceToPlain(event);
+	serialize(event: E): IEventPayload<E> {
+		return instanceToPlain<E>(event) as IEventPayload<E>;
 	}
 
-	deserialize(payload: Record<string, any>): E {
-		return plainToInstance<E, Record<string, any>>(this.eventType, payload);
+	deserialize(payload: IEventPayload<E>): E {
+		return plainToInstance<E, IEventPayload<E>>(this.eventType, payload);
 	}
 }
