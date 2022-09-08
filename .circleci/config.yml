@@ -3,7 +3,7 @@ version: 2
 aliases:
   - &restore-cache
     restore_cache:
-        key: pnpm-packages-{{ checksum "pnpm-lock.yaml" }}
+        key: pnpm-packages-{{ .Environment.CIRCLE_JOB }}-{{ checksum "pnpm-lock.yaml" }}
   - &install-pnpm
     run:
       name: Install pnpm package manager
@@ -16,7 +16,7 @@ aliases:
   - &save-cache
     save_cache:
           name: Save pnpm Package Cache
-          key: pnpm-packages-{{ checksum "pnpm-lock.yaml" }}
+          key: pnpm-packages-{{ .Environment.CIRCLE_JOB }}-{{ checksum "pnpm-lock.yaml" }}
           paths:
             - node_modules
   - &build-packages
@@ -58,6 +58,7 @@ jobs:
             pnpm setup
             pnpm env use --global 18
       - *install-deps
+      - *save-cache
       - run:
           name: Prepare
           command: |
