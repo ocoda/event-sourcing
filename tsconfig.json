@@ -11,6 +11,7 @@
 		"sourceMap": false,
 		"outDir": "./dist",
 		"rootDir": "./lib",
+		"baseUrl": ".",
 		"skipLibCheck": true,
 		"useUnknownInCatchVariables": false,
 		"noImplicitAny": false,
