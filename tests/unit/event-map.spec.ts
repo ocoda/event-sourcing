@@ -1,8 +1,12 @@
-import { EventName } from './decorators';
-import { EventMap } from './event-map';
-import { MissingEventMetadataException, UnregisteredEventException, UnregisteredSerializerException } from './exceptions';
-import { DefaultEventSerializer } from './helpers';
-import { IEvent } from './interfaces';
+import {
+	EventMap,
+	EventName,
+	IEvent,
+	MissingEventMetadataException,
+	UnregisteredEventException,
+	UnregisteredSerializerException,
+} from '../../lib';
+import { DefaultEventSerializer } from '../../lib/helpers';
 
 describe(EventMap, () => {
 	let now = new Date();
@@ -91,9 +95,7 @@ describe(EventMap, () => {
 
 		const event = new AccountOpenedEvent(new Date());
 
-		expect(() => eventMap.serializeEvent(event)).toThrowError(
-			new UnregisteredSerializerException('account-opened'),
-		);
+		expect(() => eventMap.serializeEvent(event)).toThrowError(new UnregisteredSerializerException('account-opened'));
 	});
 
 	it('deserializes a registered event', () => {

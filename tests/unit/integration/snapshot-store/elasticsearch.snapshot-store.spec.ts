@@ -1,9 +1,16 @@
-import { Aggregate, Id, SnapshotStream, SnapshotEnvelope } from '../../models';
-import { StreamReadingDirection } from '../../constants';
-import { SnapshotNotFoundException } from '../../exceptions';
-import { MongoDBSnapshotStore } from './mongodb.snapshot-store';
-import { MongoMemoryServer } from 'mongodb-memory-server';
-import { MongoClient } from 'mongodb';
+import { Client } from '@elastic/elasticsearch';
+import {
+	Aggregate,
+	Id,
+	SnapshotEnvelope,
+	SnapshotNotFoundException,
+	SnapshotStream,
+	StreamReadingDirection,
+} from '../../../../lib';
+import {
+	ElasticsearchSnapshotEnvelopeEntity,
+	ElasticsearchSnapshotStore,
+} from '../../../../lib/integration/snapshot-store/elasticsearch.snapshot-store';
 
 class Account extends Aggregate {
 	constructor(private readonly id: AccountId, private readonly balance: number) {
@@ -12,10 +19,9 @@ class Account extends Aggregate {
 }
 class AccountId extends Id {}
 
-describe(MongoDBSnapshotStore, () => {
-	let mongod: MongoMemoryServer;
-	let client: MongoClient;
-	let snapshotStore: MongoDBSnapshotStore;
+describe(ElasticsearchSnapshotStore, () => {
+	let client: Client;
+	let snapshotStore: ElasticsearchSnapshotStore;
 
 	const accountId = AccountId.generate();
 	const snapshotStream = SnapshotStream.for(Account, accountId);
@@ -30,33 +36,34 @@ describe(MongoDBSnapshotStore, () => {
 	];
 
 	beforeAll(async () => {
-		mongod = await MongoMemoryServer.create();
-		client = new MongoClient(mongod.getUri());
-		snapshotStore = new MongoDBSnapshotStore(client);
+		client = new Client({ node: 'http://localhost:9200' });
+		snapshotStore = new ElasticsearchSnapshotStore(client);
 	});
 
 	afterEach(
 		async () =>
-			client
-				.db()
-				.collection(snapshotStream.subject)
-				.deleteMany({}),
+			await client.deleteByQuery({
+				index: snapshotStream.subject,
+				body: { query: { match_all: {} } },
+				refresh: true,
+			}),
 	);
 
 	afterAll(async () => {
 		await client.close();
-		await mongod.stop();
 	});
 
 	it('should append snapshots', async () => {
 		await snapshotStore.appendSnapshots(snapshotStream, snapshots);
-		const storedSnapshots = await client
-			.db()
-			.collection(snapshotStream.subject)
-			.find()
-			.toArray();
 
-		expect(storedSnapshots.map(({ _id }) => _id)).toEqual(snapshots.map(({ snapshotId }) => snapshotId));
+		const { body } = await client.search({
+			index: snapshotStream.subject,
+			body: { query: { match_all: {} } },
+		});
+
+		expect((body.hits.hits as ElasticsearchSnapshotEnvelopeEntity<Account>[]).map(({ _source }) => _source)).toEqual(
+			snapshots.map(({ snapshotId, ...rest }) => ({ stream: snapshotStream.name, ...rest })),
+		);
 	});
 
 	it('should retrieve a single snapshot', async () => {
@@ -84,7 +91,11 @@ describe(MongoDBSnapshotStore, () => {
 	it('should retrieve snapshots backwards', async () => {
 		await snapshotStore.appendSnapshots(snapshotStream, snapshots);
 
-		const resolvedSnapshots = await snapshotStore.getSnapshots(snapshotStream, undefined, StreamReadingDirection.BACKWARD);
+		const resolvedSnapshots = await snapshotStore.getSnapshots(
+			snapshotStream,
+			undefined,
+			StreamReadingDirection.BACKWARD,
+		);
 
 		expect(resolvedSnapshots).toEqual(snapshots.slice().reverse());
 	});

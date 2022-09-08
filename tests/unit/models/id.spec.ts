@@ -1,6 +1,4 @@
-import { Aggregate } from './aggregate';
-import { InvalidIdError } from '../exceptions';
-import { Id } from './id';
+import { Aggregate, Id, InvalidIdError } from '../../../lib';
 
 describe(Aggregate, () => {
 	class AccountId extends Id {}

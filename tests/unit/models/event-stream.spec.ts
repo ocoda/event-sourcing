@@ -1,6 +1,4 @@
-import { Aggregate } from './aggregate';
-import { EventStream } from './event-stream';
-import { Id } from './id';
+import { Aggregate, EventStream, Id } from '../../../lib';
 
 describe(EventStream, () => {
 	class Account extends Aggregate {}

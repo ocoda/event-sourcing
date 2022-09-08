@@ -1,5 +1,4 @@
-import { Aggregate } from './aggregate';
-import { IEvent, ISnapshot } from '../interfaces';
+import { Aggregate, IEvent } from '../../../lib';
 
 describe(Aggregate, () => {
 	class AccountOpenedEvent implements IEvent {}

@@ -1,6 +1,4 @@
-import { IEvent } from '../interfaces';
-import { EVENT_NAME_METADATA } from './constants';
-import { EventName } from './event-name.decorator';
+import { EventName, EVENT_NAME_METADATA, IEvent } from '../../../lib';
 
 describe('@EventName', () => {
 	@EventName('foo-created')

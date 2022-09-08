@@ -1,9 +1,6 @@
 {
 	"linter": {
-		"enabled": true,
-		"rules": {
-			"recommended": true
-		}
+		"enabled": false
 	},
 	"formatter": {
 		"enabled": true,

@@ -1,6 +1,4 @@
-import { IEvent } from '../interfaces';
-import { EVENT_SERIALIZER_METADATA } from './constants';
-import { EventSerializer } from './event-serializer.decorator';
+import { EventSerializer, EVENT_SERIALIZER_METADATA, IEvent } from '../../../lib';
 
 describe('@EventSerializer', () => {
 	class AccountCreatedEvent implements IEvent {}

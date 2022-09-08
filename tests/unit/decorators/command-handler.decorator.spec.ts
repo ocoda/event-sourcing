@@ -1,6 +1,4 @@
-import { ICommand } from '../interfaces';
-import { CommandHandler } from './command-handler.decorator';
-import { COMMAND_HANDLER_METADATA, COMMAND_METADATA } from './constants';
+import { CommandHandler, COMMAND_HANDLER_METADATA, COMMAND_METADATA, ICommand } from '../../../lib';
 
 describe('@CommandHandler', () => {
 	class TestCommand implements ICommand {}

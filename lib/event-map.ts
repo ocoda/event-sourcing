@@ -1,6 +1,10 @@
 import { Injectable, Type } from '@nestjs/common';
 import { EVENT_NAME_METADATA } from './decorators';
-import { MissingEventMetadataException, UnregisteredEventException, UnregisteredSerializerException } from './exceptions';
+import {
+	MissingEventMetadataException,
+	UnregisteredEventException,
+	UnregisteredSerializerException,
+} from './exceptions';
 import { IEvent, IEventPayload, IEventSerializer } from './interfaces';
 
 export type EventSerializerType = Type<IEventSerializer<IEvent>>;
@@ -32,7 +36,7 @@ export class EventMap {
 
 	private get<E extends IEvent>(target: IEventMapTarget<E>): IEventData<E> {
 		for (const helper of this.eventMap) {
-			if(
+			if (
 				(typeof target === 'string' && target === helper.name) ||
 				(typeof target === 'object' && target.constructor === helper.cls) ||
 				(typeof target === 'function' && target === helper.cls)
@@ -46,7 +50,7 @@ export class EventMap {
 
 	public has<E extends IEvent>(target: IEventMapTarget<E>): boolean {
 		for (const helper of this.eventMap) {
-			if(
+			if (
 				(typeof target === 'string' && target === helper.name) ||
 				(typeof target === 'object' && target.constructor === helper.cls) ||
 				(typeof target === 'function' && target === helper.cls)
@@ -60,8 +64,8 @@ export class EventMap {
 	public serializeEvent<E extends IEvent>(event: IEventInstance<E>): IEventPayload<E> {
 		const { name, serializer } = this.get<E>(event);
 
-		if(!serializer) {
-			throw new UnregisteredSerializerException(name)
+		if (!serializer) {
+			throw new UnregisteredSerializerException(name);
 		}
 
 		return serializer.serialize(event);
@@ -70,8 +74,8 @@ export class EventMap {
 	public deserializeEvent<E extends IEvent>(eventName: IEventName, payload: IEventPayload<E>): IEventInstance<E> {
 		const { serializer } = this.get<E>(eventName);
 
-		if(!serializer) {
-			throw new UnregisteredSerializerException(eventName)
+		if (!serializer) {
+			throw new UnregisteredSerializerException(eventName);
 		}
 
 		return serializer.deserialize(payload);

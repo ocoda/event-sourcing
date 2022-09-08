@@ -1,28 +1,31 @@
 module.exports = {
-	moduleFileExtensions: ["js", "json", "ts"],
-	rootDir: "lib",
-	testRegex: ".*\\.spec\\.ts$",
+	moduleFileExtensions: ['js', 'json', 'ts'],
+	rootDir: 'tests',
+	testRegex: '.*\\.spec\\.ts$',
 	transform: {
-	  "^.+\\.(t|j)s$": [
-		"@swc/jest",
-		{
-			"jsc": {
-			  "parser": {
-				"syntax": "typescript",
-				"decorators": true
-			  },
-			  "transform": {
-				"legacyDecorator": true,
-				"decoratorMetadata": true
-			  },
-			  "target": "es2016",
-			  "keepClassNames": true
+		'^.+\\.(t|j)s$': [
+			'@swc/jest',
+			{
+				jsc: {
+					parser: {
+						syntax: 'typescript',
+						decorators: true,
+					},
+					transform: {
+						legacyDecorator: true,
+						decoratorMetadata: true,
+					},
+					target: 'es2016',
+					keepClassNames: true,
+				},
+				minify: false,
 			},
-			"minify": false,
-		  }
-	],
+		],
 	},
-	collectCoverageFrom: ["**/*.(t|j)s"],
-	coverageDirectory: "../coverage",
-	testEnvironment: "node",
-  };
+	collectCoverageFrom: ['**/*.(t|j)s'],
+	coverageDirectory: '../coverage',
+	testEnvironment: 'node',
+	moduleNameMapper: {
+		'^@ocoda/event-sourcing(|/.*)$': '<rootDir>/../lib/$1',
+	},
+};

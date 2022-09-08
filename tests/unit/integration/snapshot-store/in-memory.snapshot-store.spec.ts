@@ -1,7 +1,12 @@
-import { InMemorySnapshotStore } from './in-memory.snapshot-store';
-import { Aggregate, Id, SnapshotStream, SnapshotEnvelope } from '../../models';
-import { StreamReadingDirection } from '../../constants';
-import { SnapshotNotFoundException } from '../../exceptions';
+import {
+	Aggregate,
+	Id,
+	SnapshotEnvelope,
+	SnapshotNotFoundException,
+	SnapshotStream,
+	StreamReadingDirection,
+} from '../../../../lib';
+import { InMemorySnapshotStore } from '../../../../lib/integration/snapshot-store';
 
 class Account extends Aggregate {
 	constructor(private readonly id: AccountId, private readonly balance: number) {

@@ -1,6 +1,4 @@
-import { IQuery } from '../interfaces';
-import { QUERY_HANDLER_METADATA, QUERY_METADATA } from './constants';
-import { QueryHandler } from './query-handler.decorator';
+import { IQuery, QueryHandler, QUERY_HANDLER_METADATA, QUERY_METADATA } from '../../../lib';
 
 describe('@QueryHandler', () => {
 	class TestQuery implements IQuery {}

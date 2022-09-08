@@ -1,7 +1,4 @@
-import { SnapshotMetadata } from '../interfaces';
-import { Aggregate } from '../models';
-import { SNAPSHOT_METADATA } from './constants';
-import { Snapshot } from './snapshot.decorator';
+import { Snapshot, Aggregate, SnapshotMetadata, SNAPSHOT_METADATA } from '../../../lib';
 
 describe('@Snapshot', () => {
 	class Account extends Aggregate {}

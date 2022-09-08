@@ -1,6 +1,4 @@
-import { Aggregate } from './aggregate';
-import { Id } from './id';
-import { SnapshotStream } from './snapshot-stream';
+import { Aggregate, Id, SnapshotStream } from '../../../lib';
 
 describe(SnapshotStream, () => {
 	class Account extends Aggregate {}

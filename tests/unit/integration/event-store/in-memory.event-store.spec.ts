@@ -1,11 +1,16 @@
-import { Aggregate, EventEnvelope, EventStream, Id } from '../../models';
-import { IEvent } from '../../interfaces';
-import { InMemoryEventStore } from './in-memory.event-store';
-import { StreamReadingDirection } from '../../constants';
-import { EventNotFoundException } from '../../exceptions';
-import { EventName } from '../../decorators';
-import { DefaultEventSerializer } from '../../helpers';
-import { EventMap } from '../../event-map';
+import {
+	Aggregate,
+	EventEnvelope,
+	EventMap,
+	EventName,
+	EventNotFoundException,
+	EventStream,
+	Id,
+	IEvent,
+	StreamReadingDirection,
+} from '../../../../lib';
+import { DefaultEventSerializer } from '../../../../lib/helpers';
+import { InMemoryEventStore } from '../../../../lib/integration/event-store';
 
 class Account extends Aggregate {
 	constructor(private readonly id: AccountId, private readonly balance: number) {

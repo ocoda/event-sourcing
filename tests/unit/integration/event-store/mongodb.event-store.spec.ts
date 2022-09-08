@@ -1,12 +1,18 @@
-import { Aggregate, EventEnvelope, EventStream, Id } from '../../models';
-import { IEvent } from '../../interfaces';
-import { StreamReadingDirection } from '../../constants';
-import { EventNotFoundException } from '../../exceptions';
-import { EventMap } from '../../event-map';
-import { EventName } from '../../decorators';
-import { DefaultEventSerializer } from '../../helpers';
-import { ElasticsearchEventStore, ElasticsearchEventEnvelopeEntity } from './elasticsearch.event-store';
-import { Client } from '@elastic/elasticsearch';
+import {
+	Aggregate,
+	EventEnvelope,
+	EventMap,
+	EventName,
+	EventNotFoundException,
+	EventStream,
+	Id,
+	IEvent,
+	StreamReadingDirection,
+} from '../../../../lib';
+import { MongoDBEventStore, MongoEventEnvelopeEntity } from '../../../../lib/integration/event-store';
+import { MongoMemoryServer } from 'mongodb-memory-server';
+import { MongoClient } from 'mongodb';
+import { DefaultEventSerializer } from '../../../../lib/helpers';
 
 class Account extends Aggregate {
 	constructor(private readonly id: AccountId, private readonly balance: number) {
@@ -31,10 +37,11 @@ class AccountDebitedEvent implements IEvent {
 @EventName('account-closed')
 class AccountClosedEvent implements IEvent {}
 
-describe(ElasticsearchEventStore, () => {
+describe(MongoDBEventStore, () => {
 	const now = Date.now();
-	let client: Client;
-	let eventStore: ElasticsearchEventStore;
+	let mongod: MongoMemoryServer;
+	let client: MongoClient;
+	let eventStore: MongoDBEventStore;
 	let envelopes: EventEnvelope[];
 
 	const eventMap = new EventMap();
@@ -68,33 +75,34 @@ describe(ElasticsearchEventStore, () => {
 			EventEnvelope.new(accountId, 6, 'account-closed', eventMap.serializeEvent(events[5])),
 		];
 
-		client = new Client({ node: 'http://localhost:9200' });
-		eventStore = new ElasticsearchEventStore(eventMap, client);
+		mongod = await MongoMemoryServer.create();
+		client = new MongoClient(mongod.getUri());
+		eventStore = new MongoDBEventStore(eventMap, client);
 	});
 
 	afterEach(
 		async () =>
-			await client.deleteByQuery({
-				index: eventStream.subject,
-				body: { query: { match_all: {} } },
-				refresh: true,
-			}),
+			client
+				.db()
+				.collection(eventStream.subject)
+				.deleteMany({}),
 	);
 
 	afterAll(async () => {
 		jest.clearAllMocks();
 		await client.close();
+		await mongod.stop();
 	});
 
 	it('should append event envelopes', async () => {
 		await eventStore.appendEvents(accountId, accountVersion, eventStream, events);
+		const storedEvents = await client
+			.db()
+			.collection<MongoEventEnvelopeEntity>(eventStream.subject)
+			.find()
+			.toArray();
 
-		const { body } = await client.search({
-			index: eventStream.subject,
-			body: { query: { match_all: {} } },
-		});
-
-		expect((body.hits.hits as ElasticsearchEventEnvelopeEntity[]).map(({ _source }) => _source)).toEqual(
+		expect(storedEvents.map(({ _id, ...rest }) => rest)).toEqual(
 			envelopes.map(({ eventId, ...rest }) => ({ stream: eventStream.name, ...rest })),
 		);
 	});

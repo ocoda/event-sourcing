@@ -1,6 +1,4 @@
-import { IEvent } from '../interfaces';
-import { EventEnvelope } from './event-envelope';
-import { Id } from './id';
+import { EventEnvelope, Id, IEvent } from '../../../lib';
 
 describe(EventEnvelope, () => {
 	const now = new Date();
