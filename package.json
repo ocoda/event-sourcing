@@ -29,7 +29,6 @@
     "@nestjs/core": "^9.0.0",
     "@nestjs/platform-express": "^9.0.5",
     "@nestjs/testing": "^9.0.5",
-    "@node-rs/deno-lint": "^1.14.0",
     "@swc/core": "^1.2.177",
     "@swc/jest": "^0.2.22",
     "@types/jest": "28.1.6",
