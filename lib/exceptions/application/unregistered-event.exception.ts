@@ -8,12 +8,14 @@ export class UnregisteredEventException extends Error {
 			case 'string':
 				name = target;
 				break;
-			case 'object':
+			case 'object': {
 				name = target.constructor.name;
 				break;
-			case 'function':
+			}
+			case 'function': {
 				name = target.name;
 				break;
+			}
 		}
 
 		super(`Event '${name}' is not registered. Register it in the EventSourcingModule.`);

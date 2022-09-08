@@ -19,8 +19,8 @@ services:
     ports:
       - "9200:9200"
     volumes:
-        - type: tmpfs
-          target: /usr/share/elasticsearch/data
+      - type: tmpfs
+        target: /usr/share/elasticsearch/data
 
   kibana:
     container_name: kibana
