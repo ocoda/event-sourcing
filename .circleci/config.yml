@@ -77,7 +77,13 @@ jobs:
           command: pnpm ci
       - run:
           name: test
-          command: pnpm test
+          command: pnpm test:ci
+      - run:
+          name: Upload coverage reports to Codecov
+          command: |
+            curl -Os https://uploader.codecov.io/latest/linux/codecov
+            chmod +x codecov
+            ./codecov -t ${CODECOV_TOKEN}
 
 workflows:
   version: 2
