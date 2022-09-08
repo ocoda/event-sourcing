@@ -83,7 +83,7 @@ describe(ElasticsearchSnapshotStore, () => {
 	it('should retrieve snapshots backwards', async () => {
 		await snapshotStore.appendSnapshots(snapshotStream, snapshots);
 
-		const resolvedSnapshots = await snapshotStore.getSnapshots(snapshotStream, null, StreamReadingDirection.BACKWARD);
+		const resolvedSnapshots = await snapshotStore.getSnapshots(snapshotStream, undefined, StreamReadingDirection.BACKWARD);
 
 		expect(resolvedSnapshots).toEqual(snapshots.slice().reverse());
 	});

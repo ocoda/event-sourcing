@@ -124,7 +124,7 @@ describe(ElasticsearchEventStore, () => {
 	it('should retrieve events backwards', async () => {
 		await eventStore.appendEvents(accountId, accountVersion, eventStream, events);
 
-		const resolvedEvents = await eventStore.getEvents(eventStream, null, StreamReadingDirection.BACKWARD);
+		const resolvedEvents = await eventStore.getEvents(eventStream, undefined, StreamReadingDirection.BACKWARD);
 
 		expect(resolvedEvents).toEqual(events.slice().reverse());
 	});

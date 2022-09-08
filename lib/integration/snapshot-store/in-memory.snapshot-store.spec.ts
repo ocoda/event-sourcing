@@ -60,7 +60,7 @@ describe(InMemorySnapshotStore, () => {
 	it('should retrieve snapshots backwards', async () => {
 		snapshotStore.appendSnapshots(snapshotStream, snapshots);
 
-		const resolvedSnapshots = snapshotStore.getSnapshots(snapshotStream, null, StreamReadingDirection.BACKWARD);
+		const resolvedSnapshots = snapshotStore.getSnapshots(snapshotStream, undefined, StreamReadingDirection.BACKWARD);
 
 		expect(resolvedSnapshots).toEqual(snapshots.slice().reverse());
 	});

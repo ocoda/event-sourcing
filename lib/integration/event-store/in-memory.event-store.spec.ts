@@ -106,7 +106,7 @@ describe(InMemoryEventStore, () => {
 	it('should retrieve events backwards', async () => {
 		eventStore.appendEvents(accountId, accountVersion, eventStream, events);
 
-		const resolvedEvents = eventStore.getEvents(eventStream, null, StreamReadingDirection.BACKWARD);
+		const resolvedEvents = eventStore.getEvents(eventStream, undefined, StreamReadingDirection.BACKWARD);
 
 		expect(resolvedEvents).toEqual(events.slice().reverse());
 	});
