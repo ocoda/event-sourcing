@@ -1,6 +1,12 @@
 {
 	"linter": {
-		"enabled": true
+		"enabled": true,
+		"rules": {
+			"recommended": true,
+			"js": {
+				"noUnusedVariables": "off"
+			}
+		}
 	},
 	"formatter": {
 		"enabled": true,
