@@ -9,7 +9,6 @@ aliases:
       name: Install pnpm package manager
       command: |
         curl -L https://pnpm.js.org/pnpm.js | node - add --global pnpm@7
-        pnpm setup
   - &install-deps
     run:
         name: Install dependencies
@@ -55,7 +54,9 @@ jobs:
       - *install-pnpm
       - run:
           name: Install Node
-          command: pnpm env use --global 18
+          command: |
+            pnpm setup
+            pnpm env use --global 18
       - *install-deps
       - run:
           name: Prepare
