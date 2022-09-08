@@ -12,7 +12,17 @@
 		"outDir": "./dist",
 		"rootDir": "./lib",
 		"skipLibCheck": true,
-		"useUnknownInCatchVariables": false
+		"useUnknownInCatchVariables": false,
+		"noImplicitAny": false,
+		"strictNullChecks": false,
+		"paths": {
+			"@ocoda/event-sourcing": [
+				"lib",
+			],
+			"@ocoda/event-sourcing/*": [
+				"lib/*",
+			],
+		}
 	},
 	"include": [
 		"lib/**/*"
@@ -21,5 +31,5 @@
 		"node_modules",
 		"**/*.spec.ts",
 		"tests",
-	]
+	],
 }
