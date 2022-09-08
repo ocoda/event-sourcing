@@ -32,65 +32,60 @@ export class EventMap {
 
 	private get<E extends IEvent>(target: IEventMapTarget<E>): IEventData<E> {
 		for (const helper of this.eventMap) {
-			if (typeof target === 'string' && target === helper.name) {
-				return helper as IEventData<E>;
-			}
-			if (typeof target === 'object' && target.constructor === helper.cls) {
-				return helper as IEventData<E>;
-			}
-			if (typeof target === 'function' && target === helper.cls) {
+			if(
+				(typeof target === 'string' && target === helper.name) ||
+				(typeof target === 'object' && target.constructor === helper.cls) ||
+				(typeof target === 'function' && target === helper.cls)
+			) {
 				return helper as IEventData<E>;
 			}
 		}
+
+		throw new UnregisteredEventException(target);
 	}
 
-	public has<E extends IEvent>(event: IEventMapTarget<E>): boolean {
-		return this.get(event) !== undefined;
+	public has<E extends IEvent>(target: IEventMapTarget<E>): boolean {
+		for (const helper of this.eventMap) {
+			if(
+				(typeof target === 'string' && target === helper.name) ||
+				(typeof target === 'object' && target.constructor === helper.cls) ||
+				(typeof target === 'function' && target === helper.cls)
+			) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	public serializeEvent<E extends IEvent>(event: IEventInstance<E>): IEventPayload<E> {
-		const helper = this.get<E>(event);
+		const { name, serializer } = this.get<E>(event);
 
-		if (!helper) {
-			throw new UnregisteredEventException(event);
+		if(!serializer) {
+			throw new UnregisteredSerializerException(name)
 		}
 
-		if(!helper.serializer) {
-			throw new UnregisteredSerializerException(helper.name)
-		}
-
-		return helper.serializer.serialize(event);
+		return serializer.serialize(event);
 	}
 
 	public deserializeEvent<E extends IEvent>(eventName: IEventName, payload: IEventPayload<E>): IEventInstance<E> {
-		const helper = this.get<E>(eventName);
+		const { serializer } = this.get<E>(eventName);
 
-		if (!helper) {
-			throw new UnregisteredEventException(eventName);
-		}
-
-		if(!helper.serializer) {
+		if(!serializer) {
 			throw new UnregisteredSerializerException(eventName)
 		}
 
-		return helper.serializer.deserialize(payload);
+		return serializer.deserialize(payload);
 	}
 
 	public getConstructor<E extends IEvent>(target: IEventInstance<E> | IEventName): IEventConstructor<E> {
-		const helper = this.get(target);
-		if (!helper) {
-			throw new UnregisteredEventException(target);
-		}
+		const { cls } = this.get(target);
 
-		return helper.cls;
+		return cls;
 	}
 
 	public getName<E extends IEvent>(target: IEventConstructor<E> | IEventInstance<E>): IEventName {
-		const helper = this.get(target);
-		if (!helper) {
-			throw new UnregisteredEventException(target);
-		}
+		const { name } = this.get(target);
 
-		return helper.name;
+		return name;
 	}
 }
