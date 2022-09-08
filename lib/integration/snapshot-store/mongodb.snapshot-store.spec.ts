@@ -2,6 +2,7 @@ import { Aggregate, Id, SnapshotStream, SnapshotEnvelope } from '../../models';
 import { StreamReadingDirection } from '../../constants';
 import { SnapshotNotFoundException } from '../../exceptions';
 import { MongoDBSnapshotStore } from './mongodb.snapshot-store';
+import { MongoMemoryServer } from 'mongodb-memory-server';
 import { MongoClient } from 'mongodb';
 
 class Account extends Aggregate {
@@ -12,6 +13,7 @@ class Account extends Aggregate {
 class AccountId extends Id {}
 
 describe(MongoDBSnapshotStore, () => {
+	let mongod: MongoMemoryServer;
 	let client: MongoClient;
 	let snapshotStore: MongoDBSnapshotStore;
 
@@ -28,7 +30,8 @@ describe(MongoDBSnapshotStore, () => {
 	];
 
 	beforeAll(async () => {
-		client = new MongoClient('mongodb://localhost:27017');
+		mongod = await MongoMemoryServer.create();
+		client = new MongoClient(mongod.getUri());
 		snapshotStore = new MongoDBSnapshotStore(client);
 	});
 
@@ -42,6 +45,7 @@ describe(MongoDBSnapshotStore, () => {
 
 	afterAll(async () => {
 		await client.close();
+		await mongod.stop();
 	});
 
 	it('should append snapshots', async () => {
@@ -80,7 +84,7 @@ describe(MongoDBSnapshotStore, () => {
 	it('should retrieve snapshots backwards', async () => {
 		await snapshotStore.appendSnapshots(snapshotStream, snapshots);
 
-		const resolvedSnapshots = await snapshotStore.getSnapshots(snapshotStream, null, StreamReadingDirection.BACKWARD);
+		const resolvedSnapshots = await snapshotStore.getSnapshots(snapshotStream, undefined, StreamReadingDirection.BACKWARD);
 
 		expect(resolvedSnapshots).toEqual(snapshots.slice().reverse());
 	});
