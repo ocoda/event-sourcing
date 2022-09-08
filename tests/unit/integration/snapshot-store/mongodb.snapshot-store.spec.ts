@@ -1,4 +1,3 @@
-import { MongoMemoryServer } from 'mongodb-memory-server';
 import { MongoClient } from 'mongodb';
 import {
 	Aggregate,
@@ -18,7 +17,6 @@ class Account extends Aggregate {
 class AccountId extends Id {}
 
 describe(MongoDBSnapshotStore, () => {
-	let mongod: MongoMemoryServer;
 	let client: MongoClient;
 	let snapshotStore: MongoDBSnapshotStore;
 
@@ -35,8 +33,7 @@ describe(MongoDBSnapshotStore, () => {
 	];
 
 	beforeAll(async () => {
-		mongod = await MongoMemoryServer.create();
-		client = new MongoClient(mongod.getUri());
+		client = new MongoClient('mongodb://localhost:27017');
 		snapshotStore = new MongoDBSnapshotStore(client);
 	});
 
@@ -50,7 +47,6 @@ describe(MongoDBSnapshotStore, () => {
 
 	afterAll(async () => {
 		await client.close();
-		await mongod.stop();
 	});
 
 	it('should append snapshots', async () => {
@@ -89,11 +85,7 @@ describe(MongoDBSnapshotStore, () => {
 	it('should retrieve snapshots backwards', async () => {
 		await snapshotStore.appendSnapshots(snapshotStream, snapshots);
 
-		const resolvedSnapshots = await snapshotStore.getSnapshots(
-			snapshotStream,
-			undefined,
-			StreamReadingDirection.BACKWARD,
-		);
+		const resolvedSnapshots = await snapshotStore.getSnapshots(snapshotStream, null, StreamReadingDirection.BACKWARD);
 
 		expect(resolvedSnapshots).toEqual(snapshots.slice().reverse());
 	});

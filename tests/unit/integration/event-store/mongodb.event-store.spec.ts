@@ -9,8 +9,7 @@ import {
 	IEvent,
 	StreamReadingDirection,
 } from '../../../../lib';
-import { MongoDBEventStore, MongoEventEnvelopeEntity } from '../../../../lib/integration/event-store';
-import { MongoMemoryServer } from 'mongodb-memory-server';
+import { MongoDBEventStore } from '../../../../lib/integration/event-store';
 import { MongoClient } from 'mongodb';
 import { DefaultEventSerializer } from '../../../../lib/helpers';
 
@@ -39,7 +38,6 @@ class AccountClosedEvent implements IEvent {}
 
 describe(MongoDBEventStore, () => {
 	const now = Date.now();
-	let mongod: MongoMemoryServer;
 	let client: MongoClient;
 	let eventStore: MongoDBEventStore;
 	let envelopes: EventEnvelope[];
@@ -75,8 +73,7 @@ describe(MongoDBEventStore, () => {
 			EventEnvelope.create(accountId, 6, 'account-closed', eventMap.serializeEvent(events[5])),
 		];
 
-		mongod = await MongoMemoryServer.create();
-		client = new MongoClient(mongod.getUri());
+		client = new MongoClient('mongodb://localhost:27017');
 		eventStore = new MongoDBEventStore(eventMap, client);
 	});
 
@@ -91,18 +88,17 @@ describe(MongoDBEventStore, () => {
 	afterAll(async () => {
 		jest.clearAllMocks();
 		await client.close();
-		await mongod.stop();
 	});
 
 	it('should append event envelopes', async () => {
 		await eventStore.appendEvents(accountId, accountVersion, eventStream, events);
 		const storedEvents = await client
 			.db()
-			.collection<MongoEventEnvelopeEntity>(eventStream.subject)
+			.collection(eventStream.subject)
 			.find()
 			.toArray();
 
-		expect(storedEvents.map(({ _id, ...rest }) => rest)).toEqual(
+		expect((storedEvents as unknown[]).map(({ _id, ...rest }) => rest)).toEqual(
 			envelopes.map(({ eventId, ...rest }) => ({ stream: eventStream.name, ...rest })),
 		);
 	});
@@ -132,7 +128,7 @@ describe(MongoDBEventStore, () => {
 	it('should retrieve events backwards', async () => {
 		await eventStore.appendEvents(accountId, accountVersion, eventStream, events);
 
-		const resolvedEvents = await eventStore.getEvents(eventStream, undefined, StreamReadingDirection.BACKWARD);
+		const resolvedEvents = await eventStore.getEvents(eventStream, null, StreamReadingDirection.BACKWARD);
 
 		expect(resolvedEvents).toEqual(events.slice().reverse());
 	});
