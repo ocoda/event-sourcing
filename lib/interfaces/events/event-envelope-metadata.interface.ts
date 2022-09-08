@@ -3,15 +3,15 @@
  */
 export interface EventEnvelopeMetadata {
 	/**
-   * Aggregate id the message belongs to.
-   */
+	 * Aggregate id the message belongs to.
+	 */
 	aggregateId: string;
 	/**
-   * Version of the aggregate.
-   */
+	 * Version of the aggregate.
+	 */
 	sequence: number;
 	/**
-   * Time at which the event ocurred.
-   */
+	 * Time at which the event ocurred.
+	 */
 	occurredOn: number;
 }

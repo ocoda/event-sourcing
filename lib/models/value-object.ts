@@ -15,9 +15,8 @@ export abstract class ValueObject<T extends ValueObjectProps = ValueObjectProps,
 		}
 
 		return (
-			Object.keys(this.props).length === Object.keys(other.props).length && Object.keys(this.props).every(
-				(key) => this.props[key] === other.props[key],
-			)
+			Object.keys(this.props).length === Object.keys(other.props).length &&
+			Object.keys(this.props).every((key) => this.props[key] === other.props[key])
 		);
 	}
 }

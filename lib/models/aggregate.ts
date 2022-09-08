@@ -45,8 +45,8 @@ export abstract class Aggregate<EventBase extends IEvent = IEvent> {
 	}
 
 	private getEventName(event: EventBase): string {
-		const { constructor } = Object.getPrototypeOf(event);
-		return constructor.name;
+		const prototype = Object.getPrototypeOf(event);
+		return prototype.constructor.name;
 	}
 
 	commit(): IEvent[] {

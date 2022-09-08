@@ -5,9 +5,10 @@ export class UnregisteredEventException extends Error {
 		let name: string;
 
 		switch (typeof target) {
-			case 'string':
+			case 'string': {
 				name = target;
 				break;
+			}
 			case 'object': {
 				name = target.constructor.name;
 				break;

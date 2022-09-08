@@ -6,15 +6,15 @@ import { Aggregate } from '../../models';
  */
 export interface SnapshotMetadata {
 	/**
-   * The aggregate type of the snapshot.
-   */
+	 * The aggregate type of the snapshot.
+	 */
 	aggregate: Type<Aggregate>;
 	/**
-   * The name of the aggregate.
-   */
+	 * The name of the aggregate.
+	 */
 	name: string;
 	/**
-   * Per how many events a snapshot should be taken.
-   */
+	 * Per how many events a snapshot should be taken.
+	 */
 	interval?: number;
 }

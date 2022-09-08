@@ -83,7 +83,8 @@ export class EventSourcingModule {
 		}
 		return {
 			provide: EVENT_SOURCING_OPTIONS,
-			useFactory: async (optionsFactory: EventSourcingOptionsFactory) => await optionsFactory.createEventSourcingOptions(),
+			useFactory: async (optionsFactory: EventSourcingOptionsFactory) =>
+				await optionsFactory.createEventSourcingOptions(),
 			inject: [options.useExisting || options.useClass],
 		};
 	}

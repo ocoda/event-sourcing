@@ -137,17 +137,16 @@ describe(InMemoryEventStore, () => {
 
 		const resolvedEvents = eventStore.getEnvelopes(eventStream);
 
-		expect(resolvedEvents.map(({ constructor, eventId, ...rest }) => ({ constructor, ...rest }))).toEqual(
-			envelopes.map(({ constructor, eventId, ...rest }) => ({ constructor, ...rest })),
+		expect(resolvedEvents.map(({ eventName, payload, metadata }) => ({ eventName, payload, metadata }))).toEqual(
+			envelopes.map(({ eventName, payload, metadata }) => ({ eventName, payload, metadata })),
 		);
 	});
 
 	it('should retrieve a single event-envelope', () => {
 		eventStore.appendEvents(accountId, accountVersion, eventStream, events);
 
-		const { constructor, eventId, ...rest } = eventStore.getEnvelope(eventStream, envelopes[3].metadata.sequence);
+		const { eventId, ...rest } = eventStore.getEnvelope(eventStream, envelopes[3].metadata.sequence);
 
-		expect(constructor).toEqual(envelopes[3].constructor);
 		expect(rest.eventName).toEqual(envelopes[3].eventName);
 		expect(rest.metadata).toEqual(envelopes[3].metadata);
 		expect(rest.payload).toEqual(envelopes[3].payload);
