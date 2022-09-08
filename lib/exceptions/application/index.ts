@@ -8,5 +8,5 @@ export * from './missing-event-metadata.exception';
 export * from './missing-snapshot-metadata.exception';
 export * from './query-handler-not-found.exception';
 export * from './snapshot-not-found.exception';
-export * from './unregistered-aggregate.exception';
 export * from './unregistered-event.exception';
+export * from './unregistered-serializer.exception';

@@ -1,6 +1,6 @@
 import { Injectable, Type } from '@nestjs/common';
 import { EVENT_NAME_METADATA } from './decorators';
-import { MissingEventMetadataException, UnregisteredEventException } from './exceptions';
+import { MissingEventMetadataException, UnregisteredEventException, UnregisteredSerializerException } from './exceptions';
 import { IEvent, IEventPayload, IEventSerializer } from './interfaces';
 
 export type EventSerializerType = Type<IEventSerializer<IEvent>>;
@@ -49,13 +49,31 @@ export class EventMap {
 	}
 
 	public serializeEvent<E extends IEvent>(event: IEventInstance<E>): IEventPayload<E> {
-		const { serializer } = this.get<E>(event);
-		return serializer.serialize(event);
+		const helper = this.get<E>(event);
+
+		if (!helper) {
+			throw new UnregisteredEventException(event);
+		}
+
+		if(!helper.serializer) {
+			throw new UnregisteredSerializerException(helper.name)
+		}
+
+		return helper.serializer.serialize(event);
 	}
 
 	public deserializeEvent<E extends IEvent>(eventName: IEventName, payload: IEventPayload<E>): IEventInstance<E> {
-		const { serializer } = this.get<E>(eventName);
-		return serializer.deserialize(payload);
+		const helper = this.get<E>(eventName);
+
+		if (!helper) {
+			throw new UnregisteredEventException(eventName);
+		}
+
+		if(!helper.serializer) {
+			throw new UnregisteredSerializerException(eventName)
+		}
+
+		return helper.serializer.deserialize(payload);
 	}
 
 	public getConstructor<E extends IEvent>(target: IEventInstance<E> | IEventName): IEventConstructor<E> {
@@ -74,14 +92,5 @@ export class EventMap {
 		}
 
 		return helper.name;
-	}
-
-	public getSerializer<E extends IEvent>(target: IEventMapTarget<E>): IEventSerializer<E> {
-		const helper = this.get(target);
-		if (!helper) {
-			throw new UnregisteredEventException(target);
-		}
-
-		return helper.serializer as IEventSerializer<E>;
 	}
 }
