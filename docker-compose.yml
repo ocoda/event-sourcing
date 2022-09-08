@@ -21,13 +21,3 @@ services:
     volumes:
       - type: tmpfs
         target: /usr/share/elasticsearch/data
-
-  kibana:
-    container_name: kibana
-    image: docker.elastic.co/kibana/kibana:7.4.0
-    environment:
-      - ELASTICSEARCH_HOSTS=http://es-elastic:9200
-    ports:
-      - 5601:5601
-    depends_on:
-      - es-elastic
