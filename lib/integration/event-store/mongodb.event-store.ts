@@ -21,7 +21,7 @@ export class MongoDBEventStore extends EventStore {
 		this.database = client.db();
 	}
 
-	async getEvents(
+	getEvents(
 		{ name, subject }: EventStream,
 		fromVersion?: number,
 		direction: StreamReadingDirection = StreamReadingDirection.FORWARD,
@@ -64,7 +64,7 @@ export class MongoDBEventStore extends EventStore {
 		const envelopes = events.reduce<EventEnvelope[]>((acc, event) => {
 			const name = this.eventMap.getName(event);
 			const payload = this.eventMap.serializeEvent(event);
-			const envelope = EventEnvelope.new(aggregateId, sequence++, name, payload);
+			const envelope = EventEnvelope.create(aggregateId, sequence++, name, payload);
 			return [...acc, envelope];
 		}, []);
 
@@ -73,7 +73,7 @@ export class MongoDBEventStore extends EventStore {
 		await this.database.collection<MongoEventEnvelopeEntity>(subject).insertMany(entities);
 	}
 
-	async getEnvelopes(
+	getEnvelopes(
 		{ name, subject }: EventStream,
 		fromVersion?: number,
 		direction: StreamReadingDirection = StreamReadingDirection.FORWARD,

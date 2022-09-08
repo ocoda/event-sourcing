@@ -26,12 +26,12 @@ describe(MongoDBSnapshotStore, () => {
 	const snapshotStream = SnapshotStream.for(Account, accountId);
 
 	const snapshots = [
-		SnapshotEnvelope.new<Account>(accountId, 10, 'account', { balance: 50 }),
-		SnapshotEnvelope.new<Account>(accountId, 20, 'account', { balance: 20 }),
-		SnapshotEnvelope.new<Account>(accountId, 30, 'account', { balance: 60 }),
-		SnapshotEnvelope.new<Account>(accountId, 40, 'account', { balance: 100 }),
-		SnapshotEnvelope.new<Account>(accountId, 50, 'account', { balance: 70 }),
-		SnapshotEnvelope.new<Account>(accountId, 60, 'account', { balance: 150 }),
+		SnapshotEnvelope.create<Account>(accountId, 10, 'account', { balance: 50 }),
+		SnapshotEnvelope.create<Account>(accountId, 20, 'account', { balance: 20 }),
+		SnapshotEnvelope.create<Account>(accountId, 30, 'account', { balance: 60 }),
+		SnapshotEnvelope.create<Account>(accountId, 40, 'account', { balance: 100 }),
+		SnapshotEnvelope.create<Account>(accountId, 50, 'account', { balance: 70 }),
+		SnapshotEnvelope.create<Account>(accountId, 60, 'account', { balance: 150 }),
 	];
 
 	beforeAll(async () => {
@@ -42,7 +42,7 @@ describe(MongoDBSnapshotStore, () => {
 
 	afterEach(
 		async () =>
-			client
+			await client
 				.db()
 				.collection(snapshotStream.subject)
 				.deleteMany({}),

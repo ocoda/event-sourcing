@@ -10,7 +10,7 @@ export class EventEnvelope<E extends IEvent = IEvent> {
 		readonly metadata: EventEnvelopeMetadata,
 	) {}
 
-	static new<E extends IEvent = IEvent>(
+	static create<E extends IEvent = IEvent>(
 		aggregateId: Id,
 		sequence: number,
 		eventName: string,

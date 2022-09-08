@@ -9,7 +9,7 @@ import {
 import { DefaultEventSerializer } from '../../lib/helpers';
 
 describe(EventMap, () => {
-	let now = new Date();
+	const now = new Date();
 
 	@EventName('account-opened')
 	class AccountOpenedEvent implements IEvent {

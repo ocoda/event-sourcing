@@ -63,12 +63,12 @@ describe(InMemoryEventStore, () => {
 		jest.spyOn(global.Date, 'now').mockImplementation(() => now);
 
 		envelopes = [
-			EventEnvelope.new(accountId, 1, 'account-opened', eventMap.serializeEvent(events[0])),
-			EventEnvelope.new(accountId, 2, 'account-credited', eventMap.serializeEvent(events[1])),
-			EventEnvelope.new(accountId, 3, 'account-debited', eventMap.serializeEvent(events[2])),
-			EventEnvelope.new(accountId, 4, 'account-credited', eventMap.serializeEvent(events[3])),
-			EventEnvelope.new(accountId, 5, 'account-debited', eventMap.serializeEvent(events[4])),
-			EventEnvelope.new(accountId, 6, 'account-closed', eventMap.serializeEvent(events[5])),
+			EventEnvelope.create(accountId, 1, 'account-opened', eventMap.serializeEvent(events[0])),
+			EventEnvelope.create(accountId, 2, 'account-credited', eventMap.serializeEvent(events[1])),
+			EventEnvelope.create(accountId, 3, 'account-debited', eventMap.serializeEvent(events[2])),
+			EventEnvelope.create(accountId, 4, 'account-credited', eventMap.serializeEvent(events[3])),
+			EventEnvelope.create(accountId, 5, 'account-debited', eventMap.serializeEvent(events[4])),
+			EventEnvelope.create(accountId, 6, 'account-closed', eventMap.serializeEvent(events[5])),
 		];
 	});
 
@@ -78,7 +78,7 @@ describe(InMemoryEventStore, () => {
 
 	afterAll(() => jest.clearAllMocks());
 
-	it('should append event envelopes', async () => {
+	it('should append event envelopes', () => {
 		eventStore.appendEvents(accountId, accountVersion, eventStream, events);
 
 		expect(
@@ -86,7 +86,7 @@ describe(InMemoryEventStore, () => {
 		).toEqual(envelopes.map(({ eventName, payload }) => ({ eventName, payload })));
 	});
 
-	it('should retrieve events', async () => {
+	it('should retrieve events', () => {
 		eventStore.appendEvents(accountId, accountVersion, eventStream, events);
 
 		const resolvedEvents = eventStore.getEvents(eventStream);
@@ -94,7 +94,7 @@ describe(InMemoryEventStore, () => {
 		expect(resolvedEvents).toEqual(events);
 	});
 
-	it('should retrieve a single event', async () => {
+	it('should retrieve a single event', () => {
 		eventStore.appendEvents(accountId, accountVersion, eventStream, events);
 
 		const resolvedEvent = eventStore.getEvent(eventStream, envelopes[3].metadata.sequence);
@@ -102,13 +102,13 @@ describe(InMemoryEventStore, () => {
 		expect(resolvedEvent).toEqual(events[3]);
 	});
 
-	it("should throw when an event isn't found", async () => {
+	it("should throw when an event isn't found", () => {
 		expect(() => eventStore.getEvent(eventStream, accountVersion)).toThrow(
 			EventNotFoundException.withVersion(eventStream.name, accountVersion),
 		);
 	});
 
-	it('should retrieve events backwards', async () => {
+	it('should retrieve events backwards', () => {
 		eventStore.appendEvents(accountId, accountVersion, eventStream, events);
 
 		const resolvedEvents = eventStore.getEvents(eventStream, undefined, StreamReadingDirection.BACKWARD);
@@ -116,7 +116,7 @@ describe(InMemoryEventStore, () => {
 		expect(resolvedEvents).toEqual(events.slice().reverse());
 	});
 
-	it('should retrieve events forward from a certain version', async () => {
+	it('should retrieve events forward from a certain version', () => {
 		eventStore.appendEvents(accountId, accountVersion, eventStream, events);
 
 		const resolvedEvents = eventStore.getEvents(eventStream, 3);
@@ -124,7 +124,7 @@ describe(InMemoryEventStore, () => {
 		expect(resolvedEvents).toEqual(events.slice(2));
 	});
 
-	it('should retrieve events backwards from a certain version', async () => {
+	it('should retrieve events backwards from a certain version', () => {
 		eventStore.appendEvents(accountId, accountVersion, eventStream, events);
 
 		const resolvedEvents = eventStore.getEvents(eventStream, 4, StreamReadingDirection.BACKWARD);
@@ -132,7 +132,7 @@ describe(InMemoryEventStore, () => {
 		expect(resolvedEvents).toEqual(events.slice(3).reverse());
 	});
 
-	it('should retrieve event-envelopes', async () => {
+	it('should retrieve event-envelopes', () => {
 		eventStore.appendEvents(accountId, accountVersion, eventStream, events);
 
 		const resolvedEvents = eventStore.getEnvelopes(eventStream);
@@ -142,7 +142,7 @@ describe(InMemoryEventStore, () => {
 		);
 	});
 
-	it('should retrieve a single event-envelope', async () => {
+	it('should retrieve a single event-envelope', () => {
 		eventStore.appendEvents(accountId, accountVersion, eventStream, events);
 
 		const { constructor, eventId, ...rest } = eventStore.getEnvelope(eventStream, envelopes[3].metadata.sequence);

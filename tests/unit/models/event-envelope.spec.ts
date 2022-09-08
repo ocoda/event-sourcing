@@ -14,7 +14,7 @@ describe(EventEnvelope, () => {
 		const fooId = FooId.generate();
 		const fooCreatedEvent = new FooCreatedEvent('bar');
 
-		const envelope = EventEnvelope.new(fooId, 1, 'foo-created', Object.assign({}, fooCreatedEvent));
+		const envelope = EventEnvelope.create(fooId, 1, 'foo-created', Object.assign({}, fooCreatedEvent));
 
 		expect(envelope.eventId).toBeDefined();
 		expect(envelope.eventName).toBe('foo-created');

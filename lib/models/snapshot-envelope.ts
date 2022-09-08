@@ -11,7 +11,7 @@ export class SnapshotEnvelope<A extends Aggregate = Aggregate> {
 		readonly metadata: SnapshotEnvelopeMetadata,
 	) {}
 
-	static new<A extends Aggregate>(
+	static create<A extends Aggregate>(
 		aggregateId: Id,
 		sequence: number,
 		snapshotName: string,

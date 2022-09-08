@@ -48,7 +48,7 @@ export class InMemoryEventStore extends EventStore {
 		const envelopes = events.reduce<EventEnvelope[]>((acc, event) => {
 			const name = this.eventMap.getName(event);
 			const payload = this.eventMap.serializeEvent(event);
-			const envelope = EventEnvelope.new(aggregateId, sequence++, name, payload);
+			const envelope = EventEnvelope.create(aggregateId, sequence++, name, payload);
 			return [...acc, envelope];
 		}, []);
 

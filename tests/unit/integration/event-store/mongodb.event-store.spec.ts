@@ -67,12 +67,12 @@ describe(MongoDBEventStore, () => {
 		jest.spyOn(global.Date, 'now').mockImplementation(() => now);
 
 		envelopes = [
-			EventEnvelope.new(accountId, 1, 'account-opened', eventMap.serializeEvent(events[0])),
-			EventEnvelope.new(accountId, 2, 'account-credited', eventMap.serializeEvent(events[1])),
-			EventEnvelope.new(accountId, 3, 'account-debited', eventMap.serializeEvent(events[2])),
-			EventEnvelope.new(accountId, 4, 'account-credited', eventMap.serializeEvent(events[3])),
-			EventEnvelope.new(accountId, 5, 'account-debited', eventMap.serializeEvent(events[4])),
-			EventEnvelope.new(accountId, 6, 'account-closed', eventMap.serializeEvent(events[5])),
+			EventEnvelope.create(accountId, 1, 'account-opened', eventMap.serializeEvent(events[0])),
+			EventEnvelope.create(accountId, 2, 'account-credited', eventMap.serializeEvent(events[1])),
+			EventEnvelope.create(accountId, 3, 'account-debited', eventMap.serializeEvent(events[2])),
+			EventEnvelope.create(accountId, 4, 'account-credited', eventMap.serializeEvent(events[3])),
+			EventEnvelope.create(accountId, 5, 'account-debited', eventMap.serializeEvent(events[4])),
+			EventEnvelope.create(accountId, 6, 'account-closed', eventMap.serializeEvent(events[5])),
 		];
 
 		mongod = await MongoMemoryServer.create();
@@ -82,7 +82,7 @@ describe(MongoDBEventStore, () => {
 
 	afterEach(
 		async () =>
-			client
+			await client
 				.db()
 				.collection(eventStream.subject)
 				.deleteMany({}),
