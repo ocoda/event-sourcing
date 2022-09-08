@@ -7,9 +7,9 @@
 	"license": "UNLICENSED",
 	"scripts": {
 		"build": "rm -rf dist && tsc -p tsconfig.json",
-		"format": "rome format . --write",
-		"lint": "rome check .",
-		"lint:fix": "rome check . --apply-suggested",
+		"ci": "rome ci ./lib",
+		"format": "rome format ./lib ./tests --write",
+		"lint": "rome check ./lib ./tests --apply-suggested",
 		"test": "jest --config jest.config.js"
 	},
 	"engines": {
