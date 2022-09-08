@@ -43,5 +43,5 @@ export abstract class SnapshotHandler<A extends Aggregate = Aggregate> {
 		aggregate.loadFromSnapshot(snapshot, metadata.sequence);
 	}
 	abstract serialize(snapshot: ISnapshot<A>): ISnapshotPayload<A>;
-	abstract deserialize(payload: ISnapshotPayload<A>, ...params): ISnapshot<A>;
+	abstract deserialize(payload: ISnapshotPayload<A>): ISnapshot<A>;
 }
