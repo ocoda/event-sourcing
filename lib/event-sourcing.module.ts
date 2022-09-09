@@ -5,13 +5,9 @@ import { EVENT_SOURCING_OPTIONS } from './constants';
 import { EventMap } from './event-map';
 import { EventPublisher } from './event-publisher';
 import { createEventSourcingProviders, EventStoreProvider, SnapshotStoreProvider } from './event-sourcing.providers';
-import { EventStore } from './event-store';
 import { HandlersLoader } from './handlers.loader';
-import { InMemoryEventStore } from './integration/event-store';
-import { InMemorySnapshotStore } from './integration/snapshot-store';
 import { EventSourcingModuleAsyncOptions, EventSourcingModuleOptions, EventSourcingOptionsFactory } from './interfaces';
 import { QueryBus } from './query-bus';
-import { SnapshotStore } from './snapshot-store';
 
 @Module({})
 export class EventSourcingModule {
