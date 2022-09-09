@@ -1,36 +1,28 @@
 {
 	"compilerOptions": {
-		"module": "commonjs",
-		"declaration": true,
-		"strict": true,
-		"removeComments": false,
-		"noLib": false,
+		"allowJs": true,
+		"declaration": false,
 		"emitDecoratorMetadata": true,
 		"experimentalDecorators": true,
-		"target": "es6",
-		"sourceMap": false,
-		"outDir": "./dist",
-		"rootDir": "./lib",
-		"baseUrl": ".",
-		"skipLibCheck": true,
-		"useUnknownInCatchVariables": false,
+		"lib": [
+			"es7"
+		],
+		"module": "commonjs",
 		"noImplicitAny": false,
-		"strictNullChecks": false,
+		"noLib": false,
+		"noUnusedLocals": false,
+		"outDir": "dist",
 		"paths": {
 			"@ocoda/event-sourcing": [
-				"lib",
+				"./lib"
 			],
 			"@ocoda/event-sourcing/*": [
-				"lib/*",
+				"./lib/*"
 			],
-		}
+		},
+		"removeComments": true,
+		"sourceMap": true,
+		"target": "es6",
+		"useUnknownInCatchVariables": false,
 	},
-	"include": [
-		"lib/**/*"
-	],
-	"exclude": [
-		"node_modules",
-		"**/*.spec.ts",
-		"tests",
-	],
 }
