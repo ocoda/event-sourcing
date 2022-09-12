@@ -1,19 +1,30 @@
-import { Aggregate, SnapshotEnvelope, SnapshotStream } from './models';
+import { ISnapshot } from './interfaces';
+import { Aggregate, Id, SnapshotEnvelope, SnapshotStream } from './models';
 
 export abstract class SnapshotStore {
 	abstract getSnapshots<A extends Aggregate>(
 		snapshotStream: SnapshotStream<A>,
 		fromVersion?: number,
-	): SnapshotEnvelope<A>[] | Promise<SnapshotEnvelope<A>[]>;
+	): ISnapshot<A>[] | Promise<ISnapshot<A>[]>;
 	abstract getSnapshot<A extends Aggregate>(
 		snapshotStream: SnapshotStream<A>,
 		version: number,
-	): SnapshotEnvelope<A> | Promise<SnapshotEnvelope<A>>;
+	): ISnapshot<A> | Promise<ISnapshot<A>>;
 	abstract getLastSnapshot<A extends Aggregate>(
 		snapshotStream: SnapshotStream<A>,
-	): SnapshotEnvelope<A> | Promise<SnapshotEnvelope<A>>;
-	abstract appendSnapshots<A extends Aggregate>(
+	): ISnapshot<A> | Promise<ISnapshot<A>>;
+	abstract appendSnapshot<A extends Aggregate>(
+		aggregateId: Id,
+		aggregateVersion: number,
 		snapshotStream: SnapshotStream<A>,
-		envelopes: SnapshotEnvelope<A>[],
+		snapshot: ISnapshot<A>,
 	): void | Promise<void>;
+	abstract getEnvelopes?<A extends Aggregate>(
+		eventStream: SnapshotStream<A>,
+		fromVersion?: number,
+	): SnapshotEnvelope<A>[] | Promise<SnapshotEnvelope<A>[]>;
+	abstract getEnvelope?<A extends Aggregate>(
+		eventStream: SnapshotStream<A>,
+		version: number,
+	): SnapshotEnvelope<A> | Promise<SnapshotEnvelope<A>>;
 }
