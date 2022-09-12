@@ -8,16 +8,6 @@ export abstract class Aggregate<EventBase extends IEvent = IEvent> {
 	private [VERSION]: number = 0;
 	private readonly [EVENTS]: EventBase[] = [];
 
-	get snapshot(): ISnapshot<Aggregate> {
-		const snapshot = { version: this[VERSION] };
-
-		for (const prop in this as Aggregate) {
-			snapshot[prop] = this[prop];
-		}
-
-		return snapshot;
-	}
-
 	set version(version: number) {
 		this[VERSION] = version;
 	}
@@ -54,13 +44,6 @@ export abstract class Aggregate<EventBase extends IEvent = IEvent> {
 		this[EVENTS].length = 0;
 
 		return events;
-	}
-
-	loadFromSnapshot(snapshot: ISnapshot<Aggregate>, version: number) {
-		for (const prop in snapshot) {
-			this[prop] = snapshot[prop];
-		}
-		this[VERSION] = version;
 	}
 
 	loadFromHistory(events: EventBase[]) {
