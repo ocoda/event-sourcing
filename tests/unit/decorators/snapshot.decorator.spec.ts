@@ -7,7 +7,7 @@ describe('@Snapshot', () => {
 		@Snapshot(Account, { name: "foo", interval: 20 })
 		class AccountSnapshotHandler {}
 
-		const { aggregate, name, interval }: SnapshotMetadata = Reflect.getMetadata(
+		const { aggregate, name, interval }: SnapshotMetadata<Account> = Reflect.getMetadata(
 			SNAPSHOT_METADATA,
 			AccountSnapshotHandler,
 		);
@@ -20,7 +20,7 @@ describe('@Snapshot', () => {
 		@Snapshot(Account)
 		class AccountSnapshotHandler {}
 
-		const { aggregate, name, interval }: SnapshotMetadata = Reflect.getMetadata(
+		const { aggregate, name, interval }: SnapshotMetadata<Account> = Reflect.getMetadata(
 			SNAPSHOT_METADATA,
 			AccountSnapshotHandler,
 		);

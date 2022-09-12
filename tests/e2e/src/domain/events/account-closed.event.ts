@@ -1,4 +1,4 @@
-import { EventName, IEvent } from '@ocoda/event-sourcing';
+import { Event, IEvent } from '@ocoda/event-sourcing';
 
-@EventName('account-closed')
+@Event('account-closed')
 export class AccountClosedEvent implements IEvent {}

@@ -1,6 +1,6 @@
-import { EventName, IEvent } from '@ocoda/event-sourcing';
+import { Event, IEvent } from '@ocoda/event-sourcing';
 
-@EventName('account-opened')
+@Event('account-opened')
 export class AccountOpenedEvent implements IEvent {
 	constructor(public readonly accountId: string, public readonly accountOwnerIds?: string[]) {}
 }

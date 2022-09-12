@@ -10,6 +10,10 @@ export interface SnapshotMetadata<A extends Aggregate> {
 	 */
 	aggregate: Type<A>;
 	/**
+	 * The name of the snapshot.
+	 */
+	name: string;
+	/**
 	 * Per how many events a snapshot should be taken.
 	 */
 	interval?: number;

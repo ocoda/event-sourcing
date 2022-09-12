@@ -1,6 +1,6 @@
 import {
 	EventMap,
-	EventName,
+	Event,
 	IEvent,
 	MissingEventMetadataException,
 	UnregisteredEventException,
@@ -11,7 +11,7 @@ import { DefaultEventSerializer } from '../../lib/helpers';
 describe(EventMap, () => {
 	const now = new Date();
 
-	@EventName('account-opened')
+	@Event('account-opened')
 	class AccountOpenedEvent implements IEvent {
 		constructor(public readonly opened: Date) {}
 	}

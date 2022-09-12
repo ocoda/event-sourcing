@@ -13,9 +13,12 @@ import { Type } from '@nestjs/common';
  * The decorated class must implement the `ISnapshotHandler` interface.
  *
  * @param aggregate aggregate *type* to be handled by this handler.
- * @param metadata snapshot metadata.
+ * @param options snapshot metadata.
  */
-export const Snapshot = (aggregate: Type<Aggregate>, options?: Omit<SnapshotMetadata, 'aggregate'>): ClassDecorator => {
+export const Snapshot = <A extends Aggregate = Aggregate>(
+	aggregate: Type<A>,
+	options?: Omit<SnapshotMetadata<A>, 'aggregate'>,
+): ClassDecorator => {
 	return (target: object) => {
 		Reflect.defineMetadata(
 			SNAPSHOT_METADATA,

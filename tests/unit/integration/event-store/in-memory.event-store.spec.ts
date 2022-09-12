@@ -2,7 +2,7 @@ import {
 	Aggregate,
 	EventEnvelope,
 	EventMap,
-	EventName,
+	Event,
 	EventNotFoundException,
 	EventStream,
 	Id,
@@ -19,20 +19,20 @@ class Account extends Aggregate {
 }
 class AccountId extends Id {}
 
-@EventName('account-opened')
+@Event('account-opened')
 class AccountOpenedEvent implements IEvent {}
 
-@EventName('account-credited')
+@Event('account-credited')
 class AccountCreditedEvent implements IEvent {
 	constructor(public readonly amount: number) {}
 }
 
-@EventName('account-debited')
+@Event('account-debited')
 class AccountDebitedEvent implements IEvent {
 	constructor(public readonly amount: number) {}
 }
 
-@EventName('account-closed')
+@Event('account-closed')
 class AccountClosedEvent implements IEvent {}
 
 describe(InMemoryEventStore, () => {
