@@ -53,31 +53,6 @@ describe(Aggregate, () => {
 		expect(account.balance).toBe(30);
 	});
 
-	it('should create snapshots', () => {
-		const account = Account.open();
-
-		account.credit(50);
-		account.debit(20);
-
-		const snapshot = account.snapshot;
-
-		expect(snapshot).toEqual({ version: 3, balance: 30 });
-	});
-
-	it('should apply snapshots', () => {
-		const account = Account.open();
-
-		for (let i = 0; i < 4; i++) {
-			account.credit(10);
-		}
-
-		const accountFromSnapshot = new Account();
-		accountFromSnapshot.loadFromSnapshot(account.snapshot, account.version);
-
-		expect(accountFromSnapshot.version).toBe(account.version);
-		expect(accountFromSnapshot.balance).toBe(account.balance);
-	});
-
 	it('should commit events', () => {
 		const account = Account.open();
 		account.credit(50);

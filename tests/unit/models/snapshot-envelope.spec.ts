@@ -21,7 +21,7 @@ describe(SnapshotEnvelope, () => {
 			closedOn: undefined,
 		};
 
-		const envelope = SnapshotEnvelope.create(accountId, 1, 'account', accountSnapshot);
+		const envelope = SnapshotEnvelope.create(accountId, 1, accountSnapshot);
 
 		expect(envelope.snapshotId).toBeDefined();
 		expect(envelope.payload).toEqual(accountSnapshot);

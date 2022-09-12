@@ -1,6 +1,7 @@
 import {
 	Aggregate,
 	Id,
+	ISnapshot,
 	SnapshotEnvelope,
 	SnapshotNotFoundException,
 	SnapshotStream,
@@ -16,36 +17,65 @@ class Account extends Aggregate {
 class AccountId extends Id {}
 
 describe(InMemorySnapshotStore, () => {
+	let now = Date.now();
 	const accountId = AccountId.generate();
 	const snapshotStream = SnapshotStream.for(Account, accountId);
 
 	let snapshotStore: InMemorySnapshotStore;
+	let snapshotEnvelopes: SnapshotEnvelope[];
 
-	const snapshots = [
-		SnapshotEnvelope.create<Account>(accountId, 10, 'account', { balance: 50 }),
-		SnapshotEnvelope.create<Account>(accountId, 20, 'account', { balance: 20 }),
-		SnapshotEnvelope.create<Account>(accountId, 30, 'account', { balance: 60 }),
-		SnapshotEnvelope.create<Account>(accountId, 40, 'account', { balance: 100 }),
-		SnapshotEnvelope.create<Account>(accountId, 50, 'account', { balance: 70 }),
-		SnapshotEnvelope.create<Account>(accountId, 60, 'account', { balance: 150 }),
-	];
+	const snapshots: ISnapshot<Account>[] = [{ balance: 50 }, { balance: 20 }, { balance: 60 }, { balance: 50 }];
 
-	beforeEach(() => {
+	beforeAll(() => {
+		jest.spyOn(global.Date, 'now').mockImplementation(() => now);
 		snapshotStore = new InMemorySnapshotStore();
+
+		snapshotEnvelopes = [
+			SnapshotEnvelope.create<Account>(accountId, 10, snapshots[0]),
+			SnapshotEnvelope.create<Account>(accountId, 20, snapshots[1]),
+			SnapshotEnvelope.create<Account>(accountId, 30, snapshots[2]),
+			SnapshotEnvelope.create<Account>(accountId, 40, snapshots[3]),
+		];
+	});
+
+	afterAll(() => {
+		jest.clearAllMocks();
+		snapshotStore['snapshotCollection'].clear();
 	});
 
 	it('should append snapshots', () => {
-		snapshotStore.appendSnapshots(snapshotStream, snapshots);
+		snapshotStore.appendSnapshot(accountId, 10, snapshotStream, snapshots[0]);
+		snapshotStore.appendSnapshot(accountId, 20, snapshotStream, snapshots[1]);
+		snapshotStore.appendSnapshot(accountId, 30, snapshotStream, snapshots[2]);
+		snapshotStore.appendSnapshot(accountId, 40, snapshotStream, snapshots[3]);
 
-		expect(snapshotStore).toHaveProperty('snapshotCollection', new Map([[snapshotStream.name, snapshots]]));
+		const result = snapshotStore['snapshotCollection'].get(snapshotStream.subject);
+
+		expect(result).toHaveLength(4);
+
+		const [hit1, hit2, hit3, hit4] = result;
+
+		expect(hit1.stream).toEqual(snapshotStream.name);
+		expect(hit1.metadata).toEqual(snapshotEnvelopes[0].metadata);
+		expect(hit1.payload).toEqual(snapshotEnvelopes[0].payload);
+
+		expect(hit2.stream).toEqual(snapshotStream.name);
+		expect(hit2.metadata).toEqual(snapshotEnvelopes[1].metadata);
+		expect(hit2.payload).toEqual(snapshotEnvelopes[1].payload);
+
+		expect(hit3.stream).toEqual(snapshotStream.name);
+		expect(hit3.metadata).toEqual(snapshotEnvelopes[2].metadata);
+		expect(hit3.payload).toEqual(snapshotEnvelopes[2].payload);
+
+		expect(hit4.stream).toEqual(snapshotStream.name);
+		expect(hit4.metadata).toEqual(snapshotEnvelopes[3].metadata);
+		expect(hit4.payload).toEqual(snapshotEnvelopes[3].payload);
 	});
 
 	it('should retrieve a single snapshot', () => {
-		snapshotStore.appendSnapshots(snapshotStream, snapshots);
+		const resolvedSnapshot = snapshotStore.getSnapshot(snapshotStream, 20);
 
-		const resolvedSnapshot = snapshotStore.getSnapshot(snapshotStream, snapshots[3].metadata.sequence);
-
-		expect(resolvedSnapshot).toEqual(snapshots[3]);
+		expect(resolvedSnapshot).toEqual(snapshots[1]);
 	});
 
 	it("should throw when a snapshot isn't found", () => {
@@ -55,46 +85,39 @@ describe(InMemorySnapshotStore, () => {
 	});
 
 	it('should retrieve snapshots forward', () => {
-		snapshotStore.appendSnapshots(snapshotStream, snapshots);
-
 		const resolvedSnapshots = snapshotStore.getSnapshots(snapshotStream);
 
 		expect(resolvedSnapshots).toEqual(snapshots);
 	});
 
 	it('should retrieve snapshots backwards', () => {
-		snapshotStore.appendSnapshots(snapshotStream, snapshots);
-
 		const resolvedSnapshots = snapshotStore.getSnapshots(snapshotStream, undefined, StreamReadingDirection.BACKWARD);
 
 		expect(resolvedSnapshots).toEqual(snapshots.slice().reverse());
 	});
 
 	it('should retrieve snapshots forward from a certain version', () => {
-		snapshotStore.appendSnapshots(snapshotStream, snapshots);
+		const resolvedSnapshots = snapshotStore.getSnapshots(snapshotStream, 20);
 
-		const resolvedSnapshots = snapshotStore.getSnapshots(snapshotStream, 40);
-
-		expect(resolvedSnapshots).toEqual(snapshots.filter(({ metadata }) => metadata.sequence >= 40));
+		expect(resolvedSnapshots).toEqual(snapshots.filter((_, index) => (index + 1) * 10 >= 20));
 	});
 
 	it('should retrieve snapshots backwards from a certain version', () => {
-		snapshotStore.appendSnapshots(snapshotStream, snapshots);
+		const resolvedSnapshots = snapshotStore.getSnapshots(snapshotStream, 20, StreamReadingDirection.BACKWARD);
 
-		const resolvedSnapshots = snapshotStore.getSnapshots(snapshotStream, 30, StreamReadingDirection.BACKWARD);
-
-		expect(resolvedSnapshots).toEqual(snapshots.filter(({ metadata }) => metadata.sequence >= 30).reverse());
+		expect(resolvedSnapshots).toEqual(snapshots.filter((_, index) => (index + 1) * 10 >= 20).reverse());
 	});
 
 	it('should retrieve the last snapshot', () => {
-		snapshotStore.appendSnapshots(snapshotStream, snapshots);
-
 		const resolvedSnapshot = snapshotStore.getLastSnapshot(snapshotStream);
 
 		expect(resolvedSnapshot).toEqual(snapshots[snapshots.length - 1]);
 	});
 
 	it('should return undefined if there is no last snapshot', () => {
-		expect(snapshotStore.getLastSnapshot(snapshotStream)).toBeUndefined();
+		class Foo extends Aggregate {}
+		const resolvedSnapshot = snapshotStore.getLastSnapshot(SnapshotStream.for(Foo, Id.generate()));
+
+		expect(resolvedSnapshot).toBeUndefined();
 	});
 });

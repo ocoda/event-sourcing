@@ -10,10 +10,9 @@ export class AccountRepository {
 	) {}
 
 	async getById(accountId: AccountId) {
-		const account = new Account();
 		const eventStream = EventStream.for<Account>(Account, accountId);
 
-		await this.accountSnapshotHandler.hydrate(accountId, account);
+		const account = await this.accountSnapshotHandler.load(accountId);
 
 		const events = await this.eventStore.getEvents(eventStream, account.version + 1);
 

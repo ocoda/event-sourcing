@@ -1,50 +1,109 @@
 import { SnapshotNotFoundException } from '../../exceptions';
 import { StreamReadingDirection } from '../../constants';
-import { Aggregate, SnapshotEnvelope, SnapshotStream } from '../../models';
+import { Aggregate, Id, SnapshotEnvelope, SnapshotStream } from '../../models';
 import { SnapshotStore } from '../../snapshot-store';
+import { ISnapshot, SnapshotEnvelopeMetadata } from '../../interfaces';
+
+export interface InMemorySnapshotEnvelopeEntity<A extends Aggregate> {
+	_id: string;
+	stream: string;
+	payload: ISnapshot<A>;
+	metadata: SnapshotEnvelopeMetadata;
+}
 
 export class InMemorySnapshotStore extends SnapshotStore {
-	private snapshotCollection: Map<string, SnapshotEnvelope<any>[]> = new Map();
+	private snapshotCollection: Map<string, InMemorySnapshotEnvelopeEntity<any>[]> = new Map();
 
 	getSnapshots<A extends Aggregate>(
-		{ name }: SnapshotStream,
+		{ subject }: SnapshotStream,
 		fromVersion?: number,
 		direction: StreamReadingDirection = StreamReadingDirection.FORWARD,
-	): SnapshotEnvelope<A>[] {
-		let snapshots = this.snapshotCollection.get(name) || [];
+	): ISnapshot<A>[] {
+		let envelopes =
+			this.snapshotCollection.get(subject).sort(
+				({ metadata: current }, { metadata: previous }) => (previous.sequence < current.sequence ? 1 : -1),
+			) || [];
 
 		if (fromVersion) {
-			const startSnapshotIndex = snapshots.findIndex(({ metadata }) => metadata.sequence === fromVersion);
-			snapshots = startSnapshotIndex === -1 ? [] : snapshots.slice(startSnapshotIndex);
+			const startSnapshotIndex = envelopes.findIndex(({ metadata }) => metadata.sequence === fromVersion);
+			envelopes = startSnapshotIndex === -1 ? [] : envelopes.slice(startSnapshotIndex);
 		}
 
 		if (direction === StreamReadingDirection.BACKWARD) {
-			snapshots = snapshots.reverse();
+			envelopes = envelopes.reverse();
 		}
 
-		return snapshots;
+		return envelopes.map(({ payload }) => payload);
 	}
 
-	getSnapshot<A extends Aggregate>({ name }: SnapshotStream, version: number): SnapshotEnvelope<A> {
-		const entity = this.snapshotCollection.get(name)?.find(({ metadata }) => metadata.sequence === version);
+	getSnapshot<A extends Aggregate>({ name, subject }: SnapshotStream, version: number): ISnapshot<A> {
+		const entity = this.snapshotCollection.get(subject)?.find(({ metadata }) => metadata.sequence === version);
 
 		if (!entity) {
 			throw SnapshotNotFoundException.withVersion(name, version);
 		}
 
-		return entity;
+		return entity.payload;
 	}
 
-	appendSnapshots<A extends Aggregate>({ name }: SnapshotStream, envelopes: SnapshotEnvelope<A>[]): void {
-		const existingEnvelopes = this.snapshotCollection.get(name) || [];
-		this.snapshotCollection.set(name, [...existingEnvelopes, ...envelopes]);
+	appendSnapshot<A extends Aggregate>(
+		aggregateId: Id,
+		aggregateVersion: number,
+		{ name, subject }: SnapshotStream,
+		snapshot: ISnapshot<A>,
+	): void {
+		const existingEntities = this.snapshotCollection.get(subject) || [];
+		const envelope = SnapshotEnvelope.create<A>(aggregateId, aggregateVersion, snapshot);
+
+		this.snapshotCollection.set(subject, [
+			...existingEntities,
+			{
+				_id: envelope.snapshotId,
+				stream: name,
+				payload: envelope.payload,
+				metadata: envelope.metadata,
+			},
+		]);
 	}
 
-	getLastSnapshot<A extends Aggregate>({ name }: SnapshotStream<A>): SnapshotEnvelope<A> {
-		const snapshots = this.snapshotCollection.get(name);
+	getLastSnapshot<A extends Aggregate>({ subject }: SnapshotStream<A>): ISnapshot<A> {
+		const snapshots = this.snapshotCollection.get(subject);
 
-		return snapshots?.reduce((previous, current) => {
-			return previous.metadata.sequence > current.metadata.sequence ? previous : current;
-		}) as SnapshotEnvelope<A>;
+		if (snapshots) {
+			const { payload } = snapshots.sort(
+				({ metadata: current }, { metadata: previous }) => (previous.sequence > current.sequence ? 1 : -1),
+			)[0];
+
+			return payload;
+		}
+	}
+
+	getEnvelopes<A extends Aggregate>(
+		{ subject }: SnapshotStream,
+		fromVersion?: number,
+		direction: StreamReadingDirection = StreamReadingDirection.FORWARD,
+	): SnapshotEnvelope<A>[] {
+		let entities = this.snapshotCollection.get(subject) || [];
+
+		if (fromVersion) {
+			const startSnapshotIndex = entities.findIndex(({ metadata }) => metadata.sequence === fromVersion);
+			entities = startSnapshotIndex === -1 ? [] : entities.slice(startSnapshotIndex);
+		}
+
+		if (direction === StreamReadingDirection.BACKWARD) {
+			entities = entities.reverse();
+		}
+
+		return entities.map(({ _id, payload, metadata }) => SnapshotEnvelope.from(_id, payload, metadata));
+	}
+
+	getEnvelope<A extends Aggregate>({ name, subject }: SnapshotStream, version: number): SnapshotEnvelope<A> {
+		const entity = this.snapshotCollection.get(subject)?.find(({ metadata }) => metadata.sequence === version);
+
+		if (!entity) {
+			throw SnapshotNotFoundException.withVersion(name, version);
+		}
+
+		return SnapshotEnvelope.from(entity._id, entity.payload, entity.metadata);
 	}
 }

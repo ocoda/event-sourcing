@@ -10,8 +10,8 @@
 		"ci": "rome ci ./lib",
 		"format": "rome format ./lib ./tests --write",
 		"lint": "rome check ./lib ./tests --apply-suggested",
-		"test": "jest --config jest.config.js",
-		"test:ci": "jest --config jest.config.js --coverage"
+		"test": "jest --config jest.config.js --runInBand",
+		"test:ci": "jest --config jest.config.js --runInBand --coverage"
 	},
 	"engines": {
 		"node": ">= 18.0.0"

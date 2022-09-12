@@ -2,12 +2,13 @@ import { MongoClient } from 'mongodb';
 import {
 	Aggregate,
 	Id,
+	ISnapshot,
 	SnapshotEnvelope,
 	SnapshotNotFoundException,
 	SnapshotStream,
 	StreamReadingDirection,
 } from '../../../../lib';
-import { MongoDBSnapshotStore } from '../../../../lib/integration/snapshot-store';
+import { MongoDBSnapshotStore, MongoSnapshotEnvelopeEntity } from '../../../../lib/integration/snapshot-store';
 
 class Account extends Aggregate {
 	constructor(private readonly id: AccountId, private readonly balance: number) {
@@ -17,55 +18,77 @@ class Account extends Aggregate {
 class AccountId extends Id {}
 
 describe(MongoDBSnapshotStore, () => {
+	let now = Date.now();
 	let client: MongoClient;
 	let snapshotStore: MongoDBSnapshotStore;
+	let snapshotEnvelopes: SnapshotEnvelope[];
 
 	const accountId = AccountId.generate();
 	const snapshotStream = SnapshotStream.for(Account, accountId);
 
-	const snapshots = [
-		SnapshotEnvelope.create<Account>(accountId, 10, 'account', { balance: 50 }),
-		SnapshotEnvelope.create<Account>(accountId, 20, 'account', { balance: 20 }),
-		SnapshotEnvelope.create<Account>(accountId, 30, 'account', { balance: 60 }),
-		SnapshotEnvelope.create<Account>(accountId, 40, 'account', { balance: 100 }),
-		SnapshotEnvelope.create<Account>(accountId, 50, 'account', { balance: 70 }),
-		SnapshotEnvelope.create<Account>(accountId, 60, 'account', { balance: 150 }),
-	];
+	const snapshots: ISnapshot<Account>[] = [{ balance: 50 }, { balance: 20 }, { balance: 60 }, { balance: 50 }];
 
 	beforeAll(async () => {
-		client = new MongoClient('mongodb://localhost:27017');
+		jest.spyOn(global.Date, 'now').mockImplementation(() => now);
+		client = await new MongoClient('mongodb://localhost:27017').connect();
 		snapshotStore = new MongoDBSnapshotStore(client);
+
+		snapshotEnvelopes = [
+			SnapshotEnvelope.create<Account>(accountId, 10, snapshots[0]),
+			SnapshotEnvelope.create<Account>(accountId, 20, snapshots[1]),
+			SnapshotEnvelope.create<Account>(accountId, 30, snapshots[2]),
+			SnapshotEnvelope.create<Account>(accountId, 40, snapshots[3]),
+		];
 	});
 
-	afterEach(
-		async () =>
-			await client
+	afterAll(async () => {
+		jest.clearAllMocks();
+		await Promise.all([
+			client
 				.db()
 				.collection(snapshotStream.subject)
 				.deleteMany({}),
-	);
-
-	afterAll(async () => {
+			client.db().collection('foo-snapshot').deleteMany({}),
+		]);
 		await client.close();
 	});
 
 	it('should append snapshots', async () => {
-		await snapshotStore.appendSnapshots(snapshotStream, snapshots);
-		const storedSnapshots = await client
+		await snapshotStore.appendSnapshot(accountId, 10, snapshotStream, snapshots[0]);
+		await snapshotStore.appendSnapshot(accountId, 20, snapshotStream, snapshots[1]);
+		await snapshotStore.appendSnapshot(accountId, 30, snapshotStream, snapshots[2]);
+		await snapshotStore.appendSnapshot(accountId, 40, snapshotStream, snapshots[3]);
+
+		const result = await client
 			.db()
-			.collection(snapshotStream.subject)
+			.collection<MongoSnapshotEnvelopeEntity<Account>>(snapshotStream.subject)
 			.find()
 			.toArray();
+		expect(result).toHaveLength(4);
 
-		expect(storedSnapshots.map(({ _id }) => _id)).toEqual(snapshots.map(({ snapshotId }) => snapshotId));
+		const [hit1, hit2, hit3, hit4] = result;
+
+		expect(hit1.stream).toEqual(snapshotStream.name);
+		expect(hit1.metadata).toEqual(snapshotEnvelopes[0].metadata);
+		expect(hit1.payload).toEqual(snapshotEnvelopes[0].payload);
+
+		expect(hit2.stream).toEqual(snapshotStream.name);
+		expect(hit2.metadata).toEqual(snapshotEnvelopes[1].metadata);
+		expect(hit2.payload).toEqual(snapshotEnvelopes[1].payload);
+
+		expect(hit3.stream).toEqual(snapshotStream.name);
+		expect(hit3.metadata).toEqual(snapshotEnvelopes[2].metadata);
+		expect(hit3.payload).toEqual(snapshotEnvelopes[2].payload);
+
+		expect(hit4.stream).toEqual(snapshotStream.name);
+		expect(hit4.metadata).toEqual(snapshotEnvelopes[3].metadata);
+		expect(hit4.payload).toEqual(snapshotEnvelopes[3].payload);
 	});
 
 	it('should retrieve a single snapshot', async () => {
-		await snapshotStore.appendSnapshots(snapshotStream, snapshots);
+		const resolvedSnapshot = await snapshotStore.getSnapshot(snapshotStream, 20);
 
-		const resolvedSnapshot = await snapshotStore.getSnapshot(snapshotStream, snapshots[3].metadata.sequence);
-
-		expect(resolvedSnapshot).toEqual(snapshots[3]);
+		expect(resolvedSnapshot).toEqual(snapshots[1]);
 	});
 
 	it("should throw when a snapshot isn't found", async () => {
@@ -75,47 +98,38 @@ describe(MongoDBSnapshotStore, () => {
 	});
 
 	it('should retrieve snapshots forward', async () => {
-		await snapshotStore.appendSnapshots(snapshotStream, snapshots);
-
 		const resolvedSnapshots = await snapshotStore.getSnapshots(snapshotStream);
 
 		expect(resolvedSnapshots).toEqual(snapshots);
 	});
 
 	it('should retrieve snapshots backwards', async () => {
-		await snapshotStore.appendSnapshots(snapshotStream, snapshots);
-
 		const resolvedSnapshots = await snapshotStore.getSnapshots(snapshotStream, null, StreamReadingDirection.BACKWARD);
 
 		expect(resolvedSnapshots).toEqual(snapshots.slice().reverse());
 	});
 
 	it('should retrieve snapshots forward from a certain version', async () => {
-		await snapshotStore.appendSnapshots(snapshotStream, snapshots);
+		const resolvedSnapshots = await snapshotStore.getSnapshots(snapshotStream, 20);
 
-		const resolvedSnapshots = await snapshotStore.getSnapshots(snapshotStream, 40);
-
-		expect(resolvedSnapshots).toEqual(snapshots.filter(({ metadata }) => metadata.sequence >= 40));
+		expect(resolvedSnapshots).toEqual(snapshots.filter((_, index) => (index + 1) * 10 >= 20));
 	});
 
 	it('should retrieve snapshots backwards from a certain version', async () => {
-		await snapshotStore.appendSnapshots(snapshotStream, snapshots);
+		const resolvedSnapshots = await snapshotStore.getSnapshots(snapshotStream, 20, StreamReadingDirection.BACKWARD);
 
-		const resolvedSnapshots = await snapshotStore.getSnapshots(snapshotStream, 30, StreamReadingDirection.BACKWARD);
-
-		expect(resolvedSnapshots).toEqual(snapshots.filter(({ metadata }) => metadata.sequence >= 30).reverse());
+		expect(resolvedSnapshots).toEqual(snapshots.filter((_, index) => (index + 1) * 10 >= 20).reverse());
 	});
 
 	it('should retrieve the last snapshot', async () => {
-		await snapshotStore.appendSnapshots(snapshotStream, snapshots);
-
 		const resolvedSnapshot = await snapshotStore.getLastSnapshot(snapshotStream);
 
 		expect(resolvedSnapshot).toEqual(snapshots[snapshots.length - 1]);
 	});
 
 	it('should return undefined if there is no last snapshot', async () => {
-		const resolvedSnapshot = await snapshotStore.getLastSnapshot(snapshotStream);
+		class Foo extends Aggregate {}
+		const resolvedSnapshot = await snapshotStore.getLastSnapshot(SnapshotStream.for(Foo, Id.generate()));
 
 		expect(resolvedSnapshot).toBeUndefined();
 	});

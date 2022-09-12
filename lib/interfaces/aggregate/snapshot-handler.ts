@@ -1,47 +1,40 @@
 import { Inject, Type } from '@nestjs/common';
 import { SNAPSHOT_METADATA } from '../../decorators';
 import { SnapshotStore } from '../../snapshot-store';
-import { Aggregate, Id, SnapshotEnvelope, SnapshotStream } from '../../models';
+import { Aggregate, Id, SnapshotStream } from '../../models';
 import { SnapshotMetadata } from './snapshot-handler-metadata.interface';
-import { ISnapshot, ISnapshotPayload } from './snapshot.interface';
+import { ISnapshot } from './snapshot.interface';
 
 export abstract class SnapshotHandler<A extends Aggregate = Aggregate> {
-	private readonly aggregate: Type<Aggregate>;
-	private readonly snapshotName: string;
+	private readonly aggregate: Type<A>;
 	private readonly interval: number;
 
 	constructor(@Inject(SnapshotStore) readonly snapshotStore: SnapshotStore) {
-		const { aggregate, name, interval } = Reflect.getMetadata(SNAPSHOT_METADATA, this.constructor) as SnapshotMetadata;
+		const { aggregate, interval } = Reflect.getMetadata(SNAPSHOT_METADATA, this.constructor) as SnapshotMetadata<A>;
 
 		this.aggregate = aggregate;
-		this.snapshotName = name;
 		this.interval = interval;
 	}
 
 	async save(id: Id, aggregate: A): Promise<void> {
 		if (aggregate.version % this.interval === 0) {
-			const snapshotStream = SnapshotStream.for(this.aggregate, id);
-			const payload = this.serialize(aggregate.snapshot as ISnapshot<A>);
+			const snapshotStream = SnapshotStream.for(aggregate, id);
+			const payload = this.serialize(aggregate);
 
-			await this.snapshotStore.appendSnapshots(snapshotStream, [
-				SnapshotEnvelope.create(id, aggregate.version, this.snapshotName, payload),
-			]);
+			await this.snapshotStore.appendSnapshot(id, aggregate.version, snapshotStream, payload);
 		}
 	}
 
-	async hydrate(id: Id, aggregate: A): Promise<void> {
-		const snapshotStream = SnapshotStream.for(this.aggregate, id);
-		const snapshotEnvelope = await this.snapshotStore.getLastSnapshot(snapshotStream);
+	async load(id: Id): Promise<A> {
+		const snapshotStream = SnapshotStream.for<A>(this.aggregate, id);
+		const snapshot = await this.snapshotStore.getLastSnapshot<A>(snapshotStream);
 
-		if (!snapshotEnvelope) {
-			return;
+		if (!snapshot) {
+			return new this.aggregate();
 		}
 
-		const { payload, metadata } = snapshotEnvelope;
-		const snapshot = this.deserialize(payload as ISnapshotPayload<A>);
-
-		aggregate.loadFromSnapshot(snapshot, metadata.sequence);
+		return this.deserialize(snapshot);
 	}
-	abstract serialize(snapshot: ISnapshot<A>): ISnapshotPayload<A>;
-	abstract deserialize(payload: ISnapshotPayload<A>): ISnapshot<A>;
+	abstract serialize(aggregate: A): ISnapshot<A>;
+	abstract deserialize(payload: ISnapshot<A>): A;
 }

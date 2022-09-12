@@ -16,11 +16,11 @@ export class Id extends ValueObject<Props> {
 	}
 
 	public static generate(): Id {
-		return new this();
+		return new Id();
 	}
 
 	public static from(id: string): Id {
-		return new this(id);
+		return new Id(id);
 	}
 
 	get value(): string {
