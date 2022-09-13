@@ -17,16 +17,18 @@ export abstract class Aggregate<EventBase extends IEvent = IEvent> {
 	}
 
 	applyEvent<T extends EventBase = EventBase>(event: T, fromHistory = false) {
+		const aggregateEvent = Object.seal(event);
+
 		this[VERSION]++;
 
 		// If we're just hydrating the aggregate with events,
 		// don't push the event to the internal event collection to be committed
 		if (!fromHistory) {
-			this[EVENTS].push(event);
+			this[EVENTS].push(aggregateEvent);
 		}
 
-		const handler = this.getEventHandler(event);
-		handler && handler.call(this, event);
+		const handler = this.getEventHandler(aggregateEvent);
+		handler && handler.call(this, aggregateEvent);
 	}
 
 	private getEventHandler<T extends EventBase = EventBase>(event: T): Type<typeof Aggregate> | undefined {
