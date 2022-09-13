@@ -1,20 +1,39 @@
 import { Type } from '@nestjs/common';
-import { Aggregate } from './aggregate';
+import { AGGREGATE_METADATA } from '../decorators';
+import { MissingAggregateMetadataException } from '../exceptions';
+import { AggregateMetadata } from '../interfaces';
+import { AggregateRoot } from './aggregate-root';
 import { Id } from './id';
 
-export class EventStream<A extends Aggregate = Aggregate> {
-	private constructor(private _subject: Type<A>, private _id: Id) {}
+export class EventStream {
+	private readonly _collection = 'events';
+
+	private constructor(private _aggregate: string, private _id: string, private readonly _pool = 'default') {}
 
 	get subject(): string {
-		return this._subject.name.toLowerCase();
+		return `${this._aggregate}-${this._id}`;
 	}
 
-	get name(): string {
-		return `${this.subject}-${this._id.value}`;
+	get collection(): string {
+		return this._collection;
 	}
 
-	static for<A extends Aggregate<any> = Aggregate<any>>(aggregate: A | Type<A>, id: Id): EventStream<A> {
+	get pool(): string {
+		return this._pool;
+	}
+
+	static for<A extends AggregateRoot<any> = AggregateRoot<any>>(
+		aggregate: A | Type<A>,
+		id: Id,
+		pool?: string,
+	): EventStream {
 		const cls = aggregate instanceof Function ? aggregate : (aggregate.constructor as Type<A>);
-		return new EventStream<A>(cls, id);
+
+		const metadata: AggregateMetadata = Reflect.getMetadata(AGGREGATE_METADATA, cls);
+		if (!metadata) {
+			throw new MissingAggregateMetadataException(cls);
+		}
+
+		return new EventStream(metadata.eventStream.toLowerCase(), id.value, pool);
 	}
 }
