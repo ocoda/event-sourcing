@@ -34,6 +34,6 @@ export class EventStream {
 			throw new MissingAggregateMetadataException(cls);
 		}
 
-		return new EventStream(metadata.eventStream.toLowerCase(), id.value, pool);
+		return new EventStream(metadata.streamName, id.value, pool);
 	}
 }

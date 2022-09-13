@@ -1,16 +1,17 @@
-import { Aggregate, Id, SnapshotStream } from '../../../lib';
+import { Aggregate, AggregateRoot, Id, SnapshotStream } from '../../../lib';
 
 describe(SnapshotStream, () => {
-	class Account extends Aggregate {}
+	@Aggregate({ streamName: 'account' })
+	class Account extends AggregateRoot {}
 	class AccountId extends Id {}
 
 	it('should create a SnapshotStream from an Aggregate class', () => {
 		const accountId = AccountId.generate();
 		const snapshotStream = SnapshotStream.for(Account, accountId);
 
-		expect(snapshotStream).toEqual({ _subject: Account, _id: accountId });
-		expect(snapshotStream.subject).toBe('account-snapshot');
-		expect(snapshotStream.name).toBe(`account-snapshot-${accountId.value}`);
+		expect(snapshotStream.subject).toBe(`account-${accountId.value}`);
+		expect(snapshotStream.collection).toBe('snapshots');
+		expect(snapshotStream.pool).toBe('default');
 	});
 
 	it('should create a SnapshotStream from an Aggregate instance', () => {
@@ -18,8 +19,8 @@ describe(SnapshotStream, () => {
 		const accountId = AccountId.generate();
 		const snapshotStream = SnapshotStream.for(account, accountId);
 
-		expect(snapshotStream).toEqual({ _subject: Account, _id: accountId });
-		expect(snapshotStream.subject).toBe('account-snapshot');
-		expect(snapshotStream.name).toBe(`account-snapshot-${accountId.value}`);
+		expect(snapshotStream.subject).toBe(`account-${accountId.value}`);
+		expect(snapshotStream.collection).toBe('snapshots');
+		expect(snapshotStream.pool).toBe('default');
 	});
 });

@@ -1,7 +1,7 @@
 import { Aggregate, AggregateRoot, EventStream, Id, MissingAggregateMetadataException } from '../../../lib';
 
 describe(EventStream, () => {
-	@Aggregate({ eventStream: 'account'})
+	@Aggregate({ streamName: 'account' })
 	class Account extends AggregateRoot {}
 	class AccountId extends Id {}
 
