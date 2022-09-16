@@ -1,5 +1,5 @@
 import {
-	Aggregate,
+	AggregateRoot,
 	EventEnvelope,
 	EventMap,
 	Event,
@@ -13,7 +13,7 @@ import { MongoDBEventStore } from '../../../../lib/integration/event-store';
 import { MongoClient } from 'mongodb';
 import { DefaultEventSerializer } from '../../../../lib/helpers';
 
-class Account extends Aggregate {
+class Account extends AggregateRoot {
 	constructor(private readonly id: AccountId, private readonly balance: number) {
 		super();
 	}

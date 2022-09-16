@@ -1,10 +1,10 @@
 import { Type } from '@nestjs/common';
-import { Aggregate } from '../../models';
+import { AggregateRoot } from '../../models';
 
 /**
  * `@Snapshot` decorator metadata
  */
-export interface SnapshotMetadata<A extends Aggregate> {
+export interface SnapshotMetadata<A extends AggregateRoot> {
 	/**
 	 * The aggregate type of the snapshot.
 	 */

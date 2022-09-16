@@ -1,11 +1,11 @@
 import { Inject, Type } from '@nestjs/common';
 import { SNAPSHOT_METADATA } from '../../decorators';
 import { SnapshotStore } from '../../snapshot-store';
-import { Aggregate, Id, SnapshotStream } from '../../models';
+import { AggregateRoot, Id, SnapshotStream } from '../../models';
 import { SnapshotMetadata } from './snapshot-handler-metadata.interface';
 import { ISnapshot } from './snapshot.interface';
 
-export abstract class SnapshotHandler<A extends Aggregate = Aggregate> {
+export abstract class SnapshotHandler<A extends AggregateRoot = AggregateRoot> {
 	private readonly aggregate: Type<A>;
 	private readonly interval: number;
 

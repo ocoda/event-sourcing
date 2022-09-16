@@ -1,16 +1,20 @@
 import { randomUUID } from 'crypto';
 import { Id } from './id';
 import { ISnapshot, SnapshotEnvelopeMetadata } from '../interfaces';
-import { Aggregate } from './aggregate';
+import { AggregateRoot } from './aggregate-root';
 
-export class SnapshotEnvelope<A extends Aggregate = Aggregate> {
+export class SnapshotEnvelope<A extends AggregateRoot = AggregateRoot> {
 	private constructor(
 		public readonly snapshotId: string,
 		readonly payload: ISnapshot<A>,
 		readonly metadata: SnapshotEnvelopeMetadata,
 	) {}
 
-	static create<A extends Aggregate>(aggregateId: Id, sequence: number, payload: ISnapshot<A>): SnapshotEnvelope<A> {
+	static create<A extends AggregateRoot>(
+		aggregateId: Id,
+		sequence: number,
+		payload: ISnapshot<A>,
+	): SnapshotEnvelope<A> {
 		return new SnapshotEnvelope(randomUUID(), payload, {
 			aggregateId: aggregateId.value,
 			sequence,
@@ -18,7 +22,7 @@ export class SnapshotEnvelope<A extends Aggregate = Aggregate> {
 		});
 	}
 
-	static from<A extends Aggregate = Aggregate>(
+	static from<A extends AggregateRoot = AggregateRoot>(
 		snapshotId: string,
 		payload: ISnapshot<A>,
 		metadata: SnapshotEnvelopeMetadata,

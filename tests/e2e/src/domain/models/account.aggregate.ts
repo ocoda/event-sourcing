@@ -1,4 +1,4 @@
-import { Aggregate, Id } from '@ocoda/event-sourcing';
+import { AggregateRoot, Id } from '@ocoda/event-sourcing';
 import {
 	AccountClosedEvent,
 	AccountCreditedEvent,
@@ -11,7 +11,7 @@ import {
 export class AccountId extends Id {}
 export class AccountOwnerId extends Id {}
 
-export class Account extends Aggregate {
+export class Account extends AggregateRoot {
 	public id: AccountId;
 	public ownerIds: AccountOwnerId[];
 	public balance: number;

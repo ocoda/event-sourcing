@@ -1,30 +1,19 @@
 import { EventMap } from './event-map';
 import { IEvent } from './interfaces';
-import { Aggregate, Id } from './models';
+import { Id } from './models';
 import { EventEnvelope, EventStream } from './models';
 
 export abstract class EventStore {
 	abstract eventMap: EventMap;
-	abstract getEvents<A extends Aggregate = Aggregate>(
-		eventStream: EventStream<A>,
-		fromVersion?: number,
-	): IEvent[] | Promise<IEvent[]>;
-	abstract getEvent<A extends Aggregate = Aggregate>(
-		eventStream: EventStream<A>,
-		version: number,
-	): IEvent | Promise<IEvent>;
-	abstract appendEvents<A extends Aggregate = Aggregate>(
+	abstract createPool(eventStream: EventStream): void;
+	abstract getEvents(eventStream: EventStream, fromVersion?: number): IEvent[] | Promise<IEvent[]>;
+	abstract getEvent(eventStream: EventStream, version: number): IEvent | Promise<IEvent>;
+	abstract appendEvents(
 		aggregateId: Id,
 		aggregateVersion: number,
-		eventStream: EventStream<A>,
+		eventStream: EventStream,
 		events: IEvent[],
 	): void | Promise<void>;
-	abstract getEnvelopes?<A extends Aggregate = Aggregate>(
-		eventStream: EventStream<A>,
-		fromVersion?: number,
-	): EventEnvelope[] | Promise<EventEnvelope[]>;
-	abstract getEnvelope?<A extends Aggregate = Aggregate>(
-		eventStream: EventStream<A>,
-		version: number,
-	): EventEnvelope | Promise<EventEnvelope>;
+	abstract getEnvelopes?(eventStream: EventStream, fromVersion?: number): EventEnvelope[] | Promise<EventEnvelope[]>;
+	abstract getEnvelope?(eventStream: EventStream, version: number): EventEnvelope | Promise<EventEnvelope>;
 }

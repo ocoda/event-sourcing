@@ -1,7 +1,7 @@
 import { SnapshotMetadata } from '../interfaces';
 import 'reflect-metadata';
 import { SNAPSHOT_METADATA } from './constants';
-import { Aggregate } from '../models';
+import { AggregateRoot } from '../models';
 import { Type } from '@nestjs/common';
 
 /**
@@ -15,7 +15,7 @@ import { Type } from '@nestjs/common';
  * @param aggregate aggregate *type* to be handled by this handler.
  * @param options snapshot metadata.
  */
-export const Snapshot = <A extends Aggregate = Aggregate>(
+export const Snapshot = <A extends AggregateRoot = AggregateRoot>(
 	aggregate: Type<A>,
 	options?: Omit<SnapshotMetadata<A>, 'aggregate'>,
 ): ClassDecorator => {

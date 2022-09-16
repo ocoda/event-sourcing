@@ -4,7 +4,7 @@ import { IEvent, ISnapshot } from '../interfaces';
 const VERSION = Symbol();
 const EVENTS = Symbol();
 
-export abstract class Aggregate<EventBase extends IEvent = IEvent> {
+export abstract class AggregateRoot<EventBase extends IEvent = IEvent> {
 	private [VERSION]: number = 0;
 	private readonly [EVENTS]: EventBase[] = [];
 
@@ -29,7 +29,7 @@ export abstract class Aggregate<EventBase extends IEvent = IEvent> {
 		handler && handler.call(this, event);
 	}
 
-	private getEventHandler<T extends EventBase = EventBase>(event: T): Type<typeof Aggregate> | undefined {
+	private getEventHandler<T extends EventBase = EventBase>(event: T): Type<typeof AggregateRoot> | undefined {
 		const handler = `on${this.getEventName(event)}`;
 		return this[handler];
 	}

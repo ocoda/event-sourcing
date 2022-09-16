@@ -1,6 +1,6 @@
 import { Client } from '@elastic/elasticsearch';
 import {
-	Aggregate,
+	AggregateRoot,
 	Id,
 	ISnapshot,
 	SnapshotEnvelope,
@@ -13,7 +13,7 @@ import {
 	ElasticsearchSnapshotStore,
 } from '../../../../lib/integration/snapshot-store/elasticsearch.snapshot-store';
 
-class Account extends Aggregate {
+class Account extends AggregateRoot {
 	constructor(private readonly id: AccountId, private readonly balance: number) {
 		super();
 	}
@@ -138,7 +138,7 @@ describe(ElasticsearchSnapshotStore, () => {
 	});
 
 	it('should return undefined if there is no last snapshot', async () => {
-		class Foo extends Aggregate {}
+		class Foo extends AggregateRoot {}
 		const resolvedSnapshot = await snapshotStore.getLastSnapshot(SnapshotStream.for(Foo, Id.generate()));
 
 		expect(resolvedSnapshot).toBeUndefined();

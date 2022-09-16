@@ -1,10 +1,10 @@
-import { Aggregate, Id, ISnapshot, SnapshotEnvelope } from '../../../lib';
+import { AggregateRoot, Id, ISnapshot, SnapshotEnvelope } from '../../../lib';
 
 describe(SnapshotEnvelope, () => {
 	const now = new Date();
 
 	class AccountId extends Id {}
-	class Account extends Aggregate {
+	class Account extends AggregateRoot {
 		constructor(public id: AccountId, public balance: number, public openedOn: Date, public closedOn?: Date) {
 			super();
 		}

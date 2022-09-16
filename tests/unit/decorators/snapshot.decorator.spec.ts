@@ -1,7 +1,7 @@
-import { Snapshot, Aggregate, SnapshotMetadata, SNAPSHOT_METADATA } from '../../../lib';
+import { Snapshot, AggregateRoot, SnapshotMetadata, SNAPSHOT_METADATA } from '../../../lib';
 
 describe('@Snapshot', () => {
-	class Account extends Aggregate {}
+	class Account extends AggregateRoot {}
 
 	it('should add snapshot metadata to the handler', () => {
 		@Snapshot(Account, { name: "foo", interval: 20 })

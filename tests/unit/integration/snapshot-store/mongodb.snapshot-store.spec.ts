@@ -1,6 +1,6 @@
 import { MongoClient } from 'mongodb';
 import {
-	Aggregate,
+	AggregateRoot,
 	Id,
 	ISnapshot,
 	SnapshotEnvelope,
@@ -10,7 +10,7 @@ import {
 } from '../../../../lib';
 import { MongoDBSnapshotStore, MongoSnapshotEnvelopeEntity } from '../../../../lib/integration/snapshot-store';
 
-class Account extends Aggregate {
+class Account extends AggregateRoot {
 	constructor(private readonly id: AccountId, private readonly balance: number) {
 		super();
 	}
@@ -128,7 +128,7 @@ describe(MongoDBSnapshotStore, () => {
 	});
 
 	it('should return undefined if there is no last snapshot', async () => {
-		class Foo extends Aggregate {}
+		class Foo extends AggregateRoot {}
 		const resolvedSnapshot = await snapshotStore.getLastSnapshot(SnapshotStream.for(Foo, Id.generate()));
 
 		expect(resolvedSnapshot).toBeUndefined();

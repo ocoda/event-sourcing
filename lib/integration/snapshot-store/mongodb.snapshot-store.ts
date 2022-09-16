@@ -1,11 +1,11 @@
 import { ISnapshot, SnapshotEnvelopeMetadata } from '../../interfaces';
 import { Db, MongoClient } from 'mongodb';
 import { StreamReadingDirection } from '../../constants';
-import { Aggregate, Id, SnapshotEnvelope, SnapshotStream } from '../../models';
+import { AggregateRoot, Id, SnapshotEnvelope, SnapshotStream } from '../../models';
 import { SnapshotStore } from '../../snapshot-store';
 import { SnapshotNotFoundException } from '../../exceptions';
 
-export interface MongoSnapshotEnvelopeEntity<A extends Aggregate> {
+export interface MongoSnapshotEnvelopeEntity<A extends AggregateRoot> {
 	_id: string;
 	stream: string;
 	payload: ISnapshot<A>;
@@ -19,7 +19,7 @@ export class MongoDBSnapshotStore extends SnapshotStore {
 		this.database = client.db();
 	}
 
-	async getSnapshots<A extends Aggregate>(
+	async getSnapshots<A extends AggregateRoot>(
 		{ name, subject }: SnapshotStream,
 		fromVersion?: number,
 		direction: StreamReadingDirection = StreamReadingDirection.FORWARD,
@@ -37,7 +37,10 @@ export class MongoDBSnapshotStore extends SnapshotStore {
 		return entities.map(({ payload }) => payload).toArray();
 	}
 
-	async getSnapshot<A extends Aggregate>({ name, subject }: SnapshotStream, version: number): Promise<ISnapshot<A>> {
+	async getSnapshot<A extends AggregateRoot>(
+		{ name, subject }: SnapshotStream,
+		version: number,
+	): Promise<ISnapshot<A>> {
 		const entity = await this.database.collection<MongoSnapshotEnvelopeEntity<A>>(subject).findOne({
 			stream: name,
 			'metadata.sequence': version,
@@ -50,7 +53,7 @@ export class MongoDBSnapshotStore extends SnapshotStore {
 		return entity.payload;
 	}
 
-	async appendSnapshot<A extends Aggregate>(
+	async appendSnapshot<A extends AggregateRoot>(
 		aggregateId: Id,
 		aggregateVersion: number,
 		{ name, subject }: SnapshotStream,
@@ -65,7 +68,7 @@ export class MongoDBSnapshotStore extends SnapshotStore {
 		});
 	}
 
-	async getLastSnapshot<A extends Aggregate>({ name, subject }: SnapshotStream<A>): Promise<ISnapshot<A>> {
+	async getLastSnapshot<A extends AggregateRoot>({ name, subject }: SnapshotStream<A>): Promise<ISnapshot<A>> {
 		const [entity] = await this.database
 			.collection<MongoSnapshotEnvelopeEntity<A>>(subject)
 			.find(
@@ -81,7 +84,7 @@ export class MongoDBSnapshotStore extends SnapshotStore {
 		}
 	}
 
-	async getEnvelopes<A extends Aggregate>(
+	async getEnvelopes<A extends AggregateRoot>(
 		{ name, subject }: SnapshotStream,
 		fromVersion?: number,
 		direction: StreamReadingDirection = StreamReadingDirection.FORWARD,
@@ -99,7 +102,7 @@ export class MongoDBSnapshotStore extends SnapshotStore {
 		return entities.map(({ _id, payload, metadata }) => SnapshotEnvelope.from<A>(_id, payload, metadata)).toArray();
 	}
 
-	async getEnvelope<A extends Aggregate>(
+	async getEnvelope<A extends AggregateRoot>(
 		{ name, subject }: SnapshotStream,
 		version: number,
 	): Promise<SnapshotEnvelope<A>> {
