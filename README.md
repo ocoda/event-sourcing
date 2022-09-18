@@ -32,7 +32,7 @@ EventSourcingModule.forRoot({
 ```
 
 ### MongoDB
-Requires the MongoDB package to be installed
+Requires the MongoDB package to be installed and Mongo >=6
 ```
 npm install mongodb
 ```

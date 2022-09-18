@@ -1,32 +1,30 @@
 import { Type } from '@nestjs/common';
 import { AGGREGATE_METADATA } from '../decorators';
 import { MissingAggregateMetadataException } from '../exceptions';
-import { AggregateMetadata } from '../interfaces';
+import { AggregateMetadata, ISnapshotCollection, ISnapshotPool } from '../interfaces';
 import { AggregateRoot } from './aggregate-root';
 import { Id } from './id';
 
 export class SnapshotStream {
-	private readonly _collection = 'snapshots';
+	private constructor(
+		private _aggregate: string,
+		private _aggregateId: string,
+		private readonly _pool?: ISnapshotPool,
+	) {}
 
-	private constructor(private _aggregate: string, private _id: Id, private readonly _pool = 'default') {}
-
-	get subject(): string {
-		return `${this._aggregate}-${this._id}`;
+	get aggregateId(): string {
+		return this._aggregateId;
 	}
 
-	get collection(): string {
-		return this._collection;
+	get streamId(): string {
+		return `${this._aggregate}-${this._aggregateId}`;
 	}
 
-	get pool(): string {
-		return this._pool;
+	get collection(): ISnapshotCollection {
+		return this._pool ? `${this._pool}-snapshots` : 'snapshots';
 	}
 
-	static for<A extends AggregateRoot<any> = AggregateRoot<any>>(
-		aggregate: A | Type<A>,
-		id: Id,
-		pool?: string,
-	): SnapshotStream {
+	static for<A extends AggregateRoot = AggregateRoot>(aggregate: A | Type<A>, id: Id, pool?: string): SnapshotStream {
 		const cls = aggregate instanceof Function ? aggregate : (aggregate.constructor as Type<A>);
 
 		const metadata: AggregateMetadata = Reflect.getMetadata(AGGREGATE_METADATA, cls);
@@ -34,6 +32,6 @@ export class SnapshotStream {
 			throw new MissingAggregateMetadataException(cls);
 		}
 
-		return new SnapshotStream(metadata.streamName, id, pool);
+		return new SnapshotStream(metadata.streamName, id.value, pool);
 	}
 }

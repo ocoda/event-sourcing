@@ -1,16 +1,12 @@
 import { AggregateRoot, Id, ISnapshot, SnapshotEnvelope } from '../../../lib';
 
 describe(SnapshotEnvelope, () => {
-	const now = new Date();
-
 	class AccountId extends Id {}
 	class Account extends AggregateRoot {
 		constructor(public id: AccountId, public balance: number, public openedOn: Date, public closedOn?: Date) {
 			super();
 		}
 	}
-
-	beforeAll(() => jest.spyOn(global.Date, 'now').mockImplementationOnce(() => now.valueOf()));
 
 	it('should create a snapshot-envelope', () => {
 		const accountId = AccountId.generate();
@@ -21,12 +17,11 @@ describe(SnapshotEnvelope, () => {
 			closedOn: undefined,
 		};
 
-		const envelope = SnapshotEnvelope.create(accountId, 1, accountSnapshot);
+		const envelope = SnapshotEnvelope.create(accountSnapshot, { aggregateId: accountId.value, version: 1 });
 
-		expect(envelope.snapshotId).toBeDefined();
 		expect(envelope.payload).toEqual(accountSnapshot);
 		expect(envelope.metadata.aggregateId).toEqual(accountId.value);
-		expect(envelope.metadata.sequence).toBe(1);
-		expect(envelope.metadata.registeredOn).toEqual(now.valueOf());
+		expect(envelope.metadata.version).toBe(1);
+		expect(envelope.metadata.registeredOn).toBeInstanceOf(Date);
 	});
 });

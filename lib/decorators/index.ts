@@ -1,3 +1,4 @@
+export * from './aggregate.decorator';
 export * from './command-handler.decorator';
 export * from './constants';
 export * from './event-serializer.decorator';

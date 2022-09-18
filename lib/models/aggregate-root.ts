@@ -1,12 +1,12 @@
 import { Type } from '@nestjs/common';
-import { IEvent, ISnapshot } from '../interfaces';
+import { IEvent } from '../interfaces';
 
 const VERSION = Symbol();
 const EVENTS = Symbol();
 
-export abstract class AggregateRoot<EventBase extends IEvent = IEvent> {
+export abstract class AggregateRoot {
 	private [VERSION]: number = 0;
-	private readonly [EVENTS]: EventBase[] = [];
+	private readonly [EVENTS]: IEvent[] = [];
 
 	set version(version: number) {
 		this[VERSION] = version;
@@ -16,7 +16,7 @@ export abstract class AggregateRoot<EventBase extends IEvent = IEvent> {
 		return this[VERSION];
 	}
 
-	applyEvent<T extends EventBase = EventBase>(event: T, fromHistory = false) {
+	applyEvent<T extends IEvent = IEvent>(event: T, fromHistory = false) {
 		this[VERSION]++;
 
 		// If we're just hydrating the aggregate with events,
@@ -29,12 +29,12 @@ export abstract class AggregateRoot<EventBase extends IEvent = IEvent> {
 		handler && handler.call(this, event);
 	}
 
-	private getEventHandler<T extends EventBase = EventBase>(event: T): Type<typeof AggregateRoot> | undefined {
+	private getEventHandler<T extends IEvent = IEvent>(event: T): Type<typeof AggregateRoot> | undefined {
 		const handler = `on${this.getEventName(event)}`;
 		return this[handler];
 	}
 
-	private getEventName(event: EventBase): string {
+	private getEventName(event: IEvent): string {
 		const prototype = Object.getPrototypeOf(event);
 		return prototype.constructor.name;
 	}
@@ -46,7 +46,7 @@ export abstract class AggregateRoot<EventBase extends IEvent = IEvent> {
 		return events;
 	}
 
-	loadFromHistory(events: EventBase[]) {
+	loadFromHistory(events: IEvent[]) {
 		events.forEach((event) => this.applyEvent(event, true));
 	}
 }

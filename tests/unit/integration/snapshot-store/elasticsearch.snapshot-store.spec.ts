@@ -1,5 +1,6 @@
 import { Client } from '@elastic/elasticsearch';
 import {
+	Aggregate,
 	AggregateRoot,
 	Id,
 	ISnapshot,
@@ -8,139 +9,178 @@ import {
 	SnapshotStream,
 	StreamReadingDirection,
 } from '../../../../lib';
-import {
-	ElasticsearchSnapshotEnvelopeEntity,
-	ElasticsearchSnapshotStore,
-} from '../../../../lib/integration/snapshot-store/elasticsearch.snapshot-store';
+import { ElasticsearchSnapshotStore } from '../../../../lib/integration/snapshot-store';
 
+class AccountId extends Id {}
+
+@Aggregate({ streamName: 'account' })
 class Account extends AggregateRoot {
 	constructor(private readonly id: AccountId, private readonly balance: number) {
 		super();
 	}
 }
-class AccountId extends Id {}
 
 describe(ElasticsearchSnapshotStore, () => {
-	let now = Date.now();
 	let client: Client;
-	let snapshotStore: ElasticsearchSnapshotStore;
-	let snapshotEnvelopes: SnapshotEnvelope[];
 
 	const accountId = AccountId.generate();
 	const snapshotStream = SnapshotStream.for(Account, accountId);
 
+	let snapshotStore: ElasticsearchSnapshotStore;
+	let envelopes: SnapshotEnvelope[];
+
 	const snapshots: ISnapshot<Account>[] = [{ balance: 50 }, { balance: 20 }, { balance: 60 }, { balance: 50 }];
 
+	const seedSnapshots = async () => {
+		await snapshotStore.appendSnapshot(snapshotStream, 10, snapshots[0]);
+		await snapshotStore.appendSnapshot(snapshotStream, 20, snapshots[1]);
+		await snapshotStore.appendSnapshot(snapshotStream, 30, snapshots[2]);
+		await snapshotStore.appendSnapshot(snapshotStream, 40, snapshots[3]);
+	};
+
 	beforeAll(async () => {
-		jest.spyOn(global.Date, 'now').mockImplementation(() => now);
+		envelopes = [
+			SnapshotEnvelope.create<Account>(snapshots[0], { aggregateId: accountId.value, version: 10 }),
+			SnapshotEnvelope.create<Account>(snapshots[1], { aggregateId: accountId.value, version: 20 }),
+			SnapshotEnvelope.create<Account>(snapshots[2], { aggregateId: accountId.value, version: 30 }),
+			SnapshotEnvelope.create<Account>(snapshots[3], { aggregateId: accountId.value, version: 40 }),
+		];
+
 		client = new Client({ node: 'http://localhost:9200' });
 		snapshotStore = new ElasticsearchSnapshotStore(client);
-
-		snapshotEnvelopes = [
-			SnapshotEnvelope.create<Account>(accountId, 10, snapshots[0]),
-			SnapshotEnvelope.create<Account>(accountId, 20, snapshots[1]),
-			SnapshotEnvelope.create<Account>(accountId, 30, snapshots[2]),
-			SnapshotEnvelope.create<Account>(accountId, 40, snapshots[3]),
-		];
+		await snapshotStore.setup();
 	});
 
+	afterEach(
+		async () =>
+			await client.deleteByQuery({
+				index: snapshotStream.collection,
+				body: { query: { match_all: {} } },
+				refresh: true,
+			}),
+	);
+
 	afterAll(async () => {
-		jest.clearAllMocks();
-		await Promise.all([
-			client.deleteByQuery({ index: snapshotStream.subject, body: { query: { match_all: {} } }, refresh: true }),
-			client.deleteByQuery({ index: 'foo-snapshot', body: { query: { match_all: {} } }, refresh: true }),
-		]);
+		await client.indices.delete({ index: snapshotStream.collection });
 		await client.close();
 	});
 
 	it('should append snapshots', async () => {
-		await snapshotStore.appendSnapshot(accountId, 10, snapshotStream, snapshots[0]);
-		await snapshotStore.appendSnapshot(accountId, 20, snapshotStream, snapshots[1]);
-		await snapshotStore.appendSnapshot(accountId, 30, snapshotStream, snapshots[2]);
-		await snapshotStore.appendSnapshot(accountId, 40, snapshotStream, snapshots[3]);
+		await seedSnapshots();
 
 		const { body } = await client.search({
-			index: snapshotStream.subject,
+			index: snapshotStream.collection,
 			body: {
-				query: { bool: { must: [{ match: { stream: snapshotStream.name } }] } },
-				sort: { 'metadata.sequence': 'asc' },
+				query: { bool: { must: [{ match: { streamId: snapshotStream.streamId } }] } },
+				sort: { 'metadata.version': 'asc' },
 			},
 		});
-		expect(body.hits.hits).toHaveLength(4);
 
-		const [hit1, hit2, hit3, hit4]: ElasticsearchSnapshotEnvelopeEntity<Account>[] = body.hits.hits;
-		expect(hit1._source).toEqual({
-			stream: snapshotStream.name,
-			metadata: snapshotEnvelopes[0].metadata,
-			payload: snapshotEnvelopes[0].payload,
-		});
-		expect(hit2._source).toEqual({
-			stream: snapshotStream.name,
-			metadata: snapshotEnvelopes[1].metadata,
-			payload: snapshotEnvelopes[1].payload,
-		});
-		expect(hit3._source).toEqual({
-			stream: snapshotStream.name,
-			metadata: snapshotEnvelopes[2].metadata,
-			payload: snapshotEnvelopes[2].payload,
-		});
-		expect(hit4._source).toEqual({
-			stream: snapshotStream.name,
-			metadata: snapshotEnvelopes[3].metadata,
-			payload: snapshotEnvelopes[3].payload,
+		expect(body.hits.hits).toHaveLength(snapshots.length);
+
+		body.hits.hits.forEach(({ _source }, index) => {
+			expect(_source.streamId).toEqual(snapshotStream.streamId);
+			expect(_source.payload).toEqual(envelopes[index].payload);
+			expect(_source.metadata.aggregateId).toEqual(envelopes[index].metadata.aggregateId);
+			expect(_source.metadata.registeredOn).toBeDefined();
+			expect(_source.metadata.version).toEqual(envelopes[index].metadata.version);
 		});
 	});
 
+	it('should retrieve snapshots', async () => {
+		await seedSnapshots();
+
+		const resolvedSnapshots = await snapshotStore.getSnapshots(snapshotStream);
+
+		expect(resolvedSnapshots).toEqual(snapshots);
+	});
+
 	it('should retrieve a single snapshot', async () => {
-		const resolvedSnapshot = await snapshotStore.getSnapshot(snapshotStream, 20);
+		await seedSnapshots();
+
+		const resolvedSnapshot = await snapshotStore.getSnapshot(snapshotStream, envelopes[1].metadata.version);
 
 		expect(resolvedSnapshot).toEqual(snapshots[1]);
 	});
 
 	it("should throw when a snapshot isn't found", async () => {
 		await expect(snapshotStore.getSnapshot(snapshotStream, 5)).rejects.toThrow(
-			SnapshotNotFoundException.withVersion(snapshotStream.name, 5),
+			new SnapshotNotFoundException(snapshotStream.streamId, 5),
 		);
-	});
-
-	it('should retrieve snapshots forward', async () => {
-		const resolvedSnapshots = await snapshotStore.getSnapshots(snapshotStream);
-
-		expect(resolvedSnapshots).toEqual(snapshots);
 	});
 
 	it('should retrieve snapshots backwards', async () => {
-		const resolvedSnapshots = await snapshotStore.getSnapshots(
-			snapshotStream,
-			undefined,
-			StreamReadingDirection.BACKWARD,
-		);
+		await seedSnapshots();
+
+		const resolvedSnapshots = await snapshotStore.getSnapshots(snapshotStream, null, StreamReadingDirection.BACKWARD);
 
 		expect(resolvedSnapshots).toEqual(snapshots.slice().reverse());
 	});
 
 	it('should retrieve snapshots forward from a certain version', async () => {
-		const resolvedSnapshots = await snapshotStore.getSnapshots(snapshotStream, 20);
+		await seedSnapshots();
 
-		expect(resolvedSnapshots).toEqual(snapshots.filter((_, index) => (index + 1) * 10 >= 20));
+		const resolvedSnapshots = await snapshotStore.getSnapshots(snapshotStream, envelopes[1].metadata.version);
+
+		expect(resolvedSnapshots).toEqual(
+			snapshots.filter((_, index) => (index + 1) * 10 >= envelopes[1].metadata.version),
+		);
 	});
 
 	it('should retrieve snapshots backwards from a certain version', async () => {
-		const resolvedSnapshots = await snapshotStore.getSnapshots(snapshotStream, 20, StreamReadingDirection.BACKWARD);
+		await seedSnapshots();
 
-		expect(resolvedSnapshots).toEqual(snapshots.filter((_, index) => (index + 1) * 10 >= 20).reverse());
+		const resolvedSnapshots = await snapshotStore.getSnapshots(
+			snapshotStream,
+			envelopes[1].metadata.version,
+			StreamReadingDirection.BACKWARD,
+		);
+
+		expect(resolvedSnapshots).toEqual(
+			snapshots.filter((_, index) => (index + 1) * 10 >= envelopes[1].metadata.version).reverse(),
+		);
 	});
 
 	it('should retrieve the last snapshot', async () => {
+		await seedSnapshots();
+
 		const resolvedSnapshot = await snapshotStore.getLastSnapshot(snapshotStream);
 
 		expect(resolvedSnapshot).toEqual(snapshots[snapshots.length - 1]);
 	});
 
 	it('should return undefined if there is no last snapshot', async () => {
+		@Aggregate({ streamName: 'foo' })
 		class Foo extends AggregateRoot {}
+
 		const resolvedSnapshot = await snapshotStore.getLastSnapshot(SnapshotStream.for(Foo, Id.generate()));
 
 		expect(resolvedSnapshot).toBeUndefined();
+	});
+
+	it('should retrieve snapshot-envelopes', async () => {
+		await seedSnapshots();
+
+		const resolvedEnvelopes = await snapshotStore.getEnvelopes(snapshotStream);
+
+		expect(resolvedEnvelopes).toHaveLength(envelopes.length);
+
+		resolvedEnvelopes.forEach((envelope, index) => {
+			expect(envelope.payload).toEqual(envelopes[index].payload);
+			expect(envelope.metadata.aggregateId).toEqual(envelopes[index].metadata.aggregateId);
+			expect(envelope.metadata.registeredOn).toBeInstanceOf(Date);
+			expect(envelope.metadata.version).toEqual(envelopes[index].metadata.version);
+		});
+	});
+
+	it('should retrieve a single snapshot-envelope', async () => {
+		await seedSnapshots();
+
+		const { metadata, payload } = await snapshotStore.getEnvelope(snapshotStream, envelopes[3].metadata.version);
+
+		expect(payload).toEqual(envelopes[3].payload);
+		expect(metadata.aggregateId).toEqual(envelopes[3].metadata.aggregateId);
+		expect(metadata.registeredOn).toBeInstanceOf(Date);
+		expect(metadata.version).toEqual(envelopes[3].metadata.version);
 	});
 });

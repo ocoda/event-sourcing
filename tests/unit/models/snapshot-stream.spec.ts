@@ -1,4 +1,4 @@
-import { Aggregate, AggregateRoot, Id, SnapshotStream } from '../../../lib';
+import { Aggregate, AggregateRoot, Id, MissingAggregateMetadataException, SnapshotStream } from '../../../lib';
 
 describe(SnapshotStream, () => {
 	@Aggregate({ streamName: 'account' })
@@ -9,9 +9,9 @@ describe(SnapshotStream, () => {
 		const accountId = AccountId.generate();
 		const snapshotStream = SnapshotStream.for(Account, accountId);
 
-		expect(snapshotStream.subject).toBe(`account-${accountId.value}`);
+		expect(snapshotStream.aggregateId).toBe(accountId.value);
+		expect(snapshotStream.streamId).toBe(`account-${accountId.value}`);
 		expect(snapshotStream.collection).toBe('snapshots');
-		expect(snapshotStream.pool).toBe('default');
 	});
 
 	it('should create a SnapshotStream from an Aggregate instance', () => {
@@ -19,8 +19,22 @@ describe(SnapshotStream, () => {
 		const accountId = AccountId.generate();
 		const snapshotStream = SnapshotStream.for(account, accountId);
 
-		expect(snapshotStream.subject).toBe(`account-${accountId.value}`);
+		expect(snapshotStream.aggregateId).toBe(accountId.value);
+		expect(snapshotStream.streamId).toBe(`account-${accountId.value}`);
 		expect(snapshotStream.collection).toBe('snapshots');
-		expect(snapshotStream.pool).toBe('default');
+	});
+
+	it('should create a pool-specific EventStream', () => {
+		const accountId = AccountId.generate();
+		const snapshotStream = SnapshotStream.for(Account, accountId, 'custom-pool');
+
+		expect(snapshotStream.collection).toBe('custom-pool-snapshots');
+	});
+
+	it('should throw when creating a snapshot-stream for an undecorated aggregate', () => {
+		class FooId extends Id {}
+		class Foo extends AggregateRoot {}
+
+		expect(() => SnapshotStream.for(Foo, FooId.generate())).toThrow(new MissingAggregateMetadataException(Foo));
 	});
 });

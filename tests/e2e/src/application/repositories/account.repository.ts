@@ -27,7 +27,7 @@ export class AccountRepository {
 
 		await Promise.all([
 			this.accountSnapshotHandler.save(account.id, account),
-			this.eventStore.appendEvents(account.id, account.version, stream, events),
+			this.eventStore.appendEvents(stream, account.version, events),
 		]);
 	}
 }

@@ -4,6 +4,7 @@ import { MongoClient } from 'mongodb';
 import { EVENT_SOURCING_OPTIONS } from './constants';
 import { EventMap } from './event-map';
 import { EventStore } from './event-store';
+import { MissingEventStoreConnectionOptionsException } from './exceptions';
 import { ElasticsearchEventStore, InMemoryEventStore, MongoDBEventStore } from './integration/event-store';
 import { InMemorySnapshotStore } from './integration/snapshot-store';
 import { ElasticsearchSnapshotStore } from './integration/snapshot-store/elasticsearch.snapshot-store';
@@ -21,18 +22,18 @@ export const EventStoreProvider = {
 		switch (options.database) {
 			case 'elasticsearch': {
 				if (!options?.connection) {
-					throw new Error('No Elasticsearch connection options provided');
+					throw new MissingEventStoreConnectionOptionsException('elasticsearch');
 				}
 				const elasticClient = await new Client(options.connection);
 				return new ElasticsearchEventStore(eventMap, elasticClient);
 			}
 			case 'mongodb': {
 				if (!options?.connection) {
-					throw new Error('No MongoDB connection options provided');
+					throw new MissingEventStoreConnectionOptionsException('mongodb');
 				}
 				const { url, options: clientOptions } = options.connection;
 				const mongoClient = await new MongoClient(url, clientOptions).connect();
-				return new MongoDBEventStore(eventMap, mongoClient);
+				return new MongoDBEventStore(eventMap, mongoClient.db());
 			}
 			case 'in-memory':
 				return new InMemoryEventStore(eventMap);
@@ -52,7 +53,7 @@ export const SnapshotStoreProvider = {
 			case 'mongodb': {
 				const { url, options: clientOptions } = options.connection;
 				const mongoClient = await new MongoClient(url, clientOptions).connect();
-				return new MongoDBSnapshotStore(mongoClient);
+				return new MongoDBSnapshotStore(mongoClient.db());
 			}
 			case 'in-memory':
 			default:

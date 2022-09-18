@@ -1,82 +1,86 @@
-import { ISnapshot, SnapshotEnvelopeMetadata } from '../../interfaces';
-import { Db, MongoClient } from 'mongodb';
+import { ISnapshot, ISnapshotPool, SnapshotEnvelopeMetadata } from '../../interfaces';
+import { Db } from 'mongodb';
 import { StreamReadingDirection } from '../../constants';
-import { AggregateRoot, Id, SnapshotEnvelope, SnapshotStream } from '../../models';
+import { AggregateRoot, SnapshotEnvelope, SnapshotStream } from '../../models';
 import { SnapshotStore } from '../../snapshot-store';
 import { SnapshotNotFoundException } from '../../exceptions';
 
-export interface MongoSnapshotEnvelopeEntity<A extends AggregateRoot> {
+export interface MongoSnapshotEntity<A extends AggregateRoot = AggregateRoot> {
 	_id: string;
-	stream: string;
+	streamId: string;
 	payload: ISnapshot<A>;
 	metadata: SnapshotEnvelopeMetadata;
 }
 
 export class MongoDBSnapshotStore extends SnapshotStore {
-	private readonly database: Db;
-	constructor(readonly client: MongoClient) {
+	constructor(readonly database: Db) {
 		super();
-		this.database = client.db();
+	}
+
+	async setup(pool?: ISnapshotPool): Promise<void> {
+		const snapshotCollection = await this.database.createCollection<MongoSnapshotEntity>(
+			pool ? `${pool}-snapshots` : 'snapshots',
+		);
+		await snapshotCollection.createIndex({ streamId: 1, 'metadata.version': 1 }, { unique: true });
 	}
 
 	async getSnapshots<A extends AggregateRoot>(
-		{ name, subject }: SnapshotStream,
+		{ collection, streamId }: SnapshotStream,
 		fromVersion?: number,
 		direction: StreamReadingDirection = StreamReadingDirection.FORWARD,
 	): Promise<ISnapshot<A>[]> {
-		const entities = await this.database.collection<MongoSnapshotEnvelopeEntity<A>>(subject).find(
-			{
-				stream: name,
-				...(fromVersion && { 'metadata.sequence': { $gte: fromVersion } }),
-			},
-			{
-				sort: { 'metadata.sequence': direction === StreamReadingDirection.FORWARD ? 1 : -1 },
-			},
-		);
-
-		return entities.map(({ payload }) => payload).toArray();
+		return this.database
+			.collection<MongoSnapshotEntity<A>>(collection)
+			.find(
+				{
+					streamId,
+					...(fromVersion && { 'metadata.version': { $gte: fromVersion } }),
+				},
+				{
+					sort: { 'metadata.version': direction === StreamReadingDirection.FORWARD ? 1 : -1 },
+				},
+			)
+			.map(({ payload }) => payload)
+			.toArray();
 	}
 
 	async getSnapshot<A extends AggregateRoot>(
-		{ name, subject }: SnapshotStream,
+		{ collection, streamId }: SnapshotStream,
 		version: number,
 	): Promise<ISnapshot<A>> {
-		const entity = await this.database.collection<MongoSnapshotEnvelopeEntity<A>>(subject).findOne({
-			stream: name,
-			'metadata.sequence': version,
+		const entity = await this.database.collection<MongoSnapshotEntity<A>>(collection).findOne({
+			streamId,
+			'metadata.version': version,
 		});
 
 		if (!entity) {
-			throw SnapshotNotFoundException.withVersion(name, version);
+			throw new SnapshotNotFoundException(streamId, version);
 		}
 
 		return entity.payload;
 	}
 
 	async appendSnapshot<A extends AggregateRoot>(
-		aggregateId: Id,
+		{ collection, streamId, aggregateId }: SnapshotStream,
 		aggregateVersion: number,
-		{ name, subject }: SnapshotStream,
 		snapshot: ISnapshot<A>,
 	): Promise<void> {
-		const { snapshotId, payload, metadata } = SnapshotEnvelope.create<A>(aggregateId, aggregateVersion, snapshot);
-		await this.database.collection<MongoSnapshotEnvelopeEntity<A>>(subject).insertOne({
-			_id: snapshotId,
-			stream: name,
+		const { payload, metadata } = SnapshotEnvelope.create<A>(snapshot, {
+			aggregateId,
+			version: aggregateVersion,
+		});
+		await this.database.collection<MongoSnapshotEntity<A>>(collection).insertOne({
+			_id: metadata.snapshotId,
+			streamId,
 			payload,
 			metadata,
 		});
 	}
 
-	async getLastSnapshot<A extends AggregateRoot>({ name, subject }: SnapshotStream<A>): Promise<ISnapshot<A>> {
+	async getLastSnapshot<A extends AggregateRoot>({ collection, streamId }: SnapshotStream): Promise<ISnapshot<A>> {
 		const [entity] = await this.database
-			.collection<MongoSnapshotEnvelopeEntity<A>>(subject)
-			.find(
-				{
-					stream: name,
-				},
-				{ sort: { 'metadata.sequence': -1 }, limit: 1 },
-			)
+			.collection<MongoSnapshotEntity<A>>(collection)
+			.find({ streamId }, { sort: { 'metadata.version': -1 }, limit: 1 })
 			.toArray();
 
 		if (entity) {
@@ -85,36 +89,36 @@ export class MongoDBSnapshotStore extends SnapshotStore {
 	}
 
 	async getEnvelopes<A extends AggregateRoot>(
-		{ name, subject }: SnapshotStream,
+		{ collection, streamId }: SnapshotStream,
 		fromVersion?: number,
 		direction: StreamReadingDirection = StreamReadingDirection.FORWARD,
 	): Promise<SnapshotEnvelope<A>[]> {
-		const entities = await this.database.collection<MongoSnapshotEnvelopeEntity<A>>(subject).find(
+		const entities = this.database.collection<MongoSnapshotEntity<A>>(collection).find(
 			{
-				stream: name,
-				...(fromVersion && { 'metadata.sequence': { $gte: fromVersion } }),
+				streamId,
+				...(fromVersion && { 'metadata.version': { $gte: fromVersion } }),
 			},
 			{
-				sort: { 'metadata.sequence': direction === StreamReadingDirection.FORWARD ? 1 : -1 },
+				sort: { 'metadata.version': direction === StreamReadingDirection.FORWARD ? 1 : -1 },
 			},
 		);
 
-		return entities.map(({ _id, payload, metadata }) => SnapshotEnvelope.from<A>(_id, payload, metadata)).toArray();
+		return entities.map(({ payload, metadata }) => SnapshotEnvelope.from<A>(payload, metadata)).toArray();
 	}
 
 	async getEnvelope<A extends AggregateRoot>(
-		{ name, subject }: SnapshotStream,
+		{ collection, streamId }: SnapshotStream,
 		version: number,
 	): Promise<SnapshotEnvelope<A>> {
-		const entity = await this.database.collection<MongoSnapshotEnvelopeEntity<A>>(subject).findOne({
-			stream: name,
-			'metadata.sequence': version,
+		const entity = await this.database.collection<MongoSnapshotEntity<A>>(collection).findOne({
+			streamId,
+			'metadata.version': version,
 		});
 
 		if (!entity) {
-			throw SnapshotNotFoundException.withVersion(name, version);
+			throw new SnapshotNotFoundException(streamId, version);
 		}
 
-		return SnapshotEnvelope.from<A>(entity._id, entity.payload, entity.metadata);
+		return SnapshotEnvelope.from<A>(entity.payload, entity.metadata);
 	}
 }
