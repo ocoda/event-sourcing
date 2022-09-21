@@ -1,113 +1,114 @@
-import { EventStream, EventEnvelope, Id } from '../../models';
+import { EventStream, EventEnvelope } from '../../models';
 import { EventStore } from '../../event-store';
 import { StreamReadingDirection } from '../../constants';
-import { Db, MongoClient } from 'mongodb';
-import { EventEnvelopeMetadata, IEvent, IEventPayload } from '../../interfaces';
+import { Db } from 'mongodb';
+import { EventEnvelopeMetadata, IEvent, IEventPayload, IEventPool } from '../../interfaces';
 import { EventNotFoundException } from '../../exceptions';
 import { EventMap } from '../../event-map';
 
-export interface MongoEventEnvelopeEntity {
+export interface MongoEventEntity {
 	_id: string;
-	stream: string;
-	eventName: string;
+	streamId: string;
+	event: string;
 	payload: IEventPayload<IEvent>;
 	metadata: EventEnvelopeMetadata;
 }
 
 export class MongoDBEventStore extends EventStore {
-	private readonly database: Db;
-	constructor(readonly eventMap: EventMap, readonly client: MongoClient) {
+	constructor(readonly eventMap: EventMap, readonly database: Db) {
 		super();
-		this.database = client.db();
+	}
+
+	async setup(pool?: IEventPool): Promise<void> {
+		const eventCollection = await this.database.createCollection<MongoEventEntity>(pool ? `${pool}-events` : 'events');
+		await eventCollection.createIndex({ streamId: 1, 'metadata.version': 1 }, { unique: true });
 	}
 
 	getEvents(
-		{ name, subject }: EventStream,
+		{ collection, streamId }: EventStream,
 		fromVersion?: number,
 		direction: StreamReadingDirection = StreamReadingDirection.FORWARD,
 	): Promise<IEvent[]> {
 		return this.database
-			.collection<MongoEventEnvelopeEntity>(subject)
+			.collection<MongoEventEntity>(collection)
 			.find(
 				{
-					stream: name,
-					...(fromVersion && { 'metadata.sequence': { $gte: fromVersion } }),
+					streamId,
+					...(fromVersion && { 'metadata.version': { $gte: fromVersion } }),
 				},
 				{
-					sort: { 'metadata.sequence': direction === StreamReadingDirection.FORWARD ? 1 : -1 },
+					sort: { 'metadata.version': direction === StreamReadingDirection.FORWARD ? 1 : -1 },
 				},
 			)
-			.map(({ eventName, payload }) => this.eventMap.deserializeEvent(eventName, payload))
+			.map(({ event, payload }) => this.eventMap.deserializeEvent(event, payload))
 			.toArray();
 	}
 
-	async getEvent({ name, subject }: EventStream, version: number): Promise<IEvent> {
-		const entity = await this.database.collection<MongoEventEnvelopeEntity>(subject).findOne({
-			stream: name,
-			'metadata.sequence': version,
+	async getEvent({ collection, streamId }: EventStream, version: number): Promise<IEvent> {
+		const entity = await this.database.collection<MongoEventEntity>(collection).findOne({
+			streamId,
+			'metadata.version': version,
 		});
 
 		if (!entity) {
-			throw EventNotFoundException.withVersion(name, version);
+			throw new EventNotFoundException(streamId, version);
 		}
 
-		return this.eventMap.deserializeEvent(entity.eventName, entity.payload);
+		return this.eventMap.deserializeEvent(entity.event, entity.payload);
 	}
 
 	async appendEvents(
-		aggregateId: Id,
+		{ collection, streamId, aggregateId }: EventStream,
 		aggregateVersion: number,
-		{ name, subject }: EventStream,
 		events: IEvent[],
 	): Promise<void> {
-		let sequence = aggregateVersion - events.length + 1;
+		let version = aggregateVersion - events.length + 1;
 		const envelopes = events.reduce<EventEnvelope[]>((acc, event) => {
 			const name = this.eventMap.getName(event);
 			const payload = this.eventMap.serializeEvent(event);
-			const envelope = EventEnvelope.create(aggregateId, sequence++, name, payload);
+			const envelope = EventEnvelope.create(name, payload, { aggregateId, version: version++ });
 			return [...acc, envelope];
 		}, []);
 
-		const entities = envelopes.map(({ eventId, ...rest }) => ({ stream: name, _id: eventId, ...rest }));
+		const entities = envelopes.map<MongoEventEntity>(
+			({ event, payload, metadata }) => ({ _id: metadata.eventId, streamId, event, payload, metadata }),
+		);
 
-		await this.database.collection<MongoEventEnvelopeEntity>(subject).insertMany(entities);
+		await this.database.collection<MongoEventEntity>(collection).insertMany(entities);
 	}
 
 	getEnvelopes(
-		{ name, subject }: EventStream,
+		{ collection, streamId }: EventStream,
 		fromVersion?: number,
 		direction: StreamReadingDirection = StreamReadingDirection.FORWARD,
 	): Promise<EventEnvelope[]> {
 		return this.database
-			.collection<MongoEventEnvelopeEntity>(subject)
+			.collection<MongoEventEntity>(collection)
 			.find(
 				{
-					stream: name,
-					...(fromVersion && { 'metadata.sequence': { $gte: fromVersion } }),
+					streamId,
+					...(fromVersion && { 'metadata.version': { $gte: fromVersion } }),
 				},
 				{
-					sort: { 'metadata.sequence': direction === StreamReadingDirection.FORWARD ? 1 : -1 },
+					sort: { 'metadata.version': direction === StreamReadingDirection.FORWARD ? 1 : -1 },
 				},
 			)
-			.map(({ _id, eventName, payload, metadata }) => {
-				const event = this.eventMap.deserializeEvent(eventName, payload);
-				return EventEnvelope.from(_id, eventName, event, metadata);
+			.map(({ event, payload, metadata }) => {
+				return EventEnvelope.from(event, payload, metadata);
 			})
 			.toArray();
 	}
 
-	async getEnvelope({ name, subject }: EventStream, version: number): Promise<EventEnvelope> {
-		const entity = await this.database.collection<MongoEventEnvelopeEntity>(subject).findOne({
-			stream: name,
-			'metadata.sequence': version,
+	async getEnvelope({ collection, streamId }: EventStream, version: number): Promise<EventEnvelope> {
+		const entity = await this.database.collection<MongoEventEntity>(collection).findOne({
+			streamId,
+			'metadata.version': version,
 		});
 
 		if (!entity) {
-			throw EventNotFoundException.withVersion(name, version);
+			throw new EventNotFoundException(streamId, version);
 		}
 
-		const event = this.eventMap.deserializeEvent(entity.eventName, entity.payload);
-
-		return EventEnvelope.from(entity._id, entity.eventName, event, entity.metadata);
+		return EventEnvelope.from(entity.event, entity.payload, entity.metadata);
 	}
 }

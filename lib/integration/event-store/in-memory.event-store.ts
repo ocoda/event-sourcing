@@ -3,84 +3,109 @@ import { EventStore } from '../../event-store';
 import { StreamReadingDirection } from '../../constants';
 import { EventNotFoundException } from '../../exceptions';
 import { EventMap } from '../../event-map';
-import { IEvent } from '../../interfaces';
+import { EventEnvelopeMetadata, IEvent, IEventCollection, IEventPayload, IEventPool } from '../../interfaces';
+
+interface InMemoryEventEntity {
+	streamId: string;
+	event: string;
+	payload: IEventPayload<IEvent>;
+	metadata: EventEnvelopeMetadata;
+}
 
 export class InMemoryEventStore extends EventStore {
-	private eventCollection: Map<string, EventEnvelope[]> = new Map();
+	private collections: Map<IEventCollection, InMemoryEventEntity[]> = new Map();
 
 	constructor(readonly eventMap: EventMap) {
 		super();
 	}
 
+	setup(pool?: IEventPool): void {
+		this.collections.set(pool ? `${pool}-events` : 'events', []);
+	}
+
 	getEvents(
-		{ name }: EventStream,
+		{ collection, streamId }: EventStream,
 		fromVersion?: number,
 		direction: StreamReadingDirection = StreamReadingDirection.FORWARD,
 	): IEvent[] {
-		let envelopes = this.eventCollection.get(name) || [];
+		const eventCollection = this.collections.get(collection) || [];
+
+		let entities = eventCollection.filter(({ streamId: entityStreamId }) => entityStreamId === streamId);
 
 		if (fromVersion) {
-			const startEventIndex = envelopes.findIndex(({ metadata }) => metadata.sequence === fromVersion);
-			envelopes = startEventIndex === -1 ? [] : envelopes.slice(startEventIndex);
+			const startEventIndex = entities.findIndex(({ metadata }) => metadata.version === fromVersion);
+			entities = startEventIndex === -1 ? [] : entities.slice(startEventIndex);
 		}
 
 		if (direction === StreamReadingDirection.BACKWARD) {
-			envelopes = envelopes.reverse();
+			entities = entities.reverse();
 		}
 
-		return envelopes.map(({ eventName, payload }) => this.eventMap.deserializeEvent(eventName, payload));
+		return entities.map(({ event, payload }) => this.eventMap.deserializeEvent(event, payload));
 	}
 
-	getEvent({ name }: EventStream, version: number): IEvent {
-		const envelope = this.eventCollection.get(name)?.find(({ metadata }) => metadata.sequence === version);
+	getEvent({ collection, streamId }: EventStream, version: number): IEvent {
+		const eventCollection = this.collections.get(collection) || [];
 
-		if (!envelope) {
-			throw EventNotFoundException.withVersion(name, version);
+		let entity = eventCollection.find(
+			({ streamId: eventStreamId, metadata }) => eventStreamId === streamId && metadata.version === version,
+		);
+
+		if (!entity) {
+			throw new EventNotFoundException(streamId, version);
 		}
 
-		return this.eventMap.deserializeEvent(envelope.eventName, envelope.payload);
+		return this.eventMap.deserializeEvent(entity.event, entity.payload);
 	}
 
-	appendEvents(aggregateId: Id, aggregateVersion: number, { name }: EventStream, events: IEvent[]): void {
-		const existingEnvelopes = this.eventCollection.get(name) || [];
+	appendEvents({ collection, streamId, aggregateId }: EventStream, aggregateVersion: number, events: IEvent[]): void {
+		const eventCollection = this.collections.get(collection) || [];
 
-		let sequence = aggregateVersion - events.length + 1;
+		let version = aggregateVersion - events.length + 1;
 		const envelopes = events.reduce<EventEnvelope[]>((acc, event) => {
 			const name = this.eventMap.getName(event);
 			const payload = this.eventMap.serializeEvent(event);
-			const envelope = EventEnvelope.create(aggregateId, sequence++, name, payload);
+			const envelope = EventEnvelope.create(name, payload, { aggregateId, version: version++ });
 			return [...acc, envelope];
 		}, []);
 
-		this.eventCollection.set(name, [...existingEnvelopes, ...envelopes]);
+		eventCollection.push(...envelopes.map(({ event, payload, metadata }) => ({ streamId, event, payload, metadata })));
 	}
 
 	getEnvelopes(
-		{ name }: EventStream,
+		{ collection, streamId }: EventStream,
 		fromVersion?: number,
 		direction: StreamReadingDirection = StreamReadingDirection.FORWARD,
 	): EventEnvelope[] {
-		let envelopes = this.eventCollection.get(name) || [];
+		const eventCollection = this.collections.get(collection) || [];
+
+		let entities = eventCollection.filter(({ streamId: entityStreamId }) => entityStreamId === streamId);
 
 		if (fromVersion) {
-			const startEventIndex = envelopes.findIndex(({ metadata }) => metadata.sequence === fromVersion);
-			envelopes = startEventIndex === -1 ? [] : envelopes.slice(startEventIndex);
+			const startEventIndex = entities.findIndex(({ metadata }) => metadata.version === fromVersion);
+			entities = startEventIndex === -1 ? [] : entities.slice(startEventIndex);
 		}
 
 		if (direction === StreamReadingDirection.BACKWARD) {
-			envelopes = envelopes.reverse();
+			entities = entities.reverse();
 		}
 
-		return envelopes;
+		return entities.map(({ event, payload, metadata }) => {
+			return EventEnvelope.from(event, payload, metadata);
+		});
 	}
 
-	getEnvelope({ name }: EventStream, version: number): EventEnvelope {
-		const envelope = this.eventCollection.get(name)?.find(({ metadata }) => metadata.sequence === version);
+	getEnvelope({ collection, streamId }: EventStream, version: number): EventEnvelope {
+		const eventCollection = this.collections.get(collection) || [];
 
-		if (!envelope) {
-			throw EventNotFoundException.withVersion(name, version);
+		let entity = eventCollection.find(
+			({ streamId: eventStreamId, metadata }) => eventStreamId === streamId && metadata.version === version,
+		);
+
+		if (!entity) {
+			throw new EventNotFoundException(streamId, version);
 		}
 
-		return envelope;
+		return EventEnvelope.from(entity.event, entity.payload, entity.metadata);
 	}
 }

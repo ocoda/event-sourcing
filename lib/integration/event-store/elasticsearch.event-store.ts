@@ -1,17 +1,17 @@
 import { Client } from '@elastic/elasticsearch';
-import { EventEnvelopeMetadata, IEvent, IEventPayload } from '../../interfaces';
+import { EventEnvelopeMetadata, IEvent, IEventPayload, IEventPool } from '../../interfaces';
 import { EventMap } from '../../event-map';
 import { EventNotFoundException } from '../../exceptions';
 import { EventStore } from '../../event-store';
-import { EventStream, EventEnvelope, Id } from '../../models';
+import { EventStream, EventEnvelope } from '../../models';
 import { StreamReadingDirection } from '../../constants';
 
-export interface ElasticsearchEventEnvelopeEntity {
+export interface ElasticsearchEventEntity {
 	_index: string;
 	_id: string;
 	_source: {
-		stream: string;
-		eventName: string;
+		streamId: string;
+		event: string;
 		payload: IEventPayload<IEvent>;
 		metadata: EventEnvelopeMetadata;
 	};
@@ -22,126 +22,152 @@ export class ElasticsearchEventStore extends EventStore {
 		super();
 	}
 
+	async setup(pool?: IEventPool): Promise<void> {
+		await this.client.indices.create({
+			index: pool ? `${pool}-events` : 'events',
+			body: {
+				mappings: {
+					properties: {
+						streamId: { type: 'text', index: true },
+						event: { type: 'keyword' },
+						payload: { type: 'object' },
+						metadata: {
+							type: 'object',
+							properties: {
+								eventId: { type: 'keyword' },
+								aggregateId: { type: 'keyword' },
+								version: { type: 'integer', index: true },
+								occurredOn: { type: 'date' },
+								correlationId: { type: 'keyword' },
+								causationId: { type: 'keyword' },
+							},
+						},
+					},
+				},
+			},
+		});
+	}
+
 	async getEvents(
-		{ name, subject }: EventStream,
+		{ collection, streamId }: EventStream,
 		fromVersion?: number,
 		direction: StreamReadingDirection = StreamReadingDirection.FORWARD,
 	): Promise<IEvent[]> {
 		const query = {
 			bool: {
 				must: [
-					{ match: { stream: name } },
-					...(fromVersion ? [{ range: { 'metadata.sequence': { gte: fromVersion } } }] : []),
+					{ match: { streamId } },
+					...(fromVersion ? [{ range: { 'metadata.version': { gte: fromVersion } } }] : []),
 				],
 			},
 		};
 
 		const sort =
-			direction === StreamReadingDirection.FORWARD ? { 'metadata.sequence': 'asc' } : { 'metadata.sequence': 'desc' };
+			direction === StreamReadingDirection.FORWARD ? { 'metadata.version': 'asc' } : { 'metadata.version': 'desc' };
 
 		const { body } = await this.client.search({
-			index: subject,
+			index: collection,
 			body: { query, sort },
 		});
 
-		return body.hits.hits.map(({ _source: { eventName, payload } }: ElasticsearchEventEnvelopeEntity) => {
-			return this.eventMap.deserializeEvent(eventName, payload);
+		return body.hits.hits.map(({ _source: { event, payload } }: ElasticsearchEventEntity) => {
+			return this.eventMap.deserializeEvent(event, payload);
 		});
 	}
 
-	async getEvent({ name, subject }: EventStream, version: number): Promise<IEvent> {
+	async getEvent({ collection, streamId }: EventStream, version: number): Promise<IEvent> {
 		const query = {
 			bool: {
-				must: [{ match: { stream: name } }, { match: { 'metadata.sequence': version } }],
+				must: [{ match: { streamId } }, { match: { 'metadata.version': version } }],
 			},
 		};
 
 		const { body } = await this.client.search({
-			index: subject,
+			index: collection,
 			body: { query },
 		});
 
-		const entity: ElasticsearchEventEnvelopeEntity = body.hits.hits[0];
+		const entity: ElasticsearchEventEntity = body.hits.hits[0];
 
 		if (!entity) {
-			throw EventNotFoundException.withVersion(name, version);
+			throw new EventNotFoundException(streamId, version);
 		}
 
-		return this.eventMap.deserializeEvent(entity._source.eventName, entity._source.payload);
+		return this.eventMap.deserializeEvent(entity._source.event, entity._source.payload);
 	}
 
 	async appendEvents(
-		aggregateId: Id,
+		{ collection, streamId, aggregateId }: EventStream,
 		aggregateVersion: number,
-		{ name, subject }: EventStream,
 		events: IEvent[],
 	): Promise<void> {
-		let sequence = aggregateVersion - events.length + 1;
+		let version = aggregateVersion - events.length + 1;
 		const envelopes = events.reduce<EventEnvelope[]>((acc, event) => {
 			const name = this.eventMap.getName(event);
 			const payload = this.eventMap.serializeEvent(event);
-			const envelope = EventEnvelope.create(aggregateId, sequence++, name, payload);
+			const envelope = EventEnvelope.create(name, payload, { aggregateId, version: version++ });
 			return [...acc, envelope];
 		}, []);
 
 		const body = envelopes.flatMap(
-			({ eventId, ...rest }) => [{ index: { _index: subject, _id: eventId } }, { stream: name, ...rest }],
+			({ event, metadata, payload }) => [
+				{ index: { _index: collection, _id: metadata.eventId } },
+				{ streamId, event, metadata, payload },
+			],
 		);
 
-		await this.client.bulk({ index: subject, body, refresh: 'wait_for' });
+		await this.client.bulk({ index: collection, body, refresh: 'wait_for' });
 	}
 
 	async getEnvelopes(
-		{ name, subject }: EventStream,
+		{ collection, streamId }: EventStream,
 		fromVersion?: number,
 		direction: StreamReadingDirection = StreamReadingDirection.FORWARD,
 	): Promise<EventEnvelope[]> {
 		const query = {
 			bool: {
 				must: [
-					{ match: { stream: name } },
-					...(fromVersion ? [{ range: { 'metadata.sequence': { gte: fromVersion } } }] : []),
+					{ match: { streamId } },
+					...(fromVersion ? [{ range: { 'metadata.version': { gte: fromVersion } } }] : []),
 				],
 			},
 		};
 
 		const sort =
-			direction === StreamReadingDirection.FORWARD ? { 'metadata.sequence': 'asc' } : { 'metadata.sequence': 'desc' };
+			direction === StreamReadingDirection.FORWARD ? { 'metadata.version': 'asc' } : { 'metadata.version': 'desc' };
 
 		const { body } = await this.client.search({
-			index: subject,
+			index: collection,
 			body: { query, sort },
 		});
 
 		return body.hits.hits.map(
-			({ _id, _source: { eventName, payload, metadata } }: ElasticsearchEventEnvelopeEntity) =>
-				EventEnvelope.from(_id, eventName, this.eventMap.deserializeEvent(eventName, payload), metadata),
+			({ _source: { event, payload, metadata } }: ElasticsearchEventEntity) =>
+				EventEnvelope.from(event, payload, { ...metadata, occurredOn: new Date(metadata.occurredOn) }),
 		);
 	}
 
-	async getEnvelope({ name, subject }: EventStream, version: number): Promise<EventEnvelope> {
+	async getEnvelope({ collection, streamId }: EventStream, version: number): Promise<EventEnvelope> {
 		const query = {
 			bool: {
-				must: [{ match: { stream: name } }, { match: { 'metadata.sequence': version } }],
+				must: [{ match: { streamId } }, { match: { 'metadata.version': version } }],
 			},
 		};
 
 		const { body } = await this.client.search({
-			index: subject,
+			index: collection,
 			body: { query },
 		});
 
-		const entity: ElasticsearchEventEnvelopeEntity = body.hits.hits[0];
+		const entity: ElasticsearchEventEntity = body.hits.hits[0];
 
 		if (!entity) {
-			throw EventNotFoundException.withVersion(name, version);
+			throw new EventNotFoundException(streamId, version);
 		}
 
-		return EventEnvelope.from(
-			entity._id,
-			entity._source.eventName,
-			this.eventMap.deserializeEvent(entity._source.eventName, entity._source.payload),
-			entity._source.metadata,
-		);
+		return EventEnvelope.from(entity._source.event, entity._source.payload, {
+			...entity._source.metadata,
+			occurredOn: new Date(entity._source.metadata.occurredOn),
+		});
 	}
 }

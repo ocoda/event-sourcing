@@ -1,15 +1,15 @@
-import { Aggregate, Id, SnapshotEnvelope, SnapshotStream } from '../../models';
+import { AggregateRoot, SnapshotEnvelope, SnapshotStream } from '../../models';
 import { Client } from '@elastic/elasticsearch';
-import { ISnapshot, SnapshotEnvelopeMetadata } from '../../interfaces';
+import { ISnapshot, ISnapshotPool, SnapshotEnvelopeMetadata } from '../../interfaces';
 import { SnapshotNotFoundException } from '../../exceptions';
 import { SnapshotStore } from '../../snapshot-store';
 import { StreamReadingDirection } from '../../constants';
 
-export interface ElasticsearchSnapshotEnvelopeEntity<A extends Aggregate> {
+export interface ElasticsearchSnapshotEnvelopeEntity<A extends AggregateRoot> {
 	_index: string;
 	_id: string;
 	_source: {
-		stream: string;
+		streamId: string;
 		payload: ISnapshot<A>;
 		metadata: SnapshotEnvelopeMetadata;
 	};
@@ -20,81 +20,108 @@ export class ElasticsearchSnapshotStore extends SnapshotStore {
 		super();
 	}
 
-	async getSnapshots<A extends Aggregate>(
-		{ name, subject }: SnapshotStream,
+	async setup(pool?: ISnapshotPool): Promise<void> {
+		await this.client.indices.create({
+			index: pool ? `${pool}-snapshots` : 'snapshots',
+			body: {
+				mappings: {
+					properties: {
+						streamId: { type: 'text', index: true },
+						payload: { type: 'object' },
+						metadata: {
+							type: 'object',
+							properties: {
+								snapshotId: { type: 'keyword' },
+								aggregateId: { type: 'keyword' },
+								version: { type: 'integer', index: true },
+								registeredOn: { type: 'date' },
+							},
+						},
+					},
+				},
+			},
+		});
+	}
+
+	async getSnapshots<A extends AggregateRoot>(
+		{ collection, streamId }: SnapshotStream,
 		fromVersion?: number,
 		direction: StreamReadingDirection = StreamReadingDirection.FORWARD,
 	): Promise<ISnapshot<A>[]> {
 		const query = {
 			bool: {
 				must: [
-					{ match: { stream: name } },
-					...(fromVersion ? [{ range: { 'metadata.sequence': { gte: fromVersion } } }] : []),
+					{ match: { streamId } },
+					...(fromVersion ? [{ range: { 'metadata.version': { gte: fromVersion } } }] : []),
 				],
 			},
 		};
 
 		const sort =
-			direction === StreamReadingDirection.FORWARD ? { 'metadata.sequence': 'asc' } : { 'metadata.sequence': 'desc' };
+			direction === StreamReadingDirection.FORWARD ? { 'metadata.version': 'asc' } : { 'metadata.version': 'desc' };
 
 		const { body } = await this.client.search({
-			index: subject,
+			index: collection,
 			body: { query, sort },
 		});
 
 		return body.hits.hits.map(({ _source: { payload } }: ElasticsearchSnapshotEnvelopeEntity<A>) => payload);
 	}
 
-	async getSnapshot<A extends Aggregate>({ name, subject }: SnapshotStream, version: number): Promise<ISnapshot<A>> {
+	async getSnapshot<A extends AggregateRoot>(
+		{ collection, streamId }: SnapshotStream,
+		version: number,
+	): Promise<ISnapshot<A>> {
 		const query = {
 			bool: {
-				must: [{ match: { stream: name } }, { match: { 'metadata.sequence': version } }],
+				must: [{ match: { streamId } }, { match: { 'metadata.version': version } }],
 			},
 		};
 
 		const { body } = await this.client.search({
-			index: subject,
+			index: collection,
 			body: { query },
 		});
 
 		const entity: ElasticsearchSnapshotEnvelopeEntity<A> = body.hits.hits[0];
 
 		if (!entity) {
-			throw SnapshotNotFoundException.withVersion(name, version);
+			throw new SnapshotNotFoundException(streamId, version);
 		}
 
 		return entity._source.payload;
 	}
 
-	async appendSnapshot<A extends Aggregate>(
-		aggregateId: Id,
+	async appendSnapshot<A extends AggregateRoot>(
+		{ collection, streamId, aggregateId }: SnapshotStream,
 		aggregateVersion: number,
-		{ name, subject }: SnapshotStream,
 		snapshot: ISnapshot<A>,
 	): Promise<void> {
-		const { snapshotId, payload, metadata } = SnapshotEnvelope.create<A>(aggregateId, aggregateVersion, snapshot);
+		const { payload, metadata } = SnapshotEnvelope.create<A>(snapshot, { aggregateId, version: aggregateVersion });
 
 		await this.client.index({
-			index: subject,
-			id: snapshotId,
-			body: { stream: name, payload, metadata },
+			index: collection,
+			id: metadata.snapshotId,
+			body: { streamId, payload, metadata },
 			refresh: 'wait_for',
 		});
 	}
 
-	async getLastSnapshot<A extends Aggregate>({ name, subject }: SnapshotStream<A>): Promise<ISnapshot<A>> {
+	async getLastSnapshot<A extends AggregateRoot>({ collection, streamId, aggregateId }: SnapshotStream): Promise<
+		ISnapshot<A>
+	> {
 		const query = {
 			bool: {
-				must: [{ match: { stream: name } }],
+				must: [{ match: { streamId } }],
 			},
 		};
 
 		try {
 			const { body } = await this.client.search({
-				index: subject,
+				index: collection,
 				body: {
 					query,
-					sort: [{ 'metadata.sequence': 'desc' }],
+					sort: [{ 'metadata.version': 'desc' }],
 				},
 				size: 1,
 			});
@@ -112,55 +139,58 @@ export class ElasticsearchSnapshotStore extends SnapshotStore {
 		}
 	}
 
-	async getEnvelopes<A extends Aggregate>(
-		{ name, subject }: SnapshotStream,
+	async getEnvelopes<A extends AggregateRoot>(
+		{ collection, streamId }: SnapshotStream,
 		fromVersion?: number,
 		direction: StreamReadingDirection = StreamReadingDirection.FORWARD,
 	): Promise<SnapshotEnvelope<A>[]> {
 		const query = {
 			bool: {
 				must: [
-					{ match: { stream: name } },
-					...(fromVersion ? [{ range: { 'metadata.sequence': { gte: fromVersion } } }] : []),
+					{ match: { streamId } },
+					...(fromVersion ? [{ range: { 'metadata.version': { gte: fromVersion } } }] : []),
 				],
 			},
 		};
 
 		const sort =
-			direction === StreamReadingDirection.FORWARD ? { 'metadata.sequence': 'asc' } : { 'metadata.sequence': 'desc' };
+			direction === StreamReadingDirection.FORWARD ? { 'metadata.version': 'asc' } : { 'metadata.version': 'desc' };
 
 		const { body } = await this.client.search({
-			index: subject,
+			index: collection,
 			body: { query, sort },
 		});
 
 		return body.hits.hits.map(
-			({ _id, _source: { payload, metadata } }: ElasticsearchSnapshotEnvelopeEntity<A>) =>
-				SnapshotEnvelope.from<A>(_id, payload, metadata),
+			({ _source: { payload, metadata } }: ElasticsearchSnapshotEnvelopeEntity<A>) =>
+				SnapshotEnvelope.from<A>(payload, { ...metadata, registeredOn: new Date(metadata.registeredOn) }),
 		);
 	}
 
-	async getEnvelope<A extends Aggregate>(
-		{ name, subject }: SnapshotStream,
+	async getEnvelope<A extends AggregateRoot>(
+		{ collection, streamId }: SnapshotStream,
 		version: number,
 	): Promise<SnapshotEnvelope<A>> {
 		const query = {
 			bool: {
-				must: [{ match: { stream: name } }, { match: { 'metadata.sequence': version } }],
+				must: [{ match: { streamId } }, { match: { 'metadata.version': version } }],
 			},
 		};
 
 		const { body } = await this.client.search({
-			index: subject,
+			index: collection,
 			body: { query },
 		});
 
 		const entity: ElasticsearchSnapshotEnvelopeEntity<A> = body.hits.hits[0];
 
 		if (!entity) {
-			throw SnapshotNotFoundException.withVersion(name, version);
+			throw new SnapshotNotFoundException(streamId, version);
 		}
 
-		return SnapshotEnvelope.from<A>(entity._id, entity._source.payload, entity._source.metadata);
+		return SnapshotEnvelope.from<A>(entity._source.payload, {
+			...entity._source.metadata,
+			registeredOn: new Date(entity._source.metadata.registeredOn),
+		});
 	}
 }
