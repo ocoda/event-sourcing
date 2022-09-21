@@ -9,7 +9,7 @@
 	<a href="https://codecov.io/gh/ocoda/event-sourcing">
 		<img src="https://codecov.io/gh/ocoda/event-sourcing/branch/master/graph/badge.svg?token=D6BRXUY0J8">
 	</a>
-	<a href="https://opensource.org/licenses/MIT">
+	<a href="https://github.com/ocoda/event-sourcing/blob/master/LICENSE.md">
 		<img src="https://img.shields.io/badge/License-MIT-green.svg">
 	</a>
 </p>
