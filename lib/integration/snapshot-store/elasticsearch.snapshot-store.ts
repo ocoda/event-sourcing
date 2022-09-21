@@ -130,6 +130,34 @@ export class ElasticsearchSnapshotStore extends SnapshotStore {
 		}
 	}
 
+	async getLastEnvelope<A extends AggregateRoot>({ collection, streamId }: SnapshotStream): Promise<
+		SnapshotEnvelope<A>
+	> {
+		const query = {
+			bool: {
+				must: [{ match: { streamId } }],
+			},
+		};
+
+		const { body } = await this.client.search({
+			index: collection,
+			body: {
+				query,
+				sort: [{ 'metadata.version': 'desc' }],
+			},
+			size: 1,
+		});
+
+		const entity: ElasticsearchSnapshotEnvelopeEntity<A> = body.hits.hits[0];
+
+		if (entity) {
+			return SnapshotEnvelope.from<A>(entity._source.payload, {
+				...entity._source.metadata,
+				registeredOn: new Date(entity._source.metadata.registeredOn),
+			});
+		}
+	}
+
 	async getEnvelopes<A extends AggregateRoot>(
 		{ collection, streamId }: SnapshotStream,
 		fromVersion?: number,

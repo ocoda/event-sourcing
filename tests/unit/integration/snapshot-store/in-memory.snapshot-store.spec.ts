@@ -161,4 +161,17 @@ describe(InMemorySnapshotStore, () => {
 		expect(metadata.registeredOn).toBeInstanceOf(Date);
 		expect(metadata.version).toEqual(envelopes[3].metadata.version);
 	});
+
+	it('should retrieve the last snapshot-envelope', async () => {
+		seedSnapshots();
+
+		const lastEnvelope = envelopes[envelopes.length - 1];
+		const { metadata, payload } = snapshotStore.getLastEnvelope(snapshotStream);
+		console.log({ lastEnvelope, metadata, payload });
+
+		expect(payload).toEqual(lastEnvelope.payload);
+		expect(metadata.aggregateId).toEqual(lastEnvelope.metadata.aggregateId);
+		expect(metadata.registeredOn).toBeInstanceOf(Date);
+		expect(metadata.version).toEqual(lastEnvelope.metadata.version);
+	});
 });

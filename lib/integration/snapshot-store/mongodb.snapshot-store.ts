@@ -88,6 +88,19 @@ export class MongoDBSnapshotStore extends SnapshotStore {
 		}
 	}
 
+	async getLastEnvelope<A extends AggregateRoot>({ collection, streamId }: SnapshotStream): Promise<
+		SnapshotEnvelope<A>
+	> {
+		const [entity] = await this.database
+			.collection<MongoSnapshotEntity<A>>(collection)
+			.find({ streamId }, { sort: { 'metadata.version': -1 }, limit: 1 })
+			.toArray();
+
+		if (entity) {
+			return SnapshotEnvelope.from<A>(entity.payload, entity.metadata);
+		}
+	}
+
 	async getEnvelopes<A extends AggregateRoot>(
 		{ collection, streamId }: SnapshotStream,
 		fromVersion?: number,

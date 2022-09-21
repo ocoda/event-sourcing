@@ -70,15 +70,27 @@ export class InMemorySnapshotStore extends SnapshotStore {
 		});
 	}
 
-	getLastSnapshot<A extends AggregateRoot>({ collection, streamId, aggregateId }: SnapshotStream): ISnapshot<A> {
+	getLastSnapshot<A extends AggregateRoot>({ collection, streamId }: SnapshotStream): ISnapshot<A> {
 		const snapshotCollection = this.collections.get(collection) || [];
 
 		let entity = snapshotCollection.filter(({ streamId: entityStreamId }) => entityStreamId === streamId).sort(
-			({ metadata: current }, { metadata: previous }) => (previous.version < current.version ? 1 : -1),
+			({ metadata: current }, { metadata: previous }) => (previous.version < current.version ? -1 : 1),
 		)[0];
 
 		if (entity) {
 			return entity.payload;
+		}
+	}
+
+	getLastEnvelope<A extends AggregateRoot>({ collection, streamId }: SnapshotStream): SnapshotEnvelope<A> {
+		const snapshotCollection = this.collections.get(collection) || [];
+
+		let entity = snapshotCollection.filter(({ streamId: entityStreamId }) => entityStreamId === streamId).sort(
+			({ metadata: current }, { metadata: previous }) => (previous.version < current.version ? -1 : 1),
+		)[0];
+
+		if (entity) {
+			return SnapshotEnvelope.from(entity.payload, entity.metadata);
 		}
 	}
 

@@ -180,4 +180,16 @@ describe(MongoDBSnapshotStore, () => {
 		expect(metadata.registeredOn).toBeInstanceOf(Date);
 		expect(metadata.version).toEqual(envelopes[3].metadata.version);
 	});
+
+	it('should retrieve the last snapshot-envelope', async () => {
+		await seedSnapshots();
+
+		const lastEnvelope = envelopes[envelopes.length - 1];
+		const { metadata, payload } = await snapshotStore.getLastEnvelope(snapshotStream);
+
+		expect(payload).toEqual(lastEnvelope.payload);
+		expect(metadata.aggregateId).toEqual(lastEnvelope.metadata.aggregateId);
+		expect(metadata.registeredOn).toBeInstanceOf(Date);
+		expect(metadata.version).toEqual(lastEnvelope.metadata.version);
+	});
 });

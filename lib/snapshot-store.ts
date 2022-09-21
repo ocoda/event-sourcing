@@ -19,12 +19,15 @@ export abstract class SnapshotStore {
 		aggregateVersion: number,
 		snapshot: ISnapshot<A>,
 	): void | Promise<void>;
+	abstract getLastEnvelope<A extends AggregateRoot>(
+		snapshotStream: SnapshotStream,
+	): SnapshotEnvelope<A> | Promise<SnapshotEnvelope<A>>;
 	abstract getEnvelopes?<A extends AggregateRoot>(
-		eventStream: SnapshotStream,
+		eventsnapshotStreamStream: SnapshotStream,
 		fromVersion?: number,
 	): SnapshotEnvelope<A>[] | Promise<SnapshotEnvelope<A>[]>;
 	abstract getEnvelope?<A extends AggregateRoot>(
-		eventStream: SnapshotStream,
+		snapshotStream: SnapshotStream,
 		version: number,
 	): SnapshotEnvelope<A> | Promise<SnapshotEnvelope<A>>;
 }
