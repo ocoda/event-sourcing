@@ -107,35 +107,26 @@ export class ElasticsearchSnapshotStore extends SnapshotStore {
 		});
 	}
 
-	async getLastSnapshot<A extends AggregateRoot>({ collection, streamId, aggregateId }: SnapshotStream): Promise<
-		ISnapshot<A>
-	> {
+	async getLastSnapshot<A extends AggregateRoot>({ collection, streamId }: SnapshotStream): Promise<ISnapshot<A>> {
 		const query = {
 			bool: {
 				must: [{ match: { streamId } }],
 			},
 		};
 
-		try {
-			const { body } = await this.client.search({
-				index: collection,
-				body: {
-					query,
-					sort: [{ 'metadata.version': 'desc' }],
-				},
-				size: 1,
-			});
+		const { body } = await this.client.search({
+			index: collection,
+			body: {
+				query,
+				sort: [{ 'metadata.version': 'desc' }],
+			},
+			size: 1,
+		});
 
-			const entity: ElasticsearchSnapshotEnvelopeEntity<A> = body.hits.hits[0];
+		const entity: ElasticsearchSnapshotEnvelopeEntity<A> = body.hits.hits[0];
 
-			if (entity) {
-				return entity._source.payload;
-			}
-		} catch (error) {
-			if (error.meta.statusCode === 404) {
-				return;
-			}
-			throw error;
+		if (entity) {
+			return entity._source.payload;
 		}
 	}
 
