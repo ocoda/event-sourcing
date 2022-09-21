@@ -3,30 +3,21 @@ version: '3.3'
 services:
   es-mongodb:
     container_name: es-mongo
-    image: mongo:4
+    image: mongo:6
     ports:
       - 27017:27017
     volumes:
-        - type: tmpfs
-          target: /data/db
+      - type: tmpfs
+        target: /data/db
 
   es-elastic:
-    image: docker.elastic.co/elasticsearch/elasticsearch:7.4.0
-    container_name: es-elastic
+    image: elasticsearch:8.2.2
     environment:
-      - xpack.security.enabled=false
       - discovery.type=single-node
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
-      nofile:
-        soft: 65536
-        hard: 65536
-    cap_add:
-      - IPC_LOCK
-    ports:
-      - "9200:9200"
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+      - xpack.security.enabled=false
     volumes:
       - type: tmpfs
         target: /usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
