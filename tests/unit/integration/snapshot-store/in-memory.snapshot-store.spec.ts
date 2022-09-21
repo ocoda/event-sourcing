@@ -167,7 +167,6 @@ describe(InMemorySnapshotStore, () => {
 
 		const lastEnvelope = envelopes[envelopes.length - 1];
 		const { metadata, payload } = snapshotStore.getLastEnvelope(snapshotStream);
-		console.log({ lastEnvelope, metadata, payload });
 
 		expect(payload).toEqual(lastEnvelope.payload);
 		expect(metadata.aggregateId).toEqual(lastEnvelope.metadata.aggregateId);

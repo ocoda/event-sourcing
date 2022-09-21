@@ -6,7 +6,9 @@ import { AggregateRepositories, CommandHandlers, Events, QueryHandlers, Snapshot
   imports: [
     EventSourcingModule.forRootAsync({
       useFactory: () => ({
-		database: 'in-memory',
+		eventStore: {
+			client: 'in-memory'
+		},
 		events: [...Events],
 	  }),
     }),
