@@ -1,34 +1,26 @@
-import { randomUUID } from 'crypto';
 import { EventEnvelopeMetadata, IEvent, IEventPayload } from '../interfaces';
 import { Id } from './id';
 
 export class EventEnvelope<E extends IEvent = IEvent> {
 	private constructor(
-		public readonly eventId: string,
-		public readonly eventName: string,
+		public readonly event: string,
 		readonly payload: IEventPayload<E>,
 		readonly metadata: EventEnvelopeMetadata,
 	) {}
 
 	static create<E extends IEvent = IEvent>(
-		aggregateId: Id,
-		sequence: number,
-		eventName: string,
+		event: string,
 		payload: IEventPayload<E>,
+		metadata: Omit<EventEnvelopeMetadata, 'eventId' | 'occurredOn'>,
 	): EventEnvelope<E> {
-		return new EventEnvelope<E>(randomUUID(), eventName, payload, {
-			aggregateId: aggregateId.value,
-			sequence,
-			occurredOn: Date.now(),
-		});
+		return new EventEnvelope<E>(event, payload, { eventId: Id.generate().value, occurredOn: new Date(), ...metadata });
 	}
 
 	static from<E extends IEvent = IEvent>(
-		eventId: string,
-		eventName: string,
+		event: string,
 		payload: IEventPayload<E>,
 		metadata: EventEnvelopeMetadata,
 	): EventEnvelope<E> {
-		return new EventEnvelope<E>(eventId, eventName, payload, metadata);
+		return new EventEnvelope<E>(event, payload, metadata);
 	}
 }
