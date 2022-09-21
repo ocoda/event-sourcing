@@ -21,7 +21,7 @@ export abstract class SnapshotHandler<A extends AggregateRoot = AggregateRoot> {
 			const snapshotStream = SnapshotStream.for(aggregate, id);
 			const payload = this.serialize(aggregate);
 
-			await this.snapshotStore.appendSnapshot(id, aggregate.version, snapshotStream, payload);
+			await this.snapshotStore.appendSnapshot(snapshotStream, aggregate.version, payload);
 		}
 	}
 
