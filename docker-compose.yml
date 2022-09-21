@@ -11,6 +11,7 @@ services:
         target: /data/db
 
   es-elastic:
+    container_name: es-elastic
     image: elasticsearch:8.2.2
     environment:
       - discovery.type=single-node
