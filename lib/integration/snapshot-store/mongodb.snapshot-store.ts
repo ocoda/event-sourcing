@@ -1,9 +1,9 @@
-import { ISnapshot, ISnapshotPool, SnapshotEnvelopeMetadata } from '../../interfaces';
 import { Db } from 'mongodb';
 import { StreamReadingDirection } from '../../constants';
+import { SnapshotNotFoundException } from '../../exceptions';
+import { ISnapshot, ISnapshotPool, SnapshotEnvelopeMetadata } from '../../interfaces';
 import { AggregateRoot, SnapshotEnvelope, SnapshotStream } from '../../models';
 import { SnapshotStore } from '../../snapshot-store';
-import { SnapshotNotFoundException } from '../../exceptions';
 
 export interface MongoSnapshotEntity<A extends AggregateRoot = AggregateRoot> {
 	_id: string;

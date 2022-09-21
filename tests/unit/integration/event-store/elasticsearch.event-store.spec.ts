@@ -1,15 +1,15 @@
 import { Client } from '@elastic/elasticsearch';
 import {
 	Aggregate,
+	AggregateRoot,
+	Event,
 	EventEnvelope,
 	EventMap,
-	Event,
 	EventNotFoundException,
 	EventStream,
 	Id,
 	IEvent,
 	StreamReadingDirection,
-	AggregateRoot,
 } from '../../../../lib';
 import { DefaultEventSerializer } from '../../../../lib/helpers';
 import { ElasticsearchEventStore } from '../../../../lib/integration/event-store';

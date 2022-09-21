@@ -1,4 +1,4 @@
-import { Snapshot, AggregateRoot, SnapshotMetadata, SNAPSHOT_METADATA } from '../../../lib';
+import { AggregateRoot, Snapshot, SnapshotMetadata, SNAPSHOT_METADATA } from '../../../lib';
 
 describe('@Snapshot', () => {
 	class Account extends AggregateRoot {}

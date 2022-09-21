@@ -1,18 +1,18 @@
+import { MongoClient } from 'mongodb';
 import {
+	Aggregate,
 	AggregateRoot,
+	Event,
 	EventEnvelope,
 	EventMap,
-	Event,
 	EventNotFoundException,
 	EventStream,
 	Id,
 	IEvent,
 	StreamReadingDirection,
-	Aggregate,
 } from '../../../../lib';
-import { MongoDBEventStore, MongoEventEntity } from '../../../../lib/integration/event-store';
-import { MongoClient } from 'mongodb';
 import { DefaultEventSerializer } from '../../../../lib/helpers';
+import { MongoDBEventStore, MongoEventEntity } from '../../../../lib/integration/event-store';
 
 class AccountId extends Id {}
 

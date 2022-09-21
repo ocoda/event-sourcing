@@ -1,5 +1,5 @@
-import { instanceToPlain, plainToInstance } from 'class-transformer';
 import { Type } from '@nestjs/common';
+import { instanceToPlain, plainToInstance } from 'class-transformer';
 import { IEvent, IEventPayload, IEventSerializer } from '../interfaces';
 
 export class DefaultEventSerializer<E extends IEvent = IEvent> implements IEventSerializer {

@@ -1,8 +1,8 @@
-import { SnapshotMetadata } from '../interfaces';
-import 'reflect-metadata';
-import { SNAPSHOT_METADATA } from './constants';
-import { AggregateRoot } from '../models';
 import { Type } from '@nestjs/common';
+import 'reflect-metadata';
+import { SnapshotMetadata } from '../interfaces';
+import { AggregateRoot } from '../models';
+import { SNAPSHOT_METADATA } from './constants';
 
 /**
  * Decorator that marks a class as a snapshot handler. A snapshot handler

@@ -1,7 +1,7 @@
-import { ICommand, CommandMetadata } from '../interfaces';
-import 'reflect-metadata';
-import { COMMAND_HANDLER_METADATA, COMMAND_METADATA } from './constants';
 import { randomUUID } from 'crypto';
+import 'reflect-metadata';
+import { CommandMetadata, ICommand } from '../interfaces';
+import { COMMAND_HANDLER_METADATA, COMMAND_METADATA } from './constants';
 
 /**
  * Decorator that marks a class as a command handler. A command handler

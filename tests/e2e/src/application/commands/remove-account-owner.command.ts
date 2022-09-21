@@ -1,6 +1,6 @@
 import { CommandHandler, ICommand, ICommandHandler } from '@ocoda/event-sourcing';
 
-import { Account, AccountId, AccountOwnerId } from '../../domain/models';
+import { AccountId, AccountOwnerId } from '../../domain/models';
 import { AccountRepository } from '../repositories';
 
 export class RemoveAccountOwnerCommand implements ICommand {

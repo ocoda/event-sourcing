@@ -4,8 +4,7 @@ import 'reflect-metadata';
 import { COMMAND_METADATA } from './decorators';
 import { CommandHandlerNotFoundException } from './exceptions';
 import { DefaultCommandPubSub, ObservableBus } from './helpers';
-import { ICommand, ICommandBus, ICommandHandler, ICommandPublisher } from './interfaces';
-import { CommandMetadata } from './interfaces';
+import { CommandMetadata, ICommand, ICommandBus, ICommandHandler, ICommandPublisher } from './interfaces';
 
 export type CommandHandlerType = Type<ICommandHandler<ICommand>>;
 

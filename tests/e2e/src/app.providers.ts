@@ -1,3 +1,14 @@
+import { Type } from '@nestjs/common';
+import { ICommandHandler, IQueryHandler, SnapshotHandler } from '@ocoda/event-sourcing';
+import {
+	AddAccountOwnerCommandHandler,
+	CloseAccountCommandHandler,
+	CreditAccountCommandHandler,
+	DebitAccountCommandHandler,
+	OpenAccountCommandHandler,
+	RemoveAccountOwnerCommandHandler,
+} from './application/commands';
+import { AccountRepository } from './application/repositories';
 import {
 	AccountClosedEvent,
 	AccountCreditedEvent,
@@ -7,17 +18,6 @@ import {
 	AccountOwnerRemovedEvent,
 } from './domain/events';
 import { AccountSnapshotHandler } from './domain/models';
-import {
-	AddAccountOwnerCommandHandler,
-	CloseAccountCommandHandler,
-	CreditAccountCommandHandler,
-	DebitAccountCommandHandler,
-	OpenAccountCommandHandler,
-	RemoveAccountOwnerCommandHandler,
-} from './application/commands';
-import { ICommandHandler, IQueryHandler, SnapshotHandler } from '@ocoda/event-sourcing';
-import { Type } from '@nestjs/common';
-import { AccountRepository } from './application/repositories';
 
 export const CommandHandlers: Type<ICommandHandler>[] = [
 	AddAccountOwnerCommandHandler,

@@ -1,7 +1,7 @@
 import { Inject, Type } from '@nestjs/common';
 import { SNAPSHOT_METADATA } from '../../decorators';
-import { SnapshotStore } from '../../snapshot-store';
 import { AggregateRoot, Id, SnapshotStream } from '../../models';
+import { SnapshotStore } from '../../snapshot-store';
 import { SnapshotMetadata } from './snapshot-handler-metadata.interface';
 import { ISnapshot } from './snapshot.interface';
 

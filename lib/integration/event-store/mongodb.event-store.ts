@@ -1,10 +1,10 @@
-import { EventStream, EventEnvelope } from '../../models';
-import { EventStore } from '../../event-store';
-import { StreamReadingDirection } from '../../constants';
 import { Db } from 'mongodb';
-import { EventEnvelopeMetadata, IEvent, IEventPayload, IEventPool } from '../../interfaces';
-import { EventNotFoundException } from '../../exceptions';
+import { StreamReadingDirection } from '../../constants';
 import { EventMap } from '../../event-map';
+import { EventStore } from '../../event-store';
+import { EventNotFoundException } from '../../exceptions';
+import { EventEnvelopeMetadata, IEvent, IEventPayload, IEventPool } from '../../interfaces';
+import { EventEnvelope, EventStream } from '../../models';
 
 export interface MongoEventEntity {
 	_id: string;

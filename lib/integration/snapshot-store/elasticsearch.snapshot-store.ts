@@ -1,9 +1,9 @@
-import { AggregateRoot, SnapshotEnvelope, SnapshotStream } from '../../models';
 import { Client } from '@elastic/elasticsearch';
-import { ISnapshot, ISnapshotPool, SnapshotEnvelopeMetadata } from '../../interfaces';
-import { SnapshotNotFoundException } from '../../exceptions';
-import { SnapshotStore } from '../../snapshot-store';
 import { StreamReadingDirection } from '../../constants';
+import { SnapshotNotFoundException } from '../../exceptions';
+import { ISnapshot, ISnapshotPool, SnapshotEnvelopeMetadata } from '../../interfaces';
+import { AggregateRoot, SnapshotEnvelope, SnapshotStream } from '../../models';
+import { SnapshotStore } from '../../snapshot-store';
 
 export interface ElasticsearchSnapshotEnvelopeEntity<A extends AggregateRoot> {
 	_index: string;

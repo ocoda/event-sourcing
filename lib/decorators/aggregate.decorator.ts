@@ -1,8 +1,8 @@
-import { AggregateMetadata } from '../interfaces';
-import 'reflect-metadata';
-import { AGGREGATE_METADATA } from './constants';
-import { AggregateRoot } from '../models';
 import { Type } from '@nestjs/common';
+import 'reflect-metadata';
+import { AggregateMetadata } from '../interfaces';
+import { AggregateRoot } from '../models';
+import { AGGREGATE_METADATA } from './constants';
 
 /**
  * Decorator that provides an aggregate with metadata.

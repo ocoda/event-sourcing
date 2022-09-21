@@ -1,5 +1,5 @@
-import { IEvent } from '../interfaces';
 import 'reflect-metadata';
+import { IEvent } from '../interfaces';
 import { EVENT_SERIALIZER_METADATA } from './constants';
 
 /**

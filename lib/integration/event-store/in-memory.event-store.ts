@@ -1,9 +1,9 @@
-import { EventStream, EventEnvelope, Id } from '../../models';
-import { EventStore } from '../../event-store';
 import { StreamReadingDirection } from '../../constants';
-import { EventNotFoundException } from '../../exceptions';
 import { EventMap } from '../../event-map';
+import { EventStore } from '../../event-store';
+import { EventNotFoundException } from '../../exceptions';
 import { EventEnvelopeMetadata, IEvent, IEventCollection, IEventPayload, IEventPool } from '../../interfaces';
+import { EventEnvelope, EventStream } from '../../models';
 
 interface InMemoryEventEntity {
 	streamId: string;

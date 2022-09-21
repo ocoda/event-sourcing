@@ -1,6 +1,6 @@
 import {
-	EventMap,
 	Event,
+	EventMap,
 	IEvent,
 	MissingEventMetadataException,
 	UnregisteredEventException,

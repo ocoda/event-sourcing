@@ -1,7 +1,7 @@
-import { IQuery } from '../interfaces';
-import 'reflect-metadata';
-import { QUERY_HANDLER_METADATA, QUERY_METADATA } from './constants';
 import { randomUUID } from 'crypto';
+import 'reflect-metadata';
+import { IQuery } from '../interfaces';
+import { QUERY_HANDLER_METADATA, QUERY_METADATA } from './constants';
 
 /**
  * Decorator that marks a class as a query handler. A query handler

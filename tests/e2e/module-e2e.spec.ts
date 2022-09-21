@@ -1,7 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { CommandBus, EventStore, ICommandBus, SnapshotStore } from '@ocoda/event-sourcing';
-import { AccountId, AccountOwnerId } from './src/domain/models';
 import { AppModule } from './src/app.module';
 import {
 	AddAccountOwnerCommand,
@@ -12,6 +11,7 @@ import {
 	RemoveAccountOwnerCommand,
 } from './src/application/commands';
 import { AccountRepository } from './src/application/repositories';
+import { AccountId, AccountOwnerId } from './src/domain/models';
 
 describe('EventSourcingModule - e2e', () => {
 	let app: INestApplication;

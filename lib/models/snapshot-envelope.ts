@@ -1,6 +1,6 @@
-import { Id } from './id';
 import { ISnapshot, SnapshotEnvelopeMetadata } from '../interfaces';
 import { AggregateRoot } from './aggregate-root';
+import { Id } from './id';
 
 export class SnapshotEnvelope<A extends AggregateRoot = AggregateRoot> {
 	private constructor(readonly payload: ISnapshot<A>, readonly metadata: SnapshotEnvelopeMetadata) {}

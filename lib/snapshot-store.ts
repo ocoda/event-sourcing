@@ -1,4 +1,4 @@
-import { ISnapshot, ISnapshotCollection, ISnapshotPool } from './interfaces';
+import { ISnapshot, ISnapshotPool } from './interfaces';
 import { AggregateRoot, SnapshotEnvelope, SnapshotStream } from './models';
 
 export abstract class SnapshotStore {
