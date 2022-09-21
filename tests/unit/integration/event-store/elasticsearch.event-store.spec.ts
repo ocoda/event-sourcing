@@ -9,16 +9,19 @@ import {
 	Id,
 	IEvent,
 	StreamReadingDirection,
+	AggregateRoot,
 } from '../../../../lib';
 import { DefaultEventSerializer } from '../../../../lib/helpers';
-import { ElasticsearchEventEnvelopeEntity, ElasticsearchEventStore } from '../../../../lib/integration/event-store';
+import { ElasticsearchEventStore } from '../../../../lib/integration/event-store';
 
-class Account extends Aggregate {
+class AccountId extends Id {}
+
+@Aggregate({ streamName: 'account' })
+class Account extends AggregateRoot {
 	constructor(private readonly id: AccountId, private readonly balance: number) {
 		super();
 	}
 }
-class AccountId extends Id {}
 
 @Event('account-opened')
 class AccountOpenedEvent implements IEvent {}
@@ -37,7 +40,6 @@ class AccountDebitedEvent implements IEvent {
 class AccountClosedEvent implements IEvent {}
 
 describe(ElasticsearchEventStore, () => {
-	const now = Date.now();
 	let client: Client;
 	let eventStore: ElasticsearchEventStore;
 	let envelopes: EventEnvelope[];
@@ -61,51 +63,75 @@ describe(ElasticsearchEventStore, () => {
 	const accountVersion = events.length;
 	const eventStream = EventStream.for(Account, accountId);
 
-	beforeAll(() => {
-		jest.spyOn(global.Date, 'now').mockImplementation(() => now);
-
+	beforeAll(async () => {
 		envelopes = [
-			EventEnvelope.create(accountId, 1, 'account-opened', eventMap.serializeEvent(events[0])),
-			EventEnvelope.create(accountId, 2, 'account-credited', eventMap.serializeEvent(events[1])),
-			EventEnvelope.create(accountId, 3, 'account-debited', eventMap.serializeEvent(events[2])),
-			EventEnvelope.create(accountId, 4, 'account-credited', eventMap.serializeEvent(events[3])),
-			EventEnvelope.create(accountId, 5, 'account-debited', eventMap.serializeEvent(events[4])),
-			EventEnvelope.create(accountId, 6, 'account-closed', eventMap.serializeEvent(events[5])),
+			EventEnvelope.create('account-opened', eventMap.serializeEvent(events[0]), {
+				aggregateId: accountId.value,
+				version: 1,
+			}),
+			EventEnvelope.create('account-credited', eventMap.serializeEvent(events[1]), {
+				aggregateId: accountId.value,
+				version: 2,
+			}),
+			EventEnvelope.create('account-debited', eventMap.serializeEvent(events[2]), {
+				aggregateId: accountId.value,
+				version: 3,
+			}),
+			EventEnvelope.create('account-credited', eventMap.serializeEvent(events[3]), {
+				aggregateId: accountId.value,
+				version: 4,
+			}),
+			EventEnvelope.create('account-debited', eventMap.serializeEvent(events[4]), {
+				aggregateId: accountId.value,
+				version: 5,
+			}),
+			EventEnvelope.create('account-closed', eventMap.serializeEvent(events[5]), {
+				aggregateId: accountId.value,
+				version: 6,
+			}),
 		];
 
 		client = new Client({ node: 'http://localhost:9200' });
 		eventStore = new ElasticsearchEventStore(eventMap, client);
+		await eventStore.setup();
 	});
 
 	afterEach(
 		async () =>
 			await client.deleteByQuery({
-				index: eventStream.subject,
+				index: eventStream.collection,
 				body: { query: { match_all: {} } },
 				refresh: true,
 			}),
 	);
 
 	afterAll(async () => {
-		jest.clearAllMocks();
+		await client.indices.delete({ index: eventStream.collection });
 		await client.close();
 	});
 
 	it('should append event envelopes', async () => {
-		await eventStore.appendEvents(accountId, accountVersion, eventStream, events);
+		await eventStore.appendEvents(eventStream, accountVersion, events);
 
 		const { body } = await client.search({
-			index: eventStream.subject,
+			index: eventStream.collection,
 			body: { query: { match_all: {} } },
 		});
 
-		expect((body.hits.hits as ElasticsearchEventEnvelopeEntity[]).map(({ _source }) => _source)).toEqual(
-			envelopes.map(({ eventId, ...rest }) => ({ stream: eventStream.name, ...rest })),
-		);
+		expect(body.hits.hits).toHaveLength(events.length);
+
+		body.hits.hits.forEach(({ _source }, index) => {
+			expect(_source.streamId).toEqual(eventStream.streamId);
+			expect(_source.event).toEqual(envelopes[index].event);
+			expect(_source.payload).toEqual(envelopes[index].payload);
+			expect(_source.metadata.aggregateId).toEqual(envelopes[index].metadata.aggregateId);
+			expect(_source.metadata.occurredOn).toBeDefined();
+			expect(_source.metadata.version).toEqual(envelopes[index].metadata.version);
+		});
 	});
 
 	it('should retrieve events', async () => {
-		await eventStore.appendEvents(accountId, accountVersion, eventStream, events);
+		await eventStore.appendEvents(eventStream, accountVersion, events);
 
 		const resolvedEvents = await eventStore.getEvents(eventStream);
 
@@ -113,21 +139,21 @@ describe(ElasticsearchEventStore, () => {
 	});
 
 	it('should retrieve a single event', async () => {
-		await eventStore.appendEvents(accountId, accountVersion, eventStream, events);
+		await eventStore.appendEvents(eventStream, accountVersion, events);
 
-		const resolvedEvent = await eventStore.getEvent(eventStream, envelopes[3].metadata.sequence);
+		const resolvedEvent = await eventStore.getEvent(eventStream, envelopes[3].metadata.version);
 
 		expect(resolvedEvent).toEqual(events[3]);
 	});
 
 	it("should throw when an event isn't found", async () => {
 		await expect(eventStore.getEvent(eventStream, accountVersion)).rejects.toThrow(
-			EventNotFoundException.withVersion(eventStream.name, accountVersion),
+			new EventNotFoundException(eventStream.streamId, accountVersion),
 		);
 	});
 
 	it('should retrieve events backwards', async () => {
-		await eventStore.appendEvents(accountId, accountVersion, eventStream, events);
+		await eventStore.appendEvents(eventStream, accountVersion, events);
 
 		const resolvedEvents = await eventStore.getEvents(eventStream, undefined, StreamReadingDirection.BACKWARD);
 
@@ -135,7 +161,7 @@ describe(ElasticsearchEventStore, () => {
 	});
 
 	it('should retrieve events forward from a certain version', async () => {
-		await eventStore.appendEvents(accountId, accountVersion, eventStream, events);
+		await eventStore.appendEvents(eventStream, accountVersion, events);
 
 		const resolvedEvents = await eventStore.getEvents(eventStream, 3);
 
@@ -143,7 +169,7 @@ describe(ElasticsearchEventStore, () => {
 	});
 
 	it('should retrieve events backwards from a certain version', async () => {
-		await eventStore.appendEvents(accountId, accountVersion, eventStream, events);
+		await eventStore.appendEvents(eventStream, accountVersion, events);
 
 		const resolvedEvents = await eventStore.getEvents(eventStream, 4, StreamReadingDirection.BACKWARD);
 
@@ -151,22 +177,30 @@ describe(ElasticsearchEventStore, () => {
 	});
 
 	it('should retrieve event-envelopes', async () => {
-		await eventStore.appendEvents(accountId, accountVersion, eventStream, events);
+		await eventStore.appendEvents(eventStream, accountVersion, events);
 
-		const resolvedEvents = await eventStore.getEnvelopes(eventStream);
+		const resolvedEnvelopes = await eventStore.getEnvelopes(eventStream);
 
-		expect(resolvedEvents.map(({ eventName, payload, metadata }) => ({ eventName, payload, metadata }))).toEqual(
-			envelopes.map(({ eventName, payload, metadata }) => ({ eventName, payload, metadata })),
-		);
+		expect(resolvedEnvelopes).toHaveLength(envelopes.length);
+
+		resolvedEnvelopes.forEach((envelope, index) => {
+			expect(envelope.event).toEqual(envelopes[index].event);
+			expect(envelope.payload).toEqual(envelopes[index].payload);
+			expect(envelope.metadata.aggregateId).toEqual(envelopes[index].metadata.aggregateId);
+			expect(envelope.metadata.occurredOn).toBeInstanceOf(Date);
+			expect(envelope.metadata.version).toEqual(envelopes[index].metadata.version);
+		});
 	});
 
 	it('should retrieve a single event-envelope', async () => {
-		await eventStore.appendEvents(accountId, accountVersion, eventStream, events);
+		await eventStore.appendEvents(eventStream, accountVersion, events);
 
-		const { eventId, ...rest } = await eventStore.getEnvelope(eventStream, envelopes[3].metadata.sequence);
+		const { event, metadata, payload } = await eventStore.getEnvelope(eventStream, envelopes[3].metadata.version);
 
-		expect(rest.eventName).toEqual(envelopes[3].eventName);
-		expect(rest.metadata).toEqual(envelopes[3].metadata);
-		expect(rest.payload).toEqual(envelopes[3].payload);
+		expect(event).toEqual(envelopes[3].event);
+		expect(payload).toEqual(envelopes[3].payload);
+		expect(metadata.aggregateId).toEqual(envelopes[3].metadata.aggregateId);
+		expect(metadata.occurredOn).toBeInstanceOf(Date);
+		expect(metadata.version).toEqual(envelopes[3].metadata.version);
 	});
 });

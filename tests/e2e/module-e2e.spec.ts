@@ -1,6 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { CommandBus, ICommandBus } from '@ocoda/event-sourcing';
+import { CommandBus, EventStore, ICommandBus, SnapshotStore } from '@ocoda/event-sourcing';
 import { AccountId, AccountOwnerId } from './src/domain/models';
 import { AppModule } from './src/app.module';
 import {
@@ -33,6 +33,9 @@ describe('EventSourcingModule - e2e', () => {
 
 		app = moduleRef.createNestApplication();
 		await app.init();
+
+		app.get<SnapshotStore>(SnapshotStore).setup();
+		app.get<EventStore>(EventStore).setup();
 
 		commandBus = app.get<CommandBus>(CommandBus);
 		accountRepository = app.get<AccountRepository>(AccountRepository);

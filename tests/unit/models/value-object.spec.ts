@@ -1,4 +1,4 @@
-import { ValueObject } from '../../../lib/models/value-object';
+import { ValueObject } from '../../../lib';
 
 describe(ValueObject, () => {
 	class Point extends ValueObject<{ x: number; y: number }> {

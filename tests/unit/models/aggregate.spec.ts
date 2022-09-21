@@ -1,4 +1,4 @@
-import { Aggregate, IEvent } from '../../../lib';
+import { Aggregate, AggregateRoot, IEvent } from '../../../lib';
 
 describe(Aggregate, () => {
 	class AccountOpenedEvent implements IEvent {}
@@ -9,7 +9,7 @@ describe(Aggregate, () => {
 		constructor(public readonly amount: number) {}
 	}
 
-	class Account extends Aggregate {
+	class Account extends AggregateRoot {
 		public balance: number;
 
 		static open() {
