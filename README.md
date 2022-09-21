@@ -9,60 +9,71 @@
 	<a href="https://codecov.io/gh/ocoda/event-sourcing">
 		<img src="https://codecov.io/gh/ocoda/event-sourcing/branch/master/graph/badge.svg?token=D6BRXUY0J8">
 	</a>
+	<a href="https://opensource.org/licenses/MIT">
+		<img src="https://img.shields.io/badge/License-MIT-green.svg">
+	</a>
 </p>
 
-# How to install
+This library was created to help people get started with event-sourcing in NestJS. Event-sourcing is the practice of capturing state **transitions** in your domain models instead of only capturing the current state. It contains the building blocks to implement Command query responsibility segregation, store events and snapshots, publish events and much more.
+
+# Getting started
+To get started with this library, you need to install it first.
 ```
 npm install @ocoda/event-sourcing
 ```
+This library currently provides wrappers for storing events and snapshots for MongoDB and Elasticsearch. To make use of database wrappers, you will need to install their respective libraries:
+```
+npm install @elastic/elasticsearch # For using ElasticSearch
+npm install mongodb # For using MongoDB
+```
+For testing purposes no database wrapper is required, this library ships with a fully functional in-memory store.
 
-# Event-store setup
-The event-store is the database layer of your event-sourced application, responsible for storing and fetching events that have occurred. Each event gets wrapped along with some metadata into an event-envelope and appended to an event-stream.
-
-## Available event stores:
-You can create and provide your own implementation of the event-store or make use of one of the following:
-
-### InMemory: 
-An in-memory event-store implementation, useful for testing purposes.
+Once you have installed all required packages we can import the EventSourcingModule into the root AppModule of your application. The configuration itself depends on the type of database you want to use and if you want to make use of snapshots.
 ```typescript
-EventSourcingModule.forRoot({ 
-	database: 'in-memory',
-	events: [...] 
-}),
-```
-
-### MongoDB
-Requires the MongoDB package to be installed
-```
-npm install mongodb
-```
-```typescript
-EventSourcingModule.forRoot({ 
-	database: 'in-memory',
-	connection: { url: 'mongodb://localhost:27017' },
-	events: [...] 
-}),
-```
-
-### Elasticsearch
-Requires the ElasticSearch package to be installed
-```
-npm install @elastic/elasticsearch@^7.0.0
-```
-```typescript
-EventSourcingModule.forRoot({ 
-	database: 'mongodb',
-	connection: { node: 'http://localhost:9200' },
-	events: [...] 
-}),
-```
-
-### Custom
-Provide your own EventStore implementation
-```typescript
-import { EventStore } from '@ocoda/event-sourcing';
-
 @Module({
-  // TODO
+  imports: [
+    EventSourcingModule.forRoot({
+		eventStore: {
+			client: 'mongodb',
+			options: { 
+				url: 'mongodb://localhost:27017' 
+			},
+		},
+		snapshotStore: {
+			client: 'elasticsearch',
+			options: {
+				node: 'http://localhost:9200',
+			}
+		},
+		events: [...Events],
+    }),
 })
+export class AppModule {}
 ```
+
+# Aggregates
+// TODO: explain AggregateRoot and the @Aggregate decorator
+
+# Commands
+// TODO: Explain what Commands and CommandHandlers are
+
+# Events
+// TODO: Explain the @Event decorator, what it defaults to, how this reflects in the event-store, event streams, event-envelopes, how serialization can be customized, publishing, ...
+
+## EventStore
+// TODO: Explain how the event-store works (using streamIds, pools for multi-tenancy, etc.)
+
+# Repositories
+// TODO: Explain what aggregate repositories are and how they work
+
+# Snapshots
+// TODO: Explain the @Snapshot decorator, SnapshotHandlers (and how serialization must be customized), how this reflects in the snapshot-store, snapshot streams, snapshot envelopes, ...
+
+## SnapshotStore
+// TODO: Explain how the snapshot-store works (using streamIds, pools for multi-tenancy, etc.)
+
+# Queries
+// TODO: Explain what Queries and QueryHandlers are
+
+# Misc
+// TODO: Explain Value Objects, Id's, ...
