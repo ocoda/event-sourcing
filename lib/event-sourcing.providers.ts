@@ -19,23 +19,24 @@ export function createEventSourcingProviders(options: EventSourcingModuleOptions
 export const EventStoreProvider = {
 	provide: EventStore,
 	useFactory: async (eventMap: EventMap, options: EventSourcingModuleOptions) => {
-		switch (options.database) {
+		switch (options.eventStore?.client) {
 			case 'elasticsearch': {
-				if (!options?.connection) {
-					throw new MissingEventStoreConnectionOptionsException('elasticsearch');
+				if (!options.eventStore.options) {
+					throw new MissingEventStoreConnectionOptionsException('eventStore', 'elasticsearch');
 				}
-				const elasticClient = await new Client(options.connection);
+				const elasticClient = await new Client(options.eventStore.options);
 				return new ElasticsearchEventStore(eventMap, elasticClient);
 			}
 			case 'mongodb': {
-				if (!options?.connection) {
-					throw new MissingEventStoreConnectionOptionsException('mongodb');
+				if (!options.eventStore.options) {
+					throw new MissingEventStoreConnectionOptionsException('eventStore', 'mongodb');
 				}
-				const { url, options: clientOptions } = options.connection;
+				const { url, ...clientOptions } = options.eventStore.options;
 				const mongoClient = await new MongoClient(url, clientOptions).connect();
-				return new MongoDBEventStore(eventMap, mongoClient);
+				return new MongoDBEventStore(eventMap, mongoClient.db());
 			}
 			case 'in-memory':
+			default:
 				return new InMemoryEventStore(eventMap);
 		}
 	},
@@ -45,15 +46,21 @@ export const EventStoreProvider = {
 export const SnapshotStoreProvider = {
 	provide: SnapshotStore,
 	useFactory: async (options: EventSourcingModuleOptions) => {
-		switch (options.database) {
+		switch (options.snapshotStore?.client) {
 			case 'elasticsearch': {
-				const elasticClient = await new Client(options.connection);
+				if (!options.snapshotStore.options) {
+					throw new MissingEventStoreConnectionOptionsException('snapshotStore', 'elasticsearch');
+				}
+				const elasticClient = await new Client(options.snapshotStore.options);
 				return new ElasticsearchSnapshotStore(elasticClient);
 			}
 			case 'mongodb': {
-				const { url, options: clientOptions } = options.connection;
+				if (!options.snapshotStore.options) {
+					throw new MissingEventStoreConnectionOptionsException('snapshotStore', 'mongodb');
+				}
+				const { url, ...clientOptions } = options.snapshotStore.options;
 				const mongoClient = await new MongoClient(url, clientOptions).connect();
-				return new MongoDBSnapshotStore(mongoClient);
+				return new MongoDBSnapshotStore(mongoClient.db());
 			}
 			case 'in-memory':
 			default:

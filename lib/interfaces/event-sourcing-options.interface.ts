@@ -2,29 +2,17 @@ import { ClientOptions } from '@elastic/elasticsearch';
 import { ModuleMetadata, Type } from '@nestjs/common';
 import { MongoClientOptions } from 'mongodb';
 import { IEvent } from './events';
-import { EventStoreClient } from './integration';
 
-interface BaseEventSourcingModuleOptions<T extends EventStoreClient> {
+type InMemoryStoreConfig = { client: 'in-memory' };
+type MongoDbStoreConfig = { client: 'mongodb'; options: { url: string } & MongoClientOptions };
+type ElasticsearchStoreConfig = { client: 'elasticsearch'; options: ClientOptions };
+
+export interface EventSourcingModuleOptions {
 	events: Type<IEvent>[];
-	database?: T;
+	eventStore?: InMemoryStoreConfig | MongoDbStoreConfig | ElasticsearchStoreConfig;
+	snapshotStore?: InMemoryStoreConfig | MongoDbStoreConfig | ElasticsearchStoreConfig;
 	disableDefaultSerializer?: boolean;
 }
-
-interface MongoDBEventSourcingModuleOptions extends BaseEventSourcingModuleOptions<'mongodb'> {
-	connection: {
-		url: string;
-		options?: MongoClientOptions;
-	};
-}
-
-interface ElasticsearchEventSourcingModuleOptions extends BaseEventSourcingModuleOptions<'elasticsearch'> {
-	connection: ClientOptions;
-}
-
-export type EventSourcingModuleOptions =
-	| BaseEventSourcingModuleOptions<'in-memory'>
-	| MongoDBEventSourcingModuleOptions
-	| ElasticsearchEventSourcingModuleOptions;
 
 export interface EventSourcingOptionsFactory {
 	createEventSourcingOptions: () => Promise<EventSourcingModuleOptions> | EventSourcingModuleOptions;

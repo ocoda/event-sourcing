@@ -1,5 +1,5 @@
 export class MissingEventStoreConnectionOptionsException extends Error {
-	constructor(type: 'elasticsearch' | 'mongodb') {
-		super(`No ${type} connection options provided`);
+	constructor(store: 'eventStore' | 'snapshotStore', type: 'elasticsearch' | 'mongodb') {
+		super(`No ${type} connection options provided for the ${store}`);
 	}
 }
