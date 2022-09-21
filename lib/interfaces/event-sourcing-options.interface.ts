@@ -2,10 +2,9 @@ import { ClientOptions } from '@elastic/elasticsearch';
 import { ModuleMetadata, Type } from '@nestjs/common';
 import { MongoClientOptions } from 'mongodb';
 import { IEvent } from './events';
+import { EventStoreClient } from './integration';
 
-type DatabaseType = 'in-memory' | 'mongodb' | 'elasticsearch';
-
-interface BaseEventSourcingModuleOptions<T extends DatabaseType> {
+interface BaseEventSourcingModuleOptions<T extends EventStoreClient> {
 	events: Type<IEvent>[];
 	database?: T;
 	disableDefaultSerializer?: boolean;

@@ -3,15 +3,19 @@
  */
 export interface SnapshotEnvelopeMetadata {
 	/**
+	 * Unique snapshot ID
+	 */
+	snapshotId: string;
+	/**
 	 * Aggregate id the message belongs to.
 	 */
 	aggregateId: string;
 	/**
 	 * Version of the aggregate.
 	 */
-	sequence: number;
+	version: number;
 	/**
 	 * Time at which the snapshot was taken.
 	 */
-	registeredOn: number;
+	registeredOn: Date;
 }

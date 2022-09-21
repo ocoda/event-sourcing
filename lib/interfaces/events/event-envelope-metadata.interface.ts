@@ -3,15 +3,27 @@
  */
 export interface EventEnvelopeMetadata {
 	/**
+	 * Unique event ID
+	 */
+	eventId: string;
+	/**
 	 * Aggregate id the message belongs to.
 	 */
 	aggregateId: string;
 	/**
 	 * Version of the aggregate.
 	 */
-	sequence: number;
+	version: number;
 	/**
 	 * Time at which the event ocurred.
 	 */
-	occurredOn: number;
+	occurredOn: Date;
+	/**
+	 * ID if the initial event
+	 */
+	correlationId?: string;
+	/**
+	 * ID of the preceding event that triggered this event
+	 */
+	causationId?: string;
 }
