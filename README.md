@@ -51,8 +51,42 @@ Once you have installed all required packages we can import the EventSourcingMod
 export class AppModule {}
 ```
 
-# Aggregates
-// TODO: explain AggregateRoot and the @Aggregate decorator
+# Aggregates and Value Objects
+An aggregate models an individual concept that has a unique identity in your application, e.g. an account.
+
+To create an aggregate using this library you will need to:
+- inherit the `AggregateRoot` class, which is responsible for handling events and keeping track of the version of the aggregate
+- apply the `@Aggregate()` decorator
+
+```typescript
+import { Aggregate, AggregateRoot } from '@ocoda/event-sourcing';
+
+@Aggregate()
+class Account extends AggregateRoot {
+	...
+}
+```
+
+The `@Aggregate()` decorator marks the class as an aggregate and optionally specifies how the streamId of events and snapshots should be named, e.g. `@Aggregate({ streamName: 'account' })` will create the following streamId: `account-d46fb0f9-02dc-4d11-a282-ab00f7fffeff`. If the stream name isn't provided in the decorator, the name of the class will automatically be converted to lowercase and used.
+
+A Value Object is an immutable model has no conceptual identity, it describes charasteristics and optionally requires some validation, e.g. the name of an account. To create a value object, we can simply extend the ValueObject class.
+
+```typescript
+import { ValueObject } from '@ocoda/event-sourcing';
+
+export class AccountName extends ValueObject {
+	public static fromString(name: string) {
+		if(name.length < 3) {
+			throw new Error('Account name should contain at least 3 characters');
+		}
+		return new Accountname({ value: name });
+	}
+
+	get value(): string {
+		return this.props.value;
+	}
+}
+```
 
 # Commands
 // TODO: Explain what Commands and CommandHandlers are
@@ -61,7 +95,7 @@ export class AppModule {}
 // TODO: Explain the @Event decorator, what it defaults to, how this reflects in the event-store, event streams, event-envelopes, how serialization can be customized, publishing, ...
 
 ## EventStore
-// TODO: Explain how the event-store works (using streamIds, pools for multi-tenancy, etc.)
+// TODO: Explain how the event-store works (using streamIds, pools for multi-tenancy, setup, etc.)
 
 # Repositories
 // TODO: Explain what aggregate repositories are and how they work
@@ -70,7 +104,7 @@ export class AppModule {}
 // TODO: Explain the @Snapshot decorator, SnapshotHandlers (and how serialization must be customized), how this reflects in the snapshot-store, snapshot streams, snapshot envelopes, ...
 
 ## SnapshotStore
-// TODO: Explain how the snapshot-store works (using streamIds, pools for multi-tenancy, etc.)
+// TODO: Explain how the snapshot-store works (using streamIds, pools for multi-tenancy, setup, etc.)
 
 # Queries
 // TODO: Explain what Queries and QueryHandlers are
