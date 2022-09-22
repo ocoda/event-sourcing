@@ -21,10 +21,10 @@ This library was created to help people get started with event-sourcing in NestJ
   <summary>Table of Contents</summary>
   <ol>
     <li><a href="#getting-started">Getting Started</a></li>
-    <li><a href="#aggregates-&-value-objects">Aggregates & Value Objects</a></li>
-    <li><a href="#commands-&-command-handlers">Commands & Command Handlers</a></li>
+    <li><a href="#aggregates--value-objects">Aggregates & Value Objects</a></li>
+    <li><a href="#commands--command-handlers">Commands & Command Handlers</a></li>
     <li>
-		<a href="#events-&-event-handlers">Events</a>
+		<a href="#events--event-handlers">Events</a>
 		<ul>
         	<li><a href="#event-store">Event Store</a></li>
       </ul>
