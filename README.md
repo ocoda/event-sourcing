@@ -16,7 +16,36 @@
 
 This library was created to help people get started with event-sourcing in NestJS. Event-sourcing is the practice of capturing state **transitions** in your domain models instead of only capturing the current state. It contains the building blocks to implement Command query responsibility segregation, store events and snapshots, publish events and much more.
 
-# Getting started
+&nbsp;
+<details open>
+  <summary>Table of Contents</summary>
+  <ol>
+    <li><a href="#getting-started">Getting Started</a></li>
+    <li><a href="#aggregates-&-value-objects">Aggregates & Value Objects</a></li>
+    <li><a href="#commands-&-command-handlers">Commands & Command Handlers</a></li>
+    <li>
+		<a href="#events-&-event-handlers">Events</a>
+		<ul>
+        	<li><a href="#event-store">Event Store</a></li>
+      </ul>
+	</li>
+    <li><a href="#repositories">Repositories</a></li>
+	<li>
+		<a href="#snapshots">Snapshots</a>
+		<ul>
+        	<li><a href="#snapshot-store">Snapshot Store</a></li>
+      </ul>
+	</li>
+    <li><a href="#queries">Queries</a></li>
+    <li><a href="#contact">Contact</a></li>
+    <li><a href="#acknowledgments">Acknowledgments</a></li>
+  </ol>
+</details>
+&nbsp;
+<hr/>
+&nbsp;
+
+## Getting started
 To get started with this library, you need to install it first.
 ```
 npm install @ocoda/event-sourcing
@@ -30,6 +59,8 @@ For testing purposes no database wrapper is required, this library ships with a 
 
 Once you have installed all required packages we can import the EventSourcingModule into the root AppModule of your application. The configuration itself depends on the type of database you want to use and if you want to make use of snapshots.
 ```typescript
+import { EventSourcingModule } from '@ocoda/event-sourcing';
+
 @Module({
   imports: [
     EventSourcingModule.forRoot({
@@ -50,8 +81,9 @@ Once you have installed all required packages we can import the EventSourcingMod
 })
 export class AppModule {}
 ```
+&nbsp;
 
-# Aggregates and Value Objects
+## Aggregates & Value Objects
 An aggregate models an individual concept that has a unique identity in your application, e.g. an account.
 
 To create an aggregate using this library you will need to:
@@ -87,27 +119,61 @@ export class AccountName extends ValueObject {
 	}
 }
 ```
+&nbsp;
 
-# Commands
-// TODO: Explain what Commands and CommandHandlers are
+## Commands & Command Handlers
+A Command is an object that is sent to your domain application that describes the intent of the user and is handled by a CommandHandler. Ideally the name of a command implies the Aggregate it operates on and its intent imperatively, e.g. OpenAccountCommand.
 
-# Events
+```typescript
+import { ICommand } from '@ocoda/event-sourcing';
+
+class OpenAccountCommand implements ICommand {
+	constructor(public readonly accountOwner: string) {}
+}
+```
+
+You can then define a CommandHandler that will be responsible for handling every execution of this Command.
+
+```typescript
+import { CommandHandler, ICommandHandler } from '@ocoda/event-sourcing';
+
+@CommandHandler(OpenAccountCommand)
+export class OpenAccountCommandHandler implements ICommandHandler {
+	async execute(command: OpenAccountCommand): Promise<...> {
+		...
+	}
+}
+
+```
+
+Don't forget to register your CommandHandlers as providers in your application.
+&nbsp;
+
+## Events & Event Handlers
 // TODO: Explain the @Event decorator, what it defaults to, how this reflects in the event-store, event streams, event-envelopes, how serialization can be customized, publishing, ...
 
-## EventStore
+### Event Store
 // TODO: Explain how the event-store works (using streamIds, pools for multi-tenancy, setup, etc.)
+&nbsp;
 
-# Repositories
+## Repositories
 // TODO: Explain what aggregate repositories are and how they work
+&nbsp;
 
-# Snapshots
+## Snapshots
 // TODO: Explain the @Snapshot decorator, SnapshotHandlers (and how serialization must be customized), how this reflects in the snapshot-store, snapshot streams, snapshot envelopes, ...
 
-## SnapshotStore
+### Snapshot Store
 // TODO: Explain how the snapshot-store works (using streamIds, pools for multi-tenancy, setup, etc.)
+&nbsp;
 
-# Queries
+## Queries
 // TODO: Explain what Queries and QueryHandlers are
+&nbsp;
 
-# Misc
-// TODO: Explain Value Objects, Id's, ...
+## Contact
+&nbsp;
+
+## Acknowledgments
+
+This library is inspired by [@nestjs/cqrs](https://github.com/nestjs/cqrs)
