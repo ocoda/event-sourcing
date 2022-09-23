@@ -111,10 +111,13 @@ describe(InMemoryEventStore, () => {
 		});
 	});
 
-	it('should retrieve events', () => {
+	it('should retrieve events', async () => {
 		eventStore.appendEvents(eventStream, accountVersion, events);
 
-		const resolvedEvents = eventStore.getEvents(eventStream);
+		const resolvedEvents = [];
+		for await (const events of eventStore.getEvents({ eventStream })) {
+			resolvedEvents.push(...events);
+		}
 
 		expect(resolvedEvents).toEqual(events);
 	});
@@ -133,34 +136,53 @@ describe(InMemoryEventStore, () => {
 		);
 	});
 
-	it('should retrieve events backwards', () => {
+	it('should retrieve events backwards', async () => {
 		eventStore.appendEvents(eventStream, accountVersion, events);
 
-		const resolvedEvents = eventStore.getEvents(eventStream, undefined, StreamReadingDirection.BACKWARD);
+		const resolvedEvents = [];
+		for await (const events of eventStore.getEvents({ eventStream, direction: StreamReadingDirection.BACKWARD })) {
+			resolvedEvents.push(...events);
+		}
 
 		expect(resolvedEvents).toEqual(events.slice().reverse());
 	});
 
-	it('should retrieve events forward from a certain version', () => {
+	it('should retrieve events forward from a certain version', async () => {
 		eventStore.appendEvents(eventStream, accountVersion, events);
 
-		const resolvedEvents = eventStore.getEvents(eventStream, 3);
+		const resolvedEvents = [];
+		for await (const events of eventStore.getEvents({
+			eventStream,
+			fromVersion: 3,
+		})) {
+			resolvedEvents.push(...events);
+		}
 
 		expect(resolvedEvents).toEqual(events.slice(2));
 	});
 
-	it('should retrieve events backwards from a certain version', () => {
+	it('should retrieve events backwards from a certain version', async () => {
 		eventStore.appendEvents(eventStream, accountVersion, events);
 
-		const resolvedEvents = eventStore.getEvents(eventStream, 4, StreamReadingDirection.BACKWARD);
+		const resolvedEvents = [];
+		for await (const events of eventStore.getEvents({
+			eventStream,
+			fromVersion: 4,
+			direction: StreamReadingDirection.BACKWARD,
+		})) {
+			resolvedEvents.push(...events);
+		}
 
 		expect(resolvedEvents).toEqual(events.slice(3).reverse());
 	});
 
-	it('should retrieve event-envelopes', () => {
+	it('should retrieve event-envelopes', async () => {
 		eventStore.appendEvents(eventStream, accountVersion, events);
 
-		const resolvedEnvelopes = eventStore.getEnvelopes(eventStream);
+		const resolvedEnvelopes = [];
+		for await (const envelopes of eventStore.getEnvelopes({ eventStream })) {
+			resolvedEnvelopes.push(...envelopes);
+		}
 
 		expect(resolvedEnvelopes).toHaveLength(envelopes.length);
 

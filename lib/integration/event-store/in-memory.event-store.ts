@@ -23,8 +23,9 @@ export class InMemoryEventStore extends EventStore {
 		this.collections.set(pool ? `${pool}-events` : 'events', []);
 	}
 
-	getEvents(filter?: EventFilter): IEvent[] {
+	async *getEvents(filter?: EventFilter): AsyncGenerator<IEvent[]> {
 		let entities: InMemoryEventEntity[] = [];
+		let limit = filter?.limit || 10;
 
 		if (filter?.eventStream) {
 			const { collection, streamId } = filter.eventStream;
@@ -44,7 +45,10 @@ export class InMemoryEventStore extends EventStore {
 			entities = entities.reverse();
 		}
 
-		return entities.map(({ event, payload }) => this.eventMap.deserializeEvent(event, payload));
+		for (let i = 0; i < entities.length; i += limit) {
+			const batch = entities.slice(i, i + limit);
+			yield batch.map(({ event, payload }) => this.eventMap.deserializeEvent(event, payload));
+		}
 	}
 
 	getEvent({ collection, streamId }: EventStream, version: number): IEvent {
@@ -75,8 +79,9 @@ export class InMemoryEventStore extends EventStore {
 		eventCollection.push(...envelopes.map(({ event, payload, metadata }) => ({ streamId, event, payload, metadata })));
 	}
 
-	getEnvelopes(filter?: EventFilter): EventEnvelope[] {
+	async *getEnvelopes(filter?: EventFilter): AsyncGenerator<EventEnvelope[]> {
 		let entities: InMemoryEventEntity[] = [];
+		let limit = filter?.limit || 10;
 
 		if (filter?.eventStream) {
 			const { collection, streamId } = filter.eventStream;
@@ -96,7 +101,10 @@ export class InMemoryEventStore extends EventStore {
 			entities = entities.reverse();
 		}
 
-		return entities.map(({ event, payload, metadata }) => EventEnvelope.from(event, payload, metadata));
+		for (let i = 0; i < entities.length; i += limit) {
+			const batch = entities.slice(i, i + limit);
+			yield batch.map(({ event, payload, metadata }) => EventEnvelope.create(event, payload, metadata));
+		}
 	}
 
 	getEnvelope({ collection, streamId }: EventStream, version: number): EventEnvelope {

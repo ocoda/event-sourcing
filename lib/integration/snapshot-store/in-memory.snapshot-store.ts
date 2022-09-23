@@ -2,9 +2,9 @@ import { StreamReadingDirection } from '../../constants';
 import { SnapshotNotFoundException } from '../../exceptions';
 import { ISnapshot, ISnapshotPool, SnapshotEnvelopeMetadata } from '../../interfaces';
 import { AggregateRoot, SnapshotEnvelope, SnapshotStream } from '../../models';
-import { SnapshotStore } from '../../snapshot-store';
+import { SnapshotFilter, SnapshotStore } from '../../snapshot-store';
 
-export interface InMemorySnapshotEntity<A extends AggregateRoot = AggregateRoot> {
+export interface InMemorySnapshotEntity<A extends AggregateRoot> {
 	streamId: string;
 	payload: ISnapshot<A>;
 	metadata: SnapshotEnvelopeMetadata;
@@ -17,27 +17,32 @@ export class InMemorySnapshotStore extends SnapshotStore {
 		this.collections.set(pool ? `${pool}-snapshots` : 'snapshots', []);
 	}
 
-	getSnapshots<A extends AggregateRoot>(
-		{ collection, streamId }: SnapshotStream,
-		fromVersion?: number,
-		direction: StreamReadingDirection = StreamReadingDirection.FORWARD,
-	): ISnapshot<A>[] {
-		const snapshotCollection = this.collections.get(collection) || [];
+	async *getSnapshots<A extends AggregateRoot>(filter?: SnapshotFilter): AsyncGenerator<ISnapshot<A>[]> {
+		let entities: InMemorySnapshotEntity<any>[] = [];
+		let limit = filter?.limit || 10;
 
-		let entities = snapshotCollection.filter(({ streamId: entityStreamId }) => entityStreamId === streamId).sort(
-			({ metadata: current }, { metadata: previous }) => (previous.version < current.version ? 1 : -1),
-		);
-
-		if (fromVersion) {
-			const startSnapshotIndex = entities.findIndex(({ metadata }) => metadata.version === fromVersion);
-			entities = startSnapshotIndex === -1 ? [] : entities.slice(startSnapshotIndex);
+		if (filter?.snapshotStream) {
+			const { collection, streamId } = filter.snapshotStream;
+			entities = this.collections.get(collection).filter(({ streamId: entityStreamId }) => entityStreamId === streamId);
+		} else {
+			for (const collection of this.collections.values()) {
+				entities.push(...collection);
+			}
 		}
 
-		if (direction === StreamReadingDirection.BACKWARD) {
+		if (filter?.fromVersion) {
+			const startEventIndex = entities.findIndex(({ metadata }) => metadata.version === filter.fromVersion);
+			entities = startEventIndex === -1 ? [] : entities.slice(startEventIndex);
+		}
+
+		if (filter?.direction === StreamReadingDirection.BACKWARD) {
 			entities = entities.reverse();
 		}
 
-		return entities.map(({ payload }) => payload);
+		for (let i = 0; i < entities.length; i += limit) {
+			const batch = entities.slice(i, i + limit);
+			yield batch.map(({ payload }) => payload);
+		}
 	}
 
 	getSnapshot<A extends AggregateRoot>({ collection, streamId }: SnapshotStream, version: number): ISnapshot<A> {
@@ -94,27 +99,32 @@ export class InMemorySnapshotStore extends SnapshotStore {
 		}
 	}
 
-	getEnvelopes<A extends AggregateRoot>(
-		{ collection, streamId }: SnapshotStream,
-		fromVersion?: number,
-		direction: StreamReadingDirection = StreamReadingDirection.FORWARD,
-	): SnapshotEnvelope<A>[] {
-		const snapshotCollection = this.collections.get(collection) || [];
+	async *getEnvelopes<A extends AggregateRoot>(filter?: SnapshotFilter): AsyncGenerator<SnapshotEnvelope<A>[]> {
+		let entities: InMemorySnapshotEntity<any>[] = [];
+		let limit = filter?.limit || 10;
 
-		let entities = snapshotCollection.filter(({ streamId: entityStreamId }) => entityStreamId === streamId).sort(
-			({ metadata: current }, { metadata: previous }) => (previous.version < current.version ? 1 : -1),
-		);
-
-		if (fromVersion) {
-			const startSnapshotIndex = entities.findIndex(({ metadata }) => metadata.version === fromVersion);
-			entities = startSnapshotIndex === -1 ? [] : entities.slice(startSnapshotIndex);
+		if (filter?.snapshotStream) {
+			const { collection, streamId } = filter.snapshotStream;
+			entities = this.collections.get(collection).filter(({ streamId: entityStreamId }) => entityStreamId === streamId);
+		} else {
+			for (const collection of this.collections.values()) {
+				entities.push(...collection);
+			}
 		}
 
-		if (direction === StreamReadingDirection.BACKWARD) {
+		if (filter?.fromVersion) {
+			const startEventIndex = entities.findIndex(({ metadata }) => metadata.version === filter.fromVersion);
+			entities = startEventIndex === -1 ? [] : entities.slice(startEventIndex);
+		}
+
+		if (filter?.direction === StreamReadingDirection.BACKWARD) {
 			entities = entities.reverse();
 		}
 
-		return entities.map(({ payload, metadata }) => SnapshotEnvelope.from<A>(payload, metadata));
+		for (let i = 0; i < entities.length; i += limit) {
+			const batch = entities.slice(i, i + limit);
+			yield batch.map(({ payload, metadata }) => SnapshotEnvelope.from<A>(payload, metadata));
+		}
 	}
 
 	getEnvelope<A extends AggregateRoot>({ collection, streamId }: SnapshotStream, version: number): SnapshotEnvelope<A> {

@@ -16,10 +16,7 @@ export class SnapshotEnvelope<A extends AggregateRoot = AggregateRoot> {
 		});
 	}
 
-	static from<A extends AggregateRoot = AggregateRoot>(
-		payload: ISnapshot<A>,
-		metadata: SnapshotEnvelopeMetadata,
-	): SnapshotEnvelope<A> {
+	static from<A extends AggregateRoot>(payload: ISnapshot<A>, metadata: SnapshotEnvelopeMetadata): SnapshotEnvelope<A> {
 		return new SnapshotEnvelope(payload, metadata);
 	}
 }

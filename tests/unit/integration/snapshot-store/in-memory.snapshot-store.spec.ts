@@ -65,10 +65,13 @@ describe(InMemorySnapshotStore, () => {
 		});
 	});
 
-	it('should retrieve snapshots', () => {
+	it('should retrieve snapshots', async () => {
 		seedSnapshots();
 
-		const resolvedSnapshots = snapshotStore.getSnapshots(snapshotStream);
+		const resolvedSnapshots = [];
+		for await (const snapshots of snapshotStore.getSnapshots({ snapshotStream })) {
+			resolvedSnapshots.push(...snapshots);
+		}
 
 		expect(resolvedSnapshots).toEqual(snapshots);
 	});
@@ -87,32 +90,47 @@ describe(InMemorySnapshotStore, () => {
 		);
 	});
 
-	it('should retrieve snapshots backwards', () => {
+	it('should retrieve snapshots backwards', async () => {
 		seedSnapshots();
 
-		const resolvedSnapshots = snapshotStore.getSnapshots(snapshotStream, undefined, StreamReadingDirection.BACKWARD);
+		const resolvedSnapshots = [];
+		for await (const snapshots of snapshotStore.getSnapshots({
+			snapshotStream,
+			direction: StreamReadingDirection.BACKWARD,
+		})) {
+			resolvedSnapshots.push(...snapshots);
+		}
 
 		expect(resolvedSnapshots).toEqual(snapshots.slice().reverse());
 	});
 
-	it('should retrieve snapshots forward from a certain version', () => {
+	it('should retrieve snapshots forward from a certain version', async () => {
 		seedSnapshots();
 
-		const resolvedSnapshots = snapshotStore.getSnapshots(snapshotStream, envelopes[1].metadata.version);
+		const resolvedSnapshots = [];
+		for await (const snapshots of snapshotStore.getSnapshots({
+			snapshotStream,
+			fromVersion: envelopes[1].metadata.version,
+		})) {
+			resolvedSnapshots.push(...snapshots);
+		}
 
 		expect(resolvedSnapshots).toEqual(
 			snapshots.filter((_, index) => (index + 1) * 10 >= envelopes[1].metadata.version),
 		);
 	});
 
-	it('should retrieve snapshots backwards from a certain version', () => {
+	it('should retrieve snapshots backwards from a certain version', async () => {
 		seedSnapshots();
 
-		const resolvedSnapshots = snapshotStore.getSnapshots(
+		const resolvedSnapshots = [];
+		for await (const snapshots of snapshotStore.getSnapshots({
 			snapshotStream,
-			envelopes[1].metadata.version,
-			StreamReadingDirection.BACKWARD,
-		);
+			fromVersion: envelopes[1].metadata.version,
+			direction: StreamReadingDirection.BACKWARD,
+		})) {
+			resolvedSnapshots.push(...snapshots);
+		}
 
 		expect(resolvedSnapshots).toEqual(
 			snapshots.filter((_, index) => (index + 1) * 10 >= envelopes[1].metadata.version).reverse(),
@@ -139,7 +157,12 @@ describe(InMemorySnapshotStore, () => {
 	it('should retrieve snapshot-envelopes', async () => {
 		seedSnapshots();
 
-		const resolvedEnvelopes = snapshotStore.getEnvelopes(snapshotStream);
+		const resolvedEnvelopes = [];
+		for await (const envelopes of snapshotStore.getEnvelopes({
+			snapshotStream,
+		})) {
+			resolvedEnvelopes.push(...envelopes);
+		}
 
 		expect(resolvedEnvelopes).toHaveLength(envelopes.length);
 
