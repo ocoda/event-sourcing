@@ -1,7 +1,7 @@
 import { Client } from '@elastic/elasticsearch';
 import { StreamReadingDirection } from '../../constants';
 import { EventMap } from '../../event-map';
-import { EventStore } from '../../event-store';
+import { EventFilter, EventStore } from '../../event-store';
 import { EventNotFoundException } from '../../exceptions';
 import { EventEnvelopeMetadata, IEvent, IEventPayload, IEventPool } from '../../interfaces';
 import { EventEnvelope, EventStream } from '../../models';
@@ -26,6 +26,7 @@ export class ElasticsearchEventStore extends EventStore {
 		await this.client.indices.create({
 			index: pool ? `${pool}-events` : 'events',
 			body: {
+				aliases: { all: {} },
 				mappings: {
 					properties: {
 						streamId: { type: 'text', index: true },
@@ -48,31 +49,31 @@ export class ElasticsearchEventStore extends EventStore {
 		});
 	}
 
-	async getEvents(
-		{ collection, streamId }: EventStream,
-		fromVersion?: number,
-		direction: StreamReadingDirection = StreamReadingDirection.FORWARD,
-	): Promise<IEvent[]> {
-		const query = {
-			bool: {
-				must: [
-					{ match: { streamId } },
-					...(fromVersion ? [{ range: { 'metadata.version': { gte: fromVersion } } }] : []),
-				],
-			},
-		};
+	async *getEvents(filter?: EventFilter): AsyncGenerator<IEvent[]> {
+		let size = filter?.limit || 10;
+		let query: Record<string, any> = { bool: { must: [] } };
+
+		filter?.eventStream && query.bool.must.push({ match: { streamId: filter.eventStream.streamId } });
+		filter?.fromVersion && query.bool.must.push({ range: { 'metadata.version': { gte: filter.fromVersion } } });
+
+		if (query.bool.must.length === 0) {
+			query = { match_all: {} };
+		}
 
 		const sort =
-			direction === StreamReadingDirection.FORWARD ? { 'metadata.version': 'asc' } : { 'metadata.version': 'desc' };
+			filter?.direction === StreamReadingDirection.BACKWARD
+				? { 'metadata.version': 'desc' }
+				: { 'metadata.version': 'asc' };
 
-		const { body } = await this.client.search({
-			index: collection,
+		const scrollSearch = this.client.helpers.scrollSearch<ElasticsearchEventEntity[]>({
+			index: filter?.eventStream?.collection || 'all',
 			body: { query, sort },
+			size,
 		});
 
-		return body.hits.hits.map(({ _source: { event, payload } }: ElasticsearchEventEntity) => {
-			return this.eventMap.deserializeEvent(event, payload);
-		});
+		for await (const { body } of scrollSearch) {
+			yield body.hits.hits.map(({ _source: { event, payload } }) => this.eventMap.deserializeEvent(event, payload));
+		}
 	}
 
 	async getEvent({ collection, streamId }: EventStream, version: number): Promise<IEvent> {
@@ -119,32 +120,34 @@ export class ElasticsearchEventStore extends EventStore {
 		await this.client.bulk({ index: collection, body, refresh: 'wait_for' });
 	}
 
-	async getEnvelopes(
-		{ collection, streamId }: EventStream,
-		fromVersion?: number,
-		direction: StreamReadingDirection = StreamReadingDirection.FORWARD,
-	): Promise<EventEnvelope[]> {
-		const query = {
-			bool: {
-				must: [
-					{ match: { streamId } },
-					...(fromVersion ? [{ range: { 'metadata.version': { gte: fromVersion } } }] : []),
-				],
-			},
-		};
+	async *getEnvelopes(filter?: EventFilter): AsyncGenerator<EventEnvelope[]> {
+		let size = filter?.limit || 10;
+		let query: Record<string, any> = { bool: { must: [] } };
+
+		filter?.eventStream && query.bool.must.push({ match: { streamId: filter.eventStream.streamId } });
+		filter?.fromVersion && query.bool.must.push({ range: { 'metadata.version': { gte: filter.fromVersion } } });
+
+		if (query.bool.must.length === 0) {
+			query = { match_all: {} };
+		}
 
 		const sort =
-			direction === StreamReadingDirection.FORWARD ? { 'metadata.version': 'asc' } : { 'metadata.version': 'desc' };
+			filter?.direction === StreamReadingDirection.BACKWARD
+				? { 'metadata.version': 'desc' }
+				: { 'metadata.version': 'asc' };
 
-		const { body } = await this.client.search({
-			index: collection,
+		const scrollSearch = this.client.helpers.scrollSearch<ElasticsearchEventEntity[]>({
+			index: filter?.eventStream?.collection || 'all',
 			body: { query, sort },
+			size,
 		});
 
-		return body.hits.hits.map(
-			({ _source: { event, payload, metadata } }: ElasticsearchEventEntity) =>
-				EventEnvelope.from(event, payload, { ...metadata, occurredOn: new Date(metadata.occurredOn) }),
-		);
+		for await (const { body } of scrollSearch) {
+			yield body.hits.hits.map(
+				({ _source: { event, payload, metadata } }) =>
+					EventEnvelope.from(event, payload, { ...metadata, occurredOn: new Date(metadata.occurredOn) }),
+			);
+		}
 	}
 
 	async getEnvelope({ collection, streamId }: EventStream, version: number): Promise<EventEnvelope> {
