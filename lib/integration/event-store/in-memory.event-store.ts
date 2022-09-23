@@ -1,6 +1,6 @@
 import { StreamReadingDirection } from '../../constants';
 import { EventMap } from '../../event-map';
-import { EventStore } from '../../event-store';
+import { EventFilter, EventStore } from '../../event-store';
 import { EventNotFoundException } from '../../exceptions';
 import { EventEnvelopeMetadata, IEvent, IEventCollection, IEventPayload, IEventPool } from '../../interfaces';
 import { EventEnvelope, EventStream } from '../../models';
@@ -23,21 +23,24 @@ export class InMemoryEventStore extends EventStore {
 		this.collections.set(pool ? `${pool}-events` : 'events', []);
 	}
 
-	getEvents(
-		{ collection, streamId }: EventStream,
-		fromVersion?: number,
-		direction: StreamReadingDirection = StreamReadingDirection.FORWARD,
-	): IEvent[] {
-		const eventCollection = this.collections.get(collection) || [];
+	getEvents(filter?: EventFilter): IEvent[] {
+		let entities: InMemoryEventEntity[] = [];
 
-		let entities = eventCollection.filter(({ streamId: entityStreamId }) => entityStreamId === streamId);
+		if (filter?.eventStream) {
+			const { collection, streamId } = filter.eventStream;
+			entities = this.collections.get(collection).filter(({ streamId: entityStreamId }) => entityStreamId === streamId);
+		} else {
+			for (const collection of this.collections.values()) {
+				entities.push(...collection);
+			}
+		}
 
-		if (fromVersion) {
-			const startEventIndex = entities.findIndex(({ metadata }) => metadata.version === fromVersion);
+		if (filter?.fromVersion) {
+			const startEventIndex = entities.findIndex(({ metadata }) => metadata.version === filter.fromVersion);
 			entities = startEventIndex === -1 ? [] : entities.slice(startEventIndex);
 		}
 
-		if (direction === StreamReadingDirection.BACKWARD) {
+		if (filter?.direction === StreamReadingDirection.BACKWARD) {
 			entities = entities.reverse();
 		}
 
@@ -72,27 +75,28 @@ export class InMemoryEventStore extends EventStore {
 		eventCollection.push(...envelopes.map(({ event, payload, metadata }) => ({ streamId, event, payload, metadata })));
 	}
 
-	getEnvelopes(
-		{ collection, streamId }: EventStream,
-		fromVersion?: number,
-		direction: StreamReadingDirection = StreamReadingDirection.FORWARD,
-	): EventEnvelope[] {
-		const eventCollection = this.collections.get(collection) || [];
+	getEnvelopes(filter?: EventFilter): EventEnvelope[] {
+		let entities: InMemoryEventEntity[] = [];
 
-		let entities = eventCollection.filter(({ streamId: entityStreamId }) => entityStreamId === streamId);
+		if (filter?.eventStream) {
+			const { collection, streamId } = filter.eventStream;
+			entities = this.collections.get(collection).filter(({ streamId: entityStreamId }) => entityStreamId === streamId);
+		} else {
+			for (const collection of this.collections.values()) {
+				entities.push(...collection);
+			}
+		}
 
-		if (fromVersion) {
-			const startEventIndex = entities.findIndex(({ metadata }) => metadata.version === fromVersion);
+		if (filter?.fromVersion) {
+			const startEventIndex = entities.findIndex(({ metadata }) => metadata.version === filter.fromVersion);
 			entities = startEventIndex === -1 ? [] : entities.slice(startEventIndex);
 		}
 
-		if (direction === StreamReadingDirection.BACKWARD) {
+		if (filter?.direction === StreamReadingDirection.BACKWARD) {
 			entities = entities.reverse();
 		}
 
-		return entities.map(({ event, payload, metadata }) => {
-			return EventEnvelope.from(event, payload, metadata);
-		});
+		return entities.map(({ event, payload, metadata }) => EventEnvelope.from(event, payload, metadata));
 	}
 
 	getEnvelope({ collection, streamId }: EventStream, version: number): EventEnvelope {
