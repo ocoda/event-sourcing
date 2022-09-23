@@ -3,9 +3,9 @@ import { StreamReadingDirection } from '../../constants';
 import { SnapshotNotFoundException } from '../../exceptions';
 import { ISnapshot, ISnapshotPool, SnapshotEnvelopeMetadata } from '../../interfaces';
 import { AggregateRoot, SnapshotEnvelope, SnapshotStream } from '../../models';
-import { SnapshotStore } from '../../snapshot-store';
+import { SnapshotFilter, SnapshotStore } from '../../snapshot-store';
 
-export interface ElasticsearchSnapshotEnvelopeEntity<A extends AggregateRoot> {
+export interface ElasticsearchSnapshotEntity<A extends AggregateRoot> {
 	_index: string;
 	_id: string;
 	_source: {
@@ -24,6 +24,7 @@ export class ElasticsearchSnapshotStore extends SnapshotStore {
 		await this.client.indices.create({
 			index: pool ? `${pool}-snapshots` : 'snapshots',
 			body: {
+				aliases: { all: {} },
 				mappings: {
 					properties: {
 						streamId: { type: 'text', index: true },
@@ -43,29 +44,31 @@ export class ElasticsearchSnapshotStore extends SnapshotStore {
 		});
 	}
 
-	async getSnapshots<A extends AggregateRoot>(
-		{ collection, streamId }: SnapshotStream,
-		fromVersion?: number,
-		direction: StreamReadingDirection = StreamReadingDirection.FORWARD,
-	): Promise<ISnapshot<A>[]> {
-		const query = {
-			bool: {
-				must: [
-					{ match: { streamId } },
-					...(fromVersion ? [{ range: { 'metadata.version': { gte: fromVersion } } }] : []),
-				],
-			},
-		};
+	async *getSnapshots<A extends AggregateRoot>(filter?: SnapshotFilter): AsyncGenerator<ISnapshot<A>[]> {
+		let size = filter?.limit || 10;
+		let query: Record<string, any> = { bool: { must: [] } };
+
+		filter?.snapshotStream && query.bool.must.push({ match: { streamId: filter.snapshotStream.streamId } });
+		filter?.fromVersion && query.bool.must.push({ range: { 'metadata.version': { gte: filter.fromVersion } } });
+
+		if (query.bool.must.length === 0) {
+			query = { match_all: {} };
+		}
 
 		const sort =
-			direction === StreamReadingDirection.FORWARD ? { 'metadata.version': 'asc' } : { 'metadata.version': 'desc' };
+			filter?.direction === StreamReadingDirection.BACKWARD
+				? { 'metadata.version': 'desc' }
+				: { 'metadata.version': 'asc' };
 
-		const { body } = await this.client.search({
-			index: collection,
+		const scrollSearch = this.client.helpers.scrollSearch<ElasticsearchSnapshotEntity<A>[]>({
+			index: filter?.snapshotStream?.collection || 'all',
 			body: { query, sort },
+			size,
 		});
 
-		return body.hits.hits.map(({ _source: { payload } }: ElasticsearchSnapshotEnvelopeEntity<A>) => payload);
+		for await (const { body } of scrollSearch) {
+			yield body.hits.hits.map(({ _source: { payload } }: ElasticsearchSnapshotEntity<A>) => payload);
+		}
 	}
 
 	async getSnapshot<A extends AggregateRoot>(
@@ -83,7 +86,7 @@ export class ElasticsearchSnapshotStore extends SnapshotStore {
 			body: { query },
 		});
 
-		const entity: ElasticsearchSnapshotEnvelopeEntity<A> = body.hits.hits[0];
+		const entity: ElasticsearchSnapshotEntity<A> = body.hits.hits[0];
 
 		if (!entity) {
 			throw new SnapshotNotFoundException(streamId, version);
@@ -123,7 +126,7 @@ export class ElasticsearchSnapshotStore extends SnapshotStore {
 			size: 1,
 		});
 
-		const entity: ElasticsearchSnapshotEnvelopeEntity<A> = body.hits.hits[0];
+		const entity: ElasticsearchSnapshotEntity<A> = body.hits.hits[0];
 
 		if (entity) {
 			return entity._source.payload;
@@ -148,7 +151,7 @@ export class ElasticsearchSnapshotStore extends SnapshotStore {
 			size: 1,
 		});
 
-		const entity: ElasticsearchSnapshotEnvelopeEntity<A> = body.hits.hits[0];
+		const entity: ElasticsearchSnapshotEntity<A> = body.hits.hits[0];
 
 		if (entity) {
 			return SnapshotEnvelope.from<A>(entity._source.payload, {
@@ -158,32 +161,34 @@ export class ElasticsearchSnapshotStore extends SnapshotStore {
 		}
 	}
 
-	async getEnvelopes<A extends AggregateRoot>(
-		{ collection, streamId }: SnapshotStream,
-		fromVersion?: number,
-		direction: StreamReadingDirection = StreamReadingDirection.FORWARD,
-	): Promise<SnapshotEnvelope<A>[]> {
-		const query = {
-			bool: {
-				must: [
-					{ match: { streamId } },
-					...(fromVersion ? [{ range: { 'metadata.version': { gte: fromVersion } } }] : []),
-				],
-			},
-		};
+	async *getEnvelopes<A extends AggregateRoot>(filter?: SnapshotFilter): AsyncGenerator<SnapshotEnvelope<A>[]> {
+		let size = filter?.limit || 10;
+		let query: Record<string, any> = { bool: { must: [] } };
+
+		filter?.snapshotStream && query.bool.must.push({ match: { streamId: filter.snapshotStream.streamId } });
+		filter?.fromVersion && query.bool.must.push({ range: { 'metadata.version': { gte: filter.fromVersion } } });
+
+		if (query.bool.must.length === 0) {
+			query = { match_all: {} };
+		}
 
 		const sort =
-			direction === StreamReadingDirection.FORWARD ? { 'metadata.version': 'asc' } : { 'metadata.version': 'desc' };
+			filter?.direction === StreamReadingDirection.BACKWARD
+				? { 'metadata.version': 'desc' }
+				: { 'metadata.version': 'asc' };
 
-		const { body } = await this.client.search({
-			index: collection,
+		const scrollSearch = this.client.helpers.scrollSearch<ElasticsearchSnapshotEntity<A>[]>({
+			index: filter?.snapshotStream?.collection || 'all',
 			body: { query, sort },
+			size,
 		});
 
-		return body.hits.hits.map(
-			({ _source: { payload, metadata } }: ElasticsearchSnapshotEnvelopeEntity<A>) =>
-				SnapshotEnvelope.from<A>(payload, { ...metadata, registeredOn: new Date(metadata.registeredOn) }),
-		);
+		for await (const { body } of scrollSearch) {
+			yield body.hits.hits.map(
+				({ _source: { payload, metadata } }: ElasticsearchSnapshotEntity<A>) =>
+					SnapshotEnvelope.from<A>(payload, { ...metadata, registeredOn: new Date(metadata.registeredOn) }),
+			);
+		}
 	}
 
 	async getEnvelope<A extends AggregateRoot>(
@@ -201,7 +206,7 @@ export class ElasticsearchSnapshotStore extends SnapshotStore {
 			body: { query },
 		});
 
-		const entity: ElasticsearchSnapshotEnvelopeEntity<A> = body.hits.hits[0];
+		const entity: ElasticsearchSnapshotEntity<A> = body.hits.hits[0];
 
 		if (!entity) {
 			throw new SnapshotNotFoundException(streamId, version);
