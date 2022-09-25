@@ -2,13 +2,44 @@ import { StreamReadingDirection } from './constants';
 import { ISnapshot, ISnapshotPool } from './interfaces';
 import { AggregateRoot, SnapshotEnvelope, SnapshotStream } from './models';
 
-export interface SnapshotFilter {
+interface BaseSnapshotFilter {
+	/**
+	 * The snapshot stream to filter by.
+	 * If not provided, all snapshots will be returned.
+	 */
 	snapshotStream?: SnapshotStream;
-	fromVersion?: number;
+	/**
+	 * The direction in which snapshots should be read.
+	 * @default StreamReadingDirection.FORWARD
+	 */
 	direction?: StreamReadingDirection;
-	offset?: number;
+	/**
+	 * The number of snapshots to read
+	 * @default Number.MAX_SAFE_INTEGER
+	 */
 	limit?: number;
+	/**
+	 * The amount of snapshots to read at a time
+	 * @default 50
+	 */
+	batch?: number;
 }
+
+export interface StreamSnapshotFilter extends BaseSnapshotFilter {
+	/**
+	 * The snapshot stream to filter by.
+	 * If not provided, all snapshots will be returned.
+	 */
+	snapshotStream: SnapshotStream;
+	/**
+	 * The position from where the snapshots should be read.
+	 * Can only be used in combination with a stream.
+	 * @default 1
+	 */
+	fromVersion: number;
+}
+
+export type SnapshotFilter = BaseSnapshotFilter | StreamSnapshotFilter;
 
 export abstract class SnapshotStore {
 	abstract setup(pool?: ISnapshotPool): void | Promise<void>;

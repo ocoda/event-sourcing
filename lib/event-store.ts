@@ -3,13 +3,44 @@ import { EventMap } from './event-map';
 import { IEvent, IEventPool } from './interfaces';
 import { EventEnvelope, EventStream } from './models';
 
-export interface EventFilter {
+interface BaseEventFilter {
+	/**
+	 * The event stream to filter by.
+	 * If not provided, all events will be returned.
+	 */
 	eventStream?: EventStream;
-	fromVersion?: number;
+	/**
+	 * The direction in which events should be read.
+	 * @default StreamReadingDirection.FORWARD
+	 */
 	direction?: StreamReadingDirection;
-	offset?: number;
+	/**
+	 * The number of events to read
+	 * @default Number.MAX_SAFE_INTEGER
+	 */
 	limit?: number;
+	/**
+	 * The amount of events to read at a time
+	 * @default 50
+	 */
+	batch?: number;
 }
+
+export interface StreamEventFilter extends BaseEventFilter {
+	/**
+	 * The event stream to filter by.
+	 * If not provided, all events will be returned.
+	 */
+	eventStream: EventStream;
+	/**
+	 * The version from where the events should be read.
+	 * Can only be used in combination with a stream.
+	 * @default 1
+	 */
+	fromVersion: number;
+}
+
+export type EventFilter = BaseEventFilter | StreamEventFilter;
 
 export abstract class EventStore {
 	abstract eventMap: EventMap;
