@@ -1,7 +1,6 @@
 lockfileVersion: 5.4
 
 specifiers:
-  '@elastic/elasticsearch': ^7.15.0
   '@nestjs/common': ^9.0.0
   '@nestjs/core': ^9.0.0
   '@nestjs/platform-express': ^9.0.5
@@ -24,7 +23,6 @@ dependencies:
   class-transformer: 0.5.1
 
 devDependencies:
-  '@elastic/elasticsearch': 7.17.0
   '@nestjs/common': 9.0.5_aniaiezvefq2fqnommj6u5l4zi
   '@nestjs/core': 9.0.5_kqlsqbigaolinktvzctrbordee
   '@nestjs/platform-express': 9.0.5_yhkp7kxuauoq6imzcegikmb6ju
@@ -365,18 +363,6 @@ packages:
 
   /@bcoe/v8-coverage/0.2.3:
     resolution: {integrity: sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==}
-    dev: true
-
-  /@elastic/elasticsearch/7.17.0:
-    resolution: {integrity: sha512-5QLPCjd0uLmLj1lSuKSThjNpq39f6NmlTy9ROLFwG5gjyTgpwSqufDeYG/Fm43Xs05uF7WcscoO7eguI3HuuYA==}
-    engines: {node: '>=12'}
-    dependencies:
-      debug: 4.3.4
-      hpagent: 0.1.2
-      ms: 2.1.3
-      secure-json-parse: 2.5.0
-    transitivePeerDependencies:
-      - supports-color
     dev: true
 
   /@istanbuljs/load-nyc-config/1.1.0:
@@ -1871,10 +1857,6 @@ packages:
       function-bind: 1.1.1
     dev: true
 
-  /hpagent/0.1.2:
-    resolution: {integrity: sha512-ePqFXHtSQWAFXYmj+JtOTHr84iNrII4/QRlAAPPE+zqnKy4xJo7Ie1Y4kC7AdB+LxLxSTTzBMASsEcy0q8YyvQ==}
-    dev: true
-
   /html-escaper/2.0.2:
     resolution: {integrity: sha512-H2iMtd0I4Mt5eYiapRdIDjp+XzelXQ0tFE4JS7YFwFevXXMmOp9myNrUvCg0D6ws8iqkRPBfKHgbwig1SmlLfg==}
     dev: true
@@ -3014,10 +2996,6 @@ packages:
       sparse-bitfield: 3.0.3
     dev: true
     optional: true
-
-  /secure-json-parse/2.5.0:
-    resolution: {integrity: sha512-ZQruFgZnIWH+WyO9t5rWt4ZEGqCKPwhiw+YbzTwpmT9elgLrLcfuyUiSnwwjUiVy9r4VM3urtbNF1xmEh9IL2w==}
-    dev: true
 
   /semver/6.3.0:
     resolution: {integrity: sha512-b39TBaTSfV6yBrapU89p5fKekE2m/NwnDocOVruQFS1/veMgdzuPcnOM34M6CwxW8jH/lxEa5rBoDeUwu5HHTw==}

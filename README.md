@@ -50,9 +50,8 @@ To get started with this library, you need to install it first.
 ```
 npm install @ocoda/event-sourcing
 ```
-This library currently provides wrappers for storing events and snapshots for MongoDB and Elasticsearch. To make use of database wrappers, you will need to install their respective libraries:
+This library currently provides wrappers for storing events and snapshots for MongoDB. To make use of database wrappers, you will need to install their respective libraries:
 ```
-npm install @elastic/elasticsearch # For using ElasticSearch
 npm install mongodb # For using MongoDB
 ```
 For testing purposes no database wrapper is required, this library ships with a fully functional in-memory store.
@@ -71,9 +70,9 @@ import { EventSourcingModule } from '@ocoda/event-sourcing';
 			},
 		},
 		snapshotStore: {
-			client: 'elasticsearch',
+			client: 'mongodb',
 			options: {
-				node: 'http://localhost:9200',
+				node: 'mongodb://localhost:27017',
 			}
 		},
 		events: [...Events],
