@@ -1,7 +1,7 @@
 import { StreamReadingDirection } from './constants';
 import { EventMap } from './event-map';
 import { IEvent, IEventPool } from './interfaces';
-import { EventEnvelope, EventStream } from './models';
+import { EventCollection, EventEnvelope, EventStream } from './models';
 
 interface BaseEventFilter {
 	/**
@@ -53,7 +53,7 @@ export type EventFilter = BaseEventFilter | StreamEventFilter;
 
 export abstract class EventStore {
 	abstract eventMap: EventMap;
-	abstract setup(pool?: IEventPool): void | Promise<void>;
+	abstract setup(pool?: IEventPool): EventCollection | Promise<EventCollection>;
 	abstract getEvents(filter?: EventFilter): AsyncGenerator<IEvent[]>;
 	abstract getEvent(eventStream: EventStream, version: number): IEvent | Promise<IEvent>;
 	abstract appendEvents(eventStream: EventStream, version: number, events: IEvent[]): void | Promise<void>;

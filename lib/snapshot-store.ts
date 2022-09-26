@@ -1,6 +1,6 @@
 import { StreamReadingDirection } from './constants';
 import { ISnapshot, ISnapshotPool } from './interfaces';
-import { AggregateRoot, SnapshotEnvelope, SnapshotStream } from './models';
+import { AggregateRoot, SnapshotCollection, SnapshotEnvelope, SnapshotStream } from './models';
 
 interface BaseSnapshotFilter {
 	/**
@@ -51,7 +51,7 @@ export interface StreamSnapshotFilter extends BaseSnapshotFilter {
 export type SnapshotFilter = BaseSnapshotFilter | StreamSnapshotFilter;
 
 export abstract class SnapshotStore {
-	abstract setup(pool?: ISnapshotPool): void | Promise<void>;
+	abstract setup(pool?: ISnapshotPool): SnapshotCollection | Promise<SnapshotCollection>;
 	abstract getSnapshots<A extends AggregateRoot>(filter?: SnapshotFilter): AsyncGenerator<ISnapshot<A>[]>;
 	abstract getSnapshot<A extends AggregateRoot>(
 		snapshotStream: SnapshotStream,
