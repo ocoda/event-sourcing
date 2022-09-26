@@ -14,6 +14,10 @@ interface BaseSnapshotFilter {
 	 */
 	direction?: StreamReadingDirection;
 	/**
+	 * The number of events to skip
+	 */
+	skip?: number;
+	/**
 	 * The number of snapshots to read
 	 * @default Number.MAX_SAFE_INTEGER
 	 */

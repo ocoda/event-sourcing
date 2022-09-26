@@ -15,6 +15,10 @@ interface BaseEventFilter {
 	 */
 	direction?: StreamReadingDirection;
 	/**
+	 * The number of events to skip
+	 */
+	skip?: number;
+	/**
 	 * The number of events to read
 	 * @default Number.MAX_SAFE_INTEGER
 	 */
