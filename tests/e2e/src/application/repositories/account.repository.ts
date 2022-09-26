@@ -14,9 +14,9 @@ export class AccountRepository {
 
 		const account = await this.accountSnapshotHandler.load(accountId);
 
-		const events = await this.eventStore.getEvents(eventStream, account.version + 1);
+		const eventCursor = this.eventStore.getEvents({ eventStream, fromVersion: account.version + 1 });
 
-		account.loadFromHistory(events);
+		await account.loadFromHistory(eventCursor);
 
 		return account;
 	}
