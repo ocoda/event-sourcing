@@ -39,6 +39,7 @@ class AccountDebitedEvent implements IEvent {
 class AccountClosedEvent implements IEvent {}
 
 describe(InMemoryEventStore, () => {
+	let eventStore: InMemoryEventStore;
 	let envelopesAccountA: EventEnvelope[];
 	let envelopesAccountB: EventEnvelope[];
 
@@ -47,7 +48,6 @@ describe(InMemoryEventStore, () => {
 	eventMap.register(AccountCreditedEvent, DefaultEventSerializer.for(AccountCreditedEvent));
 	eventMap.register(AccountDebitedEvent, DefaultEventSerializer.for(AccountDebitedEvent));
 	eventMap.register(AccountClosedEvent, DefaultEventSerializer.for(AccountClosedEvent));
-	let eventStore: InMemoryEventStore = new InMemoryEventStore(eventMap);
 
 	const events = [
 		new AccountOpenedEvent(),
@@ -65,6 +65,7 @@ describe(InMemoryEventStore, () => {
 	const eventStreamAccountB = EventStream.for(Account, idAccountB);
 
 	beforeAll(() => {
+		eventStore = new InMemoryEventStore(eventMap);
 		eventStore.setup();
 
 		envelopesAccountA = [

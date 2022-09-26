@@ -20,10 +20,9 @@ class Account extends AggregateRoot {
 }
 
 describe(InMemorySnapshotStore, () => {
+	let snapshotStore: InMemorySnapshotStore;
 	let envelopesAccountA: SnapshotEnvelope[];
 	let envelopesAccountB: SnapshotEnvelope[];
-
-	let snapshotStore = new InMemorySnapshotStore();
 
 	const snapshots: ISnapshot<Account>[] = [{ balance: 50 }, { balance: 20 }, { balance: 60 }, { balance: 50 }];
 
@@ -33,6 +32,7 @@ describe(InMemorySnapshotStore, () => {
 	const snapshotStreamAccountB = SnapshotStream.for(Account, idAccountB);
 
 	beforeAll(() => {
+		snapshotStore = new InMemorySnapshotStore();
 		snapshotStore.setup();
 
 		envelopesAccountA = [
