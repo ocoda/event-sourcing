@@ -112,8 +112,6 @@ describe(InMemorySnapshotStore, () => {
 			resolvedSnapshots.push(...snapshots);
 		}
 
-		console.log(resolvedSnapshots);
-
 		expect(resolvedSnapshots).toEqual(snapshots.slice(2));
 	});
 

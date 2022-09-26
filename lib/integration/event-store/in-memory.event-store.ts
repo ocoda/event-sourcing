@@ -3,7 +3,7 @@ import { EventMap } from '../../event-map';
 import { EventFilter, EventStore, StreamEventFilter } from '../../event-store';
 import { EventNotFoundException } from '../../exceptions';
 import { EventEnvelopeMetadata, IEvent, IEventCollection, IEventPayload, IEventPool } from '../../interfaces';
-import { EventEnvelope, EventStream } from '../../models';
+import { EventCollection, EventEnvelope, EventStream } from '../../models';
 
 interface InMemoryEventEntity {
 	streamId: string;
@@ -20,12 +20,14 @@ export class InMemoryEventStore extends EventStore {
 	}
 
 	setup(pool?: IEventPool): void {
-		this.collections.set(pool ? `${pool}-events` : 'events', []);
+		const collection = EventCollection.get(pool);
+		this.collections.set(collection, []);
 	}
 
 	async *getEvents(filter?: EventFilter): AsyncGenerator<IEvent[]> {
 		let entities: InMemoryEventEntity[] = [];
 
+		let collection = EventCollection.get(filter?.pool);
 		let eventStream = filter?.eventStream;
 		let fromVersion = eventStream && ((filter as StreamEventFilter).fromVersion || 0);
 		let direction = filter?.direction || StreamReadingDirection.FORWARD;
@@ -34,7 +36,7 @@ export class InMemoryEventStore extends EventStore {
 		let batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
 		if (eventStream) {
-			const { collection, streamId } = eventStream;
+			const { streamId } = eventStream;
 			entities = this.collections.get(collection).filter(({ streamId: entityStreamId }) => entityStreamId === streamId);
 		} else {
 			for (const collection of this.collections.values()) {
@@ -64,7 +66,8 @@ export class InMemoryEventStore extends EventStore {
 		}
 	}
 
-	getEvent({ collection, streamId }: EventStream, version: number): IEvent {
+	getEvent({ streamId }: EventStream, version: number, pool?: IEventPool): IEvent {
+		const collection = EventCollection.get(pool);
 		const eventCollection = this.collections.get(collection) || [];
 
 		let entity = eventCollection.find(
@@ -78,7 +81,13 @@ export class InMemoryEventStore extends EventStore {
 		return this.eventMap.deserializeEvent(entity.event, entity.payload);
 	}
 
-	appendEvents({ collection, streamId, aggregateId }: EventStream, aggregateVersion: number, events: IEvent[]): void {
+	appendEvents(
+		{ streamId, aggregateId }: EventStream,
+		aggregateVersion: number,
+		events: IEvent[],
+		pool?: IEventPool,
+	): void {
+		const collection = EventCollection.get(pool);
 		const eventCollection = this.collections.get(collection) || [];
 
 		let version = aggregateVersion - events.length + 1;
@@ -95,6 +104,7 @@ export class InMemoryEventStore extends EventStore {
 	async *getEnvelopes(filter?: EventFilter): AsyncGenerator<EventEnvelope[]> {
 		let entities: InMemoryEventEntity[] = [];
 
+		const collection = EventCollection.get(filter?.pool);
 		let eventStream = filter?.eventStream && filter.eventStream;
 		let fromVersion = eventStream && ((filter as StreamEventFilter).fromVersion || 0);
 		let direction = filter?.direction || StreamReadingDirection.FORWARD;
@@ -103,7 +113,7 @@ export class InMemoryEventStore extends EventStore {
 		let batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
 		if (eventStream) {
-			const { collection, streamId } = eventStream;
+			const { streamId } = eventStream;
 			entities = this.collections.get(collection).filter(({ streamId: entityStreamId }) => entityStreamId === streamId);
 		} else {
 			for (const collection of this.collections.values()) {
@@ -133,7 +143,8 @@ export class InMemoryEventStore extends EventStore {
 		}
 	}
 
-	getEnvelope({ collection, streamId }: EventStream, version: number): EventEnvelope {
+	getEnvelope({ streamId }: EventStream, version: number, pool?: IEventPool): EventEnvelope {
+		const collection = EventCollection.get(pool);
 		const eventCollection = this.collections.get(collection) || [];
 
 		let entity = eventCollection.find(
