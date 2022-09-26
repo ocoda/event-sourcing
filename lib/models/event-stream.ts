@@ -1,16 +1,12 @@
 import { Type } from '@nestjs/common';
 import { AGGREGATE_METADATA } from '../decorators';
 import { MissingAggregateMetadataException } from '../exceptions';
-import { AggregateMetadata, IEventCollection, ISnapshotPool } from '../interfaces';
+import { AggregateMetadata, IEventCollection, IEventPool } from '../interfaces';
 import { AggregateRoot } from './aggregate-root';
 import { Id } from './id';
 
 export class EventStream {
-	private constructor(
-		private _aggregate: string,
-		private _aggregateId: string,
-		private readonly _pool?: ISnapshotPool,
-	) {}
+	private constructor(private _aggregate: string, private _aggregateId: string, private readonly _pool?: IEventPool) {}
 
 	get aggregateId(): string {
 		return this._aggregateId;
