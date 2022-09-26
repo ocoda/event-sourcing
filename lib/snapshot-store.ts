@@ -56,21 +56,26 @@ export abstract class SnapshotStore {
 	abstract getSnapshot<A extends AggregateRoot>(
 		snapshotStream: SnapshotStream,
 		version: number,
+		pool?: ISnapshotPool,
 	): ISnapshot<A> | Promise<ISnapshot<A>>;
 	abstract getLastSnapshot<A extends AggregateRoot>(
 		snapshotStream: SnapshotStream,
+		pool?: ISnapshotPool,
 	): ISnapshot<A> | Promise<ISnapshot<A>>;
 	abstract appendSnapshot<A extends AggregateRoot>(
 		snapshotStream: SnapshotStream,
-		aggregateVersion: number,
+		version: number,
 		snapshot: ISnapshot<A>,
+		pool?: ISnapshotPool,
 	): void | Promise<void>;
 	abstract getLastEnvelope<A extends AggregateRoot>(
 		snapshotStream: SnapshotStream,
+		pool?: ISnapshotPool,
 	): SnapshotEnvelope<A> | Promise<SnapshotEnvelope<A>>;
 	abstract getEnvelopes?<A extends AggregateRoot>(filter?: SnapshotFilter): AsyncGenerator<SnapshotEnvelope<A>[]>;
 	abstract getEnvelope?<A extends AggregateRoot>(
 		snapshotStream: SnapshotStream,
 		version: number,
+		pool?: ISnapshotPool,
 	): SnapshotEnvelope<A> | Promise<SnapshotEnvelope<A>>;
 }
