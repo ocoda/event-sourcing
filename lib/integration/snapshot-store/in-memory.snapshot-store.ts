@@ -1,8 +1,8 @@
-import { StreamReadingDirection } from '../../constants';
+import { DEFAULT_BATCH_SIZE, StreamReadingDirection } from '../../constants';
 import { SnapshotNotFoundException } from '../../exceptions';
 import { ISnapshot, ISnapshotPool, SnapshotEnvelopeMetadata } from '../../interfaces';
 import { AggregateRoot, SnapshotEnvelope, SnapshotStream } from '../../models';
-import { SnapshotFilter, SnapshotStore } from '../../snapshot-store';
+import { SnapshotFilter, SnapshotStore, StreamSnapshotFilter } from '../../snapshot-store';
 
 export interface InMemorySnapshotEntity<A extends AggregateRoot> {
 	streamId: string;
@@ -19,10 +19,16 @@ export class InMemorySnapshotStore extends SnapshotStore {
 
 	async *getSnapshots<A extends AggregateRoot>(filter?: SnapshotFilter): AsyncGenerator<ISnapshot<A>[]> {
 		let entities: InMemorySnapshotEntity<any>[] = [];
-		let limit = filter?.limit || 10;
 
-		if (filter?.snapshotStream) {
-			const { collection, streamId } = filter.snapshotStream;
+		let snapshotStream = filter?.snapshotStream;
+		let fromVersion = snapshotStream && ((filter as StreamSnapshotFilter).fromVersion || 0);
+		let direction = filter?.direction || StreamReadingDirection.FORWARD;
+		let skip = filter?.skip;
+		let limit = filter?.limit || Number.MAX_SAFE_INTEGER;
+		let batch = filter?.batch || DEFAULT_BATCH_SIZE;
+
+		if (snapshotStream) {
+			const { collection, streamId } = snapshotStream;
 			entities = this.collections.get(collection).filter(({ streamId: entityStreamId }) => entityStreamId === streamId);
 		} else {
 			for (const collection of this.collections.values()) {
@@ -30,18 +36,25 @@ export class InMemorySnapshotStore extends SnapshotStore {
 			}
 		}
 
-		if (filter?.fromVersion) {
-			const startEventIndex = entities.findIndex(({ metadata }) => metadata.version === filter.fromVersion);
-			entities = startEventIndex === -1 ? [] : entities.slice(startEventIndex);
+		if (fromVersion) {
+			entities = entities.filter(({ metadata }) => metadata.version >= fromVersion);
 		}
 
-		if (filter?.direction === StreamReadingDirection.BACKWARD) {
+		if (direction === StreamReadingDirection.BACKWARD) {
 			entities = entities.reverse();
 		}
 
-		for (let i = 0; i < entities.length; i += limit) {
-			const batch = entities.slice(i, i + limit);
-			yield batch.map(({ payload }) => payload);
+		if (skip) {
+			entities = entities.slice(skip);
+		}
+
+		if (limit) {
+			entities = entities.slice(0, limit);
+		}
+
+		for (let i = 0; i < entities.length; i += batch) {
+			const chunk = entities.slice(i, i + batch);
+			yield chunk.map(({ payload }) => payload);
 		}
 	}
 
@@ -101,10 +114,16 @@ export class InMemorySnapshotStore extends SnapshotStore {
 
 	async *getEnvelopes<A extends AggregateRoot>(filter?: SnapshotFilter): AsyncGenerator<SnapshotEnvelope<A>[]> {
 		let entities: InMemorySnapshotEntity<any>[] = [];
-		let limit = filter?.limit || 10;
 
-		if (filter?.snapshotStream) {
-			const { collection, streamId } = filter.snapshotStream;
+		let snapshotStream = filter?.snapshotStream;
+		let fromVersion = snapshotStream && ((filter as StreamSnapshotFilter).fromVersion || 0);
+		let direction = filter?.direction || StreamReadingDirection.FORWARD;
+		let skip = filter?.skip;
+		let limit = filter?.limit || Number.MAX_SAFE_INTEGER;
+		let batch = filter?.batch || DEFAULT_BATCH_SIZE;
+
+		if (snapshotStream) {
+			const { collection, streamId } = snapshotStream;
 			entities = this.collections.get(collection).filter(({ streamId: entityStreamId }) => entityStreamId === streamId);
 		} else {
 			for (const collection of this.collections.values()) {
@@ -112,18 +131,25 @@ export class InMemorySnapshotStore extends SnapshotStore {
 			}
 		}
 
-		if (filter?.fromVersion) {
-			const startEventIndex = entities.findIndex(({ metadata }) => metadata.version === filter.fromVersion);
-			entities = startEventIndex === -1 ? [] : entities.slice(startEventIndex);
+		if (fromVersion) {
+			entities = entities.filter(({ metadata }) => metadata.version >= fromVersion);
 		}
 
-		if (filter?.direction === StreamReadingDirection.BACKWARD) {
+		if (direction === StreamReadingDirection.BACKWARD) {
 			entities = entities.reverse();
 		}
 
-		for (let i = 0; i < entities.length; i += limit) {
-			const batch = entities.slice(i, i + limit);
-			yield batch.map(({ payload, metadata }) => SnapshotEnvelope.from<A>(payload, metadata));
+		if (skip) {
+			entities = entities.slice(skip);
+		}
+
+		if (limit) {
+			entities = entities.slice(0, limit);
+		}
+
+		for (let i = 0; i < entities.length; i += batch) {
+			const chunk = entities.slice(i, i + batch);
+			yield chunk.map(({ payload, metadata }) => SnapshotEnvelope.from<A>(payload, metadata));
 		}
 	}
 

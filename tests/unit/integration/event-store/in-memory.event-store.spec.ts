@@ -39,14 +39,15 @@ class AccountDebitedEvent implements IEvent {
 class AccountClosedEvent implements IEvent {}
 
 describe(InMemoryEventStore, () => {
-	let eventStore: InMemoryEventStore;
-	let envelopes: EventEnvelope[];
+	let envelopesAccountA: EventEnvelope[];
+	let envelopesAccountB: EventEnvelope[];
 
 	const eventMap = new EventMap();
 	eventMap.register(AccountOpenedEvent, DefaultEventSerializer.for(AccountOpenedEvent));
 	eventMap.register(AccountCreditedEvent, DefaultEventSerializer.for(AccountCreditedEvent));
 	eventMap.register(AccountDebitedEvent, DefaultEventSerializer.for(AccountDebitedEvent));
 	eventMap.register(AccountClosedEvent, DefaultEventSerializer.for(AccountClosedEvent));
+	let eventStore: InMemoryEventStore = new InMemoryEventStore(eventMap);
 
 	const events = [
 		new AccountOpenedEvent(),
@@ -57,116 +58,151 @@ describe(InMemoryEventStore, () => {
 		new AccountClosedEvent(),
 	];
 
-	const accountId = AccountId.generate();
-	const accountVersion = events.length;
-	const eventStream = EventStream.for(Account, accountId);
+	const idAccountA = AccountId.generate();
+	const eventStreamAccountA = EventStream.for(Account, idAccountA);
+
+	const idAccountB = AccountId.generate();
+	const eventStreamAccountB = EventStream.for(Account, idAccountB);
 
 	beforeAll(() => {
-		envelopes = [
+		eventStore.setup();
+
+		envelopesAccountA = [
 			EventEnvelope.create('account-opened', eventMap.serializeEvent(events[0]), {
-				aggregateId: accountId.value,
+				aggregateId: idAccountA.value,
 				version: 1,
 			}),
 			EventEnvelope.create('account-credited', eventMap.serializeEvent(events[1]), {
-				aggregateId: accountId.value,
+				aggregateId: idAccountA.value,
 				version: 2,
 			}),
 			EventEnvelope.create('account-debited', eventMap.serializeEvent(events[2]), {
-				aggregateId: accountId.value,
+				aggregateId: idAccountA.value,
 				version: 3,
 			}),
 			EventEnvelope.create('account-credited', eventMap.serializeEvent(events[3]), {
-				aggregateId: accountId.value,
+				aggregateId: idAccountA.value,
 				version: 4,
 			}),
 			EventEnvelope.create('account-debited', eventMap.serializeEvent(events[4]), {
-				aggregateId: accountId.value,
+				aggregateId: idAccountA.value,
 				version: 5,
 			}),
 			EventEnvelope.create('account-closed', eventMap.serializeEvent(events[5]), {
-				aggregateId: accountId.value,
+				aggregateId: idAccountA.value,
+				version: 6,
+			}),
+		];
+		envelopesAccountB = [
+			EventEnvelope.create('account-opened', eventMap.serializeEvent(events[0]), {
+				aggregateId: idAccountB.value,
+				version: 1,
+			}),
+			EventEnvelope.create('account-credited', eventMap.serializeEvent(events[1]), {
+				aggregateId: idAccountB.value,
+				version: 2,
+			}),
+			EventEnvelope.create('account-debited', eventMap.serializeEvent(events[2]), {
+				aggregateId: idAccountB.value,
+				version: 3,
+			}),
+			EventEnvelope.create('account-credited', eventMap.serializeEvent(events[3]), {
+				aggregateId: idAccountB.value,
+				version: 4,
+			}),
+			EventEnvelope.create('account-debited', eventMap.serializeEvent(events[4]), {
+				aggregateId: idAccountB.value,
+				version: 5,
+			}),
+			EventEnvelope.create('account-closed', eventMap.serializeEvent(events[5]), {
+				aggregateId: idAccountB.value,
 				version: 6,
 			}),
 		];
 	});
 
-	beforeEach(() => {
-		eventStore = new InMemoryEventStore(eventMap);
-		eventStore.setup();
-	});
-
 	it('should append event envelopes', () => {
-		eventStore.appendEvents(eventStream, accountVersion, events);
-		const entities = [...eventStore['collections'].get(eventStream.collection)];
+		eventStore.appendEvents(eventStreamAccountA, 3, events.slice(0, 3));
+		eventStore.appendEvents(eventStreamAccountB, 3, events.slice(0, 3));
+		eventStore.appendEvents(eventStreamAccountA, 6, events.slice(3));
+		eventStore.appendEvents(eventStreamAccountB, 6, events.slice(3));
 
-		expect(entities).toHaveLength(events.length);
+		const entities = [...eventStore['collections'].get('events')];
+		const entitiesAccountA = entities.filter(
+			({ streamId: entityStreamId }) => entityStreamId === eventStreamAccountA.streamId,
+		);
+		const entitiesAccountB = entities.filter(
+			({ streamId: entityStreamId }) => entityStreamId === eventStreamAccountB.streamId,
+		);
 
-		entities.forEach((entity, index) => {
-			expect(entity.streamId).toEqual(eventStream.streamId);
-			expect(entity.event).toEqual(envelopes[index].event);
-			expect(entity.payload).toEqual(envelopes[index].payload);
-			expect(entity.metadata.aggregateId).toEqual(envelopes[index].metadata.aggregateId);
+		expect(entities).toHaveLength(events.length * 2);
+		expect(entitiesAccountA).toHaveLength(events.length);
+		expect(entitiesAccountB).toHaveLength(events.length);
+
+		entitiesAccountA.forEach((entity, index) => {
+			expect(entity.streamId).toEqual(eventStreamAccountA.streamId);
+			expect(entity.event).toEqual(envelopesAccountA[index].event);
+			expect(entity.payload).toEqual(envelopesAccountA[index].payload);
+			expect(entity.metadata.aggregateId).toEqual(envelopesAccountA[index].metadata.aggregateId);
 			expect(entity.metadata.occurredOn).toBeInstanceOf(Date);
-			expect(entity.metadata.version).toEqual(envelopes[index].metadata.version);
+			expect(entity.metadata.version).toEqual(envelopesAccountA[index].metadata.version);
+		});
+
+		entitiesAccountB.forEach((entity, index) => {
+			expect(entity.streamId).toEqual(eventStreamAccountB.streamId);
+			expect(entity.event).toEqual(envelopesAccountB[index].event);
+			expect(entity.payload).toEqual(envelopesAccountB[index].payload);
+			expect(entity.metadata.aggregateId).toEqual(envelopesAccountB[index].metadata.aggregateId);
+			expect(entity.metadata.occurredOn).toBeInstanceOf(Date);
+			expect(entity.metadata.version).toEqual(envelopesAccountB[index].metadata.version);
 		});
 	});
 
-	it('should retrieve events', async () => {
-		eventStore.appendEvents(eventStream, accountVersion, events);
+	it('should retrieve a single event from a specified stream', () => {
+		const resolvedEvent = eventStore.getEvent(eventStreamAccountA, envelopesAccountA[3].metadata.version);
 
+		expect(resolvedEvent).toEqual(events[3]);
+	});
+
+	it('should filter events by stream', async () => {
 		const resolvedEvents = [];
-		for await (const events of eventStore.getEvents({ eventStream })) {
+		for await (const events of eventStore.getEvents({ eventStream: eventStreamAccountA })) {
 			resolvedEvents.push(...events);
 		}
 
 		expect(resolvedEvents).toEqual(events);
 	});
 
-	it('should retrieve a single event', () => {
-		eventStore.appendEvents(eventStream, accountVersion, events);
-
-		const resolvedEvent = eventStore.getEvent(eventStream, envelopes[3].metadata.version);
-
-		expect(resolvedEvent).toEqual(events[3]);
-	});
-
-	it("should throw when an event isn't found", () => {
-		expect(() => eventStore.getEvent(eventStream, accountVersion)).toThrow(
-			new EventNotFoundException(eventStream.streamId, accountVersion),
-		);
-	});
-
-	it('should retrieve events backwards', async () => {
-		eventStore.appendEvents(eventStream, accountVersion, events);
-
+	it('should filter events by stream and version', async () => {
 		const resolvedEvents = [];
-		for await (const events of eventStore.getEvents({ eventStream, direction: StreamReadingDirection.BACKWARD })) {
-			resolvedEvents.push(...events);
-		}
-
-		expect(resolvedEvents).toEqual(events.slice().reverse());
-	});
-
-	it('should retrieve events forward from a certain version', async () => {
-		eventStore.appendEvents(eventStream, accountVersion, events);
-
-		const resolvedEvents = [];
-		for await (const events of eventStore.getEvents({
-			eventStream,
-			fromVersion: 3,
-		})) {
+		for await (const events of eventStore.getEvents({ eventStream: eventStreamAccountA, fromVersion: 3 })) {
 			resolvedEvents.push(...events);
 		}
 
 		expect(resolvedEvents).toEqual(events.slice(2));
 	});
 
-	it('should retrieve events backwards from a certain version', async () => {
-		eventStore.appendEvents(eventStream, accountVersion, events);
+	it("should throw when an event isn't found in a specified stream", () => {
+		const stream = EventStream.for(Account, AccountId.generate());
+		expect(() => eventStore.getEvent(stream, 5)).toThrow(new EventNotFoundException(stream.streamId, 5));
+	});
 
+	it('should retrieve events backwards', async () => {
 		const resolvedEvents = [];
 		for await (const events of eventStore.getEvents({
-			eventStream,
+			eventStream: eventStreamAccountA,
+			direction: StreamReadingDirection.BACKWARD,
+		})) {
+			resolvedEvents.push(...events);
+		}
+
+		expect(resolvedEvents).toEqual(events.slice().reverse());
+	});
+
+	it('should retrieve events backwards from a certain version', async () => {
+		const resolvedEvents = [];
+		for await (const events of eventStore.getEvents({
+			eventStream: eventStreamAccountA,
 			fromVersion: 4,
 			direction: StreamReadingDirection.BACKWARD,
 		})) {
@@ -176,34 +212,62 @@ describe(InMemoryEventStore, () => {
 		expect(resolvedEvents).toEqual(events.slice(3).reverse());
 	});
 
-	it('should retrieve event-envelopes', async () => {
-		eventStore.appendEvents(eventStream, accountVersion, events);
+	it('should skip the returned events', async () => {
+		const resolvedEvents = [];
 
-		const resolvedEnvelopes = [];
-		for await (const envelopes of eventStore.getEnvelopes({ eventStream })) {
-			resolvedEnvelopes.push(...envelopes);
+		for await (const events of eventStore.getEvents({ eventStream: eventStreamAccountA, skip: 3 })) {
+			resolvedEvents.push(...events);
 		}
 
-		expect(resolvedEnvelopes).toHaveLength(envelopes.length);
+		expect(resolvedEvents).toEqual(events.slice(3));
+	});
 
-		resolvedEnvelopes.forEach((envelope, index) => {
-			expect(envelope.event).toEqual(envelopes[index].event);
-			expect(envelope.payload).toEqual(envelopes[index].payload);
-			expect(envelope.metadata.aggregateId).toEqual(envelopes[index].metadata.aggregateId);
-			expect(envelope.metadata.occurredOn).toBeInstanceOf(Date);
-			expect(envelope.metadata.version).toEqual(envelopes[index].metadata.version);
-		});
+	it('should limit the returned events', async () => {
+		const resolvedEvents = [];
+		for await (const events of eventStore.getEvents({ eventStream: eventStreamAccountA, limit: 3 })) {
+			resolvedEvents.push(...events);
+		}
+
+		expect(resolvedEvents).toEqual(events.slice(0, 3));
+	});
+
+	it('should batch the returned events', async () => {
+		const resolvedEvents = [];
+		for await (const events of eventStore.getEvents({ eventStream: eventStreamAccountA, batch: 2 })) {
+			expect(events.length).toBe(2);
+			resolvedEvents.push(...events);
+		}
+
+		expect(resolvedEvents).toEqual(events);
 	});
 
 	it('should retrieve a single event-envelope', () => {
-		eventStore.appendEvents(eventStream, accountVersion, events);
+		const { event, metadata, payload } = eventStore.getEnvelope(
+			eventStreamAccountA,
+			envelopesAccountA[3].metadata.version,
+		);
 
-		const { event, metadata, payload } = eventStore.getEnvelope(eventStream, envelopes[3].metadata.version);
-
-		expect(event).toEqual(envelopes[3].event);
-		expect(payload).toEqual(envelopes[3].payload);
-		expect(metadata.aggregateId).toEqual(envelopes[3].metadata.aggregateId);
+		expect(event).toEqual(envelopesAccountA[3].event);
+		expect(payload).toEqual(envelopesAccountA[3].payload);
+		expect(metadata.aggregateId).toEqual(envelopesAccountA[3].metadata.aggregateId);
 		expect(metadata.occurredOn).toBeInstanceOf(Date);
-		expect(metadata.version).toEqual(envelopes[3].metadata.version);
+		expect(metadata.version).toEqual(envelopesAccountA[3].metadata.version);
+	});
+
+	it('should retrieve event-envelopes', async () => {
+		const resolvedEnvelopes = [];
+		for await (const envelopes of eventStore.getEnvelopes({ eventStream: eventStreamAccountA })) {
+			resolvedEnvelopes.push(...envelopes);
+		}
+
+		expect(resolvedEnvelopes).toHaveLength(envelopesAccountA.length);
+
+		resolvedEnvelopes.forEach((envelope, index) => {
+			expect(envelope.event).toEqual(envelopesAccountA[index].event);
+			expect(envelope.payload).toEqual(envelopesAccountA[index].payload);
+			expect(envelope.metadata.aggregateId).toEqual(envelopesAccountA[index].metadata.aggregateId);
+			expect(envelope.metadata.occurredOn).toBeInstanceOf(Date);
+			expect(envelope.metadata.version).toEqual(envelopesAccountA[index].metadata.version);
+		});
 	});
 });

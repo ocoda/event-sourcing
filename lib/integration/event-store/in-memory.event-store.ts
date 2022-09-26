@@ -1,6 +1,6 @@
-import { StreamReadingDirection } from '../../constants';
+import { DEFAULT_BATCH_SIZE, StreamReadingDirection } from '../../constants';
 import { EventMap } from '../../event-map';
-import { EventFilter, EventStore } from '../../event-store';
+import { EventFilter, EventStore, StreamEventFilter } from '../../event-store';
 import { EventNotFoundException } from '../../exceptions';
 import { EventEnvelopeMetadata, IEvent, IEventCollection, IEventPayload, IEventPool } from '../../interfaces';
 import { EventEnvelope, EventStream } from '../../models';
@@ -25,10 +25,16 @@ export class InMemoryEventStore extends EventStore {
 
 	async *getEvents(filter?: EventFilter): AsyncGenerator<IEvent[]> {
 		let entities: InMemoryEventEntity[] = [];
-		let limit = filter?.limit || 10;
 
-		if (filter?.eventStream) {
-			const { collection, streamId } = filter.eventStream;
+		let eventStream = filter?.eventStream;
+		let fromVersion = eventStream && ((filter as StreamEventFilter).fromVersion || 0);
+		let direction = filter?.direction || StreamReadingDirection.FORWARD;
+		let limit = filter?.limit || Number.MAX_SAFE_INTEGER;
+		let skip = filter?.skip;
+		let batch = filter?.batch || DEFAULT_BATCH_SIZE;
+
+		if (eventStream) {
+			const { collection, streamId } = eventStream;
 			entities = this.collections.get(collection).filter(({ streamId: entityStreamId }) => entityStreamId === streamId);
 		} else {
 			for (const collection of this.collections.values()) {
@@ -36,18 +42,25 @@ export class InMemoryEventStore extends EventStore {
 			}
 		}
 
-		if (filter?.fromVersion) {
-			const startEventIndex = entities.findIndex(({ metadata }) => metadata.version === filter.fromVersion);
-			entities = startEventIndex === -1 ? [] : entities.slice(startEventIndex);
+		if (fromVersion) {
+			entities = entities.filter(({ metadata }) => metadata.version >= fromVersion);
 		}
 
-		if (filter?.direction === StreamReadingDirection.BACKWARD) {
+		if (direction === StreamReadingDirection.BACKWARD) {
 			entities = entities.reverse();
 		}
 
-		for (let i = 0; i < entities.length; i += limit) {
-			const batch = entities.slice(i, i + limit);
-			yield batch.map(({ event, payload }) => this.eventMap.deserializeEvent(event, payload));
+		if (skip) {
+			entities = entities.slice(skip);
+		}
+
+		if (limit) {
+			entities = entities.slice(0, limit);
+		}
+
+		for (let i = 0; i < entities.length; i += batch) {
+			const chunk = entities.slice(i, i + batch);
+			yield chunk.map(({ event, payload }) => this.eventMap.deserializeEvent(event, payload));
 		}
 	}
 
@@ -81,10 +94,16 @@ export class InMemoryEventStore extends EventStore {
 
 	async *getEnvelopes(filter?: EventFilter): AsyncGenerator<EventEnvelope[]> {
 		let entities: InMemoryEventEntity[] = [];
-		let limit = filter?.limit || 10;
 
-		if (filter?.eventStream) {
-			const { collection, streamId } = filter.eventStream;
+		let eventStream = filter?.eventStream && filter.eventStream;
+		let fromVersion = eventStream && ((filter as StreamEventFilter).fromVersion || 0);
+		let direction = filter?.direction || StreamReadingDirection.FORWARD;
+		let limit = filter?.limit || Number.MAX_SAFE_INTEGER;
+		let skip = filter?.skip;
+		let batch = filter?.batch || DEFAULT_BATCH_SIZE;
+
+		if (eventStream) {
+			const { collection, streamId } = eventStream;
 			entities = this.collections.get(collection).filter(({ streamId: entityStreamId }) => entityStreamId === streamId);
 		} else {
 			for (const collection of this.collections.values()) {
@@ -92,18 +111,25 @@ export class InMemoryEventStore extends EventStore {
 			}
 		}
 
-		if (filter?.fromVersion) {
-			const startEventIndex = entities.findIndex(({ metadata }) => metadata.version === filter.fromVersion);
-			entities = startEventIndex === -1 ? [] : entities.slice(startEventIndex);
+		if (fromVersion) {
+			entities = entities.filter(({ metadata }) => metadata.version >= fromVersion);
 		}
 
-		if (filter?.direction === StreamReadingDirection.BACKWARD) {
+		if (direction === StreamReadingDirection.BACKWARD) {
 			entities = entities.reverse();
 		}
 
-		for (let i = 0; i < entities.length; i += limit) {
-			const batch = entities.slice(i, i + limit);
-			yield batch.map(({ event, payload, metadata }) => EventEnvelope.create(event, payload, metadata));
+		if (skip) {
+			entities = entities.slice(skip);
+		}
+
+		if (limit) {
+			entities = entities.slice(0, limit);
+		}
+
+		for (let i = 0; i < entities.length; i += batch) {
+			const chunk = entities.slice(i, i + batch);
+			yield chunk.map(({ event, payload, metadata }) => EventEnvelope.create(event, payload, metadata));
 		}
 	}
 
