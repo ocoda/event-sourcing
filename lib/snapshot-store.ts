@@ -4,6 +4,11 @@ import { AggregateRoot, SnapshotEnvelope, SnapshotStream } from './models';
 
 interface BaseSnapshotFilter {
 	/**
+	 * The snapshot pool to search in.
+	 * @default snapshots
+	 */
+	pool?: ISnapshotPool;
+	/**
 	 * The snapshot stream to filter by.
 	 * If not provided, all snapshots will be returned.
 	 */

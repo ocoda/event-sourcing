@@ -5,6 +5,11 @@ import { EventEnvelope, EventStream } from './models';
 
 interface BaseEventFilter {
 	/**
+	 * The event pool to search in.
+	 * @default events
+	 */
+	pool?: IEventPool;
+	/**
 	 * The event stream to filter by.
 	 * If not provided, all events will be returned.
 	 */
