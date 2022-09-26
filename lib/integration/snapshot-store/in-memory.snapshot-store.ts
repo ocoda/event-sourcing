@@ -1,7 +1,7 @@
 import { DEFAULT_BATCH_SIZE, StreamReadingDirection } from '../../constants';
 import { SnapshotNotFoundException } from '../../exceptions';
 import { ISnapshot, ISnapshotPool, SnapshotEnvelopeMetadata } from '../../interfaces';
-import { AggregateRoot, SnapshotCollection, SnapshotEnvelope, SnapshotStream } from '../../models';
+import { AggregateRoot, EventCollection, SnapshotCollection, SnapshotEnvelope, SnapshotStream } from '../../models';
 import { SnapshotFilter, SnapshotStore, StreamSnapshotFilter } from '../../snapshot-store';
 
 export interface InMemorySnapshotEntity<A extends AggregateRoot> {
@@ -13,9 +13,10 @@ export interface InMemorySnapshotEntity<A extends AggregateRoot> {
 export class InMemorySnapshotStore extends SnapshotStore {
 	private collections: Map<ISnapshotPool, InMemorySnapshotEntity<any>[]> = new Map();
 
-	setup(pool?: ISnapshotPool): void {
+	setup(pool?: ISnapshotPool): EventCollection {
 		const collection = SnapshotCollection.get(pool);
 		this.collections.set(collection, []);
+		return collection;
 	}
 
 	async *getSnapshots<A extends AggregateRoot>(filter?: SnapshotFilter): AsyncGenerator<ISnapshot<A>[]> {

@@ -19,9 +19,10 @@ export class InMemoryEventStore extends EventStore {
 		super();
 	}
 
-	setup(pool?: IEventPool): void {
+	setup(pool?: IEventPool): EventCollection {
 		const collection = EventCollection.get(pool);
 		this.collections.set(collection, []);
+		return collection;
 	}
 
 	async *getEvents(filter?: EventFilter): AsyncGenerator<IEvent[]> {
