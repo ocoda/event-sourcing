@@ -4,3 +4,5 @@ export enum StreamReadingDirection {
 	FORWARD,
 	BACKWARD,
 }
+
+export const DEFAULT_BATCH_SIZE = 100;

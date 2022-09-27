@@ -3,6 +3,7 @@ import {
 	AggregateRoot,
 	Id,
 	ISnapshot,
+	ISnapshotPool,
 	Snapshot,
 	SnapshotEnvelope,
 	SnapshotHandler,
@@ -69,7 +70,9 @@ describe(SnapshotHandler, () => {
 
 		snapshotStore = {
 			appendSnapshot: jest.fn(),
-			getLastEnvelope: <any>jest.fn((stream: SnapshotStream) => Promise.resolve(snapshotEnvelope)),
+			getLastEnvelope: <any>jest.fn(
+				(snapshotStream: SnapshotStream, pool?: ISnapshotPool) => Promise.resolve(snapshotEnvelope),
+			),
 			getLastSnapshot: jest.fn(),
 			getSnapshot: jest.fn(),
 			getSnapshots: jest.fn(),
@@ -86,11 +89,16 @@ describe(SnapshotHandler, () => {
 
 		account.version = snapshotInterval;
 		snapshotHandler.save(account.id, account);
-		expect(snapshotStore.appendSnapshot).toHaveBeenCalledWith(snapshotStream, snapshotInterval, {
-			...snapshot,
-			id: account.id.value,
-			openedOn: account.openedOn.toISOString(),
-		});
+		expect(snapshotStore.appendSnapshot).toHaveBeenCalledWith(
+			snapshotStream,
+			snapshotInterval,
+			{
+				...snapshot,
+				id: account.id.value,
+				openedOn: account.openedOn.toISOString(),
+			},
+			undefined,
+		);
 	});
 
 	it('retrieves the latest snapshot as a snapshot-envelope', async () => {
@@ -102,7 +110,7 @@ describe(SnapshotHandler, () => {
 
 		const loadedAccount = await snapshotHandler.load(account.id);
 
-		expect(snapshotStore.getLastEnvelope).toHaveBeenCalledWith(snapshotStream);
+		expect(snapshotStore.getLastEnvelope).toHaveBeenCalledWith(snapshotStream, undefined);
 
 		expect(loadedAccount).toEqual(account);
 	});

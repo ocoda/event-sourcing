@@ -1,53 +1,72 @@
-import { Db } from 'mongodb';
-import { StreamReadingDirection } from '../../constants';
+import { Db, Document } from 'mongodb';
+import { DEFAULT_BATCH_SIZE, StreamReadingDirection } from '../../constants';
 import { EventMap } from '../../event-map';
-import { EventStore } from '../../event-store';
+import { EventFilter, EventStore, StreamEventFilter } from '../../event-store';
 import { EventNotFoundException } from '../../exceptions';
 import { EventEnvelopeMetadata, IEvent, IEventPayload, IEventPool } from '../../interfaces';
-import { EventEnvelope, EventStream } from '../../models';
+import { EventCollection, EventEnvelope, EventStream } from '../../models';
 
-export interface MongoEventEntity {
-	_id: string;
-	streamId: string;
-	event: string;
-	payload: IEventPayload<IEvent>;
-	metadata: EventEnvelopeMetadata;
-}
+export type MongoEventEntity =
+	& { _id: string; streamId: string; event: string; payload: IEventPayload<IEvent> }
+	& Document
+	& EventEnvelopeMetadata;
 
 export class MongoDBEventStore extends EventStore {
 	constructor(readonly eventMap: EventMap, readonly database: Db) {
 		super();
 	}
 
-	async setup(pool?: IEventPool): Promise<void> {
-		const eventCollection = await this.database.createCollection<MongoEventEntity>(pool ? `${pool}-events` : 'events');
-		await eventCollection.createIndex({ streamId: 1, 'metadata.version': 1 }, { unique: true });
+	async setup(pool?: IEventPool): Promise<EventCollection> {
+		const collection = EventCollection.get(pool);
+		const eventCollection = await this.database.createCollection<MongoEventEntity>(collection);
+		await eventCollection.createIndex({ streamId: 1, version: 1 }, { unique: true });
+		return collection;
 	}
 
-	getEvents(
-		{ collection, streamId }: EventStream,
-		fromVersion?: number,
-		direction: StreamReadingDirection = StreamReadingDirection.FORWARD,
-	): Promise<IEvent[]> {
-		return this.database
+	async *getEvents(filter?: EventFilter): AsyncGenerator<IEvent[]> {
+		const collection = EventCollection.get(filter?.pool);
+		let eventStream = filter?.eventStream;
+		let fromVersion = eventStream && ((filter as StreamEventFilter).fromVersion || 0);
+		let direction = filter?.direction || StreamReadingDirection.FORWARD;
+		let limit = filter?.limit || Number.MAX_SAFE_INTEGER;
+		let skip = filter?.skip;
+		let batch = filter?.batch || DEFAULT_BATCH_SIZE;
+
+		const cursor = this.database
 			.collection<MongoEventEntity>(collection)
 			.find(
 				{
-					streamId,
-					...(fromVersion && { 'metadata.version': { $gte: fromVersion } }),
+					...(eventStream && { streamId: eventStream.streamId }),
+					...(fromVersion && { version: { $gte: fromVersion } }),
 				},
 				{
-					sort: { 'metadata.version': direction === StreamReadingDirection.FORWARD ? 1 : -1 },
+					sort: { version: direction === StreamReadingDirection.FORWARD ? 1 : -1 },
+					skip,
+					limit,
 				},
 			)
-			.map(({ event, payload }) => this.eventMap.deserializeEvent(event, payload))
-			.toArray();
+			.map(({ event, payload }) => this.eventMap.deserializeEvent(event, payload));
+
+		const entities = [];
+		let hasNext: boolean;
+		do {
+			const entity = await cursor.next();
+			hasNext = entity !== null;
+
+			hasNext && entities.push(entity);
+
+			if (entities.length > 0 && (entities.length === batch || !hasNext)) {
+				yield entities;
+				entities.length = 0;
+			}
+		} while (hasNext);
 	}
 
-	async getEvent({ collection, streamId }: EventStream, version: number): Promise<IEvent> {
+	async getEvent({ streamId }: EventStream, version: number, pool?: IEventPool): Promise<IEvent> {
+		const collection = EventCollection.get(pool);
 		const entity = await this.database.collection<MongoEventEntity>(collection).findOne({
 			streamId,
-			'metadata.version': version,
+			version,
 		});
 
 		if (!entity) {
@@ -58,10 +77,13 @@ export class MongoDBEventStore extends EventStore {
 	}
 
 	async appendEvents(
-		{ collection, streamId, aggregateId }: EventStream,
+		{ streamId, aggregateId }: EventStream,
 		aggregateVersion: number,
 		events: IEvent[],
+		pool?: IEventPool,
 	): Promise<void> {
+		const collection = EventCollection.get(pool);
+
 		let version = aggregateVersion - events.length + 1;
 		const envelopes = events.reduce<EventEnvelope[]>((acc, event) => {
 			const name = this.eventMap.getName(event);
@@ -71,44 +93,73 @@ export class MongoDBEventStore extends EventStore {
 		}, []);
 
 		const entities = envelopes.map<MongoEventEntity>(
-			({ event, payload, metadata }) => ({ _id: metadata.eventId, streamId, event, payload, metadata }),
+			({ event, payload, metadata }) => ({ _id: metadata.eventId, streamId, event, payload, ...metadata }),
 		);
 
 		await this.database.collection<MongoEventEntity>(collection).insertMany(entities);
 	}
 
-	getEnvelopes(
-		{ collection, streamId }: EventStream,
-		fromVersion?: number,
-		direction: StreamReadingDirection = StreamReadingDirection.FORWARD,
-	): Promise<EventEnvelope[]> {
-		return this.database
+	async *getEnvelopes(filter?: EventFilter): AsyncGenerator<EventEnvelope[]> {
+		const collection = EventCollection.get(filter?.pool);
+		let eventStream = filter?.eventStream;
+		let fromVersion = eventStream && ((filter as StreamEventFilter).fromVersion || 0);
+		let direction = filter?.direction || StreamReadingDirection.FORWARD;
+		let limit = filter?.limit || Number.MAX_SAFE_INTEGER;
+		let skip = filter?.skip;
+		let batch = filter?.batch || DEFAULT_BATCH_SIZE;
+
+		const cursor = this.database
 			.collection<MongoEventEntity>(collection)
 			.find(
 				{
-					streamId,
-					...(fromVersion && { 'metadata.version': { $gte: fromVersion } }),
+					...(eventStream && { streamId: eventStream.streamId }),
+					...(fromVersion && { version: { $gte: fromVersion } }),
 				},
 				{
-					sort: { 'metadata.version': direction === StreamReadingDirection.FORWARD ? 1 : -1 },
+					sort: { version: direction === StreamReadingDirection.FORWARD ? 1 : -1 },
+					skip,
+					limit,
 				},
 			)
-			.map(({ event, payload, metadata }) => {
-				return EventEnvelope.from(event, payload, metadata);
-			})
-			.toArray();
+			.map(
+				({ event, payload, eventId, aggregateId, version, occurredOn, correlationId, causationId }) =>
+					EventEnvelope.from(event, payload, { eventId, aggregateId, version, occurredOn, correlationId, causationId }),
+			);
+
+		const entities = [];
+		let hasNext: boolean;
+		do {
+			const entity = await cursor.next();
+			hasNext = entity !== null;
+
+			hasNext && entities.push(entity);
+
+			if (entities.length > 0 && (entities.length === batch || !hasNext)) {
+				yield entities;
+				entities.length = 0;
+			}
+		} while (hasNext);
 	}
 
-	async getEnvelope({ collection, streamId }: EventStream, version: number): Promise<EventEnvelope> {
+	async getEnvelope({ streamId }: EventStream, version: number, pool?: IEventPool): Promise<EventEnvelope> {
+		const collection = EventCollection.get(pool);
+
 		const entity = await this.database.collection<MongoEventEntity>(collection).findOne({
 			streamId,
-			'metadata.version': version,
+			version,
 		});
 
 		if (!entity) {
 			throw new EventNotFoundException(streamId, version);
 		}
 
-		return EventEnvelope.from(entity.event, entity.payload, entity.metadata);
+		return EventEnvelope.from(entity.event, entity.payload, {
+			eventId: entity.eventId,
+			aggregateId: entity.aggregateId,
+			version: entity.version,
+			occurredOn: entity.occurredOn,
+			correlationId: entity.correlationId,
+			causationId: entity.causationId,
+		});
 	}
 }

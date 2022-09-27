@@ -1,1 +1,1 @@
-export type SnapshotStoreClient = 'in-memory' | 'mongodb' | 'elasticsearch';
+export type SnapshotStoreClient = 'in-memory' | 'mongodb';

@@ -11,7 +11,6 @@ describe(EventStream, () => {
 
 		expect(eventStream.aggregateId).toBe(accountId.value);
 		expect(eventStream.streamId).toBe(`account-${accountId.value}`);
-		expect(eventStream.collection).toBe('events');
 	});
 
 	it('should create an EventStream from an Aggregate instance', () => {
@@ -21,14 +20,6 @@ describe(EventStream, () => {
 
 		expect(eventStream.aggregateId).toBe(accountId.value);
 		expect(eventStream.streamId).toBe(`account-${accountId.value}`);
-		expect(eventStream.collection).toBe('events');
-	});
-
-	it('should create a pool-specific EventStream', () => {
-		const accountId = AccountId.generate();
-		const eventStream = EventStream.for(Account, accountId, 'custom-pool');
-
-		expect(eventStream.collection).toBe('custom-pool-events');
 	});
 
 	it('should throw when creating an event-stream for an undecorated aggregate', () => {
