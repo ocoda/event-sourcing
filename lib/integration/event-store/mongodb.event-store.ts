@@ -1,4 +1,4 @@
-import { Db } from 'mongodb';
+import { Db, Document } from 'mongodb';
 import { DEFAULT_BATCH_SIZE, StreamReadingDirection } from '../../constants';
 import { EventMap } from '../../event-map';
 import { EventFilter, EventStore, StreamEventFilter } from '../../event-store';
@@ -6,13 +6,10 @@ import { EventNotFoundException } from '../../exceptions';
 import { EventEnvelopeMetadata, IEvent, IEventPayload, IEventPool } from '../../interfaces';
 import { EventCollection, EventEnvelope, EventStream } from '../../models';
 
-export interface MongoEventEntity {
-	_id: string;
-	streamId: string;
-	event: string;
-	payload: IEventPayload<IEvent>;
-	metadata: EventEnvelopeMetadata;
-}
+export type MongoEventEntity =
+	& { _id: string; streamId: string; event: string; payload: IEventPayload<IEvent> }
+	& Document
+	& EventEnvelopeMetadata;
 
 export class MongoDBEventStore extends EventStore {
 	constructor(readonly eventMap: EventMap, readonly database: Db) {
@@ -22,7 +19,7 @@ export class MongoDBEventStore extends EventStore {
 	async setup(pool?: IEventPool): Promise<EventCollection> {
 		const collection = EventCollection.get(pool);
 		const eventCollection = await this.database.createCollection<MongoEventEntity>(collection);
-		await eventCollection.createIndex({ streamId: 1, 'metadata.version': 1 }, { unique: true });
+		await eventCollection.createIndex({ streamId: 1, version: 1 }, { unique: true });
 		return collection;
 	}
 
@@ -40,10 +37,10 @@ export class MongoDBEventStore extends EventStore {
 			.find(
 				{
 					...(eventStream && { streamId: eventStream.streamId }),
-					...(fromVersion && { 'metadata.version': { $gte: fromVersion } }),
+					...(fromVersion && { version: { $gte: fromVersion } }),
 				},
 				{
-					sort: { 'metadata.version': direction === StreamReadingDirection.FORWARD ? 1 : -1 },
+					sort: { version: direction === StreamReadingDirection.FORWARD ? 1 : -1 },
 					skip,
 					limit,
 				},
@@ -69,7 +66,7 @@ export class MongoDBEventStore extends EventStore {
 		const collection = EventCollection.get(pool);
 		const entity = await this.database.collection<MongoEventEntity>(collection).findOne({
 			streamId,
-			'metadata.version': version,
+			version,
 		});
 
 		if (!entity) {
@@ -96,7 +93,7 @@ export class MongoDBEventStore extends EventStore {
 		}, []);
 
 		const entities = envelopes.map<MongoEventEntity>(
-			({ event, payload, metadata }) => ({ _id: metadata.eventId, streamId, event, payload, metadata }),
+			({ event, payload, metadata }) => ({ _id: metadata.eventId, streamId, event, payload, ...metadata }),
 		);
 
 		await this.database.collection<MongoEventEntity>(collection).insertMany(entities);
@@ -116,15 +113,18 @@ export class MongoDBEventStore extends EventStore {
 			.find(
 				{
 					...(eventStream && { streamId: eventStream.streamId }),
-					...(fromVersion && { 'metadata.version': { $gte: fromVersion } }),
+					...(fromVersion && { version: { $gte: fromVersion } }),
 				},
 				{
-					sort: { 'metadata.version': direction === StreamReadingDirection.FORWARD ? 1 : -1 },
+					sort: { version: direction === StreamReadingDirection.FORWARD ? 1 : -1 },
 					skip,
 					limit,
 				},
 			)
-			.map(({ event, payload, metadata }) => EventEnvelope.from(event, payload, metadata));
+			.map(
+				({ event, payload, eventId, aggregateId, version, occurredOn, correlationId, causationId }) =>
+					EventEnvelope.from(event, payload, { eventId, aggregateId, version, occurredOn, correlationId, causationId }),
+			);
 
 		const entities = [];
 		let hasNext: boolean;
@@ -146,13 +146,20 @@ export class MongoDBEventStore extends EventStore {
 
 		const entity = await this.database.collection<MongoEventEntity>(collection).findOne({
 			streamId,
-			'metadata.version': version,
+			version,
 		});
 
 		if (!entity) {
 			throw new EventNotFoundException(streamId, version);
 		}
 
-		return EventEnvelope.from(entity.event, entity.payload, entity.metadata);
+		return EventEnvelope.from(entity.event, entity.payload, {
+			eventId: entity.eventId,
+			aggregateId: entity.aggregateId,
+			version: entity.version,
+			occurredOn: entity.occurredOn,
+			correlationId: entity.correlationId,
+			causationId: entity.causationId,
+		});
 	}
 }

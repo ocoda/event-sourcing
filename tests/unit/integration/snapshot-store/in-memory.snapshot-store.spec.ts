@@ -74,17 +74,17 @@ describe(InMemorySnapshotStore, () => {
 		entitiesAccountA.forEach((entity, index) => {
 			expect(entity.streamId).toEqual(snapshotStreamAccountA.streamId);
 			expect(entity.payload).toEqual(envelopesAccountA[index].payload);
-			expect(entity.metadata.aggregateId).toEqual(envelopesAccountA[index].metadata.aggregateId);
-			expect(entity.metadata.registeredOn).toBeInstanceOf(Date);
-			expect(entity.metadata.version).toEqual(envelopesAccountA[index].metadata.version);
+			expect(entity.aggregateId).toEqual(envelopesAccountA[index].metadata.aggregateId);
+			expect(entity.registeredOn).toBeInstanceOf(Date);
+			expect(entity.version).toEqual(envelopesAccountA[index].metadata.version);
 		});
 
 		entitiesAccountB.forEach((entity, index) => {
 			expect(entity.streamId).toEqual(snapshotStreamAccountB.streamId);
 			expect(entity.payload).toEqual(envelopesAccountB[index].payload);
-			expect(entity.metadata.aggregateId).toEqual(envelopesAccountB[index].metadata.aggregateId);
-			expect(entity.metadata.registeredOn).toBeInstanceOf(Date);
-			expect(entity.metadata.version).toEqual(envelopesAccountB[index].metadata.version);
+			expect(entity.aggregateId).toEqual(envelopesAccountB[index].metadata.aggregateId);
+			expect(entity.registeredOn).toBeInstanceOf(Date);
+			expect(entity.version).toEqual(envelopesAccountB[index].metadata.version);
 		});
 	});
 

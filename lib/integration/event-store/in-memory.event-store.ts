@@ -5,12 +5,13 @@ import { EventNotFoundException } from '../../exceptions';
 import { EventEnvelopeMetadata, IEvent, IEventCollection, IEventPayload, IEventPool } from '../../interfaces';
 import { EventCollection, EventEnvelope, EventStream } from '../../models';
 
-interface InMemoryEventEntity {
-	streamId: string;
-	event: string;
-	payload: IEventPayload<IEvent>;
-	metadata: EventEnvelopeMetadata;
-}
+export type InMemoryEventEntity =
+	& {
+		streamId: string;
+		event: string;
+		payload: IEventPayload<IEvent>;
+	}
+	& EventEnvelopeMetadata;
 
 export class InMemoryEventStore extends EventStore {
 	private collections: Map<IEventCollection, InMemoryEventEntity[]> = new Map();
@@ -46,7 +47,7 @@ export class InMemoryEventStore extends EventStore {
 		}
 
 		if (fromVersion) {
-			entities = entities.filter(({ metadata }) => metadata.version >= fromVersion);
+			entities = entities.filter(({ version }) => version >= fromVersion);
 		}
 
 		if (direction === StreamReadingDirection.BACKWARD) {
@@ -72,7 +73,8 @@ export class InMemoryEventStore extends EventStore {
 		const eventCollection = this.collections.get(collection) || [];
 
 		let entity = eventCollection.find(
-			({ streamId: eventStreamId, metadata }) => eventStreamId === streamId && metadata.version === version,
+			({ streamId: eventStreamId, version: aggregateVersion }) =>
+				eventStreamId === streamId && aggregateVersion === version,
 		);
 
 		if (!entity) {
@@ -99,7 +101,9 @@ export class InMemoryEventStore extends EventStore {
 			return [...acc, envelope];
 		}, []);
 
-		eventCollection.push(...envelopes.map(({ event, payload, metadata }) => ({ streamId, event, payload, metadata })));
+		eventCollection.push(
+			...envelopes.map(({ event, payload, metadata }) => ({ streamId, event, payload, ...metadata })),
+		);
 	}
 
 	async *getEnvelopes(filter?: EventFilter): AsyncGenerator<EventEnvelope[]> {
@@ -123,7 +127,7 @@ export class InMemoryEventStore extends EventStore {
 		}
 
 		if (fromVersion) {
-			entities = entities.filter(({ metadata }) => metadata.version >= fromVersion);
+			entities = entities.filter(({ version }) => version >= fromVersion);
 		}
 
 		if (direction === StreamReadingDirection.BACKWARD) {
@@ -140,7 +144,17 @@ export class InMemoryEventStore extends EventStore {
 
 		for (let i = 0; i < entities.length; i += batch) {
 			const chunk = entities.slice(i, i + batch);
-			yield chunk.map(({ event, payload, metadata }) => EventEnvelope.create(event, payload, metadata));
+			yield chunk.map(
+				({ event, payload, eventId, aggregateId, version, occurredOn, correlationId, causationId }) =>
+					EventEnvelope.from(event, payload, {
+						eventId,
+						aggregateId,
+						version,
+						occurredOn,
+						correlationId,
+						causationId,
+					}),
+			);
 		}
 	}
 
@@ -149,13 +163,21 @@ export class InMemoryEventStore extends EventStore {
 		const eventCollection = this.collections.get(collection) || [];
 
 		let entity = eventCollection.find(
-			({ streamId: eventStreamId, metadata }) => eventStreamId === streamId && metadata.version === version,
+			({ streamId: eventStreamId, version: aggregateVersion }) =>
+				eventStreamId === streamId && aggregateVersion === version,
 		);
 
 		if (!entity) {
 			throw new EventNotFoundException(streamId, version);
 		}
 
-		return EventEnvelope.from(entity.event, entity.payload, entity.metadata);
+		return EventEnvelope.from(entity.event, entity.payload, {
+			eventId: entity.eventId,
+			aggregateId: entity.aggregateId,
+			version: entity.version,
+			occurredOn: entity.occurredOn,
+			correlationId: entity.correlationId,
+			causationId: entity.causationId,
+		});
 	}
 }

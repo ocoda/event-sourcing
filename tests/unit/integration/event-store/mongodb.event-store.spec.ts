@@ -143,7 +143,7 @@ describe(MongoDBEventStore, () => {
 			.db()
 			.collection<MongoEventEntity>(EventCollection.get())
 			.find()
-			.sort({ 'metadata.version': 1 })
+			.sort({ version: 1 })
 			.toArray();
 
 		const entitiesAccountA = entities.filter(
@@ -161,9 +161,9 @@ describe(MongoDBEventStore, () => {
 			expect(entity.streamId).toEqual(eventStreamAccountA.streamId);
 			expect(entity.event).toEqual(envelopesAccountA[index].event);
 			expect(entity.payload).toEqual(envelopesAccountA[index].payload);
-			expect(entity.metadata.aggregateId).toEqual(envelopesAccountA[index].metadata.aggregateId);
-			expect(entity.metadata.occurredOn).toBeInstanceOf(Date);
-			expect(entity.metadata.version).toEqual(envelopesAccountA[index].metadata.version);
+			expect(entity.aggregateId).toEqual(envelopesAccountA[index].metadata.aggregateId);
+			expect(entity.occurredOn).toBeInstanceOf(Date);
+			expect(entity.version).toEqual(envelopesAccountA[index].metadata.version);
 		});
 	});
 

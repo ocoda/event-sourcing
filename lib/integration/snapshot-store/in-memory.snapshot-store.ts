@@ -4,11 +4,12 @@ import { ISnapshot, ISnapshotPool, SnapshotEnvelopeMetadata } from '../../interf
 import { AggregateRoot, EventCollection, SnapshotCollection, SnapshotEnvelope, SnapshotStream } from '../../models';
 import { SnapshotFilter, SnapshotStore, StreamSnapshotFilter } from '../../snapshot-store';
 
-export interface InMemorySnapshotEntity<A extends AggregateRoot> {
-	streamId: string;
-	payload: ISnapshot<A>;
-	metadata: SnapshotEnvelopeMetadata;
-}
+export type InMemorySnapshotEntity<A extends AggregateRoot> =
+	& {
+		streamId: string;
+		payload: ISnapshot<A>;
+	}
+	& SnapshotEnvelopeMetadata;
 
 export class InMemorySnapshotStore extends SnapshotStore {
 	private collections: Map<ISnapshotPool, InMemorySnapshotEntity<any>[]> = new Map();
@@ -40,7 +41,7 @@ export class InMemorySnapshotStore extends SnapshotStore {
 		}
 
 		if (fromVersion) {
-			entities = entities.filter(({ metadata }) => metadata.version >= fromVersion);
+			entities = entities.filter(({ version }) => version >= fromVersion);
 		}
 
 		if (direction === StreamReadingDirection.BACKWARD) {
@@ -70,7 +71,8 @@ export class InMemorySnapshotStore extends SnapshotStore {
 		const snapshotCollection = this.collections.get(collection) || [];
 
 		const entity = snapshotCollection.find(
-			({ streamId: snapshotStreamId, metadata }) => snapshotStreamId === streamId && metadata.version === version,
+			({ streamId: snapshotStreamId, version: aggregateVersion }) =>
+				snapshotStreamId === streamId && aggregateVersion === version,
 		);
 
 		if (!entity) {
@@ -94,7 +96,7 @@ export class InMemorySnapshotStore extends SnapshotStore {
 		snapshotCollection.push({
 			streamId,
 			payload: envelope.payload,
-			metadata: envelope.metadata,
+			...envelope.metadata,
 		});
 	}
 
@@ -103,7 +105,7 @@ export class InMemorySnapshotStore extends SnapshotStore {
 		const snapshotCollection = this.collections.get(collection) || [];
 
 		let entity = snapshotCollection.filter(({ streamId: entityStreamId }) => entityStreamId === streamId).sort(
-			({ metadata: current }, { metadata: previous }) => (previous.version < current.version ? -1 : 1),
+			({ version: currentVersion }, { version: previousVersion }) => (previousVersion < currentVersion ? -1 : 1),
 		)[0];
 
 		if (entity) {
@@ -116,11 +118,16 @@ export class InMemorySnapshotStore extends SnapshotStore {
 		const snapshotCollection = this.collections.get(collection) || [];
 
 		let entity = snapshotCollection.filter(({ streamId: entityStreamId }) => entityStreamId === streamId).sort(
-			({ metadata: current }, { metadata: previous }) => (previous.version < current.version ? -1 : 1),
+			({ version: currentVersion }, { version: previousVersion }) => (previousVersion < currentVersion ? -1 : 1),
 		)[0];
 
 		if (entity) {
-			return SnapshotEnvelope.from(entity.payload, entity.metadata);
+			return SnapshotEnvelope.from(entity.payload, {
+				aggregateId: entity.aggregateId,
+				version: entity.version,
+				registeredOn: entity.registeredOn,
+				snapshotId: entity.snapshotId,
+			});
 		}
 	}
 
@@ -145,7 +152,7 @@ export class InMemorySnapshotStore extends SnapshotStore {
 		}
 
 		if (fromVersion) {
-			entities = entities.filter(({ metadata }) => metadata.version >= fromVersion);
+			entities = entities.filter(({ version }) => version >= fromVersion);
 		}
 
 		if (direction === StreamReadingDirection.BACKWARD) {
@@ -162,7 +169,10 @@ export class InMemorySnapshotStore extends SnapshotStore {
 
 		for (let i = 0; i < entities.length; i += batch) {
 			const chunk = entities.slice(i, i + batch);
-			yield chunk.map(({ payload, metadata }) => SnapshotEnvelope.from<A>(payload, metadata));
+			yield chunk.map(
+				({ payload, aggregateId, registeredOn, snapshotId, version }) =>
+					SnapshotEnvelope.from<A>(payload, { aggregateId, registeredOn, snapshotId, version }),
+			);
 		}
 	}
 
@@ -175,13 +185,19 @@ export class InMemorySnapshotStore extends SnapshotStore {
 		const snapshotCollection = this.collections.get(collection) || [];
 
 		let entity = snapshotCollection.find(
-			({ streamId: eventStreamId, metadata }) => eventStreamId === streamId && metadata.version === version,
+			({ streamId: eventStreamId, version: aggregateVersion }) =>
+				eventStreamId === streamId && aggregateVersion === version,
 		);
 
 		if (!entity) {
 			throw new SnapshotNotFoundException(streamId, version);
 		}
 
-		return SnapshotEnvelope.from(entity.payload, entity.metadata);
+		return SnapshotEnvelope.from(entity.payload, {
+			aggregateId: entity.aggregateId,
+			version: entity.version,
+			registeredOn: entity.registeredOn,
+			snapshotId: entity.snapshotId,
+		});
 	}
 }
