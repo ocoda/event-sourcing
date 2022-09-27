@@ -2,10 +2,20 @@ version: '3.3'
 
 services:
   es-mongodb:
-    container_name: es-mongo
+    container_name: es-mongodb
     image: mongo:6
     ports:
       - 27017:27017
     volumes:
       - type: tmpfs
         target: /data/db
+
+  es-dynamodb:
+    container_name: es-dynamodb
+    image: amazon/dynamodb-local:latest
+    command: '-jar DynamoDBLocal.jar -sharedDb -dbPath ./data'
+    ports:
+      - 8000:8000
+    volumes:
+      - type: tmpfs
+        target: /home/dynamodblocal/data
