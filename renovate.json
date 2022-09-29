@@ -1,5 +1,7 @@
 {
 	"semanticCommits": true,
+	"rangeStrategy": "update-lockfile",
+	"rebaseConflictedPrs": true,
 	"packageRules": [
 		{
 			"depTypeList": [
@@ -7,6 +9,9 @@
 			],
 			"automerge": true
 		}
+	],
+	"schedule": [
+		"before 5am on monday"
 	],
 	"extends": [
 		"config:base"
