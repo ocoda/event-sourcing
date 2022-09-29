@@ -25,7 +25,7 @@ interface BaseSnapshotFilter {
 	limit?: number;
 	/**
 	 * The amount of snapshots to read at a time
-	 * @default 50
+	 * @default 100
 	 */
 	batch?: number;
 }
@@ -39,7 +39,6 @@ export interface StreamSnapshotFilter extends BaseSnapshotFilter {
 	/**
 	 * The position from where the snapshots should be read.
 	 * Can only be used in combination with a stream.
-	 * @default 1
 	 */
 	fromVersion: number;
 }
