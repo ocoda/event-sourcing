@@ -11,7 +11,13 @@
 		"format": "rome format ./lib ./tests --write",
 		"lint": "rome check ./lib ./tests --apply-suggested",
 		"test": "jest --config jest.config.js --runInBand",
-		"test:ci": "jest --config jest.config.js --runInBand --coverage"
+		"test:ci": "jest --config jest.config.js --runInBand --coverage",
+		"prepublish:npm": "pnpm build",
+		"publish:npm": "pnpm publish --access public",
+		"prepublish:next": "pnpm build",
+		"publish:next": "pnpm publish --access public --tag next",
+		"prerelease": "pnpm build",
+		"release": "release-it"
 	},
 	"engines": {
 		"node": ">= 18.0.0"
