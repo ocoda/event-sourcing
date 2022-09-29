@@ -50,9 +50,10 @@ To get started with this library, you need to install it first.
 ```
 npm install @ocoda/event-sourcing
 ```
-This library currently provides wrappers for storing events and snapshots for MongoDB. To make use of database wrappers, you will need to install their respective libraries:
+This library currently provides wrappers for storing events and snapshots for MongoDB and DynamoDB. To make use of database wrappers, you will need to install their respective libraries:
 ```
 npm install mongodb # For using MongoDB
+npm install @aws-sdk/client-dynamodb @aws-sdk/util-dynamodb # For using DynamoDB
 ```
 For testing purposes no database wrapper is required, this library ships with a fully functional in-memory store.
 
@@ -70,9 +71,10 @@ import { EventSourcingModule } from '@ocoda/event-sourcing';
 			},
 		},
 		snapshotStore: {
-			client: 'mongodb',
+			client: 'dynamodb',
 			options: {
-				node: 'mongodb://localhost:27017',
+				region: 'us-east-1',
+				credentials: { accessKeyId: 'foo', secretAccessKey: 'bar' },
 			}
 		},
 		events: [...Events],
