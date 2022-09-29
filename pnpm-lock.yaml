@@ -1,8 +1,8 @@
 lockfileVersion: 5.4
 
 specifiers:
-  '@aws-sdk/client-dynamodb': 3.180.0
-  '@aws-sdk/util-dynamodb': 3.180.0
+  '@aws-sdk/client-dynamodb': 3.181.0
+  '@aws-sdk/util-dynamodb': 3.181.0
   '@nestjs/common': 9.1.2
   '@nestjs/core': 9.1.2
   '@nestjs/platform-express': 9.1.2
@@ -26,8 +26,8 @@ dependencies:
   class-transformer: 0.5.1
 
 devDependencies:
-  '@aws-sdk/client-dynamodb': 3.180.0
-  '@aws-sdk/util-dynamodb': 3.180.0
+  '@aws-sdk/client-dynamodb': 3.181.0
+  '@aws-sdk/util-dynamodb': 3.181.0
   '@nestjs/common': 9.1.2_aniaiezvefq2fqnommj6u5l4zi
   '@nestjs/core': 9.1.2_foclggtudvr6cnfc5hz7ukfode
   '@nestjs/platform-express': 9.1.2_umdjpi6fqr4wvw73r3mhthbyle
@@ -105,15 +105,15 @@ packages:
       tslib: 2.4.0
     dev: true
 
-  /@aws-sdk/client-dynamodb/3.180.0:
-    resolution: {integrity: sha512-goCdx+bmZQgQpiAhj4UFADeeuS5iv+BgT8n4zC17BqrPZ3PU5zNf0g5cymrks/wmol5dIeteQeERWtpO1rt3WA==}
+  /@aws-sdk/client-dynamodb/3.181.0:
+    resolution: {integrity: sha512-/Py/356ODqCLOUNohhnTV23RXcB734fInSofU9pjH25lrWrD8Lk9qHIzawcU+2A2lVLXyDtlDN0kcWS60Vvk6A==}
     engines: {node: '>=12.0.0'}
     dependencies:
       '@aws-crypto/sha256-browser': 2.0.0
       '@aws-crypto/sha256-js': 2.0.0
-      '@aws-sdk/client-sts': 3.180.0
+      '@aws-sdk/client-sts': 3.181.0
       '@aws-sdk/config-resolver': 3.178.0
-      '@aws-sdk/credential-provider-node': 3.180.0
+      '@aws-sdk/credential-provider-node': 3.181.0
       '@aws-sdk/fetch-http-handler': 3.178.0
       '@aws-sdk/hash-node': 3.178.0
       '@aws-sdk/invalid-dependency': 3.178.0
@@ -150,8 +150,8 @@ packages:
       - aws-crt
     dev: true
 
-  /@aws-sdk/client-sso/3.180.0:
-    resolution: {integrity: sha512-wwhGa+Jksc4NE+4MZVv0Jkvt1C10/Gd5NATiv+hjcCY7DdxQ31UsbUrbZ38tBK8XX+vqFlcrP1AsoXNvrjBBVw==}
+  /@aws-sdk/client-sso/3.181.0:
+    resolution: {integrity: sha512-p/HsYVAO7fgjFfn4LqlnlpSKPXGPegAwjPpY+SqyK3/Hj1OtED4whG8LTgxZSTtYwNIkHEjrHnXTiymyXh34Aw==}
     engines: {node: '>=12.0.0'}
     dependencies:
       '@aws-crypto/sha256-browser': 2.0.0
@@ -189,14 +189,14 @@ packages:
       - aws-crt
     dev: true
 
-  /@aws-sdk/client-sts/3.180.0:
-    resolution: {integrity: sha512-QSgbYPrZ1QZTaxV3fwziVPvctwaAjdTMxA4VSMDh2yTFPIDmA8IMi8doEAcRaJeUK5n9UR8O3oWOs+wAs9Mkpw==}
+  /@aws-sdk/client-sts/3.181.0:
+    resolution: {integrity: sha512-j//F9kjdSv9lUa8p87cg+xk6l5E8o8+GTYP5838eFQR7XcEc3yEljSCkuj2xIzrtf1jKuMXBnswTKmxJhjbTzQ==}
     engines: {node: '>=12.0.0'}
     dependencies:
       '@aws-crypto/sha256-browser': 2.0.0
       '@aws-crypto/sha256-js': 2.0.0
       '@aws-sdk/config-resolver': 3.178.0
-      '@aws-sdk/credential-provider-node': 3.180.0
+      '@aws-sdk/credential-provider-node': 3.181.0
       '@aws-sdk/fetch-http-handler': 3.178.0
       '@aws-sdk/hash-node': 3.178.0
       '@aws-sdk/invalid-dependency': 3.178.0
@@ -264,13 +264,13 @@ packages:
       tslib: 2.4.0
     dev: true
 
-  /@aws-sdk/credential-provider-ini/3.180.0:
-    resolution: {integrity: sha512-P4fqj0WRHoQ/eGhym/QJNl3AndDN9vyOuDSIyOWLky+ngy/pGznZyzQzhyq7Cju0mgnBeFDac6Evq0aHax1iOA==}
+  /@aws-sdk/credential-provider-ini/3.181.0:
+    resolution: {integrity: sha512-jOa42qYFgkdMumw0IRO0ASAjM0vZMXvPpy3DGOaG0Ehy4KHeykEj4/J23SxCTCkOqAbz2+8XVCuyTExUmWCuWw==}
     engines: {node: '>= 12.0.0'}
     dependencies:
       '@aws-sdk/credential-provider-env': 3.178.0
       '@aws-sdk/credential-provider-imds': 3.178.0
-      '@aws-sdk/credential-provider-sso': 3.180.0
+      '@aws-sdk/credential-provider-sso': 3.181.0
       '@aws-sdk/credential-provider-web-identity': 3.178.0
       '@aws-sdk/property-provider': 3.178.0
       '@aws-sdk/shared-ini-file-loader': 3.178.0
@@ -280,15 +280,15 @@ packages:
       - aws-crt
     dev: true
 
-  /@aws-sdk/credential-provider-node/3.180.0:
-    resolution: {integrity: sha512-M3vevtIcTAlROJEJo2WIVDVrL077vh1j3w0b5IwizCvcpHBiZ+2agWcFVR/NfCvFbdYjZd49otGnbCUMHWiRcA==}
+  /@aws-sdk/credential-provider-node/3.181.0:
+    resolution: {integrity: sha512-RlLdp+7faCKzJsmUlBSr4CjqN9WG+YZpmuVVlW5fXGUdXLBLEvLMTl5rmwKtRSUytyYK0Vqtmt48I4nBze8MrA==}
     engines: {node: '>=12.0.0'}
     dependencies:
       '@aws-sdk/credential-provider-env': 3.178.0
       '@aws-sdk/credential-provider-imds': 3.178.0
-      '@aws-sdk/credential-provider-ini': 3.180.0
+      '@aws-sdk/credential-provider-ini': 3.181.0
       '@aws-sdk/credential-provider-process': 3.178.0
-      '@aws-sdk/credential-provider-sso': 3.180.0
+      '@aws-sdk/credential-provider-sso': 3.181.0
       '@aws-sdk/credential-provider-web-identity': 3.178.0
       '@aws-sdk/property-provider': 3.178.0
       '@aws-sdk/shared-ini-file-loader': 3.178.0
@@ -308,11 +308,11 @@ packages:
       tslib: 2.4.0
     dev: true
 
-  /@aws-sdk/credential-provider-sso/3.180.0:
-    resolution: {integrity: sha512-hv8qME1ISd6GN+YCa0WK73xL6p2Sx0JiSRTzgb5bvGcdxVGLzvIlFd0VAtVhP7d84Prf6EeGz0+sGEEYRusw2w==}
+  /@aws-sdk/credential-provider-sso/3.181.0:
+    resolution: {integrity: sha512-03YAvns+P7hw5rLwYLExezn9iGX9HD2GAKCEgpSaZSlNLzMw0jU7VEmqJvrLqi+xAoshuRR5A3v8HFQU246QRA==}
     engines: {node: '>= 12.0.0'}
     dependencies:
-      '@aws-sdk/client-sso': 3.180.0
+      '@aws-sdk/client-sso': 3.181.0
       '@aws-sdk/property-provider': 3.178.0
       '@aws-sdk/shared-ini-file-loader': 3.178.0
       '@aws-sdk/types': 3.178.0
@@ -641,8 +641,8 @@ packages:
       tslib: 2.4.0
     dev: true
 
-  /@aws-sdk/util-dynamodb/3.180.0:
-    resolution: {integrity: sha512-iUfJ/GRaaRr0H22TQico/jPb/9dLrBsNBW2o2QRdW4t3dMCnxkfGgioYmQkhyzhQAGpRMRugMr4sVtTIAgp+aA==}
+  /@aws-sdk/util-dynamodb/3.181.0:
+    resolution: {integrity: sha512-rICz+w/ew44Sx3ur0bSwCcbh87crI0ZFdPRZ0YE91XFKuBhRdEEAIkSAOQHg2EMfQlBUSNwRiHP3nveqWBrbwg==}
     engines: {node: '>= 12.0.0'}
     dependencies:
       tslib: 2.4.0
