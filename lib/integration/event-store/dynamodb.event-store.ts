@@ -69,7 +69,7 @@ export class DynamoDbEventStore extends EventStore {
 
 		if (eventStream) {
 			KeyConditionExpression.push('streamId = :streamId');
-			ExpressionAttributeValues[':streamId'] = { S: filter.eventStream.streamId };
+			ExpressionAttributeValues[':streamId'] = { S: eventStream.streamId };
 		}
 
 		if (fromVersion) {
@@ -181,7 +181,7 @@ export class DynamoDbEventStore extends EventStore {
 
 		if (eventStream) {
 			KeyConditionExpression.push('streamId = :streamId');
-			ExpressionAttributeValues[':streamId'] = { S: filter.eventStream.streamId };
+			ExpressionAttributeValues[':streamId'] = { S: eventStream.streamId };
 		}
 
 		if (fromVersion) {
