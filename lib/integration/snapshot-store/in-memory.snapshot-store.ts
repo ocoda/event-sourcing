@@ -25,7 +25,7 @@ export class InMemorySnapshotStore extends SnapshotStore {
 
 		const collection = SnapshotCollection.get(filter?.pool);
 		let snapshotStream = filter?.snapshotStream;
-		let fromVersion = snapshotStream && ((filter as StreamSnapshotFilter).fromVersion || 0);
+		let fromVersion = snapshotStream && (filter as StreamSnapshotFilter).fromVersion;
 		let direction = filter?.direction || StreamReadingDirection.FORWARD;
 		let limit = filter?.limit || Number.MAX_SAFE_INTEGER;
 		let batch = filter?.batch || DEFAULT_BATCH_SIZE;
@@ -131,7 +131,7 @@ export class InMemorySnapshotStore extends SnapshotStore {
 
 		const collection = SnapshotCollection.get(filter?.pool);
 		let snapshotStream = filter?.snapshotStream;
-		let fromVersion = snapshotStream && ((filter as StreamSnapshotFilter).fromVersion || 0);
+		let fromVersion = snapshotStream && (filter as StreamSnapshotFilter).fromVersion;
 		let direction = filter?.direction || StreamReadingDirection.FORWARD;
 		let limit = filter?.limit || Number.MAX_SAFE_INTEGER;
 		let batch = filter?.batch || DEFAULT_BATCH_SIZE;
