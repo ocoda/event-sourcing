@@ -10,7 +10,7 @@ type DynamoDbStoreConfig = { client: 'dynamodb'; options: DynamoDBClientConfig }
 export interface EventSourcingModuleOptions {
 	events: Type<IEvent>[];
 	eventStore?: InMemoryStoreConfig | MongoDbStoreConfig | DynamoDbStoreConfig;
-	snapshotStore?: InMemoryStoreConfig | MongoDbStoreConfig;
+	snapshotStore?: InMemoryStoreConfig | MongoDbStoreConfig | DynamoDbStoreConfig;
 	disableDefaultSerializer?: boolean;
 }
 
