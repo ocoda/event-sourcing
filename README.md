@@ -20,20 +20,22 @@ This library was created to help people get started with event-sourcing in NestJ
 <details open>
   <summary>Table of Contents</summary>
   <ol>
-    <li><a href="#getting-started">Getting Started</a></li>
-    <li><a href="#aggregates-&-value-objects">Aggregates & Value Objects</a></li>
-    <li><a href="#commands-&-command-handlers">Commands & Command Handlers</a></li>
+    <li><a href="#getting-started">Getting started</a></li>
+    <li><a href="#aggregates--value-objects">Aggregates & value objects</a></li>
+    <li><a href="#commands--command-handlers">Commands & command handlers</a></li>
     <li>
-		<a href="#events-&-event-handlers">Events</a>
+		<a href="#events">Events</a>
 		<ul>
-        	<li><a href="#event-store">Event Store</a></li>
+        	<li><a href="#event-streams">Event streams</a></li>
+        	<li><a href="#event-store">Event store</a></li>
       </ul>
 	</li>
     <li><a href="#repositories">Repositories</a></li>
 	<li>
 		<a href="#snapshots">Snapshots</a>
 		<ul>
-        	<li><a href="#snapshot-store">Snapshot Store</a></li>
+        	<li><a href="#snapshot-streams">Snapshot streams</a></li>
+        	<li><a href="#snapshot-store">Snapshot store</a></li>
       </ul>
 	</li>
     <li><a href="#queries">Queries</a></li>
@@ -84,7 +86,7 @@ export class AppModule {}
 ```
 &nbsp;
 
-## Aggregates & Value Objects
+## Aggregates & value objects
 An aggregate models an individual concept that has a unique identity in your application, e.g. an account.
 
 To create an aggregate using this library you will need to:
@@ -122,7 +124,7 @@ export class AccountName extends ValueObject {
 ```
 &nbsp;
 
-## Commands & Command Handlers
+## Commands & command handlers
 A Command is an object that is sent to your domain application that describes the intent of the user and is handled by a CommandHandler. Ideally the name of a command implies the Aggregate it operates on and its intent imperatively, e.g. OpenAccountCommand.
 
 ```typescript
@@ -150,31 +152,203 @@ export class OpenAccountCommandHandler implements ICommandHandler {
 Don't forget to register your CommandHandlers as providers in your application.
 &nbsp;
 
-## Events & Event Handlers
-// TODO: Explain the @Event decorator, what it defaults to, how this reflects in the event-store, event streams, event-envelopes, how serialization can be customized, publishing, ...
+## Events
+Events are classes that describe a fact that took place. They can be created by using the `@Event()` decorator and must be registered in the EventSourcingModule. If no name is explicitly provided, the name of the class itself is used, otherwise the provided name gets added as metadata to your class. The name of your event is used internally to create a map of the events within your application and optionally link that event to a custom event serializer.
 
-### Event Store
-// TODO: Explain how the event-store works (using streamIds, pools for multi-tenancy, setup, etc.)
+```typescript
+@Event('account-opened')
+export class AccountOpenedEvent implements IEvent {
+	constructor(public readonly accountId: string, public readonly accountOwnerIds?: string[]) {}
+}
+```
+
+Events can contain non-primitive values, which can cause issues when storing and reading them from a database. To mediate this, whenever an event needs to be stored or retrieved from the database it gets (de)serialized using the [class-transformer](https://github.com/typestack/class-transformer) library, you can however write your own serializer logic for an event. If you decide to, don't forget to register your event serializers as providers in your application.
+
+```typescript
+@Event('account-opened')
+class AccountOpenedEvent implements IEvent {
+	constructor(public readonly opened: Date) {}
+}
+
+@EventSerializer(AccountOpenedEvent)
+export class AccountOpenedEventSerializer implements IEventSerializer {
+	serialize(event: AccountOpenedEvent): IEventPayload<AccountOpenedEvent> {
+		return { openedOn: event.opened.toISOString() };
+	}
+
+	deserialize(payload: IEventPayload<AccountOpenedEvent>): AccountOpenedEvent {
+		const openedDate = new Date(payload.opened);
+		return new AccountOpenedEvent(openedDate);
+	}
+}
+```
 &nbsp;
 
-## Repositories
-// TODO: Explain what aggregate repositories are and how they work
+### Event streams
+The EventStream class creates a representation of a stream of events for a specific aggregate.
+
+```typescript
+const accountId = Id.generate();
+const stream = EventStream.for(Account, accountId);
+
+stream.streamId; // account-af9a0775-b868-4063-89d8-ccc81bce3c3d
+```
+&nbsp;
+
+### Event store
+This library provides several types of event store implementations, as described above.
+It's important to trigger the setup method on a store in order to prepare the database for storing your events, basically what this does is create an `events` or `snapshots` table or collection.
+In a multi-tenant infrastructure, separate event- and snapshot-tables can be created by triggering the setup method with a "pool", which prefixes the table name with the tenant-pool you provided. This pool can then be passed to the event-store when writing or reading events/snapshots.
+
+```typescript
+import { EventStore } from '@ocoda/event-sourcing';
+
+class AppModule implements OnModuleInit {
+	constructor(private readonly eventStore: EventStore) {}
+
+	async onModuleInit() {
+		await this.eventStore.setup();
+	}
+}
+```
 &nbsp;
 
 ## Snapshots
-// TODO: Explain the @Snapshot decorator, SnapshotHandlers (and how serialization must be customized), how this reflects in the snapshot-store, snapshot streams, snapshot envelopes, ...
+Snapshots are an optimization that is completely optional. They come in handy when event-streams become large and reading them out becomes slow.
+&nbsp;
 
-### Snapshot Store
-// TODO: Explain how the snapshot-store works (using streamIds, pools for multi-tenancy, setup, etc.)
+### Snapshot streams
+The SnapshotStream class creates a representation of a stream of snapshots for a specific aggregate.
+
+```typescript
+const accountId = Id.generate();
+const stream = SnapshotStream.for(Account, accountId);
+
+stream.streamId // account-af9a0775-b868-4063-89d8-ccc81bce3c3d
+```
+&nbsp;
+
+### Snapshot store
+ The SnapshotStore saves the state of an aggregate at a certain interval and only fetch the events from that version on. Just as the EventStore it needs to be setup, optionally with a tenant pool.
+
+```typescript
+import { SnapshotStore } from '@ocoda/event-sourcing';
+
+class AppModule implements OnModuleInit {
+	constructor(private readonly snapshotStore: SnapshotStore) {}
+
+	async onModuleInit() {
+		await this.snapshotStore.setup();
+	}
+}
+```
+&nbsp;
+
+### Snapshot handlers
+The store is used behind the scenes of the SnapshotHandler base class, which is responsible for saving and loading snapshots behind the scenes.
+
+How an aggregate snapshot is (de)serialized is the responsibility of a SnapshotHandler which extends the base and is decorated with the `@Snapshot` decorator, which specifies:
+- which aggregate it's responsible for
+- the stream name (defaults to the name of the aggregate's class)
+- at which interval a snapshot should be taken
+
+```typescript
+import { SnapshotHandler } from '@ocoda/event-sourcing';
+
+@Snapshot(Account, { name: 'account', interval: 5 })
+export class AccountSnapshotHandler extends SnapshotHandler<Account> {
+	serialize({ id, ownerIds, balance, openedOn, closedOn }: Account) {
+		return {
+			id: id.value,
+			ownerIds: ownerIds.map(({ value }) => value),
+			balance,
+			openedOn: openedOn ? openedOn.toISOString() : undefined,
+			closedOn: closedOn ? closedOn.toISOString() : undefined,
+		};
+	}
+	deserialize({ id, ownerIds, balance, openedOn, closedOn }: ISnapshot<Account>): Account {
+		const account = new Account();
+		account.id = AccountId.from(id);
+		account.ownerIds = ownerIds.map(AccountOwnerId.from);
+		account.balance = balance;
+		account.openedOn = openedOn && new Date(openedOn);
+		account.closedOn = closedOn && new Date(closedOn);
+
+		return account;
+	}
+}
+```
+&nbsp;
+
+## Aggregate repositories
+Aggregate repositories are where both stores meet. For example:
+```typescript
+@Injectable()
+export class AccountRepository {
+	constructor(
+		private readonly eventStore: EventStore,
+		private readonly accountSnapshotHandler: AccountSnapshotHandler,
+	) {}
+
+	async getById(accountId: AccountId) {
+		const eventStream = EventStream.for<Account>(Account, accountId);
+
+		const account = await this.accountSnapshotHandler.load(accountId);
+
+		const events = this.eventStore.getEvents({ eventStream, fromVersion: account.version + 1 });
+
+		await account.loadFromHistory(events);
+
+		return account;
+	}
+
+	async save(account: Account): Promise<void> {
+		const events = account.commit();
+		const stream = EventStream.for<Account>(Account, account.id);
+
+		await Promise.all([
+			this.accountSnapshotHandler.save(account.id, account),
+			this.eventStore.appendEvents(stream, account.version, events),
+		]);
+	}
+}
+```
 &nbsp;
 
 ## Queries
-// TODO: Explain what Queries and QueryHandlers are
+You can create queries to return the data you need.
+```typescript
+export class GetAccountQuery {
+  constructor(
+    public readonly accountId: string,
+  ) {}
+
+@QueryHandler(GetAccountQuery)
+export class GetAccountQueryHandler implements IQueryHandler {
+	constructor(private readonly accountRepository: AccountRepository) {}
+
+	async execute(query: GetAccountQuery): Promise<Account> {
+		const accountId = AccountId.from(query.accountId);
+		const account = await this.accountRepository.getById(accountId);
+
+		return account;
+	}
+}
+}
+```
+&nbsp;
+
+## Misc
+- **What about materialized views?**
+Event sourcing articles often suggest to listen to published events to create or update a database view that is optimized for reading. While this offers some advantages, there is a lot of overhead to consider when doing so. An alternative is to simply read out your write models. A very interesting read about the benefits and trade-offs can be found [here](https://www.eventstore.com/blog/live-projections-for-read-models-with-event-sourcing-and-cqrs).
+
+- **What about events, sagas and all those other event-sourcing goodies?**
+I'm working on it 🚧
 &nbsp;
 
 ## Contact
+dries@drieshooghe.com
 &nbsp;
 
 ## Acknowledgments
-
 This library is inspired by [@nestjs/cqrs](https://github.com/nestjs/cqrs)
