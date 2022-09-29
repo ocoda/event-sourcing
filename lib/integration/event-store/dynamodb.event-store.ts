@@ -27,7 +27,7 @@ export interface DynamoEventEntity {
 	causationId?: string;
 }
 
-export class DynamoDbEventStore extends EventStore {
+export class DynamoDBEventStore extends EventStore {
 	constructor(readonly eventMap: EventMap, readonly client: DynamoDBClient) {
 		super();
 	}

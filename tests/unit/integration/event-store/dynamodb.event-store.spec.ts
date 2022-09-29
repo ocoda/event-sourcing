@@ -14,7 +14,7 @@ import {
 	StreamReadingDirection,
 } from '../../../../lib';
 import { DefaultEventSerializer } from '../../../../lib/helpers';
-import { DynamoDbEventStore } from '../../../../lib/integration/event-store';
+import { DynamoDBEventStore } from '../../../../lib/integration/event-store';
 
 class AccountId extends Id {}
 
@@ -41,9 +41,9 @@ class AccountDebitedEvent implements IEvent {
 @Event('account-closed')
 class AccountClosedEvent implements IEvent {}
 
-describe(DynamoDbEventStore, () => {
+describe(DynamoDBEventStore, () => {
 	let client: DynamoDBClient;
-	let eventStore: DynamoDbEventStore;
+	let eventStore: DynamoDBEventStore;
 	let envelopesAccountA: EventEnvelope[];
 	let envelopesAccountB: EventEnvelope[];
 
@@ -74,7 +74,7 @@ describe(DynamoDbEventStore, () => {
 			endpoint: 'http://localhost:8000',
 			credentials: { accessKeyId: 'foo', secretAccessKey: 'bar' },
 		});
-		eventStore = new DynamoDbEventStore(eventMap, client);
+		eventStore = new DynamoDBEventStore(eventMap, client);
 		await eventStore.setup();
 
 		envelopesAccountA = [
