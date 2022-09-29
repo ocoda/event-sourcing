@@ -1,7 +1,10 @@
+import { DeleteTableCommand, DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb';
+import { unmarshall } from '@aws-sdk/util-dynamodb';
 import {
 	Aggregate,
 	AggregateRoot,
 	Event,
+	EventCollection,
 	EventEnvelope,
 	EventMap,
 	EventNotFoundException,
@@ -11,7 +14,7 @@ import {
 	StreamReadingDirection,
 } from '../../../../lib';
 import { DefaultEventSerializer } from '../../../../lib/helpers';
-import { InMemoryEventStore } from '../../../../lib/integration/event-store';
+import { DynamoDBEventStore } from '../../../../lib/integration/event-store';
 
 class AccountId extends Id {}
 
@@ -38,8 +41,9 @@ class AccountDebitedEvent implements IEvent {
 @Event('account-closed')
 class AccountClosedEvent implements IEvent {}
 
-describe(InMemoryEventStore, () => {
-	let eventStore: InMemoryEventStore;
+describe(DynamoDBEventStore, () => {
+	let client: DynamoDBClient;
+	let eventStore: DynamoDBEventStore;
 	let envelopesAccountA: EventEnvelope[];
 	let envelopesAccountB: EventEnvelope[];
 
@@ -64,9 +68,14 @@ describe(InMemoryEventStore, () => {
 	const idAccountB = AccountId.generate();
 	const eventStreamAccountB = EventStream.for(Account, idAccountB);
 
-	beforeAll(() => {
-		eventStore = new InMemoryEventStore(eventMap);
-		eventStore.setup();
+	beforeAll(async () => {
+		client = new DynamoDBClient({
+			region: 'us-east-1',
+			endpoint: 'http://localhost:8000',
+			credentials: { accessKeyId: 'foo', secretAccessKey: 'bar' },
+		});
+		eventStore = new DynamoDBEventStore(eventMap, client);
+		await eventStore.setup();
 
 		envelopesAccountA = [
 			EventEnvelope.create('account-opened', eventMap.serializeEvent(events[0]), {
@@ -122,21 +131,43 @@ describe(InMemoryEventStore, () => {
 		];
 	});
 
-	it('should append event envelopes', () => {
-		eventStore.appendEvents(eventStreamAccountA, 3, events.slice(0, 3));
-		eventStore.appendEvents(eventStreamAccountB, 3, events.slice(0, 3));
-		eventStore.appendEvents(eventStreamAccountA, 6, events.slice(3));
-		eventStore.appendEvents(eventStreamAccountB, 6, events.slice(3));
+	afterAll(async () => {
+		await client.send(new DeleteTableCommand({ TableName: EventCollection.get() }));
+		client.destroy();
+	});
 
-		const entities = [...eventStore['collections'].get('events')];
-		const entitiesAccountA = entities.filter(
-			({ streamId: entityStreamId }) => entityStreamId === eventStreamAccountA.streamId,
-		);
-		const entitiesAccountB = entities.filter(
-			({ streamId: entityStreamId }) => entityStreamId === eventStreamAccountB.streamId,
-		);
+	it('should append event envelopes', async () => {
+		await Promise.all([
+			eventStore.appendEvents(eventStreamAccountA, 3, events.slice(0, 3)),
+			eventStore.appendEvents(eventStreamAccountB, 3, events.slice(0, 3)),
+			eventStore.appendEvents(eventStreamAccountA, 6, events.slice(3)),
+			eventStore.appendEvents(eventStreamAccountB, 6, events.slice(3)),
+		]);
 
-		expect(entities).toHaveLength(events.length * 2);
+		const entitiesAccountA = (
+			await client.send(
+				new QueryCommand({
+					TableName: EventCollection.get(),
+					KeyConditionExpression: 'streamId = :streamId',
+					ExpressionAttributeValues: {
+						':streamId': { S: eventStreamAccountA.streamId },
+					},
+				}),
+			)
+		).Items.map((item) => unmarshall(item));
+
+		const entitiesAccountB = (
+			await client.send(
+				new QueryCommand({
+					TableName: EventCollection.get(),
+					KeyConditionExpression: 'streamId = :streamId',
+					ExpressionAttributeValues: {
+						':streamId': { S: eventStreamAccountB.streamId },
+					},
+				}),
+			)
+		).Items.map((item) => unmarshall(item));
+
 		expect(entitiesAccountA).toHaveLength(events.length);
 		expect(entitiesAccountB).toHaveLength(events.length);
 
@@ -145,22 +176,13 @@ describe(InMemoryEventStore, () => {
 			expect(entity.event).toEqual(envelopesAccountA[index].event);
 			expect(entity.payload).toEqual(envelopesAccountA[index].payload);
 			expect(entity.aggregateId).toEqual(envelopesAccountA[index].metadata.aggregateId);
-			expect(entity.occurredOn).toBeInstanceOf(Date);
+			expect(typeof entity.occurredOn).toBe('number');
 			expect(entity.version).toEqual(envelopesAccountA[index].metadata.version);
-		});
-
-		entitiesAccountB.forEach((entity, index) => {
-			expect(entity.streamId).toEqual(eventStreamAccountB.streamId);
-			expect(entity.event).toEqual(envelopesAccountB[index].event);
-			expect(entity.payload).toEqual(envelopesAccountB[index].payload);
-			expect(entity.aggregateId).toEqual(envelopesAccountB[index].metadata.aggregateId);
-			expect(entity.occurredOn).toBeInstanceOf(Date);
-			expect(entity.version).toEqual(envelopesAccountB[index].metadata.version);
 		});
 	});
 
-	it('should retrieve a single event from a specified stream', () => {
-		const resolvedEvent = eventStore.getEvent(eventStreamAccountA, envelopesAccountA[3].metadata.version);
+	it('should retrieve a single event from a specified stream', async () => {
+		const resolvedEvent = await eventStore.getEvent(eventStreamAccountA, envelopesAccountA[3].metadata.version);
 
 		expect(resolvedEvent).toEqual(events[3]);
 	});
@@ -183,9 +205,9 @@ describe(InMemoryEventStore, () => {
 		expect(resolvedEvents).toEqual(events.slice(2));
 	});
 
-	it("should throw when an event isn't found in a specified stream", () => {
+	it("should throw when an event isn't found in a specified stream", async () => {
 		const stream = EventStream.for(Account, AccountId.generate());
-		expect(() => eventStore.getEvent(stream, 5)).toThrow(new EventNotFoundException(stream.streamId, 5));
+		expect(eventStore.getEvent(stream, 5)).rejects.toThrow(new EventNotFoundException(stream.streamId, 5));
 	});
 
 	it('should retrieve events backwards', async () => {
@@ -232,8 +254,8 @@ describe(InMemoryEventStore, () => {
 		expect(resolvedEvents).toEqual(events);
 	});
 
-	it('should retrieve a single event-envelope', () => {
-		const { event, metadata, payload } = eventStore.getEnvelope(
+	it('should retrieve a single event-envelope', async () => {
+		const { event, metadata, payload } = await eventStore.getEnvelope(
 			eventStreamAccountA,
 			envelopesAccountA[3].metadata.version,
 		);

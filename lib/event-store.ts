@@ -20,17 +20,13 @@ interface BaseEventFilter {
 	 */
 	direction?: StreamReadingDirection;
 	/**
-	 * The number of events to skip
-	 */
-	skip?: number;
-	/**
 	 * The number of events to read
 	 * @default Number.MAX_SAFE_INTEGER
 	 */
 	limit?: number;
 	/**
 	 * The amount of events to read at a time
-	 * @default 50
+	 * @default 100
 	 */
 	batch?: number;
 }
@@ -44,7 +40,6 @@ export interface StreamEventFilter extends BaseEventFilter {
 	/**
 	 * The version from where the events should be read.
 	 * Can only be used in combination with a stream.
-	 * @default 1
 	 */
 	fromVersion: number;
 }

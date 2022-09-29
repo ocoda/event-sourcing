@@ -167,15 +167,6 @@ describe(MongoDBSnapshotStore, () => {
 		);
 	});
 
-	it('should skip the returned snapshots', async () => {
-		const resolvedSnapshots = [];
-		for await (const snapshots of snapshotStore.getSnapshots({ snapshotStream: snapshotStreamAccountA, skip: 3 })) {
-			resolvedSnapshots.push(...snapshots);
-		}
-
-		expect(resolvedSnapshots).toEqual(snapshots.slice(3));
-	});
-
 	it('should limit the returned snapshots', async () => {
 		const resolvedSnapshots = [];
 		for await (const snapshots of snapshotStore.getSnapshots({ snapshotStream: snapshotStreamAccountA, limit: 2 })) {
@@ -187,12 +178,12 @@ describe(MongoDBSnapshotStore, () => {
 
 	it('should batch the returned snapshots', async () => {
 		const resolvedSnapshots = [];
-		for await (const snapshots of snapshotStore.getSnapshots({ limit: 2 })) {
+		for await (const snapshots of snapshotStore.getSnapshots({ snapshotStream: snapshotStreamAccountA, limit: 2 })) {
 			expect(snapshots.length).toBe(2);
-			resolvedSnapshots.push(...resolvedSnapshots);
+			resolvedSnapshots.push(...snapshots);
 		}
 
-		expect(resolvedSnapshots).toEqual(resolvedSnapshots);
+		expect(resolvedSnapshots).toEqual(snapshots.slice(0, 2));
 	});
 
 	it('should retrieve the last snapshot', async () => {

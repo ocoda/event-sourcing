@@ -20,6 +20,8 @@
 		"class-transformer": "^0.5.1"
 	},
 	"peerDependencies": {
+		"@aws-sdk/client-dynamodb": "^3.180.0",
+		"@aws-sdk/util-dynamodb": "^3.180.0",
 		"@nestjs/common": "^9.0.0",
 		"@nestjs/core": "^9.0.0",
 		"mongodb": "^4.9.1",
@@ -27,6 +29,8 @@
 		"rxjs": "^7.2.0"
 	},
 	"devDependencies": {
+		"@aws-sdk/client-dynamodb": "^3.180.0",
+		"@aws-sdk/util-dynamodb": "^3.180.0",
 		"@nestjs/common": "^9.0.0",
 		"@nestjs/core": "^9.0.0",
 		"@nestjs/platform-express": "^9.0.5",

@@ -26,10 +26,9 @@ export class MongoDBEventStore extends EventStore {
 	async *getEvents(filter?: EventFilter): AsyncGenerator<IEvent[]> {
 		const collection = EventCollection.get(filter?.pool);
 		let eventStream = filter?.eventStream;
-		let fromVersion = eventStream && ((filter as StreamEventFilter).fromVersion || 0);
+		let fromVersion = eventStream && (filter as StreamEventFilter).fromVersion;
 		let direction = filter?.direction || StreamReadingDirection.FORWARD;
 		let limit = filter?.limit || Number.MAX_SAFE_INTEGER;
-		let skip = filter?.skip;
 		let batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
 		const cursor = this.database
@@ -41,7 +40,6 @@ export class MongoDBEventStore extends EventStore {
 				},
 				{
 					sort: { version: direction === StreamReadingDirection.FORWARD ? 1 : -1 },
-					skip,
 					limit,
 				},
 			)
@@ -102,10 +100,9 @@ export class MongoDBEventStore extends EventStore {
 	async *getEnvelopes(filter?: EventFilter): AsyncGenerator<EventEnvelope[]> {
 		const collection = EventCollection.get(filter?.pool);
 		let eventStream = filter?.eventStream;
-		let fromVersion = eventStream && ((filter as StreamEventFilter).fromVersion || 0);
+		let fromVersion = eventStream && (filter as StreamEventFilter).fromVersion;
 		let direction = filter?.direction || StreamReadingDirection.FORWARD;
 		let limit = filter?.limit || Number.MAX_SAFE_INTEGER;
-		let skip = filter?.skip;
 		let batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
 		const cursor = this.database
@@ -117,7 +114,6 @@ export class MongoDBEventStore extends EventStore {
 				},
 				{
 					sort: { version: direction === StreamReadingDirection.FORWARD ? 1 : -1 },
-					skip,
 					limit,
 				},
 			)

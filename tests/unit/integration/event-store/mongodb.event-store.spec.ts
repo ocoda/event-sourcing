@@ -221,16 +221,6 @@ describe(MongoDBEventStore, () => {
 		expect(resolvedEvents).toEqual(events.slice(3).reverse());
 	});
 
-	it('should skip the returned events', async () => {
-		const resolvedEvents = [];
-
-		for await (const events of eventStore.getEvents({ eventStream: eventStreamAccountA, skip: 3 })) {
-			resolvedEvents.push(...events);
-		}
-
-		expect(resolvedEvents).toEqual(events.slice(3));
-	});
-
 	it('should limit the returned events', async () => {
 		const resolvedEvents = [];
 		for await (const events of eventStore.getEvents({ eventStream: eventStreamAccountA, limit: 3 })) {

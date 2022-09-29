@@ -1,14 +1,17 @@
+import { DeleteTableCommand, DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb';
+import { unmarshall } from '@aws-sdk/util-dynamodb';
 import {
 	Aggregate,
 	AggregateRoot,
 	Id,
 	ISnapshot,
+	SnapshotCollection,
 	SnapshotEnvelope,
 	SnapshotNotFoundException,
 	SnapshotStream,
 	StreamReadingDirection,
 } from '../../../../lib';
-import { InMemorySnapshotStore } from '../../../../lib/integration/snapshot-store';
+import { DynamoDBSnapshotStore } from '../../../../lib/integration/snapshot-store';
 
 class AccountId extends Id {}
 
@@ -19,8 +22,9 @@ class Account extends AggregateRoot {
 	}
 }
 
-describe(InMemorySnapshotStore, () => {
-	let snapshotStore: InMemorySnapshotStore;
+describe(DynamoDBSnapshotStore, () => {
+	let client: DynamoDBClient;
+	let snapshotStore: DynamoDBSnapshotStore;
 	let envelopesAccountA: SnapshotEnvelope[];
 	let envelopesAccountB: SnapshotEnvelope[];
 
@@ -31,9 +35,14 @@ describe(InMemorySnapshotStore, () => {
 	const snapshotStreamAccountA = SnapshotStream.for(Account, idAccountA);
 	const snapshotStreamAccountB = SnapshotStream.for(Account, idAccountB);
 
-	beforeAll(() => {
-		snapshotStore = new InMemorySnapshotStore();
-		snapshotStore.setup();
+	beforeAll(async () => {
+		client = new DynamoDBClient({
+			region: 'us-east-1',
+			endpoint: 'http://localhost:8000',
+			credentials: { accessKeyId: 'foo', secretAccessKey: 'bar' },
+		});
+		snapshotStore = new DynamoDBSnapshotStore(client);
+		await snapshotStore.setup();
 
 		envelopesAccountA = [
 			SnapshotEnvelope.create<Account>(snapshots[0], { aggregateId: idAccountA.value, version: 10 }),
@@ -49,25 +58,47 @@ describe(InMemorySnapshotStore, () => {
 		];
 	});
 
-	it('should append snapshot envelopes', () => {
-		snapshotStore.appendSnapshot(snapshotStreamAccountA, 10, snapshots[0]);
-		snapshotStore.appendSnapshot(snapshotStreamAccountB, 10, snapshots[0]);
-		snapshotStore.appendSnapshot(snapshotStreamAccountA, 20, snapshots[1]);
-		snapshotStore.appendSnapshot(snapshotStreamAccountB, 20, snapshots[1]);
-		snapshotStore.appendSnapshot(snapshotStreamAccountA, 30, snapshots[2]);
-		snapshotStore.appendSnapshot(snapshotStreamAccountB, 30, snapshots[2]);
-		snapshotStore.appendSnapshot(snapshotStreamAccountA, 40, snapshots[3]);
-		snapshotStore.appendSnapshot(snapshotStreamAccountB, 40, snapshots[3]);
+	afterAll(async () => {
+		await client.send(new DeleteTableCommand({ TableName: SnapshotCollection.get() }));
+		client.destroy();
+	});
 
-		const entities = [...snapshotStore['collections'].get('snapshots')];
-		const entitiesAccountA = entities.filter(
-			({ streamId: entityStreamId }) => entityStreamId === snapshotStreamAccountA.streamId,
-		);
-		const entitiesAccountB = entities.filter(
-			({ streamId: entityStreamId }) => entityStreamId === snapshotStreamAccountB.streamId,
-		);
+	it('should append snapshot envelopes', async () => {
+		await Promise.all([
+			snapshotStore.appendSnapshot(snapshotStreamAccountA, 10, snapshots[0]),
+			snapshotStore.appendSnapshot(snapshotStreamAccountB, 10, snapshots[0]),
+			snapshotStore.appendSnapshot(snapshotStreamAccountA, 20, snapshots[1]),
+			snapshotStore.appendSnapshot(snapshotStreamAccountB, 20, snapshots[1]),
+			snapshotStore.appendSnapshot(snapshotStreamAccountA, 30, snapshots[2]),
+			snapshotStore.appendSnapshot(snapshotStreamAccountB, 30, snapshots[2]),
+			snapshotStore.appendSnapshot(snapshotStreamAccountA, 40, snapshots[3]),
+			snapshotStore.appendSnapshot(snapshotStreamAccountB, 40, snapshots[3]),
+		]);
 
-		expect(entities).toHaveLength(snapshots.length * 2);
+		const entitiesAccountA = (
+			await client.send(
+				new QueryCommand({
+					TableName: SnapshotCollection.get(),
+					KeyConditionExpression: 'streamId = :streamId',
+					ExpressionAttributeValues: {
+						':streamId': { S: snapshotStreamAccountA.streamId },
+					},
+				}),
+			)
+		).Items.map((item) => unmarshall(item));
+
+		const entitiesAccountB = (
+			await client.send(
+				new QueryCommand({
+					TableName: SnapshotCollection.get(),
+					KeyConditionExpression: 'streamId = :streamId',
+					ExpressionAttributeValues: {
+						':streamId': { S: snapshotStreamAccountB.streamId },
+					},
+				}),
+			)
+		).Items.map((item) => unmarshall(item));
+
 		expect(entitiesAccountA).toHaveLength(snapshots.length);
 		expect(entitiesAccountB).toHaveLength(snapshots.length);
 
@@ -75,7 +106,7 @@ describe(InMemorySnapshotStore, () => {
 			expect(entity.streamId).toEqual(snapshotStreamAccountA.streamId);
 			expect(entity.payload).toEqual(envelopesAccountA[index].payload);
 			expect(entity.aggregateId).toEqual(envelopesAccountA[index].metadata.aggregateId);
-			expect(entity.registeredOn).toBeInstanceOf(Date);
+			expect(typeof entity.registeredOn).toBe('number');
 			expect(entity.version).toEqual(envelopesAccountA[index].metadata.version);
 		});
 
@@ -83,13 +114,16 @@ describe(InMemorySnapshotStore, () => {
 			expect(entity.streamId).toEqual(snapshotStreamAccountB.streamId);
 			expect(entity.payload).toEqual(envelopesAccountB[index].payload);
 			expect(entity.aggregateId).toEqual(envelopesAccountB[index].metadata.aggregateId);
-			expect(entity.registeredOn).toBeInstanceOf(Date);
+			expect(typeof entity.registeredOn).toBe('number');
 			expect(entity.version).toEqual(envelopesAccountB[index].metadata.version);
 		});
 	});
 
-	it('should retrieve a single snapshot from a specified stream', () => {
-		const resolvedSnapshot = snapshotStore.getSnapshot(snapshotStreamAccountA, envelopesAccountA[1].metadata.version);
+	it('should retrieve a single snapshot from a specified stream', async () => {
+		const resolvedSnapshot = await snapshotStore.getSnapshot(
+			snapshotStreamAccountA,
+			envelopesAccountA[1].metadata.version,
+		);
 
 		expect(resolvedSnapshot).toEqual(snapshots[1]);
 	});
@@ -117,7 +151,7 @@ describe(InMemorySnapshotStore, () => {
 
 	it("should throw when a snapshot isn't found in a specified stream", () => {
 		const stream = SnapshotStream.for(Account, AccountId.generate());
-		expect(() => snapshotStore.getSnapshot(stream, 20)).toThrow(new SnapshotNotFoundException(stream.streamId, 20));
+		expect(snapshotStore.getSnapshot(stream, 20)).rejects.toThrow(new SnapshotNotFoundException(stream.streamId, 20));
 	});
 
 	it('should retrieve snapshots backwards', async () => {
@@ -166,17 +200,17 @@ describe(InMemorySnapshotStore, () => {
 		expect(resolvedSnapshots).toEqual(snapshots.slice(0, 2));
 	});
 
-	it('should retrieve the last snapshot', () => {
-		const resolvedSnapshot = snapshotStore.getLastSnapshot(snapshotStreamAccountA);
+	it('should retrieve the last snapshot', async () => {
+		const resolvedSnapshot = await snapshotStore.getLastSnapshot(snapshotStreamAccountA);
 
 		expect(resolvedSnapshot).toEqual(snapshots[snapshots.length - 1]);
 	});
 
-	it('should return undefined if there is no last snapshot', () => {
+	it('should return undefined if there is no last snapshot', async () => {
 		@Aggregate({ streamName: 'foo' })
 		class Foo extends AggregateRoot {}
 
-		const resolvedSnapshot = snapshotStore.getLastSnapshot(SnapshotStream.for(Foo, Id.generate()));
+		const resolvedSnapshot = await snapshotStore.getLastSnapshot(SnapshotStream.for(Foo, Id.generate()));
 
 		expect(resolvedSnapshot).toBeUndefined();
 	});
@@ -200,7 +234,7 @@ describe(InMemorySnapshotStore, () => {
 	});
 
 	it('should retrieve a single snapshot-envelope', async () => {
-		const { metadata, payload } = snapshotStore.getEnvelope(
+		const { metadata, payload } = await snapshotStore.getEnvelope(
 			snapshotStreamAccountA,
 			envelopesAccountA[3].metadata.version,
 		);
@@ -213,7 +247,7 @@ describe(InMemorySnapshotStore, () => {
 
 	it('should retrieve the last snapshot-envelope', async () => {
 		const lastEnvelope = envelopesAccountA[envelopesAccountA.length - 1];
-		const { metadata, payload } = snapshotStore.getLastEnvelope(snapshotStreamAccountA);
+		const { metadata, payload } = await snapshotStore.getLastEnvelope(snapshotStreamAccountA);
 
 		expect(payload).toEqual(lastEnvelope.payload);
 		expect(metadata.aggregateId).toEqual(lastEnvelope.metadata.aggregateId);

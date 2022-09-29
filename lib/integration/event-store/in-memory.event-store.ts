@@ -31,10 +31,9 @@ export class InMemoryEventStore extends EventStore {
 
 		let collection = EventCollection.get(filter?.pool);
 		let eventStream = filter?.eventStream;
-		let fromVersion = eventStream && ((filter as StreamEventFilter).fromVersion || 0);
+		let fromVersion = eventStream && (filter as StreamEventFilter).fromVersion;
 		let direction = filter?.direction || StreamReadingDirection.FORWARD;
 		let limit = filter?.limit || Number.MAX_SAFE_INTEGER;
-		let skip = filter?.skip;
 		let batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
 		if (eventStream) {
@@ -52,10 +51,6 @@ export class InMemoryEventStore extends EventStore {
 
 		if (direction === StreamReadingDirection.BACKWARD) {
 			entities = entities.reverse();
-		}
-
-		if (skip) {
-			entities = entities.slice(skip);
 		}
 
 		if (limit) {
@@ -111,10 +106,9 @@ export class InMemoryEventStore extends EventStore {
 
 		const collection = EventCollection.get(filter?.pool);
 		let eventStream = filter?.eventStream && filter.eventStream;
-		let fromVersion = eventStream && ((filter as StreamEventFilter).fromVersion || 0);
+		let fromVersion = eventStream && (filter as StreamEventFilter).fromVersion;
 		let direction = filter?.direction || StreamReadingDirection.FORWARD;
 		let limit = filter?.limit || Number.MAX_SAFE_INTEGER;
-		let skip = filter?.skip;
 		let batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
 		if (eventStream) {
@@ -132,10 +126,6 @@ export class InMemoryEventStore extends EventStore {
 
 		if (direction === StreamReadingDirection.BACKWARD) {
 			entities = entities.reverse();
-		}
-
-		if (skip) {
-			entities = entities.slice(skip);
 		}
 
 		if (limit) {

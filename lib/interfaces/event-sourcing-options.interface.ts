@@ -1,14 +1,16 @@
+import { DynamoDBClientConfig } from '@aws-sdk/client-dynamodb';
 import { ModuleMetadata, Type } from '@nestjs/common';
 import { MongoClientOptions } from 'mongodb';
 import { IEvent } from './events';
 
 type InMemoryStoreConfig = { client: 'in-memory' };
-type MongoDbStoreConfig = { client: 'mongodb'; options: { url: string } & MongoClientOptions };
+type MongoDBStoreConfig = { client: 'mongodb'; options: { url: string } & MongoClientOptions };
+type DynamoDBStoreConfig = { client: 'dynamodb'; options: DynamoDBClientConfig };
 
 export interface EventSourcingModuleOptions {
 	events: Type<IEvent>[];
-	eventStore?: InMemoryStoreConfig | MongoDbStoreConfig;
-	snapshotStore?: InMemoryStoreConfig | MongoDbStoreConfig;
+	eventStore?: InMemoryStoreConfig | MongoDBStoreConfig | DynamoDBStoreConfig;
+	snapshotStore?: InMemoryStoreConfig | MongoDBStoreConfig | DynamoDBStoreConfig;
 	disableDefaultSerializer?: boolean;
 }
 
