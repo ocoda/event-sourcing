@@ -1,5 +1,4 @@
 import { Injectable, Type } from '@nestjs/common';
-import { ModuleRef } from '@nestjs/core';
 import 'reflect-metadata';
 import { CommandHandlerNotFoundException, MissingCommandMetadataException } from './exceptions';
 import { DefaultCommandPubSub, getCommandMetadata, ObservableBus } from './helpers';
@@ -14,12 +13,7 @@ export class CommandBus<CommandBase extends ICommand = ICommand>
 	implements ICommandBus<CommandBase>
 {
 	private handlers = new Map<string, ICommandHandler<CommandBase>>();
-	private _publisher: ICommandPublisher<CommandBase>;
-
-	constructor(private readonly moduleRef: ModuleRef) {
-		super();
-		this.useDefaultPublisher();
-	}
+	private _publisher: ICommandPublisher<CommandBase> = new DefaultCommandPubSub<CommandBase>(this.subject$);
 
 	get publisher(): ICommandPublisher<CommandBase> {
 		return this._publisher;
@@ -52,9 +46,5 @@ export class CommandBus<CommandBase extends ICommand = ICommand>
 		}
 
 		return id;
-	}
-
-	private useDefaultPublisher() {
-		this._publisher = new DefaultCommandPubSub<CommandBase>(this.subject$);
 	}
 }
