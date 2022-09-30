@@ -1,11 +1,11 @@
 import { Injectable, Type } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import 'reflect-metadata';
-import { QUERY_METADATA } from './decorators/constants';
 import { QueryHandlerNotFoundException } from './exceptions';
-import { DefaultQueryPubSub, ObservableBus } from './helpers';
-import { IQuery, IQueryBus, IQueryHandler, IQueryPublisher, QueryMetadata } from './interfaces';
+import { DefaultQueryPubSub, getQueryMetadata, ObservableBus } from './helpers';
+import { IQuery, IQueryBus, IQueryHandler, IQueryPublisher } from './interfaces';
 
+export type QueryType = Type<IQuery>;
 export type QueryHandlerType = Type<IQueryHandler<IQuery>>;
 
 @Injectable()
@@ -45,12 +45,9 @@ export class QueryBus<QueryBase extends IQuery = IQuery>
 
 	private getQueryId(query: QueryBase): string {
 		const { constructor: queryType } = Object.getPrototypeOf(query);
-		const queryMetadata: QueryMetadata = Reflect.getMetadata(QUERY_METADATA, queryType);
-		if (!queryMetadata) {
-			throw new QueryHandlerNotFoundException(queryType.name);
-		}
+		const { id } = getQueryMetadata(queryType);
 
-		return queryMetadata.id;
+		return id;
 	}
 
 	private useDefaultPublisher() {

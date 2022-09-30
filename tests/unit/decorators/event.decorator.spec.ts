@@ -1,4 +1,5 @@
-import { Event, EVENT_METADATA, IEvent } from '../../../lib';
+import { getEventMetadata } from '@ocoda/event-sourcing/helpers';
+import { Event, IEvent } from '../../../lib';
 
 describe('@Event', () => {
 	@Event('foo-created')
@@ -8,10 +9,10 @@ describe('@Event', () => {
 	class BarCreated implements IEvent {}
 
 	it('should determine the name of an event from the constructor', () => {
-		const explicitEventName = Reflect.getMetadata(EVENT_METADATA, FooCreated);
+		const { name: explicitEventName } = getEventMetadata(FooCreated);
 		expect(explicitEventName).toEqual('foo-created');
 
-		const implicitEventName = Reflect.getMetadata(EVENT_METADATA, BarCreated);
+		const { name: implicitEventName } = getEventMetadata(BarCreated);
 		expect(implicitEventName).toEqual('BarCreated');
 	});
 });

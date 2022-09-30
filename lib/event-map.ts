@@ -1,10 +1,6 @@
 import { Injectable, Type } from '@nestjs/common';
-import { EVENT_METADATA } from './decorators';
-import {
-	MissingEventMetadataException,
-	UnregisteredEventException,
-	UnregisteredSerializerException,
-} from './exceptions';
+import { UnregisteredEventException, UnregisteredSerializerException } from './exceptions';
+import { getEventMetadata } from './helpers';
 import { IEvent, IEventPayload, IEventSerializer } from './interfaces';
 
 export type EventSerializerType = Type<IEventSerializer<IEvent>>;
@@ -26,10 +22,7 @@ export class EventMap {
 	private readonly eventMap: Set<IEventData<unknown>> = new Set();
 
 	public register<E extends IEvent>(cls: IEventConstructor<E>, serializer?: IEventSerializer): void {
-		const name: string = Reflect.getMetadata(EVENT_METADATA, cls);
-		if (!name) {
-			throw new MissingEventMetadataException(cls);
-		}
+		const { name } = getEventMetadata(cls);
 
 		this.eventMap.add({ name, cls, serializer });
 	}

@@ -1,11 +1,11 @@
 import { Injectable, Type } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import 'reflect-metadata';
-import { COMMAND_METADATA } from './decorators';
 import { CommandHandlerNotFoundException } from './exceptions';
-import { DefaultCommandPubSub, ObservableBus } from './helpers';
-import { CommandMetadata, ICommand, ICommandBus, ICommandHandler, ICommandPublisher } from './interfaces';
+import { DefaultCommandPubSub, getCommandMetadata, ObservableBus } from './helpers';
+import { ICommand, ICommandBus, ICommandHandler, ICommandPublisher } from './interfaces';
 
+export type CommandType = Type<ICommand>;
 export type CommandHandlerType = Type<ICommandHandler<ICommand>>;
 
 @Injectable()
@@ -45,12 +45,9 @@ export class CommandBus<CommandBase extends ICommand = ICommand>
 
 	private getCommandId(command: CommandBase): string {
 		const { constructor: commandType } = Object.getPrototypeOf(command);
-		const commandMetadata: CommandMetadata = Reflect.getMetadata(COMMAND_METADATA, commandType);
-		if (!commandMetadata) {
-			throw new CommandHandlerNotFoundException(commandType.name);
-		}
+		const { id } = getCommandMetadata(commandType);
 
-		return commandMetadata.id;
+		return id;
 	}
 
 	private useDefaultPublisher() {

@@ -4,16 +4,14 @@ import { InstanceWrapper } from '@nestjs/core/injector/instance-wrapper';
 import { CommandBus, CommandHandlerType } from './command-bus';
 import {
 	COMMAND_HANDLER_METADATA,
-	COMMAND_METADATA,
 	EVENT_SERIALIZER_METADATA,
 	InjectEventSourcingOptions,
 	QUERY_HANDLER_METADATA,
-	QUERY_METADATA,
 } from './decorators';
 import { EventMap } from './event-map';
 import { InvalidCommandHandlerException, InvalidQueryHandlerException } from './exceptions';
-import { DefaultEventSerializer } from './helpers';
-import { CommandMetadata, EventSourcingModuleOptions, QueryMetadata } from './interfaces';
+import { DefaultEventSerializer, getCommandMetadata, getQueryMetadata } from './helpers';
+import { EventSourcingModuleOptions } from './interfaces';
 import { QueryBus, QueryHandlerType } from './query-bus';
 
 enum HandlerType {
@@ -66,7 +64,7 @@ export class HandlersLoader implements OnApplicationBootstrap {
 		handlers?.forEach(({ metatype, instance }) => {
 			const command: CommandHandlerType = Reflect.getMetadata(COMMAND_HANDLER_METADATA, metatype);
 
-			const { id }: CommandMetadata = Reflect.getMetadata(COMMAND_METADATA, command);
+			const { id } = getCommandMetadata(command);
 
 			if (!id) {
 				throw new InvalidCommandHandlerException();
@@ -80,7 +78,7 @@ export class HandlersLoader implements OnApplicationBootstrap {
 		handlers?.forEach(({ metatype, instance }) => {
 			const query: QueryHandlerType = Reflect.getMetadata(QUERY_HANDLER_METADATA, metatype);
 
-			const { id }: QueryMetadata = Reflect.getMetadata(QUERY_METADATA, query);
+			const { id } = getQueryMetadata(query);
 
 			if (!id) {
 				throw new InvalidQueryHandlerException();

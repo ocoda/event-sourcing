@@ -1,4 +1,5 @@
-import { CommandHandler, COMMAND_HANDLER_METADATA, COMMAND_METADATA, ICommand } from '../../../lib';
+import { getCommandMetadata } from '@ocoda/event-sourcing/helpers';
+import { CommandHandler, COMMAND_HANDLER_METADATA, ICommand } from '../../../lib';
 
 describe('@CommandHandler', () => {
 	class TestCommand implements ICommand {}
@@ -10,7 +11,7 @@ describe('@CommandHandler', () => {
 		const command: ICommand = Reflect.getMetadata(COMMAND_HANDLER_METADATA, TestCommandHandler);
 		expect(command).toEqual(TestCommand);
 
-		const commandMetadata = Reflect.getMetadata(COMMAND_METADATA, command);
+		const commandMetadata = getCommandMetadata(command);
 		expect(commandMetadata.id).toBeDefined();
 	});
 });
