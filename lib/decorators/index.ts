@@ -1,6 +1,7 @@
 export * from './aggregate.decorator';
 export * from './command-handler.decorator';
 export * from './constants';
+export * from './event-listener.decorator';
 export * from './event-serializer.decorator';
 export * from './event-sourcing-options.decorator';
 export * from './event.decorator';
