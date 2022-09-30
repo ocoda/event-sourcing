@@ -1,7 +1,7 @@
 import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import { DiscoveryService } from '@nestjs/core';
 import { InstanceWrapper } from '@nestjs/core/injector/instance-wrapper';
-import { CommandBus, CommandHandlerType } from './command-bus';
+import { CommandBus } from './command-bus';
 import {
 	COMMAND_HANDLER_METADATA,
 	EVENT_SERIALIZER_METADATA,
@@ -9,10 +9,21 @@ import {
 	QUERY_HANDLER_METADATA,
 } from './decorators';
 import { EventMap } from './event-map';
-import { InvalidCommandHandlerException, InvalidQueryHandlerException } from './exceptions';
-import { DefaultEventSerializer, getCommandMetadata, getQueryMetadata } from './helpers';
-import { EventSourcingModuleOptions } from './interfaces';
-import { QueryBus, QueryHandlerType } from './query-bus';
+import {
+	InvalidCommandHandlerException,
+	MissingCommandHandlerMetadataException,
+	MissingQueryHandlerMetadataException,
+	MissingQueryMetadataException,
+} from './exceptions';
+import {
+	DefaultEventSerializer,
+	getCommandHandlerMetadata,
+	getCommandMetadata,
+	getQueryHandlerMetadata,
+	getQueryMetadata,
+} from './helpers';
+import { EventSourcingModuleOptions, ICommandHandler } from './interfaces';
+import { QueryBus } from './query-bus';
 
 enum HandlerType {
 	COMMANDS,
@@ -60,9 +71,13 @@ export class HandlersLoader implements OnApplicationBootstrap {
 		return handlers;
 	}
 
-	private registerCommandHandlers(handlers: InstanceWrapper[]) {
+	private registerCommandHandlers(handlers: InstanceWrapper<ICommandHandler>[]) {
 		handlers?.forEach(({ metatype, instance }) => {
-			const command: CommandHandlerType = Reflect.getMetadata(COMMAND_HANDLER_METADATA, metatype);
+			const { command } = getCommandHandlerMetadata(metatype);
+
+			if (!command) {
+				throw new MissingCommandHandlerMetadataException(metatype);
+			}
 
 			const { id } = getCommandMetadata(command);
 
@@ -76,12 +91,16 @@ export class HandlersLoader implements OnApplicationBootstrap {
 
 	private registerQueryHandlers(handlers: InstanceWrapper[]) {
 		handlers?.forEach(({ metatype, instance }) => {
-			const query: QueryHandlerType = Reflect.getMetadata(QUERY_HANDLER_METADATA, metatype);
+			const { query } = getQueryHandlerMetadata(metatype);
+
+			if (!query) {
+				throw new MissingQueryHandlerMetadataException(metatype);
+			}
 
 			const { id } = getQueryMetadata(query);
 
 			if (!id) {
-				throw new InvalidQueryHandlerException();
+				throw new MissingQueryMetadataException(query);
 			}
 
 			this.queryBus.bind(instance, id);

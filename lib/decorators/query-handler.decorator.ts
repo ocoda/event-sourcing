@@ -9,6 +9,8 @@ import { QUERY_HANDLER_METADATA, QUERY_METADATA } from './constants';
  *
  * The decorated class must implement the `IQueryHandler` interface.
  *
+ * The handler automatically assigns an id to the query metadata.
+ *
  * @param query query *type* to be handled by this handler.
  */
 export const QueryHandler = (query: IQuery): ClassDecorator => {
@@ -16,6 +18,6 @@ export const QueryHandler = (query: IQuery): ClassDecorator => {
 		if (!Reflect.hasMetadata(QUERY_METADATA, query)) {
 			Reflect.defineMetadata(QUERY_METADATA, { id: randomUUID() }, query);
 		}
-		Reflect.defineMetadata(QUERY_HANDLER_METADATA, query, target);
+		Reflect.defineMetadata(QUERY_HANDLER_METADATA, { query }, target);
 	};
 };

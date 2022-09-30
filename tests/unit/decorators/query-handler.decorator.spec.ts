@@ -1,5 +1,5 @@
-import { getQueryMetadata } from '@ocoda/event-sourcing/helpers';
-import { IQuery, QueryHandler, QUERY_HANDLER_METADATA } from '../../../lib';
+import { getQueryHandlerMetadata, getQueryMetadata } from '@ocoda/event-sourcing/helpers';
+import { IQuery, QueryHandler } from '../../../lib';
 
 describe('@QueryHandler', () => {
 	class TestQuery implements IQuery {}
@@ -8,10 +8,10 @@ describe('@QueryHandler', () => {
 	class TestQueryHandler {}
 
 	it('should specify which query the query-handler handles', () => {
-		const query: IQuery = Reflect.getMetadata(QUERY_HANDLER_METADATA, TestQueryHandler);
+		const { query } = getQueryHandlerMetadata(TestQueryHandler);
 		expect(query).toEqual(TestQuery);
 
-		const queryMetadata = getQueryMetadata(query);
-		expect(queryMetadata.id).toBeDefined();
+		const { id } = getQueryMetadata(query);
+		expect(id).toBeDefined();
 	});
 });

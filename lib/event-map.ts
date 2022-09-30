@@ -1,5 +1,9 @@
 import { Injectable, Type } from '@nestjs/common';
-import { UnregisteredEventException, UnregisteredSerializerException } from './exceptions';
+import {
+	MissingEventMetadataException,
+	UnregisteredEventException,
+	UnregisteredSerializerException,
+} from './exceptions';
 import { getEventMetadata } from './helpers';
 import { IEvent, IEventPayload, IEventSerializer } from './interfaces';
 
@@ -23,6 +27,10 @@ export class EventMap {
 
 	public register<E extends IEvent>(cls: IEventConstructor<E>, serializer?: IEventSerializer): void {
 		const { name } = getEventMetadata(cls);
+
+		if (!name) {
+			throw new MissingEventMetadataException(cls);
+		}
 
 		this.eventMap.add({ name, cls, serializer });
 	}
