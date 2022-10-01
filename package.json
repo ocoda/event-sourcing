@@ -4,6 +4,7 @@
 	"description": "NestJS Event Sourcing Library",
 	"author": "Dries Hooghe <dries@drieshooghe.com>",
 	"license": "MIT",
+	"main": "dist/index.js",
 	"scripts": {
 		"build": "rm -rf dist && tsc -p tsconfig.build.json",
 		"ci": "rome ci ./lib",
