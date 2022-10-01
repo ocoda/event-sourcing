@@ -1,3 +1,4 @@
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { MongoClient } from 'mongodb';
 import {
 	Aggregate,
@@ -14,6 +15,14 @@ import {
 } from '../../../../lib';
 import { DefaultEventSerializer } from '../../../../lib/helpers';
 import { MongoDBEventStore, MongoEventEntity } from '../../../../lib/integration/event-store';
+
+jest.mock('@nestjs/event-emitter', () => {
+	return {
+		EventEmitter2: jest.fn().mockImplementation(() => {
+			return { emit: () => {} };
+		}),
+	};
+});
 
 class AccountId extends Id {}
 
@@ -41,6 +50,7 @@ class AccountDebitedEvent implements IEvent {
 class AccountClosedEvent implements IEvent {}
 
 describe(MongoDBEventStore, () => {
+	const eventEmitter = new EventEmitter2();
 	let client: MongoClient;
 	let eventStore: MongoDBEventStore;
 	let envelopesAccountA: EventEnvelope[];
@@ -69,7 +79,7 @@ describe(MongoDBEventStore, () => {
 
 	beforeAll(async () => {
 		client = new MongoClient('mongodb://localhost:27017');
-		eventStore = new MongoDBEventStore(eventMap, client.db());
+		eventStore = new MongoDBEventStore(eventMap, eventEmitter, client.db());
 		await eventStore.setup();
 
 		envelopesAccountA = [
@@ -164,6 +174,15 @@ describe(MongoDBEventStore, () => {
 			expect(entity.aggregateId).toEqual(envelopesAccountA[index].metadata.aggregateId);
 			expect(entity.occurredOn).toBeInstanceOf(Date);
 			expect(entity.version).toEqual(envelopesAccountA[index].metadata.version);
+		});
+
+		entitiesAccountB.forEach((entity, index) => {
+			expect(entity.streamId).toEqual(eventStreamAccountB.streamId);
+			expect(entity.event).toEqual(envelopesAccountB[index].event);
+			expect(entity.payload).toEqual(envelopesAccountB[index].payload);
+			expect(entity.aggregateId).toEqual(envelopesAccountB[index].metadata.aggregateId);
+			expect(entity.occurredOn).toBeInstanceOf(Date);
+			expect(entity.version).toEqual(envelopesAccountB[index].metadata.version);
 		});
 	});
 

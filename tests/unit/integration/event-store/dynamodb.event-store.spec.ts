@@ -1,5 +1,6 @@
 import { DeleteTableCommand, DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb';
 import { unmarshall } from '@aws-sdk/util-dynamodb';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
 	Aggregate,
 	AggregateRoot,
@@ -15,6 +16,14 @@ import {
 } from '../../../../lib';
 import { DefaultEventSerializer } from '../../../../lib/helpers';
 import { DynamoDBEventStore } from '../../../../lib/integration/event-store';
+
+jest.mock('@nestjs/event-emitter', () => {
+	return {
+		EventEmitter2: jest.fn().mockImplementation(() => {
+			return { emit: () => {} };
+		}),
+	};
+});
 
 class AccountId extends Id {}
 
@@ -42,6 +51,7 @@ class AccountDebitedEvent implements IEvent {
 class AccountClosedEvent implements IEvent {}
 
 describe(DynamoDBEventStore, () => {
+	const eventEmitter = new EventEmitter2();
 	let client: DynamoDBClient;
 	let eventStore: DynamoDBEventStore;
 	let envelopesAccountA: EventEnvelope[];
@@ -74,7 +84,7 @@ describe(DynamoDBEventStore, () => {
 			endpoint: 'http://localhost:8000',
 			credentials: { accessKeyId: 'foo', secretAccessKey: 'bar' },
 		});
-		eventStore = new DynamoDBEventStore(eventMap, client);
+		eventStore = new DynamoDBEventStore(eventMap, eventEmitter, client);
 		await eventStore.setup();
 
 		envelopesAccountA = [
@@ -178,6 +188,15 @@ describe(DynamoDBEventStore, () => {
 			expect(entity.aggregateId).toEqual(envelopesAccountA[index].metadata.aggregateId);
 			expect(typeof entity.occurredOn).toBe('number');
 			expect(entity.version).toEqual(envelopesAccountA[index].metadata.version);
+		});
+
+		entitiesAccountB.forEach((entity, index) => {
+			expect(entity.streamId).toEqual(eventStreamAccountB.streamId);
+			expect(entity.event).toEqual(envelopesAccountB[index].event);
+			expect(entity.payload).toEqual(envelopesAccountB[index].payload);
+			expect(entity.aggregateId).toEqual(envelopesAccountB[index].metadata.aggregateId);
+			expect(typeof entity.occurredOn).toBe('number');
+			expect(entity.version).toEqual(envelopesAccountB[index].metadata.version);
 		});
 	});
 

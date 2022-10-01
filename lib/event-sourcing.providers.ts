@@ -1,12 +1,13 @@
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { Provider } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { MongoClient } from 'mongodb';
 import { EVENT_SOURCING_OPTIONS } from './constants';
 import { EventMap } from './event-map';
 import { EventStore } from './event-store';
-import { MissingEventStoreConnectionOptionsException } from './exceptions';
-import { InMemoryEventStore, MongoDBEventStore } from './integration/event-store';
-import { InMemorySnapshotStore, MongoDBSnapshotStore } from './integration/snapshot-store';
+import { MissingStoreConnectionOptionsException } from './exceptions';
+import { DynamoDBEventStore, InMemoryEventStore, MongoDBEventStore } from './integration/event-store';
+import { DynamoDBSnapshotStore, InMemorySnapshotStore, MongoDBSnapshotStore } from './integration/snapshot-store';
 import { EventSourcingModuleOptions } from './interfaces';
 import { SnapshotStore } from './snapshot-store';
 
@@ -20,11 +21,18 @@ export const EventStoreProvider = {
 		switch (options.eventStore?.client) {
 			case 'mongodb': {
 				if (!options.eventStore.options) {
-					throw new MissingEventStoreConnectionOptionsException('eventStore', 'mongodb');
+					throw new MissingStoreConnectionOptionsException('eventStore', 'mongodb');
 				}
 				const { url, ...clientOptions } = options.eventStore.options;
 				const mongoClient = await new MongoClient(url, clientOptions).connect();
 				return new MongoDBEventStore(eventMap, eventEmitter, mongoClient.db());
+			}
+			case 'dynamodb': {
+				if (!options.eventStore.options) {
+					throw new MissingStoreConnectionOptionsException('eventStore', ' dynamodb');
+				}
+				const dynamoClient = new DynamoDBClient(options.eventStore.options);
+				return new DynamoDBEventStore(eventMap, eventEmitter, dynamoClient);
 			}
 			case 'in-memory':
 			default:
@@ -40,11 +48,18 @@ export const SnapshotStoreProvider = {
 		switch (options.snapshotStore?.client) {
 			case 'mongodb': {
 				if (!options.snapshotStore.options) {
-					throw new MissingEventStoreConnectionOptionsException('snapshotStore', 'mongodb');
+					throw new MissingStoreConnectionOptionsException('snapshotStore', 'mongodb');
 				}
 				const { url, ...clientOptions } = options.snapshotStore.options;
 				const mongoClient = await new MongoClient(url, clientOptions).connect();
 				return new MongoDBSnapshotStore(mongoClient.db());
+			}
+			case 'dynamodb': {
+				if (!options.snapshotStore.options) {
+					throw new MissingStoreConnectionOptionsException('snapshotStore', 'dynamodb');
+				}
+				const dynamoClient = new DynamoDBClient(options.snapshotStore.options);
+				return new DynamoDBSnapshotStore(dynamoClient);
 			}
 			case 'in-memory':
 			default:
