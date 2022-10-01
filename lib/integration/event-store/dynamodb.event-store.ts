@@ -8,6 +8,7 @@ import {
 	QueryCommand,
 } from '@aws-sdk/client-dynamodb';
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DEFAULT_BATCH_SIZE, StreamReadingDirection } from '../../constants';
 import { EventMap } from '../../event-map';
 import { EventFilter, EventStore, StreamEventFilter } from '../../event-store';
@@ -28,7 +29,7 @@ export interface DynamoEventEntity {
 }
 
 export class DynamoDBEventStore extends EventStore {
-	constructor(readonly eventMap: EventMap, readonly client: DynamoDBClient) {
+	constructor(readonly eventMap: EventMap, readonly eventEmitter: EventEmitter2, readonly client: DynamoDBClient) {
 		super();
 	}
 
@@ -166,6 +167,7 @@ export class DynamoDBEventStore extends EventStore {
 		};
 
 		await this.client.send(new BatchWriteItemCommand(params));
+		envelopes.forEach((envelope) => this.emit(envelope));
 	}
 
 	async *getEnvelopes(filter?: EventFilter): AsyncGenerator<EventEnvelope[]> {

@@ -1,4 +1,5 @@
 import { Provider } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { MongoClient } from 'mongodb';
 import { EVENT_SOURCING_OPTIONS } from './constants';
 import { EventMap } from './event-map';
@@ -15,7 +16,7 @@ export function createEventSourcingProviders(options: EventSourcingModuleOptions
 
 export const EventStoreProvider = {
 	provide: EventStore,
-	useFactory: async (eventMap: EventMap, options: EventSourcingModuleOptions) => {
+	useFactory: async (eventMap: EventMap, eventEmitter: EventEmitter2, options: EventSourcingModuleOptions) => {
 		switch (options.eventStore?.client) {
 			case 'mongodb': {
 				if (!options.eventStore.options) {
@@ -23,14 +24,14 @@ export const EventStoreProvider = {
 				}
 				const { url, ...clientOptions } = options.eventStore.options;
 				const mongoClient = await new MongoClient(url, clientOptions).connect();
-				return new MongoDBEventStore(eventMap, mongoClient.db());
+				return new MongoDBEventStore(eventMap, eventEmitter, mongoClient.db());
 			}
 			case 'in-memory':
 			default:
-				return new InMemoryEventStore(eventMap);
+				return new InMemoryEventStore(eventMap, eventEmitter);
 		}
 	},
-	inject: [EventMap, EVENT_SOURCING_OPTIONS],
+	inject: [EventMap, EventEmitter2, EVENT_SOURCING_OPTIONS],
 };
 
 export const SnapshotStoreProvider = {

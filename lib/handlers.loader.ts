@@ -19,6 +19,7 @@ import {
 	DefaultEventSerializer,
 	getCommandHandlerMetadata,
 	getCommandMetadata,
+	getEventSerializerMetadata,
 	getQueryHandlerMetadata,
 	getQueryMetadata,
 } from './helpers';
@@ -47,7 +48,7 @@ export class HandlersLoader implements OnApplicationBootstrap {
 
 		this.registerCommandHandlers(handlers.get(HandlerType.COMMANDS));
 		this.registerQueryHandlers(handlers.get(HandlerType.QUERIES));
-		this.registerEvents(handlers.get(HandlerType.SERIALIZATION));
+		this.registerEventSerializers(handlers.get(HandlerType.SERIALIZATION));
 	}
 
 	private loadHandlers() {
@@ -107,11 +108,12 @@ export class HandlersLoader implements OnApplicationBootstrap {
 		});
 	}
 
-	private registerEvents(handlers: InstanceWrapper[]) {
+	private registerEventSerializers(handlers: InstanceWrapper[]) {
 		this.options?.events.forEach((event) => {
-			const handler = handlers?.find(
-				({ metatype }) => Reflect.getMetadata(EVENT_SERIALIZER_METADATA, metatype) === event,
-			);
+			const handler = handlers?.find(({ metatype }) => {
+				const { event: registeredEvent } = getEventSerializerMetadata(metatype);
+				return registeredEvent === event;
+			});
 
 			const serializer =
 				handler?.instance || (!this.options.disableDefaultSerializer && DefaultEventSerializer.for(event));
