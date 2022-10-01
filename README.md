@@ -15,12 +15,9 @@
 </p>
 
 &nbsp;
-<table style="border: 2px solid darkgray; text-align: center; padding: 2rem;">
-	<td style="border-style: hidden;">🚧</td>
-	<td style="border-style: hidden;"><strong>This library is still under construction and thus subject to breaking changes. It's not recommended to use it in production.</strong></td>
-	<td style="border-style: hidden;">🚧</td>
-</table>
-&nbsp;
+> &nbsp;
+> This library is still under construction and thus subject to breaking changes. It's not recommended to use it in production. 🚧
+> &nbsp;
 
 This library was created to help people get started with event-sourcing in NestJS. Event-sourcing is the practice of capturing state **transitions** in your domain models instead of only capturing the current state. It contains the building blocks to implement Command query responsibility segregation, store events and snapshots, react to events and much more.
 
