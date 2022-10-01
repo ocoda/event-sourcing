@@ -1,1 +1,1 @@
-export type EventStoreClient = 'in-memory' | 'mongodb';
+export type EventStoreClient = 'in-memory' | 'mongodb' | 'dynamodb';

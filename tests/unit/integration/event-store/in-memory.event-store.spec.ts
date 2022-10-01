@@ -1,3 +1,4 @@
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
 	Aggregate,
 	AggregateRoot,
@@ -12,6 +13,14 @@ import {
 } from '../../../../lib';
 import { DefaultEventSerializer } from '../../../../lib/helpers';
 import { InMemoryEventStore } from '../../../../lib/integration/event-store';
+
+jest.mock('@nestjs/event-emitter', () => {
+	return {
+		EventEmitter2: jest.fn().mockImplementation(() => {
+			return { emit: () => {} };
+		}),
+	};
+});
 
 class AccountId extends Id {}
 
@@ -39,6 +48,7 @@ class AccountDebitedEvent implements IEvent {
 class AccountClosedEvent implements IEvent {}
 
 describe(InMemoryEventStore, () => {
+	const eventEmitter = new EventEmitter2();
 	let eventStore: InMemoryEventStore;
 	let envelopesAccountA: EventEnvelope[];
 	let envelopesAccountB: EventEnvelope[];
@@ -65,7 +75,7 @@ describe(InMemoryEventStore, () => {
 	const eventStreamAccountB = EventStream.for(Account, idAccountB);
 
 	beforeAll(() => {
-		eventStore = new InMemoryEventStore(eventMap);
+		eventStore = new InMemoryEventStore(eventMap, eventEmitter);
 		eventStore.setup();
 
 		envelopesAccountA = [

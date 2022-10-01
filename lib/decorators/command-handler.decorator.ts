@@ -9,6 +9,8 @@ import { COMMAND_HANDLER_METADATA, COMMAND_METADATA } from './constants';
  *
  * The decorated class must implement the `ICommandHandler` interface.
  *
+ * The handler automatically assigns an id to the command metadata.
+ *
  * @param command command *type* to be handled by this handler.
  */
 export const CommandHandler = (command: ICommand): ClassDecorator => {
@@ -16,6 +18,6 @@ export const CommandHandler = (command: ICommand): ClassDecorator => {
 		if (!Reflect.hasMetadata(COMMAND_METADATA, command)) {
 			Reflect.defineMetadata(COMMAND_METADATA, { id: randomUUID() } as CommandMetadata, command);
 		}
-		Reflect.defineMetadata(COMMAND_HANDLER_METADATA, command, target);
+		Reflect.defineMetadata(COMMAND_HANDLER_METADATA, { command }, target);
 	};
 };

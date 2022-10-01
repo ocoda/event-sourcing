@@ -1,12 +1,8 @@
-import { Injectable, Type } from '@nestjs/common';
-import { ModuleRef } from '@nestjs/core';
+import { Injectable } from '@nestjs/common';
 import 'reflect-metadata';
-import { COMMAND_METADATA } from './decorators';
-import { CommandHandlerNotFoundException } from './exceptions';
-import { DefaultCommandPubSub, ObservableBus } from './helpers';
-import { CommandMetadata, ICommand, ICommandBus, ICommandHandler, ICommandPublisher } from './interfaces';
-
-export type CommandHandlerType = Type<ICommandHandler<ICommand>>;
+import { CommandHandlerNotFoundException, MissingCommandMetadataException } from './exceptions';
+import { DefaultCommandPubSub, getCommandMetadata, ObservableBus } from './helpers';
+import { ICommand, ICommandBus, ICommandHandler, ICommandPublisher } from './interfaces';
 
 @Injectable()
 export class CommandBus<CommandBase extends ICommand = ICommand>
@@ -14,12 +10,7 @@ export class CommandBus<CommandBase extends ICommand = ICommand>
 	implements ICommandBus<CommandBase>
 {
 	private handlers = new Map<string, ICommandHandler<CommandBase>>();
-	private _publisher: ICommandPublisher<CommandBase>;
-
-	constructor(private readonly moduleRef: ModuleRef) {
-		super();
-		this.useDefaultPublisher();
-	}
+	private _publisher: ICommandPublisher<CommandBase> = new DefaultCommandPubSub<CommandBase>(this.subject$);
 
 	get publisher(): ICommandPublisher<CommandBase> {
 		return this._publisher;
@@ -45,15 +36,12 @@ export class CommandBus<CommandBase extends ICommand = ICommand>
 
 	private getCommandId(command: CommandBase): string {
 		const { constructor: commandType } = Object.getPrototypeOf(command);
-		const commandMetadata: CommandMetadata = Reflect.getMetadata(COMMAND_METADATA, commandType);
-		if (!commandMetadata) {
-			throw new CommandHandlerNotFoundException(commandType.name);
+		const { id } = getCommandMetadata(commandType);
+
+		if (!id) {
+			throw new MissingCommandMetadataException(commandType);
 		}
 
-		return commandMetadata.id;
-	}
-
-	private useDefaultPublisher() {
-		this._publisher = new DefaultCommandPubSub<CommandBase>(this.subject$);
+		return id;
 	}
 }

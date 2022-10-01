@@ -1,3 +1,4 @@
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Db, Document } from 'mongodb';
 import { DEFAULT_BATCH_SIZE, StreamReadingDirection } from '../../constants';
 import { EventMap } from '../../event-map';
@@ -12,7 +13,7 @@ export type MongoEventEntity =
 	& EventEnvelopeMetadata;
 
 export class MongoDBEventStore extends EventStore {
-	constructor(readonly eventMap: EventMap, readonly database: Db) {
+	constructor(readonly eventMap: EventMap, readonly eventEmitter: EventEmitter2, readonly database: Db) {
 		super();
 	}
 
@@ -95,6 +96,7 @@ export class MongoDBEventStore extends EventStore {
 		);
 
 		await this.database.collection<MongoEventEntity>(collection).insertMany(entities);
+		envelopes.forEach((envelope) => this.emit(envelope));
 	}
 
 	async *getEnvelopes(filter?: EventFilter): AsyncGenerator<EventEnvelope[]> {

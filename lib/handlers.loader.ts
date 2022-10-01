@@ -1,20 +1,31 @@
 import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import { DiscoveryService } from '@nestjs/core';
 import { InstanceWrapper } from '@nestjs/core/injector/instance-wrapper';
-import { CommandBus, CommandHandlerType } from './command-bus';
+import { CommandBus } from './command-bus';
 import {
 	COMMAND_HANDLER_METADATA,
-	COMMAND_METADATA,
 	EVENT_SERIALIZER_METADATA,
 	InjectEventSourcingOptions,
 	QUERY_HANDLER_METADATA,
-	QUERY_METADATA,
 } from './decorators';
 import { EventMap } from './event-map';
-import { InvalidCommandHandlerException, InvalidQueryHandlerException } from './exceptions';
-import { DefaultEventSerializer } from './helpers';
-import { CommandMetadata, EventSourcingModuleOptions, QueryMetadata } from './interfaces';
-import { QueryBus, QueryHandlerType } from './query-bus';
+import {
+	MissingCommandHandlerMetadataException,
+	MissingCommandMetadataException,
+	MissingEventSerializerMetadataException,
+	MissingQueryHandlerMetadataException,
+	MissingQueryMetadataException,
+} from './exceptions';
+import {
+	DefaultEventSerializer,
+	getCommandHandlerMetadata,
+	getCommandMetadata,
+	getEventSerializerMetadata,
+	getQueryHandlerMetadata,
+	getQueryMetadata,
+} from './helpers';
+import { EventSourcingModuleOptions, ICommandHandler } from './interfaces';
+import { QueryBus } from './query-bus';
 
 enum HandlerType {
 	COMMANDS,
@@ -62,14 +73,18 @@ export class HandlersLoader implements OnApplicationBootstrap {
 		return handlers;
 	}
 
-	private registerCommandHandlers(handlers: InstanceWrapper[]) {
+	private registerCommandHandlers(handlers: InstanceWrapper<ICommandHandler>[]) {
 		handlers?.forEach(({ metatype, instance }) => {
-			const command: CommandHandlerType = Reflect.getMetadata(COMMAND_HANDLER_METADATA, metatype);
+			const { command } = getCommandHandlerMetadata(metatype);
 
-			const { id }: CommandMetadata = Reflect.getMetadata(COMMAND_METADATA, command);
+			if (!command) {
+				throw new MissingCommandHandlerMetadataException(metatype);
+			}
+
+			const { id } = getCommandMetadata(command);
 
 			if (!id) {
-				throw new InvalidCommandHandlerException();
+				throw new MissingCommandMetadataException(command);
 			}
 
 			this.commandBus.bind(instance, id);
@@ -78,12 +93,16 @@ export class HandlersLoader implements OnApplicationBootstrap {
 
 	private registerQueryHandlers(handlers: InstanceWrapper[]) {
 		handlers?.forEach(({ metatype, instance }) => {
-			const query: QueryHandlerType = Reflect.getMetadata(QUERY_HANDLER_METADATA, metatype);
+			const { query } = getQueryHandlerMetadata(metatype);
 
-			const { id }: QueryMetadata = Reflect.getMetadata(QUERY_METADATA, query);
+			if (!query) {
+				throw new MissingQueryHandlerMetadataException(metatype);
+			}
+
+			const { id } = getQueryMetadata(query);
 
 			if (!id) {
-				throw new InvalidQueryHandlerException();
+				throw new MissingQueryMetadataException(query);
 			}
 
 			this.queryBus.bind(instance, id);
@@ -91,10 +110,19 @@ export class HandlersLoader implements OnApplicationBootstrap {
 	}
 
 	private registerEvents(handlers: InstanceWrapper[]) {
+		handlers?.forEach(({ metatype }) => {
+			const { event } = getEventSerializerMetadata(metatype);
+
+			if (!event) {
+				throw new MissingEventSerializerMetadataException(metatype);
+			}
+		});
+
 		this.options?.events.forEach((event) => {
-			const handler = handlers?.find(
-				({ metatype }) => Reflect.getMetadata(EVENT_SERIALIZER_METADATA, metatype) === event,
-			);
+			const handler = handlers?.find(({ metatype }) => {
+				const { event: registeredEvent } = getEventSerializerMetadata(metatype);
+				return registeredEvent === event;
+			});
 
 			const serializer =
 				handler?.instance || (!this.options.disableDefaultSerializer && DefaultEventSerializer.for(event));

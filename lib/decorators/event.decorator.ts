@@ -1,4 +1,6 @@
+import { randomUUID } from 'crypto';
 import 'reflect-metadata';
+import { EventMetadata } from '../interfaces';
 import { EVENT_METADATA } from './constants';
 
 /**
@@ -8,6 +10,7 @@ import { EVENT_METADATA } from './constants';
  */
 export const Event = (name?: string): ClassDecorator => {
 	return (target: any) => {
-		Reflect.defineMetadata(EVENT_METADATA, name || target.name, target);
+		const metadata: EventMetadata = { id: randomUUID(), name: name || target.name };
+		Reflect.defineMetadata(EVENT_METADATA, metadata, target);
 	};
 };

@@ -14,7 +14,15 @@
 	</a>
 </p>
 
-This library was created to help people get started with event-sourcing in NestJS. Event-sourcing is the practice of capturing state **transitions** in your domain models instead of only capturing the current state. It contains the building blocks to implement Command query responsibility segregation, store events and snapshots, publish events and much more.
+&nbsp;
+<table>
+	<td>🚧</td>
+	<td align="center"><strong>This library is still under construction and thus subject to breaking changes. It's not recommended to use it in production.</strong></td>
+	<td>🚧</td>
+</table>
+&nbsp;
+
+This library was created to help people get started with event-sourcing in NestJS. Event-sourcing is the practice of capturing state **transitions** in your domain models instead of only capturing the current state. It contains the building blocks to implement Command query responsibility segregation, store events and snapshots, react to events and much more.
 
 &nbsp;
 <details open>
@@ -28,9 +36,9 @@ This library was created to help people get started with event-sourcing in NestJ
 		<ul>
         	<li><a href="#event-streams">Event streams</a></li>
         	<li><a href="#event-store">Event store</a></li>
+			<li><a href="#event-listeners">Event Listeners</a></li>
       </ul>
 	</li>
-    <li><a href="#repositories">Repositories</a></li>
 	<li>
 		<a href="#snapshots">Snapshots</a>
 		<ul>
@@ -38,7 +46,9 @@ This library was created to help people get started with event-sourcing in NestJ
         	<li><a href="#snapshot-store">Snapshot store</a></li>
       </ul>
 	</li>
+	<li><a href="#aggregate-repositories">Aggregate repositories</a></li>
     <li><a href="#queries">Queries</a></li>
+    <li><a href="#misc">Misc</a></li>
     <li><a href="#contact">Contact</a></li>
     <li><a href="#acknowledgments">Acknowledgments</a></li>
   </ol>
@@ -212,6 +222,20 @@ class AppModule implements OnModuleInit {
 }
 ```
 &nbsp;
+
+### Event listeners
+An event listener is a class that has methods that respond to events that have occurred and were stored. This makes it convenient to trigger actions based on the events that took place in your application, e.g. sending an email when a user signed up.
+
+```typescript
+@Injectable()
+export class UserEventListener implements IEventListener {
+	constructor(private readonly mailService: MailService) {}
+	@OnEvent(UsedSignedUpEvent)
+	handleUserSignedUpEvent(event: UsedSignedUpEvent) {
+		this.mailService.send(...)
+	}
+}
+```
 
 ## Snapshots
 Snapshots are an optimization that is completely optional. They come in handy when event-streams become large and reading them out becomes slow.

@@ -1,12 +1,8 @@
-import { Injectable, Type } from '@nestjs/common';
-import { ModuleRef } from '@nestjs/core';
+import { Injectable } from '@nestjs/common';
 import 'reflect-metadata';
-import { QUERY_METADATA } from './decorators/constants';
-import { QueryHandlerNotFoundException } from './exceptions';
-import { DefaultQueryPubSub, ObservableBus } from './helpers';
-import { IQuery, IQueryBus, IQueryHandler, IQueryPublisher, QueryMetadata } from './interfaces';
-
-export type QueryHandlerType = Type<IQueryHandler<IQuery>>;
+import { MissingQueryMetadataException, QueryHandlerNotFoundException } from './exceptions';
+import { DefaultQueryPubSub, getQueryMetadata, ObservableBus } from './helpers';
+import { IQuery, IQueryBus, IQueryHandler, IQueryPublisher } from './interfaces';
 
 @Injectable()
 export class QueryBus<QueryBase extends IQuery = IQuery>
@@ -14,12 +10,7 @@ export class QueryBus<QueryBase extends IQuery = IQuery>
 	implements IQueryBus<QueryBase>
 {
 	private handlers = new Map<string, IQueryHandler<QueryBase>>();
-	private _publisher: IQueryPublisher<QueryBase>;
-
-	constructor(private readonly moduleRef: ModuleRef) {
-		super();
-		this.useDefaultPublisher();
-	}
+	private _publisher: IQueryPublisher<QueryBase> = new DefaultQueryPubSub<QueryBase>(this.subject$);
 
 	get publisher(): IQueryPublisher<QueryBase> {
 		return this._publisher;
@@ -45,15 +36,12 @@ export class QueryBus<QueryBase extends IQuery = IQuery>
 
 	private getQueryId(query: QueryBase): string {
 		const { constructor: queryType } = Object.getPrototypeOf(query);
-		const queryMetadata: QueryMetadata = Reflect.getMetadata(QUERY_METADATA, queryType);
-		if (!queryMetadata) {
-			throw new QueryHandlerNotFoundException(queryType.name);
+		const { id } = getQueryMetadata(queryType);
+
+		if (!id) {
+			throw new MissingQueryMetadataException(queryType);
 		}
 
-		return queryMetadata.id;
-	}
-
-	private useDefaultPublisher() {
-		this._publisher = new DefaultQueryPubSub<QueryBase>(this.subject$);
+		return id;
 	}
 }
