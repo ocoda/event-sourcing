@@ -15,10 +15,10 @@
 </p>
 
 &nbsp;
-<table>
-	<td>🚧</td>
-	<td align="center"><strong>This library is still under construction and thus subject to breaking changes. It's not recommended to use it in production.</strong></td>
-	<td>🚧</td>
+<table style="border: 2px solid darkgray; text-align: center; padding: 2rem;">
+	<td style="border-style: hidden;">🚧</td>
+	<td style="border-style: hidden;"><strong>This library is still under construction and thus subject to breaking changes. It's not recommended to use it in production.</strong></td>
+	<td style="border-style: hidden;">🚧</td>
 </table>
 &nbsp;
 
