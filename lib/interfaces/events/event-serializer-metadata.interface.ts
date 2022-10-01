@@ -1,5 +1,6 @@
-import { EventType } from '../../event-bus';
+import { Type } from '@nestjs/common';
+import { IEvent } from './event.interface';
 
 export interface EventSerializerMetadata {
-	event: EventType;
+	event: Type<IEvent>;
 }

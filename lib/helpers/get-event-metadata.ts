@@ -1,7 +1,7 @@
+import { Type } from '@nestjs/common';
 import { EVENT_METADATA } from '../decorators';
-import { EventType } from '../event-bus';
-import { EventMetadata } from '../interfaces';
+import { EventMetadata, IEvent } from '../interfaces';
 
-export const getEventMetadata = (event: EventType): EventMetadata => {
+export const getEventMetadata = (event: Type<IEvent>): EventMetadata => {
 	return Reflect.getMetadata(EVENT_METADATA, event) ?? {};
 };
