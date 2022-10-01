@@ -2,7 +2,6 @@ export * from './command-bus';
 export * from './constants';
 export * from './decorators';
 export * from './event-map';
-export * from './event-publisher';
 export * from './event-sourcing.module';
 export * from './event-store';
 export * from './exceptions';

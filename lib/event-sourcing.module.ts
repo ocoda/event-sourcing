@@ -4,7 +4,6 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 import { CommandBus } from './command-bus';
 import { EVENT_SOURCING_OPTIONS } from './constants';
 import { EventMap } from './event-map';
-import { EventPublisher } from './event-publisher';
 import { createEventSourcingProviders, EventStoreProvider, SnapshotStoreProvider } from './event-sourcing.providers';
 import { HandlersLoader } from './handlers.loader';
 import { EventSourcingModuleAsyncOptions, EventSourcingModuleOptions, EventSourcingOptionsFactory } from './interfaces';
@@ -20,7 +19,6 @@ export class EventSourcingModule {
 			...createEventSourcingProviders(options),
 			EventMap,
 			HandlersLoader,
-			EventPublisher,
 			CommandBus,
 			QueryBus,
 			EventStoreProvider,
@@ -43,7 +41,6 @@ export class EventSourcingModule {
 			...this.createAsyncProviders(options),
 			EventMap,
 			HandlersLoader,
-			EventPublisher,
 			CommandBus,
 			QueryBus,
 			EventStoreProvider,
