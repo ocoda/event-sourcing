@@ -1,5 +1,6 @@
-import { CommandType } from '../../command-bus';
+import { Type } from '@nestjs/common';
+import { ICommand } from './command.interface';
 
 export interface CommandHandlerMetadata {
-	command: CommandType;
+	command: Type<ICommand>;
 }

@@ -1,5 +1,6 @@
-import { QueryType } from '../../query-bus';
+import { Type } from '@nestjs/common';
+import { IQuery } from './query.interface';
 
 export interface QueryHandlerMetadata {
-	query: QueryType;
+	query: Type<IQuery>;
 }

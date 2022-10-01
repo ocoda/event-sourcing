@@ -1,11 +1,8 @@
-import { Injectable, Type } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import 'reflect-metadata';
 import { CommandHandlerNotFoundException, MissingCommandMetadataException } from './exceptions';
 import { DefaultCommandPubSub, getCommandMetadata, ObservableBus } from './helpers';
 import { ICommand, ICommandBus, ICommandHandler, ICommandPublisher } from './interfaces';
-
-export type CommandType = Type<ICommand>;
-export type CommandHandlerType = Type<ICommandHandler<ICommand>>;
 
 @Injectable()
 export class CommandBus<CommandBase extends ICommand = ICommand>
