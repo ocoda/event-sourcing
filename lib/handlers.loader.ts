@@ -10,8 +10,9 @@ import {
 } from './decorators';
 import { EventMap } from './event-map';
 import {
-	InvalidCommandHandlerException,
 	MissingCommandHandlerMetadataException,
+	MissingCommandMetadataException,
+	MissingEventSerializerMetadataException,
 	MissingQueryHandlerMetadataException,
 	MissingQueryMetadataException,
 } from './exceptions';
@@ -48,7 +49,7 @@ export class HandlersLoader implements OnApplicationBootstrap {
 
 		this.registerCommandHandlers(handlers.get(HandlerType.COMMANDS));
 		this.registerQueryHandlers(handlers.get(HandlerType.QUERIES));
-		this.registerEventSerializers(handlers.get(HandlerType.SERIALIZATION));
+		this.registerEvents(handlers.get(HandlerType.SERIALIZATION));
 	}
 
 	private loadHandlers() {
@@ -83,7 +84,7 @@ export class HandlersLoader implements OnApplicationBootstrap {
 			const { id } = getCommandMetadata(command);
 
 			if (!id) {
-				throw new InvalidCommandHandlerException();
+				throw new MissingCommandMetadataException(command);
 			}
 
 			this.commandBus.bind(instance, id);
@@ -108,7 +109,15 @@ export class HandlersLoader implements OnApplicationBootstrap {
 		});
 	}
 
-	private registerEventSerializers(handlers: InstanceWrapper[]) {
+	private registerEvents(handlers: InstanceWrapper[]) {
+		handlers?.forEach(({ metatype }) => {
+			const { event } = getEventSerializerMetadata(metatype);
+
+			if (!event) {
+				throw new MissingEventSerializerMetadataException(metatype);
+			}
+		});
+
 		this.options?.events.forEach((event) => {
 			const handler = handlers?.find(({ metatype }) => {
 				const { event: registeredEvent } = getEventSerializerMetadata(metatype);
