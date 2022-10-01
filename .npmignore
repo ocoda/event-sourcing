@@ -1,0 +1,15 @@
+# source
+index.ts
+lib
+tests
+
+# misc
+.circleci
+.release-it.json
+docker-compose.yml
+jest.config.js
+pnpm-lock.yaml
+renovate.json
+rome.json
+tsconfig.build.json
+tsconfig.json
