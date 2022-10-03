@@ -1,7 +1,6 @@
 import { Type } from '@nestjs/common';
-import { AGGREGATE_METADATA } from '../decorators';
 import { MissingAggregateMetadataException } from '../exceptions';
-import { AggregateMetadata } from '../interfaces';
+import { getAggregateMetadata } from '../helpers';
 import { AggregateRoot } from './aggregate-root';
 import { Id } from './id';
 
@@ -19,7 +18,7 @@ export class EventStream {
 	static for<A extends AggregateRoot = AggregateRoot>(aggregate: A | Type<A>, id: Id): EventStream {
 		const cls = aggregate instanceof Function ? aggregate : (aggregate.constructor as Type<A>);
 
-		const metadata: AggregateMetadata = Reflect.getMetadata(AGGREGATE_METADATA, cls);
+		const metadata = getAggregateMetadata(cls);
 		if (!metadata) {
 			throw new MissingAggregateMetadataException(cls);
 		}
