@@ -1,17 +1,17 @@
 <p align="center">
-	<a href="http://ocoda.io/" target="blank"><img src="https://github.com/ocoda/.github/raw/master/assets/ocoda_logo_full_gradient.svg" width="600" alt="Ocoda Logo" /></a>
+  <a href="http://ocoda.io/" target="blank"><img src="https://github.com/ocoda/.github/raw/master/assets/ocoda_logo_full_gradient.svg" width="600" alt="Ocoda Logo" /></a>
 </p>
 
 <p align="center">
-	<a href="https://dl.circleci.com/status-badge/redirect/gh/ocoda/event-sourcing/tree/master">
-		<img src="https://dl.circleci.com/status-badge/img/gh/ocoda/event-sourcing/tree/master.svg?style=shield&circle-token=a100516020508c3af55331a6000b671c6bc94f62">
-	</a>
-	<a href="https://codecov.io/gh/ocoda/event-sourcing">
-		<img src="https://codecov.io/gh/ocoda/event-sourcing/branch/master/graph/badge.svg?token=D6BRXUY0J8">
-	</a>
-	<a href="https://github.com/ocoda/event-sourcing/blob/master/LICENSE.md">
-		<img src="https://img.shields.io/badge/License-MIT-green.svg">
-	</a>
+  <a href="https://dl.circleci.com/status-badge/redirect/gh/ocoda/event-sourcing/tree/master">
+    <img src="https://dl.circleci.com/status-badge/img/gh/ocoda/event-sourcing/tree/master.svg?style=shield&circle-token=a100516020508c3af55331a6000b671c6bc94f62">
+  </a>
+  <a href="https://codecov.io/gh/ocoda/event-sourcing">
+    <img src="https://codecov.io/gh/ocoda/event-sourcing/branch/master/graph/badge.svg?token=D6BRXUY0J8">
+  </a>
+  <a href="https://github.com/ocoda/event-sourcing/blob/master/LICENSE.md">
+    <img src="https://img.shields.io/badge/License-MIT-green.svg">
+  </a>
 </p>
 
 &nbsp;
@@ -29,21 +29,21 @@ This library was created to help people get started with event-sourcing in NestJ
     <li><a href="#aggregates--value-objects">Aggregates & value objects</a></li>
     <li><a href="#commands--command-handlers">Commands & command handlers</a></li>
     <li>
-		<a href="#events">Events</a>
-		<ul>
-        	<li><a href="#event-streams">Event streams</a></li>
-        	<li><a href="#event-store">Event store</a></li>
-			<li><a href="#event-listeners">Event Listeners</a></li>
+    <a href="#events">Events</a>
+    <ul>
+          <li><a href="#event-streams">Event streams</a></li>
+          <li><a href="#event-store">Event store</a></li>
+      <li><a href="#event-listeners">Event listeners</a></li>
       </ul>
-	</li>
-	<li>
-		<a href="#snapshots">Snapshots</a>
-		<ul>
-        	<li><a href="#snapshot-streams">Snapshot streams</a></li>
-        	<li><a href="#snapshot-store">Snapshot store</a></li>
+  </li>
+  <li>
+    <a href="#snapshots">Snapshots</a>
+    <ul>
+          <li><a href="#snapshot-streams">Snapshot streams</a></li>
+          <li><a href="#snapshot-store">Snapshot store</a></li>
       </ul>
-	</li>
-	<li><a href="#aggregate-repositories">Aggregate repositories</a></li>
+  </li>
+  <li><a href="#aggregate-repositories">Aggregate repositories</a></li>
     <li><a href="#queries">Queries</a></li>
     <li><a href="#misc">Misc</a></li>
     <li><a href="#contact">Contact</a></li>
@@ -69,24 +69,25 @@ For testing purposes no database wrapper is required, this library ships with a 
 Once you have installed all required packages we can import the EventSourcingModule into the root AppModule of your application. The configuration itself depends on the type of database you want to use and if you want to make use of snapshots.
 ```typescript
 import { EventSourcingModule } from '@ocoda/event-sourcing';
+import { Events } from './app.providers.ts';
 
 @Module({
   imports: [
     EventSourcingModule.forRoot({
-		eventStore: {
-			client: 'mongodb',
-			options: { 
-				url: 'mongodb://localhost:27017' 
-			},
-		},
-		snapshotStore: {
-			client: 'dynamodb',
-			options: {
-				region: 'us-east-1',
-				credentials: { accessKeyId: 'foo', secretAccessKey: 'bar' },
-			}
-		},
-		events: [...Events],
+      eventStore: {
+        client: 'mongodb',
+        options: { 
+          url: 'mongodb://localhost:27017' 
+        },
+      },
+      snapshotStore: {
+        client: 'dynamodb',
+        options: {
+          region: 'us-east-1',
+          credentials: { accessKeyId: 'foo', secretAccessKey: 'bar' },
+        }
+      },
+      events: [...Events],
     }),
 })
 export class AppModule {}
@@ -103,9 +104,9 @@ To create an aggregate using this library you will need to:
 ```typescript
 import { Aggregate, AggregateRoot } from '@ocoda/event-sourcing';
 
-@Aggregate()
+@Aggregate('account')
 class Account extends AggregateRoot {
-	...
+  ...
 }
 ```
 
@@ -117,16 +118,16 @@ A Value Object is an immutable model has no conceptual identity, it describes ch
 import { ValueObject } from '@ocoda/event-sourcing';
 
 export class AccountName extends ValueObject {
-	public static fromString(name: string) {
-		if(name.length < 3) {
-			throw new Error('Account name should contain at least 3 characters');
-		}
-		return new Accountname({ value: name });
-	}
+  public static fromString(name: string) {
+    if(name.length < 3) {
+      throw new Error('Account name should contain at least 3 characters');
+    }
+    return new Accountname({ value: name });
+  }
 
-	get value(): string {
-		return this.props.value;
-	}
+  get value(): string {
+    return this.props.value;
+  }
 }
 ```
 &nbsp;
@@ -138,7 +139,7 @@ A Command is an object that is sent to your domain application that describes th
 import { ICommand } from '@ocoda/event-sourcing';
 
 class OpenAccountCommand implements ICommand {
-	constructor(public readonly accountOwner: string) {}
+  constructor(public readonly accountOwner: string) {}
 }
 ```
 
@@ -149,11 +150,18 @@ import { CommandHandler, ICommandHandler } from '@ocoda/event-sourcing';
 
 @CommandHandler(OpenAccountCommand)
 export class OpenAccountCommandHandler implements ICommandHandler {
-	async execute(command: OpenAccountCommand): Promise<...> {
-		...
-	}
-}
 
+  constructor(private readonly accountRepository: AccountRepository) {}
+
+  async execute(command: OpenAccountCommand): Promise<string> {
+    const accountId = AccountId.generate();
+    const account = Account.open(accountId, command.accountOwnerIds?.map(AccountOwnerId.from));
+
+    await this.accountRepository.save(account);
+
+    return accountId.value;
+  }
+}
 ```
 
 Don't forget to register your CommandHandlers as providers in your application.
@@ -165,28 +173,43 @@ Events are classes that describe a fact that took place. They can be created by 
 ```typescript
 @Event('account-opened')
 export class AccountOpenedEvent implements IEvent {
-	constructor(public readonly accountId: string, public readonly accountOwnerIds?: string[]) {}
+  constructor(
+    public readonly accountId: string,
+    public readonly openedOn: string,
+    public readonly accountOwnerIds?: string[]
+  ) {}
 }
 ```
 
-Events can contain non-primitive values, which can cause issues when storing and reading them from a database. To mediate this, whenever an event needs to be stored or retrieved from the database it gets (de)serialized using the [class-transformer](https://github.com/typestack/class-transformer) library, you can however write your own serializer logic for an event. If you decide to, don't forget to register your event serializers as providers in your application.
+Preferrably events contain only primitive values, otherwise this can cause issues when storing and reading them from a database. To mediate this however, whenever an event needs to be stored or retrieved from the database it gets (de)serialized using the [class-transformer](https://github.com/typestack/class-transformer) library, you can however write your own serializer logic for an event. If you decide to, don't forget to register your event serializers as providers in your application.
 
 ```typescript
 @Event('account-opened')
-class AccountOpenedEvent implements IEvent {
-	constructor(public readonly opened: Date) {}
+export class AccountOpenedEvent implements IEvent {
+  constructor(
+    public readonly accountId: AccountId,
+    public readonly openedOn: Date,
+    public readonly accountOwnerIds?: AccountOwnerId[]
+  ) {}
 }
 
 @EventSerializer(AccountOpenedEvent)
 export class AccountOpenedEventSerializer implements IEventSerializer {
-	serialize(event: AccountOpenedEvent): IEventPayload<AccountOpenedEvent> {
-		return { openedOn: event.opened.toISOString() };
-	}
+  serialize({ accountId, openedOn, accountOwnerIds }: AccountOpenedEvent): IEventPayload<AccountOpenedEvent> {
+    return {
+      accountId: accountId.value,
+      openedOn: openedOn.toISOString(),
+      accountOwnerIds: accountOwnerIds?.map((id) => id.value)
+    };
+  }
 
-	deserialize(payload: IEventPayload<AccountOpenedEvent>): AccountOpenedEvent {
-		const openedDate = new Date(payload.opened);
-		return new AccountOpenedEvent(openedDate);
-	}
+  deserialize({ id, openedOn, accountOwnerIds }: IEventPayload<AccountOpenedEvent>): AccountOpenedEvent {
+    const accountId = AccountId.from(id);
+    const openedOnDate = openedOn && new Date(openedOn);
+    const ownerIds = accountOwnerIds?.map((id) => AccountOwnerId.from(id));
+
+    return new AccountOpenedEvent(accountId, openedOnDate, ownerIds);
+  }
 }
 ```
 &nbsp;
@@ -196,7 +219,8 @@ The EventStream class creates a representation of a stream of events for a speci
 
 ```typescript
 const accountId = Id.generate();
-const stream = EventStream.for(Account, accountId);
+const stream = EventStream.for(Account, accountId); 
+// For a multi-tenant setup: EventStream.for(Account, accountId, pool);
 
 stream.streamId; // account-af9a0775-b868-4063-89d8-ccc81bce3c3d
 ```
@@ -205,17 +229,18 @@ stream.streamId; // account-af9a0775-b868-4063-89d8-ccc81bce3c3d
 ### Event store
 This library provides several types of event store implementations, as described above.
 It's important to trigger the setup method on a store in order to prepare the database for storing your events, basically what this does is create an `events` or `snapshots` table or collection.
-In a multi-tenant infrastructure, separate event- and snapshot-tables can be created by triggering the setup method with a "pool", which prefixes the table name with the tenant-pool you provided. This pool can then be passed to the event-store when writing or reading events/snapshots.
+In a multi-tenant infrastructure, separate event-tables can be created by triggering the setup method with a "pool", which prefixes the table name with the tenant-pool you provided. This pool can then be passed to the event-store when writing or reading events/snapshots.
 
 ```typescript
 import { EventStore } from '@ocoda/event-sourcing';
 
 class AppModule implements OnModuleInit {
-	constructor(private readonly eventStore: EventStore) {}
 
-	async onModuleInit() {
-		await this.eventStore.setup();
-	}
+  constructor(private readonly eventStore: EventStore) {}
+
+  async onModuleInit() {
+    await this.eventStore.setup();
+  }
 }
 ```
 &nbsp;
@@ -226,11 +251,13 @@ An event listener is a class that has methods that respond to events that have o
 ```typescript
 @Injectable()
 export class UserEventListener implements IEventListener {
-	constructor(private readonly mailService: MailService) {}
-	@OnEvent(UsedSignedUpEvent)
-	handleUserSignedUpEvent(event: UsedSignedUpEvent) {
-		this.mailService.send(...)
-	}
+  
+  constructor(private readonly mailService: MailService) {}
+
+  @OnEvent(UsedSignedUpEvent)
+  handleUserSignedUpEvent(event: UsedSignedUpEvent) {
+    this.mailService.send(...)
+  }
 }
 ```
 
@@ -256,11 +283,12 @@ stream.streamId // account-af9a0775-b868-4063-89d8-ccc81bce3c3d
 import { SnapshotStore } from '@ocoda/event-sourcing';
 
 class AppModule implements OnModuleInit {
-	constructor(private readonly snapshotStore: SnapshotStore) {}
 
-	async onModuleInit() {
-		await this.snapshotStore.setup();
-	}
+  constructor(private readonly snapshotStore: SnapshotStore) {}
+
+  async onModuleInit() {
+    await this.snapshotStore.setup();
+  }
 }
 ```
 &nbsp;
@@ -268,7 +296,7 @@ class AppModule implements OnModuleInit {
 ### Snapshot handlers
 The store is used behind the scenes of the SnapshotHandler base class, which is responsible for saving and loading snapshots behind the scenes.
 
-How an aggregate snapshot is (de)serialized is the responsibility of a SnapshotHandler which extends the base and is decorated with the `@Snapshot` decorator, which specifies:
+How an aggregate snapshot is (de)serialized is the responsibility of a SnapshotHandler which extends the base and is decorated with the `@Snapshot()` decorator, which specifies:
 - which aggregate it's responsible for
 - the stream name (defaults to the name of the aggregate's class)
 - at which interval a snapshot should be taken
@@ -278,25 +306,25 @@ import { SnapshotHandler } from '@ocoda/event-sourcing';
 
 @Snapshot(Account, { name: 'account', interval: 5 })
 export class AccountSnapshotHandler extends SnapshotHandler<Account> {
-	serialize({ id, ownerIds, balance, openedOn, closedOn }: Account) {
-		return {
-			id: id.value,
-			ownerIds: ownerIds.map(({ value }) => value),
-			balance,
-			openedOn: openedOn ? openedOn.toISOString() : undefined,
-			closedOn: closedOn ? closedOn.toISOString() : undefined,
-		};
-	}
-	deserialize({ id, ownerIds, balance, openedOn, closedOn }: ISnapshot<Account>): Account {
-		const account = new Account();
-		account.id = AccountId.from(id);
-		account.ownerIds = ownerIds.map(AccountOwnerId.from);
-		account.balance = balance;
-		account.openedOn = openedOn && new Date(openedOn);
-		account.closedOn = closedOn && new Date(closedOn);
+  serialize({ id, ownerIds, balance, openedOn, closedOn }: Account) {
+    return {
+      id: id.value,
+      ownerIds: ownerIds.map(({ value }) => value),
+      balance,
+      openedOn: openedOn ? openedOn.toISOString() : undefined,
+      closedOn: closedOn ? closedOn.toISOString() : undefined,
+    };
+  }
+  deserialize({ id, ownerIds, balance, openedOn, closedOn }: ISnapshot<Account>): Account {
+    const account = new Account();
+    account.id = AccountId.from(id);
+    account.ownerIds = ownerIds.map(AccountOwnerId.from);
+    account.balance = balance;
+    account.openedOn = openedOn && new Date(openedOn);
+    account.closedOn = closedOn && new Date(closedOn);
 
-		return account;
-	}
+    return account;
+  }
 }
 ```
 &nbsp;
@@ -306,32 +334,33 @@ Aggregate repositories are where both stores meet. For example:
 ```typescript
 @Injectable()
 export class AccountRepository {
-	constructor(
-		private readonly eventStore: EventStore,
-		private readonly accountSnapshotHandler: AccountSnapshotHandler,
-	) {}
 
-	async getById(accountId: AccountId) {
-		const eventStream = EventStream.for<Account>(Account, accountId);
+  constructor(
+    private readonly eventStore: EventStore,
+    private readonly accountSnapshotHandler: AccountSnapshotHandler,
+  ) {}
 
-		const account = await this.accountSnapshotHandler.load(accountId);
+  async getById(accountId: AccountId) {
+    const eventStream = EventStream.for<Account>(Account, accountId);
 
-		const events = this.eventStore.getEvents({ eventStream, fromVersion: account.version + 1 });
+    const account = await this.accountSnapshotHandler.load(accountId);
 
-		await account.loadFromHistory(events);
+    const events = this.eventStore.getEvents({ eventStream, fromVersion: account.version + 1 });
 
-		return account;
-	}
+    await account.loadFromHistory(events);
 
-	async save(account: Account): Promise<void> {
-		const events = account.commit();
-		const stream = EventStream.for<Account>(Account, account.id);
+    return account;
+  }
 
-		await Promise.all([
-			this.accountSnapshotHandler.save(account.id, account),
-			this.eventStore.appendEvents(stream, account.version, events),
-		]);
-	}
+  async save(account: Account): Promise<void> {
+    const events = account.commit();
+    const stream = EventStream.for<Account>(Account, account.id);
+
+    await Promise.all([
+      this.accountSnapshotHandler.save(account.id, account),
+      this.eventStore.appendEvents(stream, account.version, events),
+    ]);
+  }
 }
 ```
 &nbsp;
@@ -340,21 +369,22 @@ export class AccountRepository {
 You can create queries to return the data you need.
 ```typescript
 export class GetAccountQuery {
-  constructor(
-    public readonly accountId: string,
-  ) {}
+
+  constructor(public readonly accountId: string) {}
+
+}
 
 @QueryHandler(GetAccountQuery)
 export class GetAccountQueryHandler implements IQueryHandler {
-	constructor(private readonly accountRepository: AccountRepository) {}
 
-	async execute(query: GetAccountQuery): Promise<Account> {
-		const accountId = AccountId.from(query.accountId);
-		const account = await this.accountRepository.getById(accountId);
+  constructor(private readonly accountRepository: AccountRepository) {}
 
-		return account;
-	}
-}
+  async execute(query: GetAccountQuery): Promise<Account> {
+    const accountId = AccountId.from(query.accountId);
+    const account = await this.accountRepository.getById(accountId);
+
+    return account;
+  }
 }
 ```
 &nbsp;
