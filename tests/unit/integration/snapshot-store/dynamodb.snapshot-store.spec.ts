@@ -75,29 +75,27 @@ describe(DynamoDBSnapshotStore, () => {
 			snapshotStore.appendSnapshot(snapshotStreamAccountB, 40, snapshots[3]),
 		]);
 
-		const entitiesAccountA = (
-			await client.send(
-				new QueryCommand({
-					TableName: SnapshotCollection.get(),
-					KeyConditionExpression: 'streamId = :streamId',
-					ExpressionAttributeValues: {
-						':streamId': { S: snapshotStreamAccountA.streamId },
-					},
-				}),
-			)
-		).Items.map((item) => unmarshall(item));
+		const { Items: itemsAccountA } = await client.send(
+			new QueryCommand({
+				TableName: SnapshotCollection.get(),
+				KeyConditionExpression: 'streamId = :streamId',
+				ExpressionAttributeValues: {
+					':streamId': { S: snapshotStreamAccountA.streamId },
+				},
+			}),
+		);
+		const entitiesAccountA = itemsAccountA?.map((item) => unmarshall(item)) || [];
 
-		const entitiesAccountB = (
-			await client.send(
-				new QueryCommand({
-					TableName: SnapshotCollection.get(),
-					KeyConditionExpression: 'streamId = :streamId',
-					ExpressionAttributeValues: {
-						':streamId': { S: snapshotStreamAccountB.streamId },
-					},
-				}),
-			)
-		).Items.map((item) => unmarshall(item));
+		const { Items: itemsAccountB } = await client.send(
+			new QueryCommand({
+				TableName: SnapshotCollection.get(),
+				KeyConditionExpression: 'streamId = :streamId',
+				ExpressionAttributeValues: {
+					':streamId': { S: snapshotStreamAccountB.streamId },
+				},
+			}),
+		);
+		const entitiesAccountB = itemsAccountB?.map((item) => unmarshall(item)) || [];
 
 		expect(entitiesAccountA).toHaveLength(snapshots.length);
 		expect(entitiesAccountB).toHaveLength(snapshots.length);
@@ -129,7 +127,7 @@ describe(DynamoDBSnapshotStore, () => {
 	});
 
 	it('should retrieve snapshots by stream', async () => {
-		const resolvedSnapshots = [];
+		const resolvedSnapshots: ISnapshot<Account>[] = [];
 		for await (const snapshots of snapshotStore.getSnapshots({ snapshotStream: snapshotStreamAccountA })) {
 			resolvedSnapshots.push(...snapshots);
 		}
@@ -138,7 +136,7 @@ describe(DynamoDBSnapshotStore, () => {
 	});
 
 	it('should filter snapshots by stream and version', async () => {
-		const resolvedSnapshots = [];
+		const resolvedSnapshots: ISnapshot<Account>[] = [];
 		for await (const snapshots of snapshotStore.getSnapshots({
 			snapshotStream: snapshotStreamAccountA,
 			fromVersion: 30,
@@ -155,7 +153,7 @@ describe(DynamoDBSnapshotStore, () => {
 	});
 
 	it('should retrieve snapshots backwards', async () => {
-		const resolvedSnapshots = [];
+		const resolvedSnapshots: ISnapshot<Account>[] = [];
 		for await (const snapshots of snapshotStore.getSnapshots({
 			snapshotStream: snapshotStreamAccountA,
 			direction: StreamReadingDirection.BACKWARD,
@@ -167,7 +165,7 @@ describe(DynamoDBSnapshotStore, () => {
 	});
 
 	it('should retrieve snapshots backwards from a certain version', async () => {
-		const resolvedSnapshots = [];
+		const resolvedSnapshots: ISnapshot<Account>[] = [];
 		for await (const snapshots of snapshotStore.getSnapshots({
 			snapshotStream: snapshotStreamAccountA,
 			fromVersion: envelopesAccountA[1].metadata.version,
@@ -182,7 +180,7 @@ describe(DynamoDBSnapshotStore, () => {
 	});
 
 	it('should limit the returned snapshots', async () => {
-		const resolvedSnapshots = [];
+		const resolvedSnapshots: ISnapshot<Account>[] = [];
 		for await (const snapshots of snapshotStore.getSnapshots({ snapshotStream: snapshotStreamAccountA, limit: 2 })) {
 			resolvedSnapshots.push(...snapshots);
 		}
@@ -191,7 +189,7 @@ describe(DynamoDBSnapshotStore, () => {
 	});
 
 	it('should batch the returned snapshots', async () => {
-		const resolvedSnapshots = [];
+		const resolvedSnapshots: ISnapshot<Account>[] = [];
 		for await (const snapshots of snapshotStore.getSnapshots({ snapshotStream: snapshotStreamAccountA, limit: 2 })) {
 			expect(snapshots.length).toBe(2);
 			resolvedSnapshots.push(...snapshots);
@@ -216,7 +214,7 @@ describe(DynamoDBSnapshotStore, () => {
 	});
 
 	it('should retrieve snapshot-envelopes', async () => {
-		const resolvedEnvelopes = [];
+		const resolvedEnvelopes: SnapshotEnvelope<Account>[] = [];
 		for await (const envelopes of snapshotStore.getEnvelopes({
 			snapshotStream: snapshotStreamAccountA,
 		})) {

@@ -59,7 +59,7 @@ describe(InMemorySnapshotStore, () => {
 		snapshotStore.appendSnapshot(snapshotStreamAccountA, 40, snapshots[3]);
 		snapshotStore.appendSnapshot(snapshotStreamAccountB, 40, snapshots[3]);
 
-		const entities = [...snapshotStore['collections'].get('snapshots')];
+		const entities = snapshotStore['collections'].get('snapshots') || [];
 		const entitiesAccountA = entities.filter(
 			({ streamId: entityStreamId }) => entityStreamId === snapshotStreamAccountA.streamId,
 		);
@@ -95,7 +95,7 @@ describe(InMemorySnapshotStore, () => {
 	});
 
 	it('should retrieve snapshots by stream', async () => {
-		const resolvedSnapshots = [];
+		const resolvedSnapshots: ISnapshot<Account>[] = [];
 		for await (const snapshots of snapshotStore.getSnapshots({ snapshotStream: snapshotStreamAccountA })) {
 			resolvedSnapshots.push(...snapshots);
 		}
@@ -104,7 +104,7 @@ describe(InMemorySnapshotStore, () => {
 	});
 
 	it('should filter snapshots by stream and version', async () => {
-		const resolvedSnapshots = [];
+		const resolvedSnapshots: ISnapshot<Account>[] = [];
 		for await (const snapshots of snapshotStore.getSnapshots({
 			snapshotStream: snapshotStreamAccountA,
 			fromVersion: 30,
@@ -121,7 +121,7 @@ describe(InMemorySnapshotStore, () => {
 	});
 
 	it('should retrieve snapshots backwards', async () => {
-		const resolvedSnapshots = [];
+		const resolvedSnapshots: ISnapshot<Account>[] = [];
 		for await (const snapshots of snapshotStore.getSnapshots({
 			snapshotStream: snapshotStreamAccountA,
 			direction: StreamReadingDirection.BACKWARD,
@@ -133,7 +133,7 @@ describe(InMemorySnapshotStore, () => {
 	});
 
 	it('should retrieve snapshots backwards from a certain version', async () => {
-		const resolvedSnapshots = [];
+		const resolvedSnapshots: ISnapshot<Account>[] = [];
 		for await (const snapshots of snapshotStore.getSnapshots({
 			snapshotStream: snapshotStreamAccountA,
 			fromVersion: envelopesAccountA[1].metadata.version,
@@ -148,7 +148,7 @@ describe(InMemorySnapshotStore, () => {
 	});
 
 	it('should limit the returned snapshots', async () => {
-		const resolvedSnapshots = [];
+		const resolvedSnapshots: ISnapshot<Account>[] = [];
 		for await (const snapshots of snapshotStore.getSnapshots({ snapshotStream: snapshotStreamAccountA, limit: 2 })) {
 			resolvedSnapshots.push(...snapshots);
 		}
@@ -157,7 +157,7 @@ describe(InMemorySnapshotStore, () => {
 	});
 
 	it('should batch the returned snapshots', async () => {
-		const resolvedSnapshots = [];
+		const resolvedSnapshots: ISnapshot<Account>[] = [];
 		for await (const snapshots of snapshotStore.getSnapshots({ snapshotStream: snapshotStreamAccountA, limit: 2 })) {
 			expect(snapshots.length).toBe(2);
 			resolvedSnapshots.push(...snapshots);
@@ -182,7 +182,7 @@ describe(InMemorySnapshotStore, () => {
 	});
 
 	it('should retrieve snapshot-envelopes', async () => {
-		const resolvedEnvelopes = [];
+		const resolvedEnvelopes: SnapshotEnvelope<Account>[] = [];
 		for await (const envelopes of snapshotStore.getEnvelopes({
 			snapshotStream: snapshotStreamAccountA,
 		})) {
