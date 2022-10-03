@@ -8,6 +8,7 @@ specifiers:
   '@nestjs/event-emitter': 1.3.1
   '@nestjs/platform-express': 9.1.2
   '@nestjs/testing': 9.1.2
+  '@swc-node/register': ^1.5.2
   '@swc/core': 1.3.3
   '@swc/jest': 0.2.23
   '@types/jest': 29.1.0
@@ -34,6 +35,7 @@ devDependencies:
   '@nestjs/core': 9.1.2_zzb753o6ov5n3wrhompfrkwa7u
   '@nestjs/platform-express': 9.1.2_umdjpi6fqr4wvw73r3mhthbyle
   '@nestjs/testing': 9.1.2_j2ls57gnkuuvs6xhnfklmsn2o4
+  '@swc-node/register': 1.5.2_feqprhgry2pb2z4ii4dnooaaom
   '@swc/core': 1.3.3
   '@swc/jest': 0.2.23_@swc+core@1.3.3
   '@types/jest': 29.1.0
@@ -1691,6 +1693,38 @@ packages:
       '@sinonjs/commons': 1.8.3
     dev: true
 
+  /@swc-node/core/1.9.1_@swc+core@1.3.3:
+    resolution: {integrity: sha512-Mh4T/PmQOpPtqw1BNvU38uWzsXbd5RJji17YBXnj7JDDE5KlTR9sSo2RKxWKDVtHbdcD1S+CtyZXA93aEWlfGQ==}
+    engines: {node: '>= 10'}
+    peerDependencies:
+      '@swc/core': '>= 1.3'
+    dependencies:
+      '@swc/core': 1.3.3
+    dev: true
+
+  /@swc-node/register/1.5.2_feqprhgry2pb2z4ii4dnooaaom:
+    resolution: {integrity: sha512-uXgAWEmbrg1zFxv6x/0rTQuToEuCxxZDaA7KyJi5+FwRcBTS79tBYEqUROH8otcTnHdh4njAbWdETFPRD4Pogw==}
+    peerDependencies:
+      typescript: '>= 4.3'
+    dependencies:
+      '@swc-node/core': 1.9.1_@swc+core@1.3.3
+      '@swc-node/sourcemap-support': 0.2.1
+      colorette: 2.0.19
+      debug: 4.3.4
+      pirates: 4.0.5
+      tslib: 2.4.0
+      typescript: 4.8.4
+    transitivePeerDependencies:
+      - '@swc/core'
+      - supports-color
+    dev: true
+
+  /@swc-node/sourcemap-support/0.2.1:
+    resolution: {integrity: sha512-+49bBLKEenzAybTIlOlZGdif5wK0ZHjrAtIUtyd5nSthFKSTzcmfmFayqVmk5ZoVZI2AG+qJOx5+K1vZt17TJQ==}
+    dependencies:
+      source-map-support: 0.5.21
+    dev: true
+
   /@swc/core-android-arm-eabi/1.3.3:
     resolution: {integrity: sha512-R6MpKXvNx/T/8a0wUTiX1THxfRbURSCmYlSi/JnUaqLYUclQK1N8aCMWz7EYSz6FE0VZBREJYDJcdnfP88E/1Q==}
     engines: {node: '>=10'}
@@ -2503,6 +2537,10 @@ packages:
 
   /color-name/1.1.4:
     resolution: {integrity: sha512-dOy+3AuW3a2wNbZHIuMZpTcgjGuLU/uBL/ubcZF9OXbDo8ff4O8yVp5Bf0efS8uEoYo5q4Fx7dY9OgQGXgAsQA==}
+
+  /colorette/2.0.19:
+    resolution: {integrity: sha512-3tlv/dIP7FWvj3BsbHrGLJ6l/oKh1O3TcgBqMn+yyCagOxc23fyzDS6HypQbgxWbkpDnf52p1LuR4eWDQ/K9WQ==}
+    dev: true
 
   /combined-stream/1.0.8:
     resolution: {integrity: sha512-FQN4MRfuJeHf7cBbBMJFXhKSDq+2kAArBlmRBvcvFE5BB1HZKXtSFASDhdlz9zOYwxh8lDdnvmMOe/+5cdoEdg==}
@@ -5393,6 +5431,13 @@ packages:
 
   /source-map-support/0.5.13:
     resolution: {integrity: sha512-SHSKFHadjVA5oR4PPqhtAVdcBWwRYVd6g6cAXnIbRiIwc2EhPrTuKUBdSLvlEKyIP3GCf89fltvcZiP9MMFA1w==}
+    dependencies:
+      buffer-from: 1.1.2
+      source-map: 0.6.1
+    dev: true
+
+  /source-map-support/0.5.21:
+    resolution: {integrity: sha512-uBHU3L3czsIyYXKX88fdrGovxdSCoTGDRZ6SYXtSRxLZUzHg5P/66Ht6uoUlHu9EZod+inXhKo3qQgwXUT/y1w==}
     dependencies:
       buffer-from: 1.1.2
       source-map: 0.6.1
