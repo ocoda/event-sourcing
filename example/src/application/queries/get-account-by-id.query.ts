@@ -1,0 +1,25 @@
+import { IQuery, IQueryHandler, QueryHandler } from '@ocoda/event-sourcing';
+import { AccountId } from '../../domain/models';
+import { AccountDto } from '../account.dtos';
+import { AccountRepository } from '../repositories';
+
+export class GetAccountByIdQuery implements IQuery {
+	constructor(public readonly accountId: string) {}
+}
+
+@QueryHandler(GetAccountByIdQuery)
+export class GetAccountByIdQueryHandler implements IQueryHandler<GetAccountByIdQuery, AccountDto> {
+	constructor(private readonly accountRepository: AccountRepository) {}
+
+	public async execute(query: GetAccountByIdQuery): Promise<AccountDto> {
+		const accountId = AccountId.from(query.accountId);
+
+		const account = await this.accountRepository.getById(accountId);
+
+		if (account.closedOn) {
+			return;
+		}
+
+		return AccountDto.from(account);
+	}
+}
