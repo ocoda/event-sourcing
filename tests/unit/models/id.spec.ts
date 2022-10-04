@@ -14,6 +14,11 @@ describe(Aggregate, () => {
 		expect(createdAccountId.value).toBe(uuid);
 	});
 
+	it('should throw when trying to create an id from an undefined variable', () => {
+		let uuid: string;
+		expect(() => AccountId.from(uuid)).toThrow(InvalidIdError.becauseEmpty());
+	});
+
 	it('should throw when creating an Id from an invalid uuid', () => {
 		const generatedAccountId = AccountId.generate();
 		expect(generatedAccountId.value).toBeDefined();

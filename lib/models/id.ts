@@ -20,6 +20,9 @@ export class Id extends ValueObject<Props> {
 	}
 
 	public static from(id: string): Id {
+		if (!id) {
+			throw InvalidIdError.becauseEmpty();
+		}
 		return new Id(id);
 	}
 
