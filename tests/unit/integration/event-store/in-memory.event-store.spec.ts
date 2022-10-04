@@ -12,7 +12,7 @@ import {
 	StreamReadingDirection,
 } from '../../../../lib';
 import { DefaultEventSerializer } from '../../../../lib/helpers';
-import { InMemoryEventStore } from '../../../../lib/integration/event-store';
+import { InMemoryEventEntity, InMemoryEventStore } from '../../../../lib/integration/event-store';
 
 jest.mock('@nestjs/event-emitter', () => {
 	return {
@@ -138,7 +138,7 @@ describe(InMemoryEventStore, () => {
 		eventStore.appendEvents(eventStreamAccountA, 6, events.slice(3));
 		eventStore.appendEvents(eventStreamAccountB, 6, events.slice(3));
 
-		const entities = [...eventStore['collections'].get('events')];
+		const entities: InMemoryEventEntity[] = eventStore['collections'].get('events') || [];
 		const entitiesAccountA = entities.filter(
 			({ streamId: entityStreamId }) => entityStreamId === eventStreamAccountA.streamId,
 		);
@@ -176,7 +176,7 @@ describe(InMemoryEventStore, () => {
 	});
 
 	it('should filter events by stream', async () => {
-		const resolvedEvents = [];
+		const resolvedEvents: IEvent[] = [];
 		for await (const events of eventStore.getEvents({ eventStream: eventStreamAccountA })) {
 			resolvedEvents.push(...events);
 		}
@@ -185,7 +185,7 @@ describe(InMemoryEventStore, () => {
 	});
 
 	it('should filter events by stream and version', async () => {
-		const resolvedEvents = [];
+		const resolvedEvents: IEvent[] = [];
 		for await (const events of eventStore.getEvents({ eventStream: eventStreamAccountA, fromVersion: 3 })) {
 			resolvedEvents.push(...events);
 		}
@@ -199,7 +199,7 @@ describe(InMemoryEventStore, () => {
 	});
 
 	it('should retrieve events backwards', async () => {
-		const resolvedEvents = [];
+		const resolvedEvents: IEvent[] = [];
 		for await (const events of eventStore.getEvents({
 			eventStream: eventStreamAccountA,
 			direction: StreamReadingDirection.BACKWARD,
@@ -211,7 +211,7 @@ describe(InMemoryEventStore, () => {
 	});
 
 	it('should retrieve events backwards from a certain version', async () => {
-		const resolvedEvents = [];
+		const resolvedEvents: IEvent[] = [];
 		for await (const events of eventStore.getEvents({
 			eventStream: eventStreamAccountA,
 			fromVersion: 4,
@@ -224,7 +224,7 @@ describe(InMemoryEventStore, () => {
 	});
 
 	it('should limit the returned events', async () => {
-		const resolvedEvents = [];
+		const resolvedEvents: IEvent[] = [];
 		for await (const events of eventStore.getEvents({ eventStream: eventStreamAccountA, limit: 3 })) {
 			resolvedEvents.push(...events);
 		}
@@ -233,7 +233,7 @@ describe(InMemoryEventStore, () => {
 	});
 
 	it('should batch the returned events', async () => {
-		const resolvedEvents = [];
+		const resolvedEvents: IEvent[] = [];
 		for await (const events of eventStore.getEvents({ eventStream: eventStreamAccountA, batch: 2 })) {
 			expect(events.length).toBe(2);
 			resolvedEvents.push(...events);
@@ -256,7 +256,7 @@ describe(InMemoryEventStore, () => {
 	});
 
 	it('should retrieve event-envelopes', async () => {
-		const resolvedEnvelopes = [];
+		const resolvedEnvelopes: EventEnvelope[] = [];
 		for await (const envelopes of eventStore.getEnvelopes({ eventStream: eventStreamAccountA })) {
 			resolvedEnvelopes.push(...envelopes);
 		}

@@ -154,29 +154,27 @@ describe(DynamoDBEventStore, () => {
 			eventStore.appendEvents(eventStreamAccountB, 6, events.slice(3)),
 		]);
 
-		const entitiesAccountA = (
-			await client.send(
-				new QueryCommand({
-					TableName: EventCollection.get(),
-					KeyConditionExpression: 'streamId = :streamId',
-					ExpressionAttributeValues: {
-						':streamId': { S: eventStreamAccountA.streamId },
-					},
-				}),
-			)
-		).Items.map((item) => unmarshall(item));
+		const { Items: itemsAccountA } = await client.send(
+			new QueryCommand({
+				TableName: EventCollection.get(),
+				KeyConditionExpression: 'streamId = :streamId',
+				ExpressionAttributeValues: {
+					':streamId': { S: eventStreamAccountA.streamId },
+				},
+			}),
+		);
+		const entitiesAccountA = itemsAccountA?.map((item) => unmarshall(item)) || [];
 
-		const entitiesAccountB = (
-			await client.send(
-				new QueryCommand({
-					TableName: EventCollection.get(),
-					KeyConditionExpression: 'streamId = :streamId',
-					ExpressionAttributeValues: {
-						':streamId': { S: eventStreamAccountB.streamId },
-					},
-				}),
-			)
-		).Items.map((item) => unmarshall(item));
+		const { Items: itemsAccountB } = await client.send(
+			new QueryCommand({
+				TableName: EventCollection.get(),
+				KeyConditionExpression: 'streamId = :streamId',
+				ExpressionAttributeValues: {
+					':streamId': { S: eventStreamAccountB.streamId },
+				},
+			}),
+		);
+		const entitiesAccountB = itemsAccountB?.map((item) => unmarshall(item)) || [];
 
 		expect(entitiesAccountA).toHaveLength(events.length);
 		expect(entitiesAccountB).toHaveLength(events.length);
@@ -207,7 +205,7 @@ describe(DynamoDBEventStore, () => {
 	});
 
 	it('should filter events by stream', async () => {
-		const resolvedEvents = [];
+		const resolvedEvents: IEvent[] = [];
 		for await (const events of eventStore.getEvents({ eventStream: eventStreamAccountA })) {
 			resolvedEvents.push(...events);
 		}
@@ -216,7 +214,7 @@ describe(DynamoDBEventStore, () => {
 	});
 
 	it('should filter events by stream and version', async () => {
-		const resolvedEvents = [];
+		const resolvedEvents: IEvent[] = [];
 		for await (const events of eventStore.getEvents({ eventStream: eventStreamAccountA, fromVersion: 3 })) {
 			resolvedEvents.push(...events);
 		}
@@ -230,7 +228,7 @@ describe(DynamoDBEventStore, () => {
 	});
 
 	it('should retrieve events backwards', async () => {
-		const resolvedEvents = [];
+		const resolvedEvents: IEvent[] = [];
 		for await (const events of eventStore.getEvents({
 			eventStream: eventStreamAccountA,
 			direction: StreamReadingDirection.BACKWARD,
@@ -242,7 +240,7 @@ describe(DynamoDBEventStore, () => {
 	});
 
 	it('should retrieve events backwards from a certain version', async () => {
-		const resolvedEvents = [];
+		const resolvedEvents: IEvent[] = [];
 		for await (const events of eventStore.getEvents({
 			eventStream: eventStreamAccountA,
 			fromVersion: 4,
@@ -255,7 +253,7 @@ describe(DynamoDBEventStore, () => {
 	});
 
 	it('should limit the returned events', async () => {
-		const resolvedEvents = [];
+		const resolvedEvents: IEvent[] = [];
 		for await (const events of eventStore.getEvents({ eventStream: eventStreamAccountA, limit: 3 })) {
 			resolvedEvents.push(...events);
 		}
@@ -264,7 +262,7 @@ describe(DynamoDBEventStore, () => {
 	});
 
 	it('should batch the returned events', async () => {
-		const resolvedEvents = [];
+		const resolvedEvents: IEvent[] = [];
 		for await (const events of eventStore.getEvents({ eventStream: eventStreamAccountA, batch: 2 })) {
 			expect(events.length).toBe(2);
 			resolvedEvents.push(...events);
@@ -287,7 +285,7 @@ describe(DynamoDBEventStore, () => {
 	});
 
 	it('should retrieve event-envelopes', async () => {
-		const resolvedEnvelopes = [];
+		const resolvedEnvelopes: EventEnvelope[] = [];
 		for await (const envelopes of eventStore.getEnvelopes({ eventStream: eventStreamAccountA })) {
 			resolvedEnvelopes.push(...envelopes);
 		}

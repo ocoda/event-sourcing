@@ -23,7 +23,8 @@
 	},
 	"include": [
 		"lib/**/*",
-		"tests/**/*"
+		"tests/**/*",
+		"example/**/*"
 	],
 	"exclude": [
 		"node_modules",

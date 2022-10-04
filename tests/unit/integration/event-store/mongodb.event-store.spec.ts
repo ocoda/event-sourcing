@@ -193,7 +193,7 @@ describe(MongoDBEventStore, () => {
 	});
 
 	it('should filter events by stream', async () => {
-		const resolvedEvents = [];
+		const resolvedEvents: IEvent[] = [];
 		for await (const events of eventStore.getEvents({ eventStream: eventStreamAccountA })) {
 			resolvedEvents.push(...events);
 		}
@@ -202,7 +202,7 @@ describe(MongoDBEventStore, () => {
 	});
 
 	it('should filter events by stream and version', async () => {
-		const resolvedEvents = [];
+		const resolvedEvents: IEvent[] = [];
 		for await (const events of eventStore.getEvents({ eventStream: eventStreamAccountA, fromVersion: 3 })) {
 			resolvedEvents.push(...events);
 		}
@@ -216,7 +216,7 @@ describe(MongoDBEventStore, () => {
 	});
 
 	it('should retrieve events backwards', async () => {
-		const resolvedEvents = [];
+		const resolvedEvents: IEvent[] = [];
 		for await (const events of eventStore.getEvents({
 			eventStream: eventStreamAccountA,
 			direction: StreamReadingDirection.BACKWARD,
@@ -228,7 +228,7 @@ describe(MongoDBEventStore, () => {
 	});
 
 	it('should retrieve events backwards from a certain version', async () => {
-		const resolvedEvents = [];
+		const resolvedEvents: IEvent[] = [];
 		for await (const events of eventStore.getEvents({
 			eventStream: eventStreamAccountA,
 			fromVersion: 4,
@@ -241,7 +241,7 @@ describe(MongoDBEventStore, () => {
 	});
 
 	it('should limit the returned events', async () => {
-		const resolvedEvents = [];
+		const resolvedEvents: IEvent[] = [];
 		for await (const events of eventStore.getEvents({ eventStream: eventStreamAccountA, limit: 3 })) {
 			resolvedEvents.push(...events);
 		}
@@ -250,7 +250,7 @@ describe(MongoDBEventStore, () => {
 	});
 
 	it('should batch the returned events', async () => {
-		const resolvedEvents = [];
+		const resolvedEvents: IEvent[] = [];
 		for await (const events of eventStore.getEvents({ eventStream: eventStreamAccountA, batch: 2 })) {
 			expect(events.length).toBe(2);
 			resolvedEvents.push(...events);
@@ -273,7 +273,7 @@ describe(MongoDBEventStore, () => {
 	});
 
 	it('should retrieve event-envelopes', async () => {
-		const resolvedEnvelopes = [];
+		const resolvedEnvelopes: EventEnvelope[] = [];
 		for await (const envelopes of eventStore.getEnvelopes({ eventStream: eventStreamAccountA })) {
 			resolvedEnvelopes.push(...envelopes);
 		}
