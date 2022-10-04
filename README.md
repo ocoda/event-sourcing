@@ -349,6 +349,10 @@ export class AccountRepository {
 
     await account.loadFromHistory(events);
 
+    if (account.version < 1) {
+        throw new AccountNotFoundException(accountId.value);
+    }
+
     return account;
   }
 
