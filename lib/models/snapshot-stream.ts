@@ -18,11 +18,11 @@ export class SnapshotStream {
 	static for<A extends AggregateRoot = AggregateRoot>(aggregate: A | Type<A>, id: Id): SnapshotStream {
 		const cls = aggregate instanceof Function ? aggregate : (aggregate.constructor as Type<A>);
 
-		const metadata = getAggregateMetadata(cls);
-		if (!metadata) {
+		const { streamName } = getAggregateMetadata(cls);
+		if (!streamName) {
 			throw new MissingAggregateMetadataException(cls);
 		}
 
-		return new SnapshotStream(metadata.streamName, id.value);
+		return new SnapshotStream(streamName, id.value);
 	}
 }
