@@ -12,6 +12,7 @@
 		"lint": "rome check ./lib ./tests --apply-suggested",
 		"test": "jest --config jest.config.js --runInBand",
 		"test:ci": "jest --config jest.config.js --runInBand --coverage",
+		"run:example": "node -r @swc-node/register ./example/src/main.ts",
 		"prepublish:npm": "pnpm build",
 		"publish:npm": "pnpm publish --access public",
 		"prepublish:next": "pnpm build",
