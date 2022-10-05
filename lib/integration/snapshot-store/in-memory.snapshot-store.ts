@@ -2,7 +2,7 @@ import { DEFAULT_BATCH_SIZE, StreamReadingDirection } from '../../constants';
 import { SnapshotNotFoundException } from '../../exceptions';
 import { ISnapshot, ISnapshotPool, SnapshotEnvelopeMetadata } from '../../interfaces';
 import { AggregateRoot, EventCollection, SnapshotCollection, SnapshotEnvelope, SnapshotStream } from '../../models';
-import { SnapshotFilter, SnapshotStore, StreamSnapshotFilter } from '../../snapshot-store';
+import { SnapshotFilter, SnapshotStore } from '../../snapshot-store';
 
 export type InMemorySnapshotEntity<A extends AggregateRoot> =
 	& {
@@ -20,24 +20,19 @@ export class InMemorySnapshotStore extends SnapshotStore {
 		return collection;
 	}
 
-	async *getSnapshots<A extends AggregateRoot>(filter?: SnapshotFilter): AsyncGenerator<ISnapshot<A>[]> {
+	async *getSnapshots<A extends AggregateRoot>(
+		{ streamId }: SnapshotStream,
+		filter?: SnapshotFilter,
+	): AsyncGenerator<ISnapshot<A>[]> {
 		let entities: InMemorySnapshotEntity<any>[] = [];
 
 		const collection = SnapshotCollection.get(filter?.pool);
-		let snapshotStream = filter?.snapshotStream;
-		let fromVersion = snapshotStream && (filter as StreamSnapshotFilter).fromVersion;
+		let fromVersion = filter?.fromVersion;
 		let direction = filter?.direction || StreamReadingDirection.FORWARD;
 		let limit = filter?.limit || Number.MAX_SAFE_INTEGER;
 		let batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
-		if (snapshotStream) {
-			const { streamId } = snapshotStream;
-			entities = this.collections.get(collection).filter(({ streamId: entityStreamId }) => entityStreamId === streamId);
-		} else {
-			for (const collection of this.collections.values()) {
-				entities.push(...collection);
-			}
-		}
+		entities = this.collections.get(collection).filter(({ streamId: entityStreamId }) => entityStreamId === streamId);
 
 		if (fromVersion) {
 			entities = entities.filter(({ version }) => version >= fromVersion);
@@ -126,24 +121,19 @@ export class InMemorySnapshotStore extends SnapshotStore {
 		}
 	}
 
-	async *getEnvelopes<A extends AggregateRoot>(filter?: SnapshotFilter): AsyncGenerator<SnapshotEnvelope<A>[]> {
+	async *getEnvelopes<A extends AggregateRoot>(
+		{ streamId }: SnapshotStream,
+		filter?: SnapshotFilter,
+	): AsyncGenerator<SnapshotEnvelope<A>[]> {
 		let entities: InMemorySnapshotEntity<any>[] = [];
 
 		const collection = SnapshotCollection.get(filter?.pool);
-		let snapshotStream = filter?.snapshotStream;
-		let fromVersion = snapshotStream && (filter as StreamSnapshotFilter).fromVersion;
+		let fromVersion = filter?.fromVersion;
 		let direction = filter?.direction || StreamReadingDirection.FORWARD;
 		let limit = filter?.limit || Number.MAX_SAFE_INTEGER;
 		let batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
-		if (snapshotStream) {
-			const { streamId } = snapshotStream;
-			entities = this.collections.get(collection).filter(({ streamId: entityStreamId }) => entityStreamId === streamId);
-		} else {
-			for (const collection of this.collections.values()) {
-				entities.push(...collection);
-			}
-		}
+		entities = this.collections.get(collection).filter(({ streamId: entityStreamId }) => entityStreamId === streamId);
 
 		if (fromVersion) {
 			entities = entities.filter(({ version }) => version >= fromVersion);

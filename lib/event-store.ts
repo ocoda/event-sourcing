@@ -4,17 +4,16 @@ import { EventMap } from './event-map';
 import { IEvent, IEventPool } from './interfaces';
 import { EventCollection, EventEnvelope, EventStream } from './models';
 
-interface BaseEventFilter {
+export interface EventFilter {
+	/**
+	 * The version from where the events should be read.
+	 */
+	fromVersion?: number;
 	/**
 	 * The event pool to search in.
 	 * @default events
 	 */
 	pool?: IEventPool;
-	/**
-	 * The event stream to filter by.
-	 * If not provided, all events will be returned.
-	 */
-	eventStream?: EventStream;
 	/**
 	 * The direction in which events should be read.
 	 * @default StreamReadingDirection.FORWARD
@@ -32,27 +31,12 @@ interface BaseEventFilter {
 	batch?: number;
 }
 
-export interface StreamEventFilter extends BaseEventFilter {
-	/**
-	 * The event stream to filter by.
-	 * If not provided, all events will be returned.
-	 */
-	eventStream: EventStream;
-	/**
-	 * The version from where the events should be read.
-	 * Can only be used in combination with a stream.
-	 */
-	fromVersion: number;
-}
-
-export type EventFilter = BaseEventFilter | StreamEventFilter;
-
 export abstract class EventStore {
 	abstract eventMap: EventMap;
 	abstract eventEmitter: EventEmitter2;
 
 	abstract setup(pool?: IEventPool): EventCollection | Promise<EventCollection>;
-	abstract getEvents(filter?: EventFilter): AsyncGenerator<IEvent[]>;
+	abstract getEvents(eventStream: EventStream, filter?: EventFilter): AsyncGenerator<IEvent[]>;
 	abstract getEvent(eventStream: EventStream, version: number, pool?: IEventPool): IEvent | Promise<IEvent>;
 	abstract appendEvents(
 		eventStream: EventStream,
@@ -60,7 +44,7 @@ export abstract class EventStore {
 		events: IEvent[],
 		pool?: IEventPool,
 	): void | Promise<void>;
-	abstract getEnvelopes?(filter?: EventFilter): AsyncGenerator<EventEnvelope[]>;
+	abstract getEnvelopes?(eventStream: EventStream, filter?: EventFilter): AsyncGenerator<EventEnvelope[]>;
 	abstract getEnvelope?(
 		eventStream: EventStream,
 		version: number,

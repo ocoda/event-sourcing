@@ -1,7 +1,7 @@
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DEFAULT_BATCH_SIZE, StreamReadingDirection } from '../../constants';
 import { EventMap } from '../../event-map';
-import { EventFilter, EventStore, StreamEventFilter } from '../../event-store';
+import { EventFilter, EventStore } from '../../event-store';
 import { EventNotFoundException } from '../../exceptions';
 import { EventEnvelopeMetadata, IEvent, IEventCollection, IEventPayload, IEventPool } from '../../interfaces';
 import { EventCollection, EventEnvelope, EventStream } from '../../models';
@@ -27,24 +27,16 @@ export class InMemoryEventStore extends EventStore {
 		return collection;
 	}
 
-	async *getEvents(filter?: EventFilter): AsyncGenerator<IEvent[]> {
+	async *getEvents({ streamId }: EventStream, filter?: EventFilter): AsyncGenerator<IEvent[]> {
 		let entities: InMemoryEventEntity[] = [];
-
 		let collection = EventCollection.get(filter?.pool);
-		let eventStream = filter?.eventStream;
-		let fromVersion = eventStream && (filter as StreamEventFilter).fromVersion;
+
+		let fromVersion = filter?.fromVersion;
 		let direction = filter?.direction || StreamReadingDirection.FORWARD;
 		let limit = filter?.limit || Number.MAX_SAFE_INTEGER;
 		let batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
-		if (eventStream) {
-			const { streamId } = eventStream;
-			entities = this.collections.get(collection).filter(({ streamId: entityStreamId }) => entityStreamId === streamId);
-		} else {
-			for (const collection of this.collections.values()) {
-				entities.push(...collection);
-			}
-		}
+		entities = this.collections.get(collection).filter(({ streamId: entityStreamId }) => entityStreamId === streamId);
 
 		if (fromVersion) {
 			entities = entities.filter(({ version }) => version >= fromVersion);
@@ -104,24 +96,16 @@ export class InMemoryEventStore extends EventStore {
 		envelopes.forEach((envelope) => this.emit(envelope));
 	}
 
-	async *getEnvelopes(filter?: EventFilter): AsyncGenerator<EventEnvelope[]> {
+	async *getEnvelopes({ streamId }: EventStream, filter?: EventFilter): AsyncGenerator<EventEnvelope[]> {
 		let entities: InMemoryEventEntity[] = [];
-
 		const collection = EventCollection.get(filter?.pool);
-		let eventStream = filter?.eventStream && filter.eventStream;
-		let fromVersion = eventStream && (filter as StreamEventFilter).fromVersion;
+
+		let fromVersion = filter?.fromVersion;
 		let direction = filter?.direction || StreamReadingDirection.FORWARD;
 		let limit = filter?.limit || Number.MAX_SAFE_INTEGER;
 		let batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
-		if (eventStream) {
-			const { streamId } = eventStream;
-			entities = this.collections.get(collection).filter(({ streamId: entityStreamId }) => entityStreamId === streamId);
-		} else {
-			for (const collection of this.collections.values()) {
-				entities.push(...collection);
-			}
-		}
+		entities = this.collections.get(collection).filter(({ streamId: entityStreamId }) => entityStreamId === streamId);
 
 		if (fromVersion) {
 			entities = entities.filter(({ version }) => version >= fromVersion);

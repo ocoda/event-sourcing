@@ -128,7 +128,7 @@ describe(DynamoDBSnapshotStore, () => {
 
 	it('should retrieve snapshots by stream', async () => {
 		const resolvedSnapshots: ISnapshot<Account>[] = [];
-		for await (const snapshots of snapshotStore.getSnapshots({ snapshotStream: snapshotStreamAccountA })) {
+		for await (const snapshots of snapshotStore.getSnapshots(snapshotStreamAccountA)) {
 			resolvedSnapshots.push(...snapshots);
 		}
 
@@ -137,10 +137,7 @@ describe(DynamoDBSnapshotStore, () => {
 
 	it('should filter snapshots by stream and version', async () => {
 		const resolvedSnapshots: ISnapshot<Account>[] = [];
-		for await (const snapshots of snapshotStore.getSnapshots({
-			snapshotStream: snapshotStreamAccountA,
-			fromVersion: 30,
-		})) {
+		for await (const snapshots of snapshotStore.getSnapshots(snapshotStreamAccountA, { fromVersion: 30 })) {
 			resolvedSnapshots.push(...snapshots);
 		}
 
@@ -154,8 +151,7 @@ describe(DynamoDBSnapshotStore, () => {
 
 	it('should retrieve snapshots backwards', async () => {
 		const resolvedSnapshots: ISnapshot<Account>[] = [];
-		for await (const snapshots of snapshotStore.getSnapshots({
-			snapshotStream: snapshotStreamAccountA,
+		for await (const snapshots of snapshotStore.getSnapshots(snapshotStreamAccountA, {
 			direction: StreamReadingDirection.BACKWARD,
 		})) {
 			resolvedSnapshots.push(...snapshots);
@@ -166,8 +162,7 @@ describe(DynamoDBSnapshotStore, () => {
 
 	it('should retrieve snapshots backwards from a certain version', async () => {
 		const resolvedSnapshots: ISnapshot<Account>[] = [];
-		for await (const snapshots of snapshotStore.getSnapshots({
-			snapshotStream: snapshotStreamAccountA,
+		for await (const snapshots of snapshotStore.getSnapshots(snapshotStreamAccountA, {
 			fromVersion: envelopesAccountA[1].metadata.version,
 			direction: StreamReadingDirection.BACKWARD,
 		})) {
@@ -181,7 +176,7 @@ describe(DynamoDBSnapshotStore, () => {
 
 	it('should limit the returned snapshots', async () => {
 		const resolvedSnapshots: ISnapshot<Account>[] = [];
-		for await (const snapshots of snapshotStore.getSnapshots({ snapshotStream: snapshotStreamAccountA, limit: 2 })) {
+		for await (const snapshots of snapshotStore.getSnapshots(snapshotStreamAccountA, { limit: 2 })) {
 			resolvedSnapshots.push(...snapshots);
 		}
 
@@ -190,7 +185,7 @@ describe(DynamoDBSnapshotStore, () => {
 
 	it('should batch the returned snapshots', async () => {
 		const resolvedSnapshots: ISnapshot<Account>[] = [];
-		for await (const snapshots of snapshotStore.getSnapshots({ snapshotStream: snapshotStreamAccountA, limit: 2 })) {
+		for await (const snapshots of snapshotStore.getSnapshots(snapshotStreamAccountA, { limit: 2 })) {
 			expect(snapshots.length).toBe(2);
 			resolvedSnapshots.push(...snapshots);
 		}
@@ -215,9 +210,7 @@ describe(DynamoDBSnapshotStore, () => {
 
 	it('should retrieve snapshot-envelopes', async () => {
 		const resolvedEnvelopes: SnapshotEnvelope<Account>[] = [];
-		for await (const envelopes of snapshotStore.getEnvelopes({
-			snapshotStream: snapshotStreamAccountA,
-		})) {
+		for await (const envelopes of snapshotStore.getEnvelopes(snapshotStreamAccountA)) {
 			resolvedEnvelopes.push(...envelopes);
 		}
 
