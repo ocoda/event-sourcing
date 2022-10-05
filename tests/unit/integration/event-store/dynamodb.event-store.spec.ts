@@ -206,7 +206,7 @@ describe(DynamoDBEventStore, () => {
 
 	it('should filter events by stream', async () => {
 		const resolvedEvents: IEvent[] = [];
-		for await (const events of eventStore.getEvents({ eventStream: eventStreamAccountA })) {
+		for await (const events of eventStore.getEvents(eventStreamAccountA)) {
 			resolvedEvents.push(...events);
 		}
 
@@ -215,7 +215,7 @@ describe(DynamoDBEventStore, () => {
 
 	it('should filter events by stream and version', async () => {
 		const resolvedEvents: IEvent[] = [];
-		for await (const events of eventStore.getEvents({ eventStream: eventStreamAccountA, fromVersion: 3 })) {
+		for await (const events of eventStore.getEvents(eventStreamAccountA, { fromVersion: 3 })) {
 			resolvedEvents.push(...events);
 		}
 
@@ -229,8 +229,7 @@ describe(DynamoDBEventStore, () => {
 
 	it('should retrieve events backwards', async () => {
 		const resolvedEvents: IEvent[] = [];
-		for await (const events of eventStore.getEvents({
-			eventStream: eventStreamAccountA,
+		for await (const events of eventStore.getEvents(eventStreamAccountA, {
 			direction: StreamReadingDirection.BACKWARD,
 		})) {
 			resolvedEvents.push(...events);
@@ -241,8 +240,7 @@ describe(DynamoDBEventStore, () => {
 
 	it('should retrieve events backwards from a certain version', async () => {
 		const resolvedEvents: IEvent[] = [];
-		for await (const events of eventStore.getEvents({
-			eventStream: eventStreamAccountA,
+		for await (const events of eventStore.getEvents(eventStreamAccountA, {
 			fromVersion: 4,
 			direction: StreamReadingDirection.BACKWARD,
 		})) {
@@ -254,7 +252,7 @@ describe(DynamoDBEventStore, () => {
 
 	it('should limit the returned events', async () => {
 		const resolvedEvents: IEvent[] = [];
-		for await (const events of eventStore.getEvents({ eventStream: eventStreamAccountA, limit: 3 })) {
+		for await (const events of eventStore.getEvents(eventStreamAccountA, { limit: 3 })) {
 			resolvedEvents.push(...events);
 		}
 
@@ -263,7 +261,7 @@ describe(DynamoDBEventStore, () => {
 
 	it('should batch the returned events', async () => {
 		const resolvedEvents: IEvent[] = [];
-		for await (const events of eventStore.getEvents({ eventStream: eventStreamAccountA, batch: 2 })) {
+		for await (const events of eventStore.getEvents(eventStreamAccountA, { batch: 2 })) {
 			expect(events.length).toBe(2);
 			resolvedEvents.push(...events);
 		}
@@ -286,7 +284,7 @@ describe(DynamoDBEventStore, () => {
 
 	it('should retrieve event-envelopes', async () => {
 		const resolvedEnvelopes: EventEnvelope[] = [];
-		for await (const envelopes of eventStore.getEnvelopes({ eventStream: eventStreamAccountA })) {
+		for await (const envelopes of eventStore.getEnvelopes(eventStreamAccountA)) {
 			resolvedEnvelopes.push(...envelopes);
 		}
 

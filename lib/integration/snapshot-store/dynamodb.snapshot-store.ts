@@ -12,7 +12,7 @@ import { DEFAULT_BATCH_SIZE, StreamReadingDirection } from '../../constants';
 import { SnapshotNotFoundException } from '../../exceptions';
 import { ISnapshot, ISnapshotPool } from '../../interfaces';
 import { AggregateRoot, SnapshotCollection, SnapshotEnvelope, SnapshotStream } from '../../models';
-import { SnapshotFilter, SnapshotStore, StreamSnapshotFilter } from '../../snapshot-store';
+import { SnapshotFilter, SnapshotStore } from '../../snapshot-store';
 
 export interface DynamoSnapshotEntity<A extends AggregateRoot> {
 	streamId: string;
@@ -52,21 +52,21 @@ export class DynamoDBSnapshotStore extends SnapshotStore {
 		return collection;
 	}
 
-	async *getSnapshots<A extends AggregateRoot>(filter?: SnapshotFilter): AsyncGenerator<ISnapshot<A>[]> {
+	async *getSnapshots<A extends AggregateRoot>(
+		{ streamId }: SnapshotStream,
+		filter?: SnapshotFilter,
+	): AsyncGenerator<ISnapshot<A>[]> {
 		const collection = SnapshotCollection.get(filter?.pool);
-		let snapshotStream = filter?.snapshotStream;
-		let fromVersion = snapshotStream && (filter as StreamSnapshotFilter).fromVersion;
+
+		let fromVersion = filter?.fromVersion;
 		let direction = filter?.direction || StreamReadingDirection.FORWARD;
 		let limit = filter?.limit || Number.MAX_SAFE_INTEGER;
 		let batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
-		const KeyConditionExpression = [];
-		const ExpressionAttributeValues = {};
-
-		if (snapshotStream) {
-			KeyConditionExpression.push('streamId = :streamId');
-			ExpressionAttributeValues[':streamId'] = { S: snapshotStream.streamId };
-		}
+		const KeyConditionExpression = ['streamId = :streamId'];
+		const ExpressionAttributeValues = {
+			':streamId': { S: streamId },
+		};
 
 		if (fromVersion) {
 			KeyConditionExpression.push('version >= :fromVersion');
@@ -204,22 +204,21 @@ export class DynamoDBSnapshotStore extends SnapshotStore {
 		}
 	}
 
-	async *getEnvelopes<A extends AggregateRoot>(filter?: SnapshotFilter): AsyncGenerator<SnapshotEnvelope<A>[]> {
+	async *getEnvelopes<A extends AggregateRoot>(
+		{ streamId }: SnapshotStream,
+		filter?: SnapshotFilter,
+	): AsyncGenerator<SnapshotEnvelope<A>[]> {
 		const collection = SnapshotCollection.get(filter?.pool);
 
-		let snapshotStream = filter?.snapshotStream;
-		let fromVersion = snapshotStream && (filter as StreamSnapshotFilter).fromVersion;
+		let fromVersion = filter?.fromVersion;
 		let direction = filter?.direction || StreamReadingDirection.FORWARD;
 		let limit = filter?.limit || Number.MAX_SAFE_INTEGER;
 		let batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
-		const KeyConditionExpression = [];
-		const ExpressionAttributeValues = {};
-
-		if (snapshotStream) {
-			KeyConditionExpression.push('streamId = :streamId');
-			ExpressionAttributeValues[':streamId'] = { S: snapshotStream.streamId };
-		}
+		const KeyConditionExpression = ['streamId = :streamId'];
+		const ExpressionAttributeValues = {
+			':streamId': { S: streamId },
+		};
 
 		if (fromVersion) {
 			KeyConditionExpression.push('version >= :fromVersion');

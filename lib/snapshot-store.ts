@@ -2,17 +2,16 @@ import { StreamReadingDirection } from './constants';
 import { ISnapshot, ISnapshotPool } from './interfaces';
 import { AggregateRoot, SnapshotCollection, SnapshotEnvelope, SnapshotStream } from './models';
 
-interface BaseSnapshotFilter {
+export interface SnapshotFilter {
 	/**
 	 * The snapshot pool to search in.
 	 * @default snapshots
 	 */
 	pool?: ISnapshotPool;
 	/**
-	 * The snapshot stream to filter by.
-	 * If not provided, all snapshots will be returned.
+	 * The position from where the snapshots should be read.
 	 */
-	snapshotStream?: SnapshotStream;
+	fromVersion?: number;
 	/**
 	 * The direction in which snapshots should be read.
 	 * @default StreamReadingDirection.FORWARD
@@ -30,24 +29,12 @@ interface BaseSnapshotFilter {
 	batch?: number;
 }
 
-export interface StreamSnapshotFilter extends BaseSnapshotFilter {
-	/**
-	 * The snapshot stream to filter by.
-	 * If not provided, all snapshots will be returned.
-	 */
-	snapshotStream: SnapshotStream;
-	/**
-	 * The position from where the snapshots should be read.
-	 * Can only be used in combination with a stream.
-	 */
-	fromVersion: number;
-}
-
-export type SnapshotFilter = BaseSnapshotFilter | StreamSnapshotFilter;
-
 export abstract class SnapshotStore {
 	abstract setup(pool?: ISnapshotPool): SnapshotCollection | Promise<SnapshotCollection>;
-	abstract getSnapshots<A extends AggregateRoot>(filter?: SnapshotFilter): AsyncGenerator<ISnapshot<A>[]>;
+	abstract getSnapshots<A extends AggregateRoot>(
+		snapshotStream: SnapshotStream,
+		filter?: SnapshotFilter,
+	): AsyncGenerator<ISnapshot<A>[]>;
 	abstract getSnapshot<A extends AggregateRoot>(
 		snapshotStream: SnapshotStream,
 		version: number,
@@ -67,7 +54,10 @@ export abstract class SnapshotStore {
 		snapshotStream: SnapshotStream,
 		pool?: ISnapshotPool,
 	): SnapshotEnvelope<A> | Promise<SnapshotEnvelope<A>>;
-	abstract getEnvelopes?<A extends AggregateRoot>(filter?: SnapshotFilter): AsyncGenerator<SnapshotEnvelope<A>[]>;
+	abstract getEnvelopes?<A extends AggregateRoot>(
+		snapshotStream: SnapshotStream,
+		filter?: SnapshotFilter,
+	): AsyncGenerator<SnapshotEnvelope<A>[]>;
 	abstract getEnvelope?<A extends AggregateRoot>(
 		snapshotStream: SnapshotStream,
 		version: number,

@@ -3,7 +3,7 @@ import { DEFAULT_BATCH_SIZE, StreamReadingDirection } from '../../constants';
 import { SnapshotNotFoundException } from '../../exceptions';
 import { ISnapshot, ISnapshotPool, SnapshotEnvelopeMetadata } from '../../interfaces';
 import { AggregateRoot, SnapshotCollection, SnapshotEnvelope, SnapshotStream } from '../../models';
-import { SnapshotFilter, SnapshotStore, StreamSnapshotFilter } from '../../snapshot-store';
+import { SnapshotFilter, SnapshotStore } from '../../snapshot-store';
 
 export type MongoSnapshotEntity<A extends AggregateRoot> =
 	& { _id: string; streamId: string; payload: ISnapshot<A> }
@@ -24,11 +24,13 @@ export class MongoDBSnapshotStore extends SnapshotStore {
 		return collection;
 	}
 
-	async *getSnapshots<A extends AggregateRoot>(filter?: SnapshotFilter): AsyncGenerator<ISnapshot<A>[]> {
+	async *getSnapshots<A extends AggregateRoot>(
+		{ streamId }: SnapshotStream,
+		filter?: SnapshotFilter,
+	): AsyncGenerator<ISnapshot<A>[]> {
 		const collection = SnapshotCollection.get(filter?.pool);
 
-		let snapshotStream = filter?.snapshotStream;
-		let fromVersion = snapshotStream && (filter as StreamSnapshotFilter).fromVersion;
+		let fromVersion = filter?.fromVersion;
 		let direction = filter?.direction || StreamReadingDirection.FORWARD;
 		let limit = filter?.limit || Number.MAX_SAFE_INTEGER;
 		let batch = filter?.batch || DEFAULT_BATCH_SIZE;
@@ -37,7 +39,7 @@ export class MongoDBSnapshotStore extends SnapshotStore {
 			.collection<MongoSnapshotEntity<A>>(collection)
 			.find(
 				{
-					...(snapshotStream && { streamId: snapshotStream.streamId }),
+					streamId,
 					...(fromVersion && { version: { $gte: fromVersion } }),
 				},
 				{
@@ -139,11 +141,13 @@ export class MongoDBSnapshotStore extends SnapshotStore {
 		}
 	}
 
-	async *getEnvelopes<A extends AggregateRoot>(filter?: SnapshotFilter): AsyncGenerator<SnapshotEnvelope<A>[]> {
+	async *getEnvelopes<A extends AggregateRoot>(
+		{ streamId }: SnapshotStream,
+		filter?: SnapshotFilter,
+	): AsyncGenerator<SnapshotEnvelope<A>[]> {
 		const collection = SnapshotCollection.get(filter?.pool);
 
-		let snapshotStream = filter?.snapshotStream;
-		let fromVersion = snapshotStream && (filter as StreamSnapshotFilter).fromVersion;
+		let fromVersion = filter?.fromVersion;
 		let direction = filter?.direction || StreamReadingDirection.FORWARD;
 		let limit = filter?.limit || Number.MAX_SAFE_INTEGER;
 		let batch = filter?.batch || DEFAULT_BATCH_SIZE;
@@ -152,7 +156,7 @@ export class MongoDBSnapshotStore extends SnapshotStore {
 			.collection<MongoSnapshotEntity<A>>(collection)
 			.find(
 				{
-					...(snapshotStream && { streamId: snapshotStream.streamId }),
+					streamId,
 					...(fromVersion && { version: { $gte: fromVersion } }),
 				},
 				{
