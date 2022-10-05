@@ -2,6 +2,7 @@
 index.ts
 lib
 tests
+example
 
 # misc
 .circleci
