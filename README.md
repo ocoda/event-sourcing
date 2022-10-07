@@ -262,7 +262,7 @@ export class UserEventListener implements IEventListener {
 ```
 
 ## Snapshots
-Snapshots are an optimization that is completely optional. They come in handy when event-streams become large and reading them out becomes slow.
+Snapshots are an optimization that is completely optional. However, they come in handy when event-streams become large and reading them out becomes slow.
 &nbsp;
 
 ### Snapshot streams
@@ -278,6 +278,7 @@ stream.streamId // account-af9a0775-b868-4063-89d8-ccc81bce3c3d
 
 ### Snapshot store
  The SnapshotStore saves the state of an aggregate at a certain interval and only fetch the events from that version on. Just as the EventStore it needs to be setup, optionally with a tenant pool.
+ Another advantage of using the snapshot handler is that it also creates a snapshot at version 1 of your aggregate, which makes it easier to get a complete set of aggregates of a certain type in your application.
 
 ```typescript
 import { SnapshotStore } from '@ocoda/event-sourcing';
