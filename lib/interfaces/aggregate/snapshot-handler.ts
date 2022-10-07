@@ -18,10 +18,9 @@ export abstract class SnapshotHandler<A extends AggregateRoot = AggregateRoot> {
 	}
 
 	async save(id: Id, aggregate: A, pool?: ISnapshotPool): Promise<void> {
-		if (aggregate.version % this.interval === 0) {
+		if (aggregate.version % this.interval === 0 || aggregate.version === 1) {
 			const snapshotStream = SnapshotStream.for(aggregate, id);
 			const payload = this.serialize(aggregate);
-
 			await this.snapshotStore.appendSnapshot(snapshotStream, aggregate.version, payload, pool);
 		}
 	}
