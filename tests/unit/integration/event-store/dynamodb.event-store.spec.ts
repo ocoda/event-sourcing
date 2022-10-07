@@ -1,6 +1,10 @@
-import { DeleteTableCommand, DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb';
-import { unmarshall } from '@aws-sdk/util-dynamodb';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import {
+	DeleteTableCommand,
+	DynamoDBClient,
+	QueryCommand,
+} from "@aws-sdk/client-dynamodb";
+import { unmarshall } from "@aws-sdk/util-dynamodb";
+import { EventEmitter2 } from "@nestjs/event-emitter";
 import {
 	Aggregate,
 	AggregateRoot,
@@ -13,11 +17,11 @@ import {
 	Id,
 	IEvent,
 	StreamReadingDirection,
-} from '../../../../lib';
-import { DefaultEventSerializer } from '../../../../lib/helpers';
-import { DynamoDBEventStore } from '../../../../lib/integration/event-store';
+} from "../../../../lib";
+import { DefaultEventSerializer } from "../../../../lib/helpers";
+import { DynamoDBEventStore } from "../../../../lib/integration/event-store";
 
-jest.mock('@nestjs/event-emitter', () => {
+jest.mock("@nestjs/event-emitter", () => {
 	return {
 		EventEmitter2: jest.fn().mockImplementation(() => {
 			return { emit: () => {} };
@@ -29,7 +33,10 @@ class AccountId extends Id {}
 
 @Aggregate({ streamName: 'account' })
 class Account extends AggregateRoot {
-	constructor(private readonly id: AccountId, private readonly balance: number) {
+	constructor(
+		private readonly id: AccountId,
+		private readonly balance: number,
+	) {
 		super();
 	}
 }
@@ -58,10 +65,22 @@ describe(DynamoDBEventStore, () => {
 	let envelopesAccountB: EventEnvelope[];
 
 	const eventMap = new EventMap();
-	eventMap.register(AccountOpenedEvent, DefaultEventSerializer.for(AccountOpenedEvent));
-	eventMap.register(AccountCreditedEvent, DefaultEventSerializer.for(AccountCreditedEvent));
-	eventMap.register(AccountDebitedEvent, DefaultEventSerializer.for(AccountDebitedEvent));
-	eventMap.register(AccountClosedEvent, DefaultEventSerializer.for(AccountClosedEvent));
+	eventMap.register(
+		AccountOpenedEvent,
+		DefaultEventSerializer.for(AccountOpenedEvent),
+	);
+	eventMap.register(
+		AccountCreditedEvent,
+		DefaultEventSerializer.for(AccountCreditedEvent),
+	);
+	eventMap.register(
+		AccountDebitedEvent,
+		DefaultEventSerializer.for(AccountDebitedEvent),
+	);
+	eventMap.register(
+		AccountClosedEvent,
+		DefaultEventSerializer.for(AccountClosedEvent),
+	);
 
 	const events = [
 		new AccountOpenedEvent(),
@@ -80,73 +99,123 @@ describe(DynamoDBEventStore, () => {
 
 	beforeAll(async () => {
 		client = new DynamoDBClient({
-			region: 'us-east-1',
-			endpoint: 'http://localhost:8000',
-			credentials: { accessKeyId: 'foo', secretAccessKey: 'bar' },
+			region: "us-east-1",
+			endpoint: "http://127.0.0.1:8000",
+			credentials: { accessKeyId: "foo", secretAccessKey: "bar" },
 		});
 		eventStore = new DynamoDBEventStore(eventMap, eventEmitter, client);
 		await eventStore.setup();
 
 		envelopesAccountA = [
-			EventEnvelope.create('account-opened', eventMap.serializeEvent(events[0]), {
-				aggregateId: idAccountA.value,
-				version: 1,
-			}),
-			EventEnvelope.create('account-credited', eventMap.serializeEvent(events[1]), {
-				aggregateId: idAccountA.value,
-				version: 2,
-			}),
-			EventEnvelope.create('account-debited', eventMap.serializeEvent(events[2]), {
-				aggregateId: idAccountA.value,
-				version: 3,
-			}),
-			EventEnvelope.create('account-credited', eventMap.serializeEvent(events[3]), {
-				aggregateId: idAccountA.value,
-				version: 4,
-			}),
-			EventEnvelope.create('account-debited', eventMap.serializeEvent(events[4]), {
-				aggregateId: idAccountA.value,
-				version: 5,
-			}),
-			EventEnvelope.create('account-closed', eventMap.serializeEvent(events[5]), {
-				aggregateId: idAccountA.value,
-				version: 6,
-			}),
+			EventEnvelope.create(
+				"account-opened",
+				eventMap.serializeEvent(events[0]),
+				{
+					aggregateId: idAccountA.value,
+					version: 1,
+				},
+			),
+			EventEnvelope.create(
+				"account-credited",
+				eventMap.serializeEvent(events[1]),
+				{
+					aggregateId: idAccountA.value,
+					version: 2,
+				},
+			),
+			EventEnvelope.create(
+				"account-debited",
+				eventMap.serializeEvent(events[2]),
+				{
+					aggregateId: idAccountA.value,
+					version: 3,
+				},
+			),
+			EventEnvelope.create(
+				"account-credited",
+				eventMap.serializeEvent(events[3]),
+				{
+					aggregateId: idAccountA.value,
+					version: 4,
+				},
+			),
+			EventEnvelope.create(
+				"account-debited",
+				eventMap.serializeEvent(events[4]),
+				{
+					aggregateId: idAccountA.value,
+					version: 5,
+				},
+			),
+			EventEnvelope.create(
+				"account-closed",
+				eventMap.serializeEvent(events[5]),
+				{
+					aggregateId: idAccountA.value,
+					version: 6,
+				},
+			),
 		];
 		envelopesAccountB = [
-			EventEnvelope.create('account-opened', eventMap.serializeEvent(events[0]), {
-				aggregateId: idAccountB.value,
-				version: 1,
-			}),
-			EventEnvelope.create('account-credited', eventMap.serializeEvent(events[1]), {
-				aggregateId: idAccountB.value,
-				version: 2,
-			}),
-			EventEnvelope.create('account-debited', eventMap.serializeEvent(events[2]), {
-				aggregateId: idAccountB.value,
-				version: 3,
-			}),
-			EventEnvelope.create('account-credited', eventMap.serializeEvent(events[3]), {
-				aggregateId: idAccountB.value,
-				version: 4,
-			}),
-			EventEnvelope.create('account-debited', eventMap.serializeEvent(events[4]), {
-				aggregateId: idAccountB.value,
-				version: 5,
-			}),
-			EventEnvelope.create('account-closed', eventMap.serializeEvent(events[5]), {
-				aggregateId: idAccountB.value,
-				version: 6,
-			}),
+			EventEnvelope.create(
+				"account-opened",
+				eventMap.serializeEvent(events[0]),
+				{
+					aggregateId: idAccountB.value,
+					version: 1,
+				},
+			),
+			EventEnvelope.create(
+				"account-credited",
+				eventMap.serializeEvent(events[1]),
+				{
+					aggregateId: idAccountB.value,
+					version: 2,
+				},
+			),
+			EventEnvelope.create(
+				"account-debited",
+				eventMap.serializeEvent(events[2]),
+				{
+					aggregateId: idAccountB.value,
+					version: 3,
+				},
+			),
+			EventEnvelope.create(
+				"account-credited",
+				eventMap.serializeEvent(events[3]),
+				{
+					aggregateId: idAccountB.value,
+					version: 4,
+				},
+			),
+			EventEnvelope.create(
+				"account-debited",
+				eventMap.serializeEvent(events[4]),
+				{
+					aggregateId: idAccountB.value,
+					version: 5,
+				},
+			),
+			EventEnvelope.create(
+				"account-closed",
+				eventMap.serializeEvent(events[5]),
+				{
+					aggregateId: idAccountB.value,
+					version: 6,
+				},
+			),
 		];
 	});
 
 	afterAll(async () => {
-		await client.send(new DeleteTableCommand({ TableName: EventCollection.get() }));
+		await client.send(
+			new DeleteTableCommand({ TableName: EventCollection.get() }),
+		);
 		client.destroy();
 	});
 
-	it('should append event envelopes', async () => {
+	it("should append event envelopes", async () => {
 		await Promise.all([
 			eventStore.appendEvents(eventStreamAccountA, 3, events.slice(0, 3)),
 			eventStore.appendEvents(eventStreamAccountB, 3, events.slice(0, 3)),
@@ -157,24 +226,26 @@ describe(DynamoDBEventStore, () => {
 		const { Items: itemsAccountA } = await client.send(
 			new QueryCommand({
 				TableName: EventCollection.get(),
-				KeyConditionExpression: 'streamId = :streamId',
+				KeyConditionExpression: "streamId = :streamId",
 				ExpressionAttributeValues: {
-					':streamId': { S: eventStreamAccountA.streamId },
+					":streamId": { S: eventStreamAccountA.streamId },
 				},
 			}),
 		);
-		const entitiesAccountA = itemsAccountA?.map((item) => unmarshall(item)) || [];
+		const entitiesAccountA =
+			itemsAccountA?.map((item) => unmarshall(item)) || [];
 
 		const { Items: itemsAccountB } = await client.send(
 			new QueryCommand({
 				TableName: EventCollection.get(),
-				KeyConditionExpression: 'streamId = :streamId',
+				KeyConditionExpression: "streamId = :streamId",
 				ExpressionAttributeValues: {
-					':streamId': { S: eventStreamAccountB.streamId },
+					":streamId": { S: eventStreamAccountB.streamId },
 				},
 			}),
 		);
-		const entitiesAccountB = itemsAccountB?.map((item) => unmarshall(item)) || [];
+		const entitiesAccountB =
+			itemsAccountB?.map((item) => unmarshall(item)) || [];
 
 		expect(entitiesAccountA).toHaveLength(events.length);
 		expect(entitiesAccountB).toHaveLength(events.length);
@@ -183,8 +254,10 @@ describe(DynamoDBEventStore, () => {
 			expect(entity.streamId).toEqual(eventStreamAccountA.streamId);
 			expect(entity.event).toEqual(envelopesAccountA[index].event);
 			expect(entity.payload).toEqual(envelopesAccountA[index].payload);
-			expect(entity.aggregateId).toEqual(envelopesAccountA[index].metadata.aggregateId);
-			expect(typeof entity.occurredOn).toBe('number');
+			expect(entity.aggregateId).toEqual(
+				envelopesAccountA[index].metadata.aggregateId,
+			);
+			expect(typeof entity.occurredOn).toBe("number");
 			expect(entity.version).toEqual(envelopesAccountA[index].metadata.version);
 		});
 
@@ -192,19 +265,24 @@ describe(DynamoDBEventStore, () => {
 			expect(entity.streamId).toEqual(eventStreamAccountB.streamId);
 			expect(entity.event).toEqual(envelopesAccountB[index].event);
 			expect(entity.payload).toEqual(envelopesAccountB[index].payload);
-			expect(entity.aggregateId).toEqual(envelopesAccountB[index].metadata.aggregateId);
-			expect(typeof entity.occurredOn).toBe('number');
+			expect(entity.aggregateId).toEqual(
+				envelopesAccountB[index].metadata.aggregateId,
+			);
+			expect(typeof entity.occurredOn).toBe("number");
 			expect(entity.version).toEqual(envelopesAccountB[index].metadata.version);
 		});
 	});
 
-	it('should retrieve a single event from a specified stream', async () => {
-		const resolvedEvent = await eventStore.getEvent(eventStreamAccountA, envelopesAccountA[3].metadata.version);
+	it("should retrieve a single event from a specified stream", async () => {
+		const resolvedEvent = await eventStore.getEvent(
+			eventStreamAccountA,
+			envelopesAccountA[3].metadata.version,
+		);
 
 		expect(resolvedEvent).toEqual(events[3]);
 	});
 
-	it('should filter events by stream', async () => {
+	it("should filter events by stream", async () => {
 		const resolvedEvents: IEvent[] = [];
 		for await (const events of eventStore.getEvents(eventStreamAccountA)) {
 			resolvedEvents.push(...events);
@@ -213,9 +291,11 @@ describe(DynamoDBEventStore, () => {
 		expect(resolvedEvents).toEqual(events);
 	});
 
-	it('should filter events by stream and version', async () => {
+	it("should filter events by stream and version", async () => {
 		const resolvedEvents: IEvent[] = [];
-		for await (const events of eventStore.getEvents(eventStreamAccountA, { fromVersion: 3 })) {
+		for await (const events of eventStore.getEvents(eventStreamAccountA, {
+			fromVersion: 3,
+		})) {
 			resolvedEvents.push(...events);
 		}
 
@@ -224,10 +304,12 @@ describe(DynamoDBEventStore, () => {
 
 	it("should throw when an event isn't found in a specified stream", async () => {
 		const stream = EventStream.for(Account, AccountId.generate());
-		expect(eventStore.getEvent(stream, 5)).rejects.toThrow(new EventNotFoundException(stream.streamId, 5));
+		expect(eventStore.getEvent(stream, 5)).rejects.toThrow(
+			new EventNotFoundException(stream.streamId, 5),
+		);
 	});
 
-	it('should retrieve events backwards', async () => {
+	it("should retrieve events backwards", async () => {
 		const resolvedEvents: IEvent[] = [];
 		for await (const events of eventStore.getEvents(eventStreamAccountA, {
 			direction: StreamReadingDirection.BACKWARD,
@@ -238,7 +320,7 @@ describe(DynamoDBEventStore, () => {
 		expect(resolvedEvents).toEqual(events.slice().reverse());
 	});
 
-	it('should retrieve events backwards from a certain version', async () => {
+	it("should retrieve events backwards from a certain version", async () => {
 		const resolvedEvents: IEvent[] = [];
 		for await (const events of eventStore.getEvents(eventStreamAccountA, {
 			fromVersion: 4,
@@ -250,18 +332,22 @@ describe(DynamoDBEventStore, () => {
 		expect(resolvedEvents).toEqual(events.slice(3).reverse());
 	});
 
-	it('should limit the returned events', async () => {
+	it("should limit the returned events", async () => {
 		const resolvedEvents: IEvent[] = [];
-		for await (const events of eventStore.getEvents(eventStreamAccountA, { limit: 3 })) {
+		for await (const events of eventStore.getEvents(eventStreamAccountA, {
+			limit: 3,
+		})) {
 			resolvedEvents.push(...events);
 		}
 
 		expect(resolvedEvents).toEqual(events.slice(0, 3));
 	});
 
-	it('should batch the returned events', async () => {
+	it("should batch the returned events", async () => {
 		const resolvedEvents: IEvent[] = [];
-		for await (const events of eventStore.getEvents(eventStreamAccountA, { batch: 2 })) {
+		for await (const events of eventStore.getEvents(eventStreamAccountA, {
+			batch: 2,
+		})) {
 			expect(events.length).toBe(2);
 			resolvedEvents.push(...events);
 		}
@@ -269,7 +355,7 @@ describe(DynamoDBEventStore, () => {
 		expect(resolvedEvents).toEqual(events);
 	});
 
-	it('should retrieve a single event-envelope', async () => {
+	it("should retrieve a single event-envelope", async () => {
 		const { event, metadata, payload } = await eventStore.getEnvelope(
 			eventStreamAccountA,
 			envelopesAccountA[3].metadata.version,
@@ -277,14 +363,18 @@ describe(DynamoDBEventStore, () => {
 
 		expect(event).toEqual(envelopesAccountA[3].event);
 		expect(payload).toEqual(envelopesAccountA[3].payload);
-		expect(metadata.aggregateId).toEqual(envelopesAccountA[3].metadata.aggregateId);
+		expect(metadata.aggregateId).toEqual(
+			envelopesAccountA[3].metadata.aggregateId,
+		);
 		expect(metadata.occurredOn).toBeInstanceOf(Date);
 		expect(metadata.version).toEqual(envelopesAccountA[3].metadata.version);
 	});
 
-	it('should retrieve event-envelopes', async () => {
+	it("should retrieve event-envelopes", async () => {
 		const resolvedEnvelopes: EventEnvelope[] = [];
-		for await (const envelopes of eventStore.getEnvelopes(eventStreamAccountA)) {
+		for await (const envelopes of eventStore.getEnvelopes(
+			eventStreamAccountA,
+		)) {
 			resolvedEnvelopes.push(...envelopes);
 		}
 
@@ -293,9 +383,13 @@ describe(DynamoDBEventStore, () => {
 		resolvedEnvelopes.forEach((envelope, index) => {
 			expect(envelope.event).toEqual(envelopesAccountA[index].event);
 			expect(envelope.payload).toEqual(envelopesAccountA[index].payload);
-			expect(envelope.metadata.aggregateId).toEqual(envelopesAccountA[index].metadata.aggregateId);
+			expect(envelope.metadata.aggregateId).toEqual(
+				envelopesAccountA[index].metadata.aggregateId,
+			);
 			expect(envelope.metadata.occurredOn).toBeInstanceOf(Date);
-			expect(envelope.metadata.version).toEqual(envelopesAccountA[index].metadata.version);
+			expect(envelope.metadata.version).toEqual(
+				envelopesAccountA[index].metadata.version,
+			);
 		});
 	});
 });
