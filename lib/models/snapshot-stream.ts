@@ -7,6 +7,10 @@ import { Id } from './id';
 export class SnapshotStream {
 	private constructor(private _aggregate: string, private _aggregateId: string) {}
 
+	get aggregate(): string {
+		return this._aggregate;
+	}
+
 	get aggregateId(): string {
 		return this._aggregateId;
 	}
