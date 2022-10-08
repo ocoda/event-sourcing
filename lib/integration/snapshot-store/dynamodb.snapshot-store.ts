@@ -3,16 +3,15 @@ import {
 	CreateTableCommand,
 	DynamoDBClient,
 	GetItemCommand,
-	PutItemCommand,
-	PutItemInput,
 	QueryCommand,
+	TransactWriteItemsCommand,
 } from '@aws-sdk/client-dynamodb';
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
 import { DEFAULT_BATCH_SIZE, StreamReadingDirection } from '../../constants';
 import { SnapshotNotFoundException } from '../../exceptions';
 import { ISnapshot, ISnapshotPool } from '../../interfaces';
 import { AggregateRoot, SnapshotCollection, SnapshotEnvelope, SnapshotStream } from '../../models';
-import { SnapshotFilter, SnapshotStore } from '../../snapshot-store';
+import { LatestSnapshotFilter, SnapshotFilter, SnapshotStore } from '../../snapshot-store';
 
 export interface DynamoSnapshotEntity<A extends AggregateRoot> {
 	streamId: string;
@@ -40,6 +39,20 @@ export class DynamoDBSnapshotStore extends SnapshotStore {
 				AttributeDefinitions: [
 					{ AttributeName: 'streamId', AttributeType: 'S' },
 					{ AttributeName: 'version', AttributeType: 'N' },
+					{ AttributeName: 'aggregateName', AttributeType: 'S' },
+					{ AttributeName: 'latest', AttributeType: 'N' },
+				],
+				GlobalSecondaryIndexes: [
+					{
+						IndexName: 'aggregate_index',
+						KeySchema: [
+							{ AttributeName: 'aggregateName', KeyType: 'HASH' },
+							{ AttributeName: 'latest', KeyType: 'RANGE' },
+						],
+						Projection: {
+							ProjectionType: 'ALL',
+						},
+					},
 				],
 				ProvisionedThroughput: {
 					ReadCapacityUnits: 1,
@@ -64,16 +77,14 @@ export class DynamoDBSnapshotStore extends SnapshotStore {
 		let batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
 		const KeyConditionExpression = ['streamId = :streamId'];
-		const ExpressionAttributeValues = {
-			':streamId': { S: streamId },
-		};
+		const ExpressionAttributeValues = { ':streamId': { S: streamId } };
 
 		if (fromVersion) {
 			KeyConditionExpression.push('version >= :fromVersion');
 			ExpressionAttributeValues[':fromVersion'] = { N: fromVersion.toString() };
 		}
 
-		const entities = [];
+		const entities: ISnapshot<A>[] = [];
 		let leftToFetch = limit;
 		let ExclusiveStartKey: Record<string, AttributeValue>;
 		do {
@@ -83,18 +94,15 @@ export class DynamoDBSnapshotStore extends SnapshotStore {
 					KeyConditionExpression: KeyConditionExpression.join(' AND '),
 					ExclusiveStartKey,
 					ExpressionAttributeValues,
-					...(direction === StreamReadingDirection.BACKWARD && { ScanIndexForward: false }),
+					...(direction === StreamReadingDirection.BACKWARD && {
+						ScanIndexForward: false,
+					}),
 					...(limit && { Limit: Math.min(batch, leftToFetch) }),
 				}),
 			);
 
 			ExclusiveStartKey = LastEvaluatedKey;
-			entities.push(
-				...Items.map((item) => {
-					const { payload } = unmarshall(item);
-					return payload;
-				}),
-			);
+			Items.forEach((item) => entities.push(this.hydrate<A>(item).payload));
 			leftToFetch -= Items.length;
 
 			if (entities.length > 0 && (entities.length === batch || !ExclusiveStartKey || leftToFetch <= 0)) {
@@ -111,20 +119,23 @@ export class DynamoDBSnapshotStore extends SnapshotStore {
 	): Promise<ISnapshot<A>> {
 		const collection = SnapshotCollection.get(pool);
 		const { Item } = await this.client.send(
-			new GetItemCommand({ TableName: collection, Key: marshall({ streamId, version }) }),
+			new GetItemCommand({
+				TableName: collection,
+				Key: marshall({ streamId, version }),
+			}),
 		);
 
 		if (!Item) {
 			throw new SnapshotNotFoundException(streamId, version);
 		}
 
-		const { payload } = unmarshall(Item);
+		const { payload } = this.hydrate<A>(Item);
 
 		return payload;
 	}
 
 	async appendSnapshot<A extends AggregateRoot>(
-		{ streamId, aggregateId }: SnapshotStream,
+		{ streamId, aggregateId, aggregate }: SnapshotStream,
 		aggregateVersion: number,
 		snapshot: ISnapshot<A>,
 		pool?: ISnapshotPool,
@@ -136,19 +147,43 @@ export class DynamoDBSnapshotStore extends SnapshotStore {
 			version: aggregateVersion,
 		});
 
-		const params: PutItemInput = {
-			TableName: collection,
-			Item: marshall({
-				streamId,
-				payload,
-				version: metadata.version,
-				snapshotId: metadata.snapshotId,
-				aggregateId: metadata.aggregateId,
-				registeredOn: metadata.registeredOn.getTime(),
-			}),
-		};
+		const updateLastItem = [];
+		const lastStreamEntity = await this.getLastStreamEntity(collection, streamId);
 
-		await this.client.send(new PutItemCommand(params));
+		if (lastStreamEntity) {
+			const snapshot = this.hydrate<A>(lastStreamEntity);
+			updateLastItem.push({
+				Update: {
+					TableName: collection,
+					Key: marshall({ streamId, version: snapshot.version }),
+					UpdateExpression: 'SET latest = :latest',
+					ExpressionAttributeValues: { ':latest': { N: 0 } },
+				},
+			});
+		}
+
+		await this.client.send(
+			new TransactWriteItemsCommand({
+				TransactItems: [
+					...updateLastItem,
+					{
+						Put: {
+							TableName: collection,
+							Item: marshall({
+								streamId,
+								payload,
+								version: metadata.version,
+								aggregateName: aggregate,
+								snapshotId: metadata.snapshotId,
+								aggregateId: metadata.aggregateId,
+								registeredOn: metadata.registeredOn.getTime(),
+								latest: 1,
+							}),
+						},
+					},
+				],
+			}),
+		);
 	}
 
 	async getLastSnapshot<A extends AggregateRoot>(
@@ -164,6 +199,7 @@ export class DynamoDBSnapshotStore extends SnapshotStore {
 					':streamId': { S: streamId },
 				},
 				ScanIndexForward: false,
+				Limit: 1,
 			}),
 		);
 
@@ -179,28 +215,10 @@ export class DynamoDBSnapshotStore extends SnapshotStore {
 		pool?: ISnapshotPool,
 	): Promise<SnapshotEnvelope<A>> {
 		const collection = SnapshotCollection.get(pool);
-		const { Items } = await this.client.send(
-			new QueryCommand({
-				TableName: collection,
-				KeyConditionExpression: 'streamId = :streamId',
-				ExpressionAttributeValues: {
-					':streamId': { S: streamId },
-				},
-				ScanIndexForward: false,
-			}),
-		);
+		const lastSnapshotEntity = await this.getLastStreamEntity<A>(collection, streamId);
 
-		if (Items[0]) {
-			const { payload, snapshotId, aggregateId, version, registeredOn } = unmarshall(
-				Items[0],
-			) as DynamoSnapshotEntity<A>;
-
-			return SnapshotEnvelope.from<A>(payload, {
-				snapshotId,
-				aggregateId,
-				registeredOn: new Date(registeredOn),
-				version,
-			});
+		if (lastSnapshotEntity) {
+			return this.hydrateEnvelope(lastSnapshotEntity);
 		}
 	}
 
@@ -225,7 +243,7 @@ export class DynamoDBSnapshotStore extends SnapshotStore {
 			ExpressionAttributeValues[':fromVersion'] = { N: fromVersion.toString() };
 		}
 
-		const entities = [];
+		const entities: SnapshotEnvelope<A>[] = [];
 		let leftToFetch = limit;
 		let ExclusiveStartKey: Record<string, AttributeValue>;
 		do {
@@ -235,25 +253,15 @@ export class DynamoDBSnapshotStore extends SnapshotStore {
 					KeyConditionExpression: KeyConditionExpression.join(' AND '),
 					ExclusiveStartKey,
 					ExpressionAttributeValues,
-					...(direction === StreamReadingDirection.BACKWARD && { ScanIndexForward: false }),
+					...(direction === StreamReadingDirection.BACKWARD && {
+						ScanIndexForward: false,
+					}),
 					...(limit && { Limit: Math.min(batch, leftToFetch) }),
 				}),
 			);
 
 			ExclusiveStartKey = LastEvaluatedKey;
-			entities.push(
-				...Items.map((item) => {
-					const { payload, snapshotId, aggregateId, version, registeredOn } = unmarshall(
-						item,
-					) as DynamoSnapshotEntity<A>;
-					return SnapshotEnvelope.from<A>(payload, {
-						snapshotId,
-						aggregateId,
-						registeredOn: new Date(registeredOn),
-						version,
-					});
-				}),
-			);
+			Items.forEach((item) => entities.push(this.hydrateEnvelope(item)));
 			leftToFetch -= Items.length;
 
 			if (entities.length > 0 && (entities.length === batch || !ExclusiveStartKey || leftToFetch <= 0)) {
@@ -270,19 +278,92 @@ export class DynamoDBSnapshotStore extends SnapshotStore {
 	): Promise<SnapshotEnvelope<A>> {
 		const collection = SnapshotCollection.get(pool);
 		const { Item } = await this.client.send(
-			new GetItemCommand({ TableName: collection, Key: marshall({ streamId, version }) }),
+			new GetItemCommand({
+				TableName: collection,
+				Key: marshall({ streamId, version }),
+			}),
 		);
 
 		if (!Item) {
 			throw new SnapshotNotFoundException(streamId, version);
 		}
 
-		const { payload, snapshotId, aggregateId, registeredOn } = unmarshall(Item) as DynamoSnapshotEntity<A>;
-		return SnapshotEnvelope.from<A>(payload, {
-			snapshotId,
-			aggregateId,
-			registeredOn: new Date(registeredOn),
-			version,
+		return this.hydrateEnvelope(Item);
+	}
+
+	async *getLastEnvelopes<A extends AggregateRoot>(
+		aggregateName: string,
+		filter?: LatestSnapshotFilter,
+		pool?: ISnapshotPool,
+	): AsyncGenerator<SnapshotEnvelope<A>[]> {
+		const collection = SnapshotCollection.get(pool);
+
+		let limit = filter?.limit || Number.MAX_SAFE_INTEGER;
+		let batch = filter?.batch || DEFAULT_BATCH_SIZE;
+
+		const KeyConditionExpression = ['aggregateName = :aggregateName', ' latest = :latest'];
+		const ExpressionAttributeValues = {
+			':aggregateName': { S: aggregateName },
+			':latest': { N: '1' },
+		};
+
+		const entities: SnapshotEnvelope<A>[] = [];
+		let leftToFetch = limit;
+		let ExclusiveStartKey: Record<string, AttributeValue>;
+		do {
+			const { Items, LastEvaluatedKey } = await this.client.send(
+				new QueryCommand({
+					TableName: collection,
+					IndexName: 'aggregate_index',
+					KeyConditionExpression: KeyConditionExpression.join(' AND '),
+					ExclusiveStartKey,
+					ExpressionAttributeValues,
+					ScanIndexForward: false,
+					...(limit && { Limit: Math.min(batch, leftToFetch) }),
+				}),
+			);
+
+			ExclusiveStartKey = LastEvaluatedKey;
+			Items.forEach((item) => entities.push(this.hydrateEnvelope(item)));
+			leftToFetch -= Items.length;
+
+			if (entities.length > 0 && (entities.length === batch || !ExclusiveStartKey || leftToFetch <= 0)) {
+				yield entities;
+				entities.length = 0;
+			}
+		} while (ExclusiveStartKey && leftToFetch > 0);
+	}
+
+	hydrate<A extends AggregateRoot>(entity: Record<string, AttributeValue>): DynamoSnapshotEntity<A> {
+		return unmarshall(entity) as DynamoSnapshotEntity<A>;
+	}
+
+	hydrateEnvelope<A extends AggregateRoot>(entity: Record<string, AttributeValue>): SnapshotEnvelope<A> {
+		const parsed = this.hydrate<A>(entity);
+		return SnapshotEnvelope.from<A>(parsed.payload, {
+			snapshotId: parsed.snapshotId,
+			aggregateId: parsed.aggregateId,
+			registeredOn: new Date(parsed.registeredOn),
+			version: parsed.version,
 		});
+	}
+
+	private async getLastStreamEntity<A extends AggregateRoot>(
+		collection: string,
+		streamId: string,
+	): Promise<Record<string, AttributeValue>> {
+		const { Items } = await this.client.send(
+			new QueryCommand({
+				TableName: collection,
+				KeyConditionExpression: 'streamId = :streamId',
+				ExpressionAttributeValues: {
+					':streamId': { S: streamId },
+				},
+				ScanIndexForward: false,
+				Limit: 1,
+			}),
+		);
+
+		return Items.pop();
 	}
 }
