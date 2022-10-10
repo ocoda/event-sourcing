@@ -8,8 +8,8 @@
 	"scripts": {
 		"build": "rm -rf dist && tsc -p tsconfig.build.json",
 		"ci": "rome ci ./lib",
-		"format": "rome format ./lib ./tests --write",
-		"lint": "rome check ./lib ./tests --apply-suggested",
+		"format": "rome format ./lib ./tests ./example --write",
+		"lint": "rome check ./lib ./tests ./example --apply-suggested",
 		"test": "jest --config jest.config.js --runInBand",
 		"test:ci": "jest --config jest.config.js --runInBand --coverage",
 		"run:example": "node -r @swc-node/register ./example/src/main.ts",
