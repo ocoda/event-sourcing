@@ -1,5 +1,5 @@
-import { getEventSerializerMetadata } from '@ocoda/event-sourcing/helpers';
 import { EventSerializer, IEvent } from '../../../lib';
+import { getEventSerializerMetadata } from '../../../lib/helpers';
 
 describe('@EventSerializer', () => {
 	class AccountCreatedEvent implements IEvent {}

@@ -1,5 +1,5 @@
-import { getCommandHandlerMetadata, getCommandMetadata } from '@ocoda/event-sourcing/helpers';
 import { CommandHandler, ICommand } from '../../../lib';
+import { getCommandHandlerMetadata, getCommandMetadata } from '../../../lib/helpers';
 
 describe('@CommandHandler', () => {
 	class TestCommand implements ICommand {}

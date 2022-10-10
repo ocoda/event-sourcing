@@ -1,5 +1,5 @@
 import { Inject, Type } from '@nestjs/common';
-import { SNAPSHOT_METADATA } from '../../decorators';
+import { getAggregateMetadata, getSnapshotMetadata } from '../../helpers';
 import { AggregateRoot, Id, SnapshotStream } from '../../models';
 import { SnapshotStore } from '../../snapshot-store';
 import { SnapshotMetadata } from './snapshot-handler-metadata.interface';
@@ -11,7 +11,7 @@ export abstract class SnapshotHandler<A extends AggregateRoot = AggregateRoot> {
 	private readonly interval: number;
 
 	constructor(@Inject(SnapshotStore) readonly snapshotStore: SnapshotStore) {
-		const { aggregate, interval } = Reflect.getMetadata(SNAPSHOT_METADATA, this.constructor) as SnapshotMetadata<A>;
+		const { aggregate, interval } = getSnapshotMetadata(this.constructor) as SnapshotMetadata<A>;
 
 		this.aggregate = aggregate;
 		this.interval = interval;
@@ -37,6 +37,10 @@ export abstract class SnapshotHandler<A extends AggregateRoot = AggregateRoot> {
 		aggregate.version = envelope.metadata.version;
 
 		return aggregate;
+	}
+	async loadMany(aggregate: Type<A>): Promise<A[]> {
+		const aggregateName = getAggregateMetadata(aggregate);
+		return this.snapshotStore.getLastEnvelopes();
 	}
 	abstract serialize(aggregate: A): ISnapshot<A>;
 	abstract deserialize(payload: ISnapshot<A>): A;

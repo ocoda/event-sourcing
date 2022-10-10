@@ -1,4 +1,5 @@
 import { AggregateRoot, Snapshot, SnapshotMetadata, SNAPSHOT_METADATA } from '../../../lib';
+import { getSnapshotMetadata } from '../../../lib/helpers';
 
 describe('@Snapshot', () => {
 	class Account extends AggregateRoot {}
@@ -7,10 +8,7 @@ describe('@Snapshot', () => {
 		@Snapshot(Account, { name: "foo", interval: 20 })
 		class AccountSnapshotHandler {}
 
-		const { aggregate, name, interval }: SnapshotMetadata<Account> = Reflect.getMetadata(
-			SNAPSHOT_METADATA,
-			AccountSnapshotHandler,
-		);
+		const { aggregate, name, interval }: SnapshotMetadata<Account> = getSnapshotMetadata(AccountSnapshotHandler);
 		expect(aggregate).toEqual(Account);
 		expect(name).toEqual('foo');
 		expect(interval).toEqual(20);
