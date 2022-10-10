@@ -48,8 +48,14 @@
 		}
 	},
 	"devDependencies": {
+<<<<<<< HEAD
 		"@aws-sdk/client-dynamodb": "3.186.0",
 		"@aws-sdk/util-dynamodb": "3.186.0",
+=======
+		"@aws-sdk/client-dynamodb": "3.181.0",
+		"@aws-sdk/util-dynamodb": "3.181.0",
+		"@faker-js/faker": "^7.5.0",
+>>>>>>> 1d6210b (:heavy_plus_sign: add faker as a dev dependency)
 		"@nestjs/common": "9.1.2",
 		"@nestjs/core": "9.1.2",
 		"@nestjs/platform-express": "9.1.2",
