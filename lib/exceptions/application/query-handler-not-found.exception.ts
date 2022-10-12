@@ -1,5 +1,5 @@
 export class QueryHandlerNotFoundException extends Error {
-	constructor(queryName: string) {
-		super(`The query handler for the "${queryName}" query was not found`);
+	constructor(query: Function) {
+		super(`The query handler for the "${query.name}" query was not found`);
 	}
 }
