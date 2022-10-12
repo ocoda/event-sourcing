@@ -1,20 +1,32 @@
 import { Inject, Type } from '@nestjs/common';
+import { MissingAggregateMetadataException, MissingSnapshotMetadataException } from '../../exceptions';
 import { getAggregateMetadata, getSnapshotMetadata } from '../../helpers';
 import { AggregateRoot, Id, SnapshotStream } from '../../models';
 import { SnapshotStore } from '../../snapshot-store';
-import { SnapshotMetadata } from './snapshot-handler-metadata.interface';
 import { ISnapshotPool } from './snapshot-pool.type';
 import { ISnapshot } from './snapshot.interface';
 
 export abstract class SnapshotHandler<A extends AggregateRoot = AggregateRoot> {
 	private readonly aggregate: Type<A>;
+	private readonly streamName: string;
 	private readonly interval: number;
 
 	constructor(@Inject(SnapshotStore) readonly snapshotStore: SnapshotStore) {
-		const { aggregate, interval } = getSnapshotMetadata(this.constructor) as SnapshotMetadata<A>;
+		const { aggregate, interval } = getSnapshotMetadata<A>(this.constructor);
+
+		if (!(aggregate && interval)) {
+			throw new MissingSnapshotMetadataException(this.constructor);
+		}
+
+		const { streamName } = getAggregateMetadata(aggregate);
+
+		if (!streamName) {
+			throw new MissingAggregateMetadataException(aggregate);
+		}
 
 		this.aggregate = aggregate;
 		this.interval = interval;
+		this.streamName = streamName;
 	}
 
 	async save(id: Id, aggregate: A, pool?: ISnapshotPool): Promise<void> {
@@ -38,10 +50,17 @@ export abstract class SnapshotHandler<A extends AggregateRoot = AggregateRoot> {
 
 		return aggregate;
 	}
-	async loadMany(aggregate: Type<A>): Promise<A[]> {
-		const aggregateName = getAggregateMetadata(aggregate);
-		return this.snapshotStore.getLastEnvelopes();
+	async *loadMany(filter?: { fromId?: Id; limit?: number }): AsyncGenerator<A[]> {
+		const id = filter?.fromId.value;
+		for await (const envelopes of this.snapshotStore.getLastEnvelopes<A>(this.streamName, { ...filter, fromId: id })) {
+			yield envelopes.map((envelope) => {
+				const aggregate = this.deserialize(envelope.payload);
+				aggregate.version = envelope.metadata.version;
+				return aggregate;
+			});
+		}
 	}
+
 	abstract serialize(aggregate: A): ISnapshot<A>;
 	abstract deserialize(payload: ISnapshot<A>): A;
 }

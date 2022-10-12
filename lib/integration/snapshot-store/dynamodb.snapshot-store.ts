@@ -20,6 +20,8 @@ export interface DynamoSnapshotEntity<A extends AggregateRoot> {
 	snapshotId: string;
 	aggregateId: string;
 	registeredOn: number;
+	aggregateName: string;
+	latest?: string;
 }
 
 export class DynamoDBSnapshotStore extends SnapshotStore {
@@ -40,7 +42,7 @@ export class DynamoDBSnapshotStore extends SnapshotStore {
 					{ AttributeName: 'streamId', AttributeType: 'S' },
 					{ AttributeName: 'version', AttributeType: 'N' },
 					{ AttributeName: 'aggregateName', AttributeType: 'S' },
-					{ AttributeName: 'latest', AttributeType: 'N' },
+					{ AttributeName: 'latest', AttributeType: 'S' },
 				],
 				GlobalSecondaryIndexes: [
 					{
@@ -156,8 +158,7 @@ export class DynamoDBSnapshotStore extends SnapshotStore {
 				Update: {
 					TableName: collection,
 					Key: marshall({ streamId, version: snapshot.version }),
-					UpdateExpression: 'SET latest = :latest',
-					ExpressionAttributeValues: { ':latest': { N: 0 } },
+					UpdateExpression: 'REMOVE latest',
 				},
 			});
 		}
@@ -177,7 +178,7 @@ export class DynamoDBSnapshotStore extends SnapshotStore {
 								snapshotId: metadata.snapshotId,
 								aggregateId: metadata.aggregateId,
 								registeredOn: metadata.registeredOn.getTime(),
-								latest: 1,
+								latest: `latest#${streamId}`,
 							}),
 						},
 					},
@@ -298,14 +299,20 @@ export class DynamoDBSnapshotStore extends SnapshotStore {
 	): AsyncGenerator<SnapshotEnvelope<A>[]> {
 		const collection = SnapshotCollection.get(pool);
 
+		let fromId = filter?.fromId;
 		let limit = filter?.limit || Number.MAX_SAFE_INTEGER;
 		let batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
-		const KeyConditionExpression = ['aggregateName = :aggregateName', ' latest = :latest'];
-		const ExpressionAttributeValues = {
-			':aggregateName': { S: aggregateName },
-			':latest': { N: '1' },
-		};
+		const KeyConditionExpression = ['aggregateName = :aggregateName'];
+		const ExpressionAttributeValues = { ':aggregateName': { S: aggregateName } };
+
+		if (fromId) {
+			KeyConditionExpression.push('latest > :latest');
+			ExpressionAttributeValues[':latest'] = { S: `latest#${fromId}` };
+		} else {
+			KeyConditionExpression.push('begins_with(latest, :latest)');
+			ExpressionAttributeValues[':latest'] = { S: 'latest' };
+		}
 
 		const entities: SnapshotEnvelope<A>[] = [];
 		let leftToFetch = limit;

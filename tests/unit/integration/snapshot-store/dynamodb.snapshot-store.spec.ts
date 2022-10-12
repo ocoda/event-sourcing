@@ -1,5 +1,6 @@
 import { DeleteTableCommand, DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb';
 import { unmarshall } from '@aws-sdk/util-dynamodb';
+import { randomInt } from 'crypto';
 import {
 	Aggregate,
 	AggregateRoot,
@@ -324,5 +325,43 @@ describe(DynamoDBSnapshotStore, () => {
 		expect(resolvedEnvelopes[1].metadata.aggregateId).toEqual(envelopeAccountA.metadata.aggregateId);
 		expect(resolvedEnvelopes[1].metadata.registeredOn).toBeInstanceOf(Date);
 		expect(resolvedEnvelopes[1].metadata.version).toEqual(envelopeAccountA.metadata.version);
+	});
+
+	it('should filter the last snapshot-envelopes by streamId', async () => {
+		@Aggregate({ streamName: 'foo' })
+		class Foo extends AggregateRoot {}
+
+		class FooId extends Id {}
+
+		const fooIds = Array.from({ length: 20 })
+			.map(() => FooId.generate())
+			.sort();
+		for await (const id of fooIds) {
+			await snapshotStore.appendSnapshot(SnapshotStream.for(Foo, id), randomInt(1, 10) * 10, {
+				balance: randomInt(1000),
+			});
+		}
+
+		let fetchedAccountIds: Set<string> = new Set();
+		let firstPageEnvelopes: SnapshotEnvelope<Account>[] = [];
+		for await (const envelopes of snapshotStore.getLastEnvelopes('foo', { limit: 15 })) {
+			firstPageEnvelopes.push(...envelopes);
+		}
+
+		expect(firstPageEnvelopes).toHaveLength(15);
+		firstPageEnvelopes.forEach(({ metadata }) => fetchedAccountIds.add(metadata.aggregateId));
+
+		let lastPageEnvelopes: SnapshotEnvelope<Account>[] = [];
+		for await (const envelopes of snapshotStore.getLastEnvelopes('foo', {
+			limit: 5,
+			fromId: firstPageEnvelopes[14].metadata.aggregateId,
+		})) {
+			lastPageEnvelopes.push(...envelopes);
+		}
+
+		expect(lastPageEnvelopes).toHaveLength(5);
+		lastPageEnvelopes.forEach(({ metadata }) => fetchedAccountIds.add(metadata.aggregateId));
+
+		expect(fooIds).toHaveLength(20);
 	});
 });

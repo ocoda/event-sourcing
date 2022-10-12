@@ -29,7 +29,9 @@ export interface SnapshotFilter {
 	batch?: number;
 }
 
-export interface LatestSnapshotFilter extends Pick<SnapshotFilter, 'batch' | 'limit'> {}
+export interface LatestSnapshotFilter extends Pick<SnapshotFilter, 'batch' | 'limit'> {
+	fromId?: string;
+}
 
 export abstract class SnapshotStore {
 	abstract setup(pool?: ISnapshotPool): SnapshotCollection | Promise<SnapshotCollection>;
