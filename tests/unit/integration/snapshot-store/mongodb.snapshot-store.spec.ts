@@ -144,7 +144,7 @@ describe(MongoDBSnapshotStore, () => {
 			expect(entity.streamId).toEqual(snapshotStreamAccountA.streamId);
 			expect(entity.payload).toEqual(envelopesAccountA[index].payload);
 			expect(entity.aggregateId).toEqual(envelopesAccountA[index].metadata.aggregateId);
-			expect(typeof entity.registeredOn).toBe('number');
+			expect(entity.registeredOn).toBeInstanceOf(Date);
 			expect(entity.version).toEqual(envelopesAccountA[index].metadata.version);
 		});
 	});
@@ -175,7 +175,7 @@ describe(MongoDBSnapshotStore, () => {
 			resolvedSnapshots.push(...snapshots);
 		}
 
-		expect(resolvedSnapshots).toEqual(snapshotsAccountA.slice(2));
+		expect(resolvedSnapshots).toEqual(snapshotsAccountA.slice(3));
 	});
 
 	it("should throw when a snapshot isn't found in a specified stream", () => {

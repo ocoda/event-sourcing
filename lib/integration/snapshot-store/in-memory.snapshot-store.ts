@@ -104,9 +104,7 @@ export class InMemorySnapshotStore extends SnapshotStore {
 		const collection = SnapshotCollection.get(pool);
 		const snapshotCollection = this.collections.get(collection) || [];
 
-		let entity = snapshotCollection.filter(({ streamId: entityStreamId }) => entityStreamId === streamId).sort(
-			({ version: currentVersion }, { version: previousVersion }) => (previousVersion < currentVersion ? -1 : 1),
-		)[0];
+		let entity = this.getLastStreamEntity<A>(snapshotCollection, streamId);
 
 		if (entity) {
 			return entity.payload;
@@ -117,9 +115,7 @@ export class InMemorySnapshotStore extends SnapshotStore {
 		const collection = SnapshotCollection.get(pool);
 		const snapshotCollection = this.collections.get(collection) || [];
 
-		let entity = snapshotCollection.filter(({ streamId: entityStreamId }) => entityStreamId === streamId).sort(
-			({ version: currentVersion }, { version: previousVersion }) => (previousVersion < currentVersion ? -1 : 1),
-		)[0];
+		let entity = this.getLastStreamEntity<A>(snapshotCollection, streamId);
 
 		if (entity) {
 			return SnapshotEnvelope.from(entity.payload, {
@@ -227,6 +223,19 @@ export class InMemorySnapshotStore extends SnapshotStore {
 				({ payload, aggregateId, registeredOn, snapshotId, version }) =>
 					SnapshotEnvelope.from<A>(payload, { aggregateId, registeredOn, snapshotId, version }),
 			);
+		}
+	}
+
+	private getLastStreamEntity<A extends AggregateRoot>(
+		collection: InMemorySnapshotEntity<any>[],
+		streamId: string,
+	): InMemorySnapshotEntity<A> {
+		const [entity] = collection.filter(({ streamId: entityStreamId }) => entityStreamId === streamId).sort(
+			({ version: currentVersion }, { version: previousVersion }) => (previousVersion < currentVersion ? -1 : 1),
+		);
+
+		if (entity) {
+			return entity;
 		}
 	}
 }
