@@ -1,7 +1,7 @@
 import { Inject, Type } from '@nestjs/common';
 import { MissingAggregateMetadataException, MissingSnapshotMetadataException } from '../../exceptions';
 import { getAggregateMetadata, getSnapshotMetadata } from '../../helpers';
-import { AggregateRoot, Id, SnapshotStream } from '../../models';
+import { AggregateRoot, Id, SnapshotEnvelope, SnapshotStream } from '../../models';
 import { SnapshotStore } from '../../snapshot-store';
 import { ISnapshotPool } from './snapshot-pool.type';
 import { ISnapshot } from './snapshot.interface';
@@ -50,14 +50,10 @@ export abstract class SnapshotHandler<A extends AggregateRoot = AggregateRoot> {
 
 		return aggregate;
 	}
-	async *loadMany(filter?: { fromId?: Id; limit?: number }): AsyncGenerator<A[]> {
-		const id = filter?.fromId.value;
+	async *loadMany(filter?: { fromId?: Id; limit?: number }): AsyncGenerator<SnapshotEnvelope<A>[]> {
+		const id = filter?.fromId?.value;
 		for await (const envelopes of this.snapshotStore.getLastEnvelopes<A>(this.streamName, { ...filter, fromId: id })) {
-			yield envelopes.map((envelope) => {
-				const aggregate = this.deserialize(envelope.payload);
-				aggregate.version = envelope.metadata.version;
-				return aggregate;
-			});
+			yield envelopes;
 		}
 	}
 
