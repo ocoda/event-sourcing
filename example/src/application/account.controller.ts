@@ -82,7 +82,6 @@ export class AccountController {
 
 			await this.commandBus.execute(command);
 		} catch (error) {
-			console.error(error);
 			switch (error.constructor) {
 				case AccountNotFoundException:
 					throw new HttpException(`${error.message} not found`, HttpStatus.NOT_FOUND);

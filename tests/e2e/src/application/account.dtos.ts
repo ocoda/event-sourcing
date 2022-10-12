@@ -25,7 +25,7 @@ export class AccountDto {
 		public readonly id: string,
 		public readonly ownerIds: string[],
 		public readonly balance: number,
-		public readonly openedOn: Date,
+		public readonly openedOn: string,
 	) {}
 
 	static from(account: Account): AccountDto {
@@ -33,7 +33,7 @@ export class AccountDto {
 			account.id.value,
 			account.ownerIds?.map(({ value }) => value),
 			account.balance,
-			account.openedOn,
+			account.openedOn.toISOString(),
 		);
 	}
 }

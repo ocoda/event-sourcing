@@ -24,7 +24,8 @@ export class QueryBus<QueryBase extends IQuery = IQuery>
 		const queryId = this.getQueryId(query);
 		const handler = this.handlers.get(queryId);
 		if (!handler) {
-			throw new QueryHandlerNotFoundException(queryId);
+			const { constructor: queryType } = Object.getPrototypeOf(query);
+			throw new QueryHandlerNotFoundException(queryType);
 		}
 		this._publisher.publish(query);
 		return handler.execute(query);

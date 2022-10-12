@@ -1,5 +1,5 @@
-import { getQueryHandlerMetadata, getQueryMetadata } from '@ocoda/event-sourcing/helpers';
 import { IQuery, QueryHandler } from '../../../lib';
+import { getQueryHandlerMetadata, getQueryMetadata } from '../../../lib/helpers';
 
 describe('@QueryHandler', () => {
 	class TestQuery implements IQuery {}

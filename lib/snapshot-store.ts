@@ -29,6 +29,10 @@ export interface SnapshotFilter {
 	batch?: number;
 }
 
+export interface LatestSnapshotFilter extends Pick<SnapshotFilter, 'batch' | 'limit'> {
+	fromId?: string;
+}
+
 export abstract class SnapshotStore {
 	abstract setup(pool?: ISnapshotPool): SnapshotCollection | Promise<SnapshotCollection>;
 	abstract getSnapshots<A extends AggregateRoot>(
@@ -63,4 +67,9 @@ export abstract class SnapshotStore {
 		version: number,
 		pool?: ISnapshotPool,
 	): SnapshotEnvelope<A> | Promise<SnapshotEnvelope<A>>;
+	abstract getLastEnvelopes?<A extends AggregateRoot>(
+		aggregateName: string,
+		filter?: LatestSnapshotFilter,
+		pool?: ISnapshotPool,
+	): AsyncGenerator<SnapshotEnvelope<A>[]>;
 }

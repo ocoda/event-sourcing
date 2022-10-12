@@ -8,6 +8,7 @@ import {
 	OpenAccountCommandHandler,
 	RemoveAccountOwnerCommandHandler,
 } from './application/commands';
+import { GetAccountByIdQueryHandler, GetAccountsQueryHandler } from './application/queries';
 import { AccountRepository } from './application/repositories';
 import {
 	AccountClosedEvent,
@@ -30,7 +31,7 @@ export const CommandHandlers: Type<ICommandHandler>[] = [
 	RemoveAccountOwnerCommandHandler,
 ];
 
-export const QueryHandlers: Type<IQueryHandler>[] = [];
+export const QueryHandlers: Type<IQueryHandler>[] = [GetAccountByIdQueryHandler, GetAccountsQueryHandler];
 
 export const SnapshotHandlers: Type<SnapshotHandler>[] = [AccountSnapshotHandler];
 

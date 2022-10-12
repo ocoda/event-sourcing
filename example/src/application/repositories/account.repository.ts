@@ -15,7 +15,9 @@ export class AccountRepository {
 
 		const account = await this.accountSnapshotHandler.load(accountId);
 
-		const eventCursor = this.eventStore.getEvents(eventStream, { fromVersion: account.version + 1 });
+		const eventCursor = this.eventStore.getEvents(eventStream, {
+			fromVersion: account.version + 1,
+		});
 
 		await account.loadFromHistory(eventCursor);
 
@@ -24,6 +26,25 @@ export class AccountRepository {
 		}
 
 		return account;
+	}
+
+	async getAll(fromAccountId?: AccountId, limit?: number): Promise<Account[]> {
+		const accounts = [];
+		for await (const snapshots of this.accountSnapshotHandler.loadMany({
+			fromId: fromAccountId,
+			limit,
+		})) {
+			for (const snapshot of snapshots) {
+				const eventStream = EventStream.for<Account>(Account, snapshot.id);
+				const eventCursor = this.eventStore.getEvents(eventStream, {
+					fromVersion: snapshot.version + 1,
+				});
+				const account = await snapshot.loadFromHistory(eventCursor);
+				accounts.push(account);
+			}
+		}
+
+		return accounts;
 	}
 
 	async save(account: Account): Promise<void> {

@@ -81,7 +81,7 @@ describe(DynamoDBEventStore, () => {
 	beforeAll(async () => {
 		client = new DynamoDBClient({
 			region: 'us-east-1',
-			endpoint: 'http://localhost:8000',
+			endpoint: 'http://127.0.0.1:8000',
 			credentials: { accessKeyId: 'foo', secretAccessKey: 'bar' },
 		});
 		eventStore = new DynamoDBEventStore(eventMap, eventEmitter, client);
@@ -215,7 +215,9 @@ describe(DynamoDBEventStore, () => {
 
 	it('should filter events by stream and version', async () => {
 		const resolvedEvents: IEvent[] = [];
-		for await (const events of eventStore.getEvents(eventStreamAccountA, { fromVersion: 3 })) {
+		for await (const events of eventStore.getEvents(eventStreamAccountA, {
+			fromVersion: 3,
+		})) {
 			resolvedEvents.push(...events);
 		}
 
@@ -252,7 +254,9 @@ describe(DynamoDBEventStore, () => {
 
 	it('should limit the returned events', async () => {
 		const resolvedEvents: IEvent[] = [];
-		for await (const events of eventStore.getEvents(eventStreamAccountA, { limit: 3 })) {
+		for await (const events of eventStore.getEvents(eventStreamAccountA, {
+			limit: 3,
+		})) {
 			resolvedEvents.push(...events);
 		}
 
@@ -261,7 +265,9 @@ describe(DynamoDBEventStore, () => {
 
 	it('should batch the returned events', async () => {
 		const resolvedEvents: IEvent[] = [];
-		for await (const events of eventStore.getEvents(eventStreamAccountA, { batch: 2 })) {
+		for await (const events of eventStore.getEvents(eventStreamAccountA, {
+			batch: 2,
+		})) {
 			expect(events.length).toBe(2);
 			resolvedEvents.push(...events);
 		}

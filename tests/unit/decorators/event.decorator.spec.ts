@@ -1,5 +1,5 @@
-import { getEventMetadata } from '@ocoda/event-sourcing/helpers';
 import { Event, IEvent } from '../../../lib';
+import { getEventMetadata } from '../../../lib/helpers';
 
 describe('@Event', () => {
 	@Event('foo-created')

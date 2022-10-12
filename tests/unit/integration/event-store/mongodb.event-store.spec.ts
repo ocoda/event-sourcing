@@ -78,7 +78,7 @@ describe(MongoDBEventStore, () => {
 	const eventStreamAccountB = EventStream.for(Account, idAccountB);
 
 	beforeAll(async () => {
-		client = new MongoClient('mongodb://localhost:27017');
+		client = new MongoClient('mongodb://127.0.0.1:27017');
 		eventStore = new MongoDBEventStore(eventMap, eventEmitter, client.db());
 		await eventStore.setup();
 
@@ -203,7 +203,9 @@ describe(MongoDBEventStore, () => {
 
 	it('should filter events by stream and version', async () => {
 		const resolvedEvents: IEvent[] = [];
-		for await (const events of eventStore.getEvents(eventStreamAccountA, { fromVersion: 3 })) {
+		for await (const events of eventStore.getEvents(eventStreamAccountA, {
+			fromVersion: 3,
+		})) {
 			resolvedEvents.push(...events);
 		}
 
@@ -240,7 +242,9 @@ describe(MongoDBEventStore, () => {
 
 	it('should limit the returned events', async () => {
 		const resolvedEvents: IEvent[] = [];
-		for await (const events of eventStore.getEvents(eventStreamAccountA, { limit: 3 })) {
+		for await (const events of eventStore.getEvents(eventStreamAccountA, {
+			limit: 3,
+		})) {
 			resolvedEvents.push(...events);
 		}
 
@@ -249,7 +253,9 @@ describe(MongoDBEventStore, () => {
 
 	it('should batch the returned events', async () => {
 		const resolvedEvents: IEvent[] = [];
-		for await (const events of eventStore.getEvents(eventStreamAccountA, { batch: 2 })) {
+		for await (const events of eventStore.getEvents(eventStreamAccountA, {
+			batch: 2,
+		})) {
 			expect(events.length).toBe(2);
 			resolvedEvents.push(...events);
 		}

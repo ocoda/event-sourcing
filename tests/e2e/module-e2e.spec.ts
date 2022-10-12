@@ -1,6 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { CommandBus, EventStore, ICommandBus, SnapshotStore } from '@ocoda/event-sourcing';
+import { CommandBus, EventStore, ICommandBus, IQueryBus, QueryBus, SnapshotStore } from '@ocoda/event-sourcing';
 import { AppModule } from './src/app.module';
 import {
 	AddAccountOwnerCommand,
@@ -10,13 +10,15 @@ import {
 	OpenAccountCommand,
 	RemoveAccountOwnerCommand,
 } from './src/application/commands';
+import { GetAccountByIdQuery, GetAccountsQuery } from './src/application/queries';
 import { AccountRepository } from './src/application/repositories';
 import { AccountEventListener } from './src/domain/events';
-import { AccountId, AccountOwnerId } from './src/domain/models';
+import { Account, AccountId, AccountOwnerId } from './src/domain/models';
 
 describe('EventSourcingModule - e2e', () => {
 	let app: INestApplication;
 	let commandBus: ICommandBus;
+	let queryBus: IQueryBus;
 
 	let accountId: AccountId;
 	let accountOwnerIds: AccountOwnerId[];
@@ -42,6 +44,8 @@ describe('EventSourcingModule - e2e', () => {
 		app.get<EventStore>(EventStore).setup();
 
 		commandBus = app.get<CommandBus>(CommandBus);
+		queryBus = app.get<QueryBus>(QueryBus);
+
 		accountRepository = app.get<AccountRepository>(AccountRepository);
 		accountEventListener = app.get<AccountEventListener>(AccountEventListener);
 
@@ -172,6 +176,17 @@ describe('EventSourcingModule - e2e', () => {
 		expect(accountEventListenerSpies.accountDebitedSpy).toHaveBeenCalledTimes(amounts.length);
 	});
 
+	it('should get an account by id', async () => {
+		const query = new GetAccountByIdQuery(accountId.value);
+		const account = await queryBus.execute(query);
+
+		expect(account.id).toEqual(accountId.value);
+		expect(account.ownerIds).toEqual(accountOwnerIds.map((id) => id.value));
+		expect(account.balance).toBe(balance);
+		expect(typeof account.openedOn).toBe('string');
+		expect(account.closedOn).toBeUndefined();
+	});
+
 	it('should close an account', async () => {
 		const command = new CloseAccountCommand(accountId.value);
 		await commandBus.execute(command);
@@ -188,5 +203,16 @@ describe('EventSourcingModule - e2e', () => {
 		expect(account.closedOn).toEqual(new Date());
 
 		expect(accountEventListenerSpies.accountClosedSpy).toHaveBeenCalled();
+	});
+
+	it('should get all open accounts', async () => {
+		const account2Id = await commandBus.execute<OpenAccountCommand, AccountId>(new OpenAccountCommand());
+		const account3Id = await commandBus.execute<OpenAccountCommand, AccountId>(new OpenAccountCommand());
+
+		const query = new GetAccountsQuery();
+		const accounts = await queryBus.execute<GetAccountsQuery, Account[]>(query);
+
+		expect(accounts).toHaveLength(2);
+		expect(accounts.map(({ id }) => id).sort()).toEqual([account2Id.value, account3Id.value].sort())
 	});
 });
