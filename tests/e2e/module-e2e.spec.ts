@@ -213,6 +213,6 @@ describe('EventSourcingModule - e2e', () => {
 		const accounts = await queryBus.execute<GetAccountsQuery, Account[]>(query);
 
 		expect(accounts).toHaveLength(2);
-		expect(accounts.map(({ id }) => id).sort()).toEqual([account2Id.value, account3Id.value].sort())
+		expect(accounts.map(({ id }) => id).sort()).toEqual([account2Id.value, account3Id.value].sort());
 	});
 });
