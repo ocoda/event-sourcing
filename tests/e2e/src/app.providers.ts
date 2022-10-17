@@ -14,7 +14,6 @@ import {
 	AccountClosedEvent,
 	AccountCreditedEvent,
 	AccountDebitedEvent,
-	AccountEventListener,
 	AccountOpenedEvent,
 	AccountOwnerAddedEvent,
 	AccountOwnerRemovedEvent,
