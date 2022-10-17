@@ -3,7 +3,8 @@
 		"enabled": true,
 		"rules": {
 			"recommended": true,
-			"js": {
+			"nursery": {
+				"recommended": true,
 				"noUnusedVariables": "off"
 			}
 		}
