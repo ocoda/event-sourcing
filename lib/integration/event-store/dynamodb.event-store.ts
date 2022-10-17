@@ -140,26 +140,24 @@ export class DynamoDBEventStore extends EventStore {
 
 		const params: BatchWriteItemInput = {
 			RequestItems: {
-				[collection]: envelopes.map(
-					({ event, payload, metadata }) => ({
-						PutRequest: {
-							Item: marshall(
-								{
-									streamId,
-									event,
-									payload,
-									version: metadata.version,
-									eventId: metadata.eventId,
-									aggregateId: metadata.aggregateId,
-									occurredOn: metadata.occurredOn.getTime(),
-									correlationId: metadata.correlationId,
-									causationId: metadata.causationId,
-								},
-								{ removeUndefinedValues: true },
-							),
-						},
-					}),
-				),
+				[collection]: envelopes.map(({ event, payload, metadata }) => ({
+					PutRequest: {
+						Item: marshall(
+							{
+								streamId,
+								event,
+								payload,
+								version: metadata.version,
+								eventId: metadata.eventId,
+								aggregateId: metadata.aggregateId,
+								occurredOn: metadata.occurredOn.getTime(),
+								correlationId: metadata.correlationId,
+								causationId: metadata.causationId,
+							},
+							{ removeUndefinedValues: true },
+						),
+					},
+				})),
 			},
 		};
 

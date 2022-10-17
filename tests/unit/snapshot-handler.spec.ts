@@ -70,8 +70,8 @@ describe(SnapshotHandler, () => {
 
 		snapshotStore = {
 			appendSnapshot: jest.fn(),
-			getLastEnvelope: <any>jest.fn(
-				(snapshotStream: SnapshotStream, pool?: ISnapshotPool) => Promise.resolve(snapshotEnvelope),
+			getLastEnvelope: <any>(
+				jest.fn((snapshotStream: SnapshotStream, pool?: ISnapshotPool) => Promise.resolve(snapshotEnvelope))
 			),
 			getLastSnapshot: jest.fn(),
 			getSnapshot: jest.fn(),

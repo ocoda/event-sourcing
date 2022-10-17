@@ -6,13 +6,11 @@ import { EventNotFoundException } from '../../exceptions';
 import { EventEnvelopeMetadata, IEvent, IEventCollection, IEventPayload, IEventPool } from '../../interfaces';
 import { EventCollection, EventEnvelope, EventStream } from '../../models';
 
-export type InMemoryEventEntity =
-	& {
-		streamId: string;
-		event: string;
-		payload: IEventPayload<IEvent>;
-	}
-	& EventEnvelopeMetadata;
+export type InMemoryEventEntity = {
+	streamId: string;
+	event: string;
+	payload: IEventPayload<IEvent>;
+} & EventEnvelopeMetadata;
 
 export class InMemoryEventStore extends EventStore {
 	private collections: Map<IEventCollection, InMemoryEventEntity[]> = new Map();
@@ -121,16 +119,15 @@ export class InMemoryEventStore extends EventStore {
 
 		for (let i = 0; i < entities.length; i += batch) {
 			const chunk = entities.slice(i, i + batch);
-			yield chunk.map(
-				({ event, payload, eventId, aggregateId, version, occurredOn, correlationId, causationId }) =>
-					EventEnvelope.from(event, payload, {
-						eventId,
-						aggregateId,
-						version,
-						occurredOn,
-						correlationId,
-						causationId,
-					}),
+			yield chunk.map(({ event, payload, eventId, aggregateId, version, occurredOn, correlationId, causationId }) =>
+				EventEnvelope.from(event, payload, {
+					eventId,
+					aggregateId,
+					version,
+					occurredOn,
+					correlationId,
+					causationId,
+				}),
 			);
 		}
 	}

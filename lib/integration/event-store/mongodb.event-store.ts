@@ -7,10 +7,13 @@ import { EventNotFoundException } from '../../exceptions';
 import { EventEnvelopeMetadata, IEvent, IEventPayload, IEventPool } from '../../interfaces';
 import { EventCollection, EventEnvelope, EventStream } from '../../models';
 
-export type MongoEventEntity =
-	& { _id: string; streamId: string; event: string; payload: IEventPayload<IEvent> }
-	& Document
-	& EventEnvelopeMetadata;
+export type MongoEventEntity = {
+	_id: string;
+	streamId: string;
+	event: string;
+	payload: IEventPayload<IEvent>;
+} & Document &
+	EventEnvelopeMetadata;
 
 export class MongoDBEventStore extends EventStore {
 	constructor(readonly eventMap: EventMap, readonly eventEmitter: EventEmitter2, readonly database: Db) {
@@ -91,9 +94,13 @@ export class MongoDBEventStore extends EventStore {
 			return [...acc, envelope];
 		}, []);
 
-		const entities = envelopes.map<MongoEventEntity>(
-			({ event, payload, metadata }) => ({ _id: metadata.eventId, streamId, event, payload, ...metadata }),
-		);
+		const entities = envelopes.map<MongoEventEntity>(({ event, payload, metadata }) => ({
+			_id: metadata.eventId,
+			streamId,
+			event,
+			payload,
+			...metadata,
+		}));
 
 		await this.database.collection<MongoEventEntity>(collection).insertMany(entities);
 		envelopes.forEach((envelope) => this.emit(envelope));
@@ -119,9 +126,8 @@ export class MongoDBEventStore extends EventStore {
 					limit,
 				},
 			)
-			.map(
-				({ event, payload, eventId, aggregateId, version, occurredOn, correlationId, causationId }) =>
-					EventEnvelope.from(event, payload, { eventId, aggregateId, version, occurredOn, correlationId, causationId }),
+			.map(({ event, payload, eventId, aggregateId, version, occurredOn, correlationId, causationId }) =>
+				EventEnvelope.from(event, payload, { eventId, aggregateId, version, occurredOn, correlationId, causationId }),
 			);
 
 		const entities = [];
