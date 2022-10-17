@@ -1,4 +1,3 @@
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import { StreamReadingDirection } from './constants';
 import { EventMap } from './event-map';
 import { IEvent, IEventPool } from './interfaces';
@@ -33,7 +32,6 @@ export interface EventFilter {
 
 export abstract class EventStore {
 	abstract eventMap: EventMap;
-	abstract eventEmitter: EventEmitter2;
 
 	abstract setup(pool?: IEventPool): EventCollection | Promise<EventCollection>;
 	abstract getEvents(eventStream: EventStream, filter?: EventFilter): AsyncGenerator<IEvent[]>;
@@ -50,8 +48,4 @@ export abstract class EventStore {
 		version: number,
 		pool?: IEventPool,
 	): EventEnvelope | Promise<EventEnvelope>;
-
-	emit(envelope: EventEnvelope) {
-		this.eventEmitter.emit(envelope.event, envelope);
-	}
 }

@@ -3,7 +3,7 @@ import { EventSourcingModule, EventStore, SnapshotStore } from '@ocoda/event-sou
 import {
 	AggregateRepositories,
 	CommandHandlers,
-	EventListeners,
+	EventHandlers,
 	Events,
 	QueryHandlers,
 	SnapshotHandlers,
@@ -25,7 +25,7 @@ import { AccountController } from './application/account.controller';
     ...CommandHandlers,
     ...QueryHandlers,
     ...SnapshotHandlers,
-	...EventListeners,
+	...EventHandlers,
   ],
   controllers: [AccountController]
 })

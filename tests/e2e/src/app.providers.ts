@@ -1,5 +1,5 @@
 import { Type } from '@nestjs/common';
-import { ICommandHandler, IEventListener, IQueryHandler, SnapshotHandler } from '@ocoda/event-sourcing';
+import { ICommandHandler, IEventHandler, IQueryHandler, SnapshotHandler } from '@ocoda/event-sourcing';
 import {
 	AddAccountOwnerCommandHandler,
 	CloseAccountCommandHandler,
@@ -35,7 +35,8 @@ export const QueryHandlers: Type<IQueryHandler>[] = [GetAccountByIdQueryHandler,
 
 export const SnapshotHandlers: Type<SnapshotHandler>[] = [AccountSnapshotHandler];
 
-export const EventListeners: Type<IEventListener>[] = [AccountEventListener];
+export const EventHandlers: Type<IEventHandler>[] = [];
+
 
 export const Events = [
 	AccountOpenedEvent,

@@ -1,4 +1,3 @@
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import { MongoClient } from 'mongodb';
 import {
 	Aggregate,
@@ -15,14 +14,6 @@ import {
 } from '../../../../lib';
 import { DefaultEventSerializer } from '../../../../lib/helpers';
 import { MongoDBEventStore, MongoEventEntity } from '../../../../lib/integration/event-store';
-
-jest.mock('@nestjs/event-emitter', () => {
-	return {
-		EventEmitter2: jest.fn().mockImplementation(() => {
-			return { emit: () => {} };
-		}),
-	};
-});
 
 class AccountId extends Id {}
 
@@ -50,7 +41,6 @@ class AccountDebitedEvent implements IEvent {
 class AccountClosedEvent implements IEvent {}
 
 describe(MongoDBEventStore, () => {
-	const eventEmitter = new EventEmitter2();
 	let client: MongoClient;
 	let eventStore: MongoDBEventStore;
 	let envelopesAccountA: EventEnvelope[];
@@ -79,7 +69,7 @@ describe(MongoDBEventStore, () => {
 
 	beforeAll(async () => {
 		client = new MongoClient('mongodb://127.0.0.1:27017');
-		eventStore = new MongoDBEventStore(eventMap, eventEmitter, client.db());
+		eventStore = new MongoDBEventStore(eventMap, client.db());
 		await eventStore.setup();
 
 		envelopesAccountA = [

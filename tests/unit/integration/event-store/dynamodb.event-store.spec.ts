@@ -1,6 +1,5 @@
 import { DeleteTableCommand, DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb';
 import { unmarshall } from '@aws-sdk/util-dynamodb';
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
 	Aggregate,
 	AggregateRoot,
@@ -16,14 +15,6 @@ import {
 } from '../../../../lib';
 import { DefaultEventSerializer } from '../../../../lib/helpers';
 import { DynamoDBEventStore } from '../../../../lib/integration/event-store';
-
-jest.mock('@nestjs/event-emitter', () => {
-	return {
-		EventEmitter2: jest.fn().mockImplementation(() => {
-			return { emit: () => {} };
-		}),
-	};
-});
 
 class AccountId extends Id {}
 
@@ -51,7 +42,6 @@ class AccountDebitedEvent implements IEvent {
 class AccountClosedEvent implements IEvent {}
 
 describe(DynamoDBEventStore, () => {
-	const eventEmitter = new EventEmitter2();
 	let client: DynamoDBClient;
 	let eventStore: DynamoDBEventStore;
 	let envelopesAccountA: EventEnvelope[];
@@ -84,7 +74,7 @@ describe(DynamoDBEventStore, () => {
 			endpoint: 'http://127.0.0.1:8000',
 			credentials: { accessKeyId: 'foo', secretAccessKey: 'bar' },
 		});
-		eventStore = new DynamoDBEventStore(eventMap, eventEmitter, client);
+		eventStore = new DynamoDBEventStore(eventMap, client);
 		await eventStore.setup();
 
 		envelopesAccountA = [

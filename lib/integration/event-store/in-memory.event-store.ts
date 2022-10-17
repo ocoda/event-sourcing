@@ -1,4 +1,3 @@
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DEFAULT_BATCH_SIZE, StreamReadingDirection } from '../../constants';
 import { EventMap } from '../../event-map';
 import { EventFilter, EventStore } from '../../event-store';
@@ -15,7 +14,7 @@ export type InMemoryEventEntity = {
 export class InMemoryEventStore extends EventStore {
 	private collections: Map<IEventCollection, InMemoryEventEntity[]> = new Map();
 
-	constructor(readonly eventMap: EventMap, readonly eventEmitter: EventEmitter2) {
+	constructor(readonly eventMap: EventMap) {
 		super();
 	}
 
@@ -90,8 +89,6 @@ export class InMemoryEventStore extends EventStore {
 		eventCollection.push(
 			...envelopes.map(({ event, payload, metadata }) => ({ streamId, event, payload, ...metadata })),
 		);
-
-		envelopes.forEach((envelope) => this.emit(envelope));
 	}
 
 	async *getEnvelopes({ streamId }: EventStream, filter?: EventFilter): AsyncGenerator<EventEnvelope[]> {
