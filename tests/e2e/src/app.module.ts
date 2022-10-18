@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { EventSourcingModule } from '@ocoda/event-sourcing';
 import {
 	AggregateRepositories,
+	Aggregates,
 	CommandHandlers,
 	EventHandlers,
 	Events,
@@ -13,6 +14,7 @@ import {
   imports: [
     EventSourcingModule.forRootAsync({
       useFactory: () => ({
+		aggregates: [...Aggregates],
 		events: [...Events],
 		eventStore: {
 			client: 'in-memory'

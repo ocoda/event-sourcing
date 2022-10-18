@@ -2,6 +2,7 @@ import { DynamicModule, Module, Provider } from '@nestjs/common';
 import { DiscoveryModule } from '@nestjs/core';
 import { CommandBus } from './command-bus';
 import { EVENT_SOURCING_OPTIONS } from './constants';
+import { EventBus } from './event-bus';
 import { EventMap } from './event-map';
 import { createEventSourcingProviders, EventStoreProvider, SnapshotStoreProvider } from './event-sourcing.providers';
 import { HandlersLoader } from './handlers.loader';
@@ -20,6 +21,7 @@ export class EventSourcingModule {
 			HandlersLoader,
 			CommandBus,
 			QueryBus,
+			EventBus,
 			EventStoreProvider,
 			SnapshotStoreProvider,
 		];
@@ -42,6 +44,7 @@ export class EventSourcingModule {
 			HandlersLoader,
 			CommandBus,
 			QueryBus,
+			EventBus,
 			EventStoreProvider,
 			SnapshotStoreProvider,
 		];

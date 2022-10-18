@@ -18,7 +18,7 @@ import {
 	AccountOwnerAddedEvent,
 	AccountOwnerRemovedEvent,
 } from './domain/events';
-import { AccountSnapshotHandler } from './domain/models';
+import { Account, AccountSnapshotHandler } from './domain/models';
 
 export const CommandHandlers: Type<ICommandHandler>[] = [
 	AddAccountOwnerCommandHandler,
@@ -36,6 +36,7 @@ export const SnapshotHandlers: Type<SnapshotHandler>[] = [AccountSnapshotHandler
 
 export const EventHandlers: Type<IEventHandler>[] = [];
 
+export const Aggregates = [Account];
 
 export const Events = [
 	AccountOpenedEvent,
