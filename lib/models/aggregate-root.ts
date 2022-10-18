@@ -16,6 +16,10 @@ export abstract class AggregateRoot {
 		return this[VERSION];
 	}
 
+	publish<T extends IEvent = IEvent>(event: T) {}
+
+	publishAll<T extends IEvent = IEvent>(events: T[]) {}
+
 	applyEvent<T extends IEvent = IEvent>(event: T, fromHistory = false) {
 		this[VERSION]++;
 
@@ -41,6 +45,7 @@ export abstract class AggregateRoot {
 
 	commit(): IEvent[] {
 		const events = [...this[EVENTS]];
+		this.publishAll(events);
 		this[EVENTS].length = 0;
 
 		return events;
