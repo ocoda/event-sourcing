@@ -74,7 +74,7 @@ export class InMemoryEventStore extends EventStore {
 		aggregateVersion: number,
 		events: IEvent[],
 		pool?: IEventPool,
-	): void {
+	): EventEnvelope[] {
 		const collection = EventCollection.get(pool);
 		const eventCollection = this.collections.get(collection) || [];
 
@@ -89,6 +89,8 @@ export class InMemoryEventStore extends EventStore {
 		eventCollection.push(
 			...envelopes.map(({ event, payload, metadata }) => ({ streamId, event, payload, ...metadata })),
 		);
+
+		return envelopes;
 	}
 
 	async *getEnvelopes({ streamId }: EventStream, filter?: EventFilter): AsyncGenerator<EventEnvelope[]> {

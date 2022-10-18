@@ -82,7 +82,7 @@ export class MongoDBEventStore extends EventStore {
 		aggregateVersion: number,
 		events: IEvent[],
 		pool?: IEventPool,
-	): Promise<void> {
+	): Promise<EventEnvelope[]> {
 		const collection = EventCollection.get(pool);
 
 		let version = aggregateVersion - events.length + 1;
@@ -102,6 +102,8 @@ export class MongoDBEventStore extends EventStore {
 		}));
 
 		await this.database.collection<MongoEventEntity>(collection).insertMany(entities);
+
+		return envelopes;
 	}
 
 	async *getEnvelopes({ streamId }: EventStream, filter?: EventFilter): AsyncGenerator<EventEnvelope[]> {

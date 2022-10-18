@@ -41,7 +41,7 @@ export abstract class EventStore {
 		version: number,
 		events: IEvent[],
 		pool?: IEventPool,
-	): void | Promise<void>;
+	): EventEnvelope[] | Promise<EventEnvelope[]>;
 	abstract getEnvelopes?(eventStream: EventStream, filter?: EventFilter): AsyncGenerator<EventEnvelope[]>;
 	abstract getEnvelope?(
 		eventStream: EventStream,
