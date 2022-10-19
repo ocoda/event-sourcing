@@ -34,9 +34,9 @@ import { EventSourcingModuleOptions } from './interfaces';
 import { QueryBus } from './query-bus';
 
 enum HandlerType {
-	COMMANDS,
-	QUERIES,
-	EVENTS,
+	COMMAND,
+	QUERY,
+	EVENT,
 	SERIALIZATION,
 }
 
@@ -73,13 +73,13 @@ export class HandlersLoader implements OnApplicationBootstrap {
 		providers.forEach((wrapper) => {
 			if (wrapper.metatype) {
 				if (Reflect.hasMetadata(COMMAND_HANDLER_METADATA, wrapper.metatype)) {
-					this.handlers.get(HandlerType.COMMANDS).push(wrapper);
+					this.handlers.get(HandlerType.COMMAND).push(wrapper);
 				}
 				if (Reflect.hasMetadata(QUERY_HANDLER_METADATA, wrapper.metatype)) {
-					this.handlers.get(HandlerType.QUERIES).push(wrapper);
+					this.handlers.get(HandlerType.QUERY).push(wrapper);
 				}
 				if (Reflect.hasMetadata(EVENT_HANDLER_METADATA, wrapper.metatype)) {
-					this.handlers.get(HandlerType.EVENTS).push(wrapper);
+					this.handlers.get(HandlerType.EVENT).push(wrapper);
 				}
 				if (Reflect.hasMetadata(EVENT_SERIALIZER_METADATA, wrapper.metatype)) {
 					this.handlers.get(HandlerType.SERIALIZATION).push(wrapper);
@@ -89,7 +89,7 @@ export class HandlersLoader implements OnApplicationBootstrap {
 	}
 
 	private registerCommandHandlers() {
-		this.handlers.get(HandlerType.COMMANDS)?.forEach(({ metatype, instance }) => {
+		this.handlers.get(HandlerType.COMMAND)?.forEach(({ metatype, instance }) => {
 			const { command } = getCommandHandlerMetadata(metatype);
 
 			if (!command) {
@@ -107,7 +107,7 @@ export class HandlersLoader implements OnApplicationBootstrap {
 	}
 
 	private registerQueryHandlers() {
-		this.handlers.get(HandlerType.QUERIES)?.forEach(({ metatype, instance }) => {
+		this.handlers.get(HandlerType.QUERY)?.forEach(({ metatype, instance }) => {
 			const { query } = getQueryHandlerMetadata(metatype);
 
 			if (!query) {
@@ -139,7 +139,7 @@ export class HandlersLoader implements OnApplicationBootstrap {
 	}
 
 	private registerEventHandlers() {
-		this.handlers.get(HandlerType.EVENTS)?.forEach(({ metatype, instance }) => {
+		this.handlers.get(HandlerType.EVENT)?.forEach(({ metatype, instance }) => {
 			const { events } = getEventHandlerMetadata(metatype);
 
 			if (!events) {

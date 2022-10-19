@@ -9,21 +9,13 @@ import { EventEnvelope } from './models';
 @Injectable()
 export class EventBus extends ObservableBus<EventEnvelope> implements IEventBus, OnModuleDestroy {
 	protected readonly subscriptions: Subscription[] = [];
-	private _publisher: IEventPublisher = new DefaultEventPubSub(this.subject$);
-
-	get publisher(): IEventPublisher {
-		return this._publisher;
-	}
-
-	set publisher(_publisher: IEventPublisher) {
-		this._publisher = _publisher;
-	}
+	private publishers: IEventPublisher[] = [new DefaultEventPubSub(this.subject$)];
 
 	onModuleDestroy() {
 		this.subscriptions.forEach((subscription) => subscription.unsubscribe());
 	}
 
-	publish = (envelope: EventEnvelope) => this._publisher.publish(envelope, this.subject$);
+	publish = (envelope: EventEnvelope) => this.publishers.forEach((publisher) => publisher.publish(envelope));
 
 	bind(handler: IEventHandler, name: string) {
 		const stream$ = name ? this.ofEventName(name) : this.subject$;
@@ -35,6 +27,10 @@ export class EventBus extends ObservableBus<EventEnvelope> implements IEventBus,
 				},
 			});
 		this.subscriptions.push(subscription);
+	}
+
+	addPublisher(publisher: IEventPublisher) {
+		this.publishers.push(publisher);
 	}
 
 	protected ofEventName(eventName: string): Observable<EventEnvelope> {
