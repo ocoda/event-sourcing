@@ -46,6 +46,7 @@ describe(DynamoDBEventStore, () => {
 	let eventStore: DynamoDBEventStore;
 	let envelopesAccountA: EventEnvelope[];
 	let envelopesAccountB: EventEnvelope[];
+	let publish = jest.fn(async () => Promise.resolve());
 
 	const eventMap = new EventMap();
 	eventMap.register(AccountOpenedEvent, DefaultEventSerializer.for(AccountOpenedEvent));
@@ -75,6 +76,7 @@ describe(DynamoDBEventStore, () => {
 			credentials: { accessKeyId: 'foo', secretAccessKey: 'bar' },
 		});
 		eventStore = new DynamoDBEventStore(eventMap, client);
+		eventStore.publish = publish;
 		await eventStore.setup();
 
 		envelopesAccountA = [
@@ -186,6 +188,8 @@ describe(DynamoDBEventStore, () => {
 			expect(typeof entity.occurredOn).toBe('number');
 			expect(entity.version).toEqual(envelopesAccountB[index].metadata.version);
 		});
+
+		expect(publish).toHaveBeenCalledTimes(events.length * 2);
 	});
 
 	it('should retrieve a single event from a specified stream', async () => {

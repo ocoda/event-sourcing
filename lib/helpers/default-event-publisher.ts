@@ -1,10 +1,11 @@
 import { Subject } from 'rxjs';
-import { IEvent, IEventPublisher } from '../interfaces';
+import { IEventPublisher } from '../interfaces';
+import { EventEnvelope } from '../models';
 
-export class DefaultEventPubSub<EventBase extends IEvent = IEvent> implements IEventPublisher<EventBase> {
-	constructor(private subject$: Subject<EventBase>) {}
+export class DefaultEventPubSub implements IEventPublisher {
+	constructor(private subject$: Subject<EventEnvelope>) {}
 
-	publish<T extends EventBase>(event: T) {
-		this.subject$.next(event);
+	publish(envelope: EventEnvelope) {
+		this.subject$.next(envelope);
 	}
 }

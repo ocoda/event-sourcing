@@ -32,6 +32,28 @@ export interface EventFilter {
 
 export abstract class EventStore {
 	abstract eventMap: EventMap;
+	protected _publish: (envelope: EventEnvelope<IEvent>) => any;
+
+	constructor() {
+		return new Proxy(this, {
+			get(target, propKey) {
+				if (propKey === 'appendEvents') {
+					return async function (...args: unknown[]) {
+						let envelopes = await target[propKey].apply(this, args);
+						for (const envelope of envelopes) {
+							await this._publish(envelope);
+						}
+						return envelopes;
+					};
+				}
+				return target[propKey];
+			},
+		});
+	}
+
+	set publish(fn: (envelope: EventEnvelope<IEvent>) => any) {
+		this._publish = fn;
+	}
 
 	abstract setup(pool?: IEventPool): EventCollection | Promise<EventCollection>;
 	abstract getEvents(eventStream: EventStream, filter?: EventFilter): AsyncGenerator<IEvent[]>;
@@ -41,7 +63,7 @@ export abstract class EventStore {
 		version: number,
 		events: IEvent[],
 		pool?: IEventPool,
-	): EventEnvelope[] | Promise<EventEnvelope[]>;
+	): Promise<EventEnvelope[]>;
 	abstract getEnvelopes?(eventStream: EventStream, filter?: EventFilter): AsyncGenerator<EventEnvelope[]>;
 	abstract getEnvelope?(
 		eventStream: EventStream,

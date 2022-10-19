@@ -42,6 +42,7 @@ describe(InMemoryEventStore, () => {
 	let eventStore: InMemoryEventStore;
 	let envelopesAccountA: EventEnvelope[];
 	let envelopesAccountB: EventEnvelope[];
+	let publish = jest.fn(async () => Promise.resolve());
 
 	const eventMap = new EventMap();
 	eventMap.register(AccountOpenedEvent, DefaultEventSerializer.for(AccountOpenedEvent));
@@ -66,6 +67,7 @@ describe(InMemoryEventStore, () => {
 
 	beforeAll(() => {
 		eventStore = new InMemoryEventStore(eventMap);
+		eventStore.publish = publish;
 		eventStore.setup();
 
 		envelopesAccountA = [
@@ -122,11 +124,13 @@ describe(InMemoryEventStore, () => {
 		];
 	});
 
-	it('should append event envelopes', () => {
-		eventStore.appendEvents(eventStreamAccountA, 3, events.slice(0, 3));
-		eventStore.appendEvents(eventStreamAccountB, 3, events.slice(0, 3));
-		eventStore.appendEvents(eventStreamAccountA, 6, events.slice(3));
-		eventStore.appendEvents(eventStreamAccountB, 6, events.slice(3));
+	it('should append event envelopes', async () => {
+		await Promise.all([
+			eventStore.appendEvents(eventStreamAccountA, 3, events.slice(0, 3)),
+			eventStore.appendEvents(eventStreamAccountB, 3, events.slice(0, 3)),
+			eventStore.appendEvents(eventStreamAccountA, 6, events.slice(3)),
+			eventStore.appendEvents(eventStreamAccountB, 6, events.slice(3)),
+		]);
 
 		const entities: InMemoryEventEntity[] = eventStore['collections'].get('events') || [];
 		const entitiesAccountA = entities.filter(
@@ -157,6 +161,8 @@ describe(InMemoryEventStore, () => {
 			expect(entity.occurredOn).toBeInstanceOf(Date);
 			expect(entity.version).toEqual(envelopesAccountB[index].metadata.version);
 		});
+
+		expect(publish).toHaveBeenCalledTimes(events.length * 2);
 	});
 
 	it('should retrieve a single event from a specified stream', () => {

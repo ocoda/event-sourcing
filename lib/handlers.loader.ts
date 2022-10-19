@@ -1,4 +1,4 @@
-import { Injectable, OnApplicationBootstrap, Type } from '@nestjs/common';
+import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import { DiscoveryService } from '@nestjs/core';
 import { InstanceWrapper } from '@nestjs/core/injector/instance-wrapper';
 import { CommandBus } from './command-bus';
@@ -11,12 +11,12 @@ import {
 } from './decorators';
 import { EventBus } from './event-bus';
 import { EventMap } from './event-map';
+import { EventStore } from './event-store';
 import {
 	MissingCommandHandlerMetadataException,
 	MissingCommandMetadataException,
 	MissingEventHandlerMetadataException,
 	MissingEventMetadataException,
-	MissingEventSerializerMetadataException,
 	MissingQueryHandlerMetadataException,
 	MissingQueryMetadataException,
 } from './exceptions';
@@ -31,7 +31,6 @@ import {
 } from './helpers';
 import { getEventHandlerMetadata } from './helpers/metadata/get-event-handler-metadata';
 import { EventSourcingModuleOptions } from './interfaces';
-import { AggregateRoot } from './models';
 import { QueryBus } from './query-bus';
 
 enum HandlerType {
@@ -54,6 +53,7 @@ export class HandlersLoader implements OnApplicationBootstrap {
 		private readonly commandBus: CommandBus,
 		private readonly queryBus: QueryBus,
 		private readonly eventBus: EventBus,
+		private readonly eventStore: EventStore,
 		private readonly eventMap: EventMap,
 	) {}
 
@@ -64,9 +64,7 @@ export class HandlersLoader implements OnApplicationBootstrap {
 		this.registerQueryHandlers();
 		this.registerEventSerializers();
 		this.registerEventHandlers();
-
-		this.registerEvents();
-		this.registerAggregates();
+		this.registerEventStore();
 	}
 
 	private loadHandlers() {
@@ -127,36 +125,6 @@ export class HandlersLoader implements OnApplicationBootstrap {
 	}
 
 	private registerEventSerializers() {
-		this.handlers.get(HandlerType.SERIALIZATION)?.forEach(({ metatype }) => {
-			const { event } = getEventSerializerMetadata(metatype);
-
-			if (!event) {
-				throw new MissingEventSerializerMetadataException(metatype);
-			}
-		});
-	}
-
-	private registerEventHandlers() {
-		this.handlers.get(HandlerType.EVENTS)?.forEach(({ metatype, instance }) => {
-			const { events } = getEventHandlerMetadata(metatype);
-
-			if (!events) {
-				throw new MissingEventHandlerMetadataException(metatype);
-			}
-
-			events.forEach((event) => {
-				const { id } = getEventMetadata(event);
-
-				if (!id) {
-					throw new MissingEventMetadataException(event);
-				}
-
-				this.eventBus.bind(instance, id);
-			});
-		});
-	}
-
-	private registerEvents() {
 		this.options?.events.forEach((event) => {
 			const handler = this.handlers.get(HandlerType.SERIALIZATION)?.find(({ metatype }) => {
 				const { event: registeredEvent } = getEventSerializerMetadata(metatype);
@@ -170,10 +138,27 @@ export class HandlersLoader implements OnApplicationBootstrap {
 		});
 	}
 
-	private registerAggregates() {
-		this.options?.aggregates.forEach((aggregate: Type<AggregateRoot>) => {
-			aggregate.prototype.publish = this.eventBus.publish;
-			aggregate.prototype.publishAll = this.eventBus.publishAll;
+	private registerEventHandlers() {
+		this.handlers.get(HandlerType.EVENTS)?.forEach(({ metatype, instance }) => {
+			const { events } = getEventHandlerMetadata(metatype);
+
+			if (!events) {
+				throw new MissingEventHandlerMetadataException(metatype);
+			}
+
+			events.forEach((event) => {
+				const { name } = getEventMetadata(event);
+
+				if (!name) {
+					throw new MissingEventMetadataException(event);
+				}
+
+				this.eventBus.bind(instance, name);
+			});
 		});
+	}
+
+	private registerEventStore() {
+		this.eventStore.publish = this.eventBus.publish;
 	}
 }

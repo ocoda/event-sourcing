@@ -1,5 +1,5 @@
-import { IEvent } from './event.interface';
+import { EventEnvelope } from '../../models';
 
-export interface IEventHandler<T extends IEvent = any> {
-	handle(event: T): any;
+export interface IEventHandler {
+	handle(envelope: EventEnvelope): any;
 }

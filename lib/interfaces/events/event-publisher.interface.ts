@@ -1,6 +1,5 @@
-import { IEvent } from './event.interface';
+import { EventEnvelope } from '@ocoda/event-sourcing/models';
 
-export interface IEventPublisher<EventBase extends IEvent = IEvent> {
-	publish<T extends EventBase = EventBase>(event: T, ...params): any;
-	publishAll?<T extends EventBase = EventBase>(events: T[], ...params): any;
+export interface IEventPublisher {
+	publish(event: EventEnvelope, ...params): any;
 }

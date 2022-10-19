@@ -1,6 +1,5 @@
-import { IEvent } from './event.interface';
+import { EventEnvelope } from '../../models';
 
-export interface IEventBus<EventBase extends IEvent = IEvent> {
-	publish<T extends EventBase>(event: T);
-	publishAll(events: EventBase[]);
+export interface IEventBus {
+	publish(envelope: EventEnvelope): void | Promise<void>;
 }

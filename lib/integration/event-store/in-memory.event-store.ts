@@ -69,12 +69,12 @@ export class InMemoryEventStore extends EventStore {
 		return this.eventMap.deserializeEvent(entity.event, entity.payload);
 	}
 
-	appendEvents(
+	async appendEvents(
 		{ streamId, aggregateId }: EventStream,
 		aggregateVersion: number,
 		events: IEvent[],
 		pool?: IEventPool,
-	): EventEnvelope[] {
+	): Promise<EventEnvelope[]> {
 		const collection = EventCollection.get(pool);
 		const eventCollection = this.collections.get(collection) || [];
 
@@ -90,7 +90,7 @@ export class InMemoryEventStore extends EventStore {
 			...envelopes.map(({ event, payload, metadata }) => ({ streamId, event, payload, ...metadata })),
 		);
 
-		return envelopes;
+		return Promise.resolve(envelopes);
 	}
 
 	async *getEnvelopes({ streamId }: EventStream, filter?: EventFilter): AsyncGenerator<EventEnvelope[]> {

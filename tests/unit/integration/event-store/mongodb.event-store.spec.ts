@@ -45,6 +45,7 @@ describe(MongoDBEventStore, () => {
 	let eventStore: MongoDBEventStore;
 	let envelopesAccountA: EventEnvelope[];
 	let envelopesAccountB: EventEnvelope[];
+	let publish = jest.fn(async () => Promise.resolve());
 
 	const eventMap = new EventMap();
 	eventMap.register(AccountOpenedEvent, DefaultEventSerializer.for(AccountOpenedEvent));
@@ -70,6 +71,7 @@ describe(MongoDBEventStore, () => {
 	beforeAll(async () => {
 		client = new MongoClient('mongodb://127.0.0.1:27017');
 		eventStore = new MongoDBEventStore(eventMap, client.db());
+		eventStore.publish = publish;
 		await eventStore.setup();
 
 		envelopesAccountA = [
@@ -174,6 +176,8 @@ describe(MongoDBEventStore, () => {
 			expect(entity.occurredOn).toBeInstanceOf(Date);
 			expect(entity.version).toEqual(envelopesAccountB[index].metadata.version);
 		});
+
+		expect(publish).toHaveBeenCalledTimes(events.length * 2);
 	});
 
 	it('should retrieve a single event from a specified stream', async () => {

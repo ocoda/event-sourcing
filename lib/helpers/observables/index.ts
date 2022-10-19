@@ -1,2 +1,2 @@
 export * from './observable-bus';
-export * from './type-filter';
+export * from './event-filter';
