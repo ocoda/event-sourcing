@@ -21,7 +21,7 @@ import {
 } from './domain/events';
 import { AccountClosedEventHandler } from './domain/events/account-closed.event-handler';
 import { AccountOpenedEventHandler } from './domain/events/account-opened.event-handler';
-import { Account, AccountSnapshotHandler } from './domain/models';
+import { AccountSnapshotHandler } from './domain/models';
 
 export const CommandHandlers: Type<ICommandHandler>[] = [
 	AddAccountOwnerCommandHandler,
@@ -38,8 +38,6 @@ export const QueryHandlers: Type<IQueryHandler>[] = [GetAccountByIdQueryHandler,
 export const SnapshotHandlers: Type<SnapshotHandler>[] = [AccountSnapshotHandler];
 
 export const EventHandlers: Type<IEventHandler>[] = [AccountOpenedEventHandler, AccountClosedEventHandler];
-
-export const Aggregates = [Account];
 
 export const EventPublishers = [CustomEventPublisher];
 

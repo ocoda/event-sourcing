@@ -9,6 +9,7 @@ import {
 	RemoveAccountOwnerCommandHandler,
 	TransferBetweenAccountsCommandHandler,
 } from './application/commands';
+import { CustomEventPublisher } from './application/publishers';
 import { GetAccountByIdQueryHandler } from './application/queries';
 import { AccountRepository } from './application/repositories';
 import {
@@ -19,6 +20,8 @@ import {
 	AccountOwnerAddedEvent,
 	AccountOwnerRemovedEvent,
 } from './domain/events';
+import { AccountClosedEventHandler } from './domain/events/account-closed.event-handler';
+import { AccountOpenedEventHandler } from './domain/events/account-opened.event-handler';
 import { AccountSnapshotHandler } from './domain/models';
 
 export const CommandHandlers: Type<ICommandHandler>[] = [
@@ -36,7 +39,9 @@ export const QueryHandlers: Type<IQueryHandler>[] = [GetAccountByIdQueryHandler]
 
 export const SnapshotHandlers: Type<SnapshotHandler>[] = [AccountSnapshotHandler];
 
-export const EventHandlers: Type<IEventHandler>[] = [];
+export const EventHandlers: Type<IEventHandler>[] = [AccountOpenedEventHandler, AccountClosedEventHandler];
+
+export const EventPublishers = [CustomEventPublisher];
 
 export const Events = [
 	AccountOpenedEvent,

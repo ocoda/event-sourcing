@@ -4,6 +4,7 @@ import {
 	AggregateRepositories,
 	CommandHandlers,
 	EventHandlers,
+	EventPublishers,
 	Events,
 	QueryHandlers,
 	SnapshotHandlers,
@@ -14,9 +15,9 @@ import { AccountController } from './application/account.controller';
   imports: [
     EventSourcingModule.forRootAsync({
       useFactory: () => ({
+		events: [...Events],
 		eventStore: { client: 'in-memory' },
 		snapshotStore: { client: 'in-memory' },
-		events: [...Events],
 	  }),
     }),
   ],
@@ -26,6 +27,7 @@ import { AccountController } from './application/account.controller';
     ...QueryHandlers,
     ...SnapshotHandlers,
 	...EventHandlers,
+	...EventPublishers
   ],
   controllers: [AccountController]
 })
