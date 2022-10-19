@@ -245,19 +245,15 @@ class AppModule implements OnModuleInit {
 ```
 &nbsp;
 
-### Event listeners
-An event listener is a class that has methods that respond to events that have occurred and were stored. This makes it convenient to trigger actions based on the events that took place in your application, e.g. sending an email when a user signed up.
+### Event publishers
+Whenever the EventStore appends events, they get published by the event-publishers that are registered in the EventBus. A default event publisher takes care of publishing events internally. If you create and register an EventHandler as a provider, this automatically subscribes to events that get fired within your application.
 
 ```typescript
-@Injectable()
-export class UserEventListener implements IEventListener {
-  
-  constructor(private readonly mailService: MailService) {}
-
-  @OnEvent(UsedSignedUpEvent)
-  handleUserSignedUpEvent(event: UsedSignedUpEvent) {
-    this.mailService.send(...)
-  }
+@EventHandler(AccountOpenedEvent)
+export class AccountOpenedEventHandler implements IEventHandler {
+	handle({ metadata }: EventEnvelope<AccountOpenedEvent>) {
+		...
+	}
 }
 ```
 
@@ -398,8 +394,9 @@ export class GetAccountQueryHandler implements IQueryHandler {
 - **What about materialized views?**
 Event sourcing articles often suggest to listen to published events to create or update a database view that is optimized for reading. While this offers some advantages, there is a lot of overhead to consider when doing so. An alternative is to simply read out your write models. A very interesting read about the benefits and trade-offs can be found [here](https://www.eventstore.com/blog/live-projections-for-read-models-with-event-sourcing-and-cqrs).
 
-- **What about events, sagas and all those other event-sourcing goodies?**
-I'm working on it 🚧
+- **What about sagas?**
+At this point, I haven't created Sagas because in basic use cases EventHandlers can take care of triggering side-effects.
+If the need arises, I'll look into this.
 &nbsp;
 
 ## Contact
