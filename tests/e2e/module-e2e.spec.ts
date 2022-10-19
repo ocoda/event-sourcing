@@ -1,6 +1,14 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { CommandBus, EventStore, ICommandBus, IQueryBus, QueryBus, SnapshotStore } from '@ocoda/event-sourcing';
+import {
+	CommandBus,
+	EventStore,
+	ICommandBus,
+	IEventPublisher,
+	IQueryBus,
+	QueryBus,
+	SnapshotStore,
+} from '@ocoda/event-sourcing';
 import { AppModule } from './src/app.module';
 import {
 	AddAccountOwnerCommand,
@@ -10,6 +18,7 @@ import {
 	OpenAccountCommand,
 	RemoveAccountOwnerCommand,
 } from './src/application/commands';
+import { CustomEventPublisher } from './src/application/publishers';
 import { GetAccountByIdQuery, GetAccountsQuery } from './src/application/queries';
 import { AccountRepository } from './src/application/repositories';
 import { Account, AccountId, AccountOwnerId } from './src/domain/models';
@@ -18,6 +27,7 @@ describe('EventSourcingModule - e2e', () => {
 	let app: INestApplication;
 	let commandBus: ICommandBus;
 	let queryBus: IQueryBus;
+	let customEventPublisher: IEventPublisher;
 
 	let accountId: AccountId;
 	let accountOwnerIds: AccountOwnerId[];
@@ -41,6 +51,9 @@ describe('EventSourcingModule - e2e', () => {
 
 		commandBus = app.get<CommandBus>(CommandBus);
 		queryBus = app.get<QueryBus>(QueryBus);
+		customEventPublisher = app.get<IEventPublisher>(CustomEventPublisher);
+
+		customEventPublisher.publish = jest.fn((_) => Promise.resolve());
 
 		accountRepository = app.get<AccountRepository>(AccountRepository);
 	});
@@ -54,6 +67,8 @@ describe('EventSourcingModule - e2e', () => {
 		const command = new OpenAccountCommand();
 		accountId = await commandBus.execute(command);
 		expectedVersion++;
+
+		expect(customEventPublisher.publish).toHaveBeenCalledTimes(1);
 
 		const account = await accountRepository.getById(accountId);
 
@@ -89,6 +104,8 @@ describe('EventSourcingModule - e2e', () => {
 			expect(account.openedOn).toEqual(new Date());
 			expect(account.closedOn).toBeUndefined();
 		}
+
+		expect(customEventPublisher.publish).toHaveBeenCalledTimes(5);
 	});
 
 	it('should remove owners from an account', async () => {
@@ -109,6 +126,8 @@ describe('EventSourcingModule - e2e', () => {
 			expect(account.openedOn).toEqual(new Date());
 			expect(account.closedOn).toBeUndefined();
 		}
+
+		expect(customEventPublisher.publish).toHaveBeenCalledTimes(7);
 	});
 
 	it('should credit an account', async () => {
@@ -131,6 +150,8 @@ describe('EventSourcingModule - e2e', () => {
 			expect(account.openedOn).toEqual(new Date());
 			expect(account.closedOn).toBeUndefined();
 		}
+
+		expect(customEventPublisher.publish).toHaveBeenCalledTimes(12);
 	});
 
 	it('should debit an account', async () => {
@@ -153,6 +174,8 @@ describe('EventSourcingModule - e2e', () => {
 			expect(account.openedOn).toEqual(new Date());
 			expect(account.closedOn).toBeUndefined();
 		}
+
+		expect(customEventPublisher.publish).toHaveBeenCalledTimes(17);
 	});
 
 	it('should get an account by id', async () => {
@@ -180,6 +203,8 @@ describe('EventSourcingModule - e2e', () => {
 		expect(account.balance).toBe(balance);
 		expect(account.openedOn).toEqual(new Date());
 		expect(account.closedOn).toEqual(new Date());
+
+		expect(customEventPublisher.publish).toHaveBeenCalledTimes(18);
 	});
 
 	it('should get all open accounts', async () => {

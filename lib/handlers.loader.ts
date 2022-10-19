@@ -5,6 +5,7 @@ import { CommandBus } from './command-bus';
 import {
 	COMMAND_HANDLER_METADATA,
 	EVENT_HANDLER_METADATA,
+	EVENT_PUBLISHER_METADATA,
 	EVENT_SERIALIZER_METADATA,
 	InjectEventSourcingOptions,
 	QUERY_HANDLER_METADATA,
@@ -38,6 +39,7 @@ enum HandlerType {
 	QUERY,
 	EVENT,
 	SERIALIZATION,
+	PUBLISHING,
 }
 
 @Injectable()
@@ -64,6 +66,7 @@ export class HandlersLoader implements OnApplicationBootstrap {
 		this.registerQueryHandlers();
 		this.registerEventSerializers();
 		this.registerEventHandlers();
+		this.registerEventPublishers();
 		this.registerEventStore();
 	}
 
@@ -83,6 +86,9 @@ export class HandlersLoader implements OnApplicationBootstrap {
 				}
 				if (Reflect.hasMetadata(EVENT_SERIALIZER_METADATA, wrapper.metatype)) {
 					this.handlers.get(HandlerType.SERIALIZATION).push(wrapper);
+				}
+				if (Reflect.hasMetadata(EVENT_PUBLISHER_METADATA, wrapper.metatype)) {
+					this.handlers.get(HandlerType.PUBLISHING).push(wrapper);
 				}
 			}
 		});
@@ -155,6 +161,12 @@ export class HandlersLoader implements OnApplicationBootstrap {
 
 				this.eventBus.bind(instance, name);
 			});
+		});
+	}
+
+	private registerEventPublishers() {
+		this.handlers.get(HandlerType.PUBLISHING)?.forEach(({ instance }) => {
+			this.eventBus.addPublisher(instance);
 		});
 	}
 

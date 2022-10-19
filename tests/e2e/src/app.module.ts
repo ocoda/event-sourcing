@@ -5,6 +5,7 @@ import {
 	Aggregates,
 	CommandHandlers,
 	EventHandlers,
+	EventPublishers,
 	Events,
 	QueryHandlers,
 	SnapshotHandlers,
@@ -28,6 +29,7 @@ import {
     ...QueryHandlers,
     ...SnapshotHandlers,
 	...EventHandlers,
+	...EventPublishers
   ],
 })
 export class AppModule {}

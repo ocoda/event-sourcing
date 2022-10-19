@@ -8,6 +8,7 @@ import {
 	OpenAccountCommandHandler,
 	RemoveAccountOwnerCommandHandler,
 } from './application/commands';
+import { CustomEventPublisher } from './application/publishers';
 import { GetAccountByIdQueryHandler, GetAccountsQueryHandler } from './application/queries';
 import { AccountRepository } from './application/repositories';
 import {
@@ -39,6 +40,8 @@ export const SnapshotHandlers: Type<SnapshotHandler>[] = [AccountSnapshotHandler
 export const EventHandlers: Type<IEventHandler>[] = [AccountOpenedEventHandler, AccountClosedEventHandler];
 
 export const Aggregates = [Account];
+
+export const EventPublishers = [CustomEventPublisher];
 
 export const Events = [
 	AccountOpenedEvent,

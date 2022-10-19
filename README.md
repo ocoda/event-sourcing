@@ -245,13 +245,27 @@ class AppModule implements OnModuleInit {
 ```
 &nbsp;
 
+### Event envelopes
+Events that get stored to a stream are always wrapped in an EventEnvelope. This envelope contains the name of the event as specified with the `@Event()` decorator, the serialized version of the event and additional metadata. (eventId, aggregateId, version, etc.)
+
 ### Event publishers
-Whenever the EventStore appends events, they get published by the event-publishers that are registered in the EventBus. A default event publisher takes care of publishing events internally. If you create and register an EventHandler as a provider, this automatically subscribes to events that get fired within your application.
+Whenever the EventStore appends events, the produced EventEnvelopes get published by the EventPublishers that are registered in the EventBus. A default EventPublisher takes care of publishing events internally, which allows us to create and register EventHandlers that automatically respond to these events.
 
 ```typescript
 @EventHandler(AccountOpenedEvent)
 export class AccountOpenedEventHandler implements IEventHandler {
-	handle({ metadata }: EventEnvelope<AccountOpenedEvent>) {
+	handle(envelope: EventEnvelope<AccountOpenedEvent>) {
+		...
+	}
+}
+```
+
+To register an additional EventPublisher to push your EventEnvelopes to Redis, SNS, Kafka, etc. simply create one and register it as a provider.
+
+```typescript
+@EventPublisher()
+export class CustomEventPublisher implements IEventPublisher {
+	async publish(envelope: EventEnvelope<IEvent>): Promise<void> {
 		...
 	}
 }
