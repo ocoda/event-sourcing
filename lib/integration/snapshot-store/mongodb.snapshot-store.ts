@@ -5,16 +5,14 @@ import { ISnapshot, ISnapshotPool, SnapshotEnvelopeMetadata } from '../../interf
 import { AggregateRoot, SnapshotCollection, SnapshotEnvelope, SnapshotStream } from '../../models';
 import { LatestSnapshotFilter, SnapshotFilter, SnapshotStore } from '../../snapshot-store';
 
-export type MongoSnapshotEntity<A extends AggregateRoot> =
-	& {
-		_id: string;
-		streamId: string;
-		payload: ISnapshot<A>;
-		aggregateName: string;
-		latest?: string;
-	}
-	& Document
-	& SnapshotEnvelopeMetadata;
+export type MongoSnapshotEntity<A extends AggregateRoot> = {
+	_id: string;
+	streamId: string;
+	payload: ISnapshot<A>;
+	aggregateName: string;
+	latest?: string;
+} & Document &
+	SnapshotEnvelopeMetadata;
 
 export class MongoDBSnapshotStore extends SnapshotStore {
 	constructor(readonly database: Db) {
@@ -106,10 +104,9 @@ export class MongoDBSnapshotStore extends SnapshotStore {
 		const lastStreamEntity = await this.getLastStreamEntity(collection, streamId);
 
 		if (lastStreamEntity) {
-			await this.database.collection<MongoSnapshotEntity<A>>(collection).updateOne(
-				{ _id: lastStreamEntity._id },
-				{ $set: { latest: null } },
-			);
+			await this.database
+				.collection<MongoSnapshotEntity<A>>(collection)
+				.updateOne({ _id: lastStreamEntity._id }, { $set: { latest: null } });
 		}
 
 		await this.database.collection<MongoSnapshotEntity<A>>(collection).insertOne({
@@ -176,9 +173,8 @@ export class MongoDBSnapshotStore extends SnapshotStore {
 					limit,
 				},
 			)
-			.map(
-				({ payload, aggregateId, registeredOn, snapshotId, version }) =>
-					SnapshotEnvelope.from<A>(payload, { aggregateId, registeredOn, snapshotId, version }),
+			.map(({ payload, aggregateId, registeredOn, snapshotId, version }) =>
+				SnapshotEnvelope.from<A>(payload, { aggregateId, registeredOn, snapshotId, version }),
 			);
 
 		const entities = [];
@@ -243,9 +239,8 @@ export class MongoDBSnapshotStore extends SnapshotStore {
 					limit,
 				},
 			)
-			.map(
-				({ payload, aggregateId, registeredOn, snapshotId, version }) =>
-					SnapshotEnvelope.from<A>(payload, { aggregateId, registeredOn, snapshotId, version }),
+			.map(({ payload, aggregateId, registeredOn, snapshotId, version }) =>
+				SnapshotEnvelope.from<A>(payload, { aggregateId, registeredOn, snapshotId, version }),
 			);
 
 		const entities = [];

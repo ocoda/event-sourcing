@@ -4,4 +4,3 @@ export * from './account-debited.event';
 export * from './account-opened.event';
 export * from './account-owner-added.event';
 export * from './account-owner-removed.event';
-export * from './account.event-listener';

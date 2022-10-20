@@ -1,4 +1,3 @@
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Db, Document } from 'mongodb';
 import { DEFAULT_BATCH_SIZE, StreamReadingDirection } from '../../constants';
 import { EventMap } from '../../event-map';
@@ -7,13 +6,16 @@ import { EventNotFoundException } from '../../exceptions';
 import { EventEnvelopeMetadata, IEvent, IEventPayload, IEventPool } from '../../interfaces';
 import { EventCollection, EventEnvelope, EventStream } from '../../models';
 
-export type MongoEventEntity =
-	& { _id: string; streamId: string; event: string; payload: IEventPayload<IEvent> }
-	& Document
-	& EventEnvelopeMetadata;
+export type MongoEventEntity = {
+	_id: string;
+	streamId: string;
+	event: string;
+	payload: IEventPayload<IEvent>;
+} & Document &
+	EventEnvelopeMetadata;
 
 export class MongoDBEventStore extends EventStore {
-	constructor(readonly eventMap: EventMap, readonly eventEmitter: EventEmitter2, readonly database: Db) {
+	constructor(readonly eventMap: EventMap, readonly database: Db) {
 		super();
 	}
 
@@ -80,7 +82,7 @@ export class MongoDBEventStore extends EventStore {
 		aggregateVersion: number,
 		events: IEvent[],
 		pool?: IEventPool,
-	): Promise<void> {
+	): Promise<EventEnvelope[]> {
 		const collection = EventCollection.get(pool);
 
 		let version = aggregateVersion - events.length + 1;
@@ -91,12 +93,17 @@ export class MongoDBEventStore extends EventStore {
 			return [...acc, envelope];
 		}, []);
 
-		const entities = envelopes.map<MongoEventEntity>(
-			({ event, payload, metadata }) => ({ _id: metadata.eventId, streamId, event, payload, ...metadata }),
-		);
+		const entities = envelopes.map<MongoEventEntity>(({ event, payload, metadata }) => ({
+			_id: metadata.eventId,
+			streamId,
+			event,
+			payload,
+			...metadata,
+		}));
 
 		await this.database.collection<MongoEventEntity>(collection).insertMany(entities);
-		envelopes.forEach((envelope) => this.emit(envelope));
+
+		return envelopes;
 	}
 
 	async *getEnvelopes({ streamId }: EventStream, filter?: EventFilter): AsyncGenerator<EventEnvelope[]> {
@@ -119,9 +126,15 @@ export class MongoDBEventStore extends EventStore {
 					limit,
 				},
 			)
-			.map(
-				({ event, payload, eventId, aggregateId, version, occurredOn, correlationId, causationId }) =>
-					EventEnvelope.from(event, payload, { eventId, aggregateId, version, occurredOn, correlationId, causationId }),
+			.map(({ event, payload, eventId, aggregateId, version, occurredOn, correlationId, causationId }) =>
+				EventEnvelope.from(event, payload, {
+					eventId,
+					aggregateId,
+					version,
+					occurredOn,
+					correlationId,
+					causationId,
+				}),
 			);
 
 		const entities = [];

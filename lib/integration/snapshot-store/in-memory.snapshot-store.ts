@@ -4,14 +4,12 @@ import { ISnapshot, ISnapshotPool, SnapshotEnvelopeMetadata } from '../../interf
 import { AggregateRoot, EventCollection, SnapshotCollection, SnapshotEnvelope, SnapshotStream } from '../../models';
 import { LatestSnapshotFilter, SnapshotFilter, SnapshotStore } from '../../snapshot-store';
 
-export type InMemorySnapshotEntity<A extends AggregateRoot> =
-	& {
-		streamId: string;
-		payload: ISnapshot<A>;
-		aggregateName: string;
-		latest?: string;
-	}
-	& SnapshotEnvelopeMetadata;
+export type InMemorySnapshotEntity<A extends AggregateRoot> = {
+	streamId: string;
+	payload: ISnapshot<A>;
+	aggregateName: string;
+	latest?: string;
+} & SnapshotEnvelopeMetadata;
 
 export class InMemorySnapshotStore extends SnapshotStore {
 	private collections: Map<ISnapshotPool, InMemorySnapshotEntity<any>[]> = new Map();
@@ -155,9 +153,8 @@ export class InMemorySnapshotStore extends SnapshotStore {
 
 		for (let i = 0; i < entities.length; i += batch) {
 			const chunk = entities.slice(i, i + batch);
-			yield chunk.map(
-				({ payload, aggregateId, registeredOn, snapshotId, version }) =>
-					SnapshotEnvelope.from<A>(payload, { aggregateId, registeredOn, snapshotId, version }),
+			yield chunk.map(({ payload, aggregateId, registeredOn, snapshotId, version }) =>
+				SnapshotEnvelope.from<A>(payload, { aggregateId, registeredOn, snapshotId, version }),
 			);
 		}
 	}
@@ -219,9 +216,8 @@ export class InMemorySnapshotStore extends SnapshotStore {
 
 		for (let i = 0; i < entities.length; i += batch) {
 			const chunk = entities.slice(i, i + batch);
-			yield chunk.map(
-				({ payload, aggregateId, registeredOn, snapshotId, version }) =>
-					SnapshotEnvelope.from<A>(payload, { aggregateId, registeredOn, snapshotId, version }),
+			yield chunk.map(({ payload, aggregateId, registeredOn, snapshotId, version }) =>
+				SnapshotEnvelope.from<A>(payload, { aggregateId, registeredOn, snapshotId, version }),
 			);
 		}
 	}
@@ -230,9 +226,9 @@ export class InMemorySnapshotStore extends SnapshotStore {
 		collection: InMemorySnapshotEntity<any>[],
 		streamId: string,
 	): InMemorySnapshotEntity<A> {
-		const [entity] = collection.filter(({ streamId: entityStreamId }) => entityStreamId === streamId).sort(
-			({ version: currentVersion }, { version: previousVersion }) => (previousVersion < currentVersion ? -1 : 1),
-		);
+		const [entity] = collection
+			.filter(({ streamId: entityStreamId }) => entityStreamId === streamId)
+			.sort(({ version: currentVersion }, { version: previousVersion }) => (previousVersion < currentVersion ? -1 : 1));
 
 		if (entity) {
 			return entity;

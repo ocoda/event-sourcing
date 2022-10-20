@@ -4,15 +4,20 @@ import { InstanceWrapper } from '@nestjs/core/injector/instance-wrapper';
 import { CommandBus } from './command-bus';
 import {
 	COMMAND_HANDLER_METADATA,
+	EVENT_HANDLER_METADATA,
+	EVENT_PUBLISHER_METADATA,
 	EVENT_SERIALIZER_METADATA,
 	InjectEventSourcingOptions,
 	QUERY_HANDLER_METADATA,
 } from './decorators';
+import { EventBus } from './event-bus';
 import { EventMap } from './event-map';
+import { EventStore } from './event-store';
 import {
 	MissingCommandHandlerMetadataException,
 	MissingCommandMetadataException,
-	MissingEventSerializerMetadataException,
+	MissingEventHandlerMetadataException,
+	MissingEventMetadataException,
 	MissingQueryHandlerMetadataException,
 	MissingQueryMetadataException,
 } from './exceptions';
@@ -20,61 +25,77 @@ import {
 	DefaultEventSerializer,
 	getCommandHandlerMetadata,
 	getCommandMetadata,
+	getEventMetadata,
 	getEventSerializerMetadata,
 	getQueryHandlerMetadata,
 	getQueryMetadata,
 } from './helpers';
-import { EventSourcingModuleOptions, ICommandHandler } from './interfaces';
+import { getEventHandlerMetadata } from './helpers/metadata/get-event-handler-metadata';
+import { EventSourcingModuleOptions } from './interfaces';
 import { QueryBus } from './query-bus';
 
 enum HandlerType {
-	COMMANDS,
-	QUERIES,
+	COMMAND,
+	QUERY,
+	EVENT,
 	SERIALIZATION,
+	PUBLISHING,
 }
 
 @Injectable()
 export class HandlersLoader implements OnApplicationBootstrap {
+	private handlers: Map<HandlerType, InstanceWrapper<any>[]> = new Map(
+		Object.values(HandlerType).map((key) => [HandlerType[key], []]),
+	);
+
 	constructor(
 		@InjectEventSourcingOptions()
 		private readonly options: EventSourcingModuleOptions,
 		private readonly discoveryService: DiscoveryService,
 		private readonly commandBus: CommandBus,
 		private readonly queryBus: QueryBus,
+		private readonly eventBus: EventBus,
+		private readonly eventStore: EventStore,
 		private readonly eventMap: EventMap,
 	) {}
 
 	onApplicationBootstrap() {
-		const handlers = this.loadHandlers();
+		this.loadHandlers();
 
-		this.registerCommandHandlers(handlers.get(HandlerType.COMMANDS));
-		this.registerQueryHandlers(handlers.get(HandlerType.QUERIES));
-		this.registerEvents(handlers.get(HandlerType.SERIALIZATION));
+		this.registerCommandHandlers();
+		this.registerQueryHandlers();
+		this.registerEventSerializers();
+		this.registerEventHandlers();
+		this.registerEventPublishers();
+		this.registerEventStore();
 	}
 
 	private loadHandlers() {
 		const providers = this.discoveryService.getProviders();
-		const handlers = new Map<HandlerType, InstanceWrapper[]>();
 
 		providers.forEach((wrapper) => {
 			if (wrapper.metatype) {
 				if (Reflect.hasMetadata(COMMAND_HANDLER_METADATA, wrapper.metatype)) {
-					handlers.set(HandlerType.COMMANDS, [...(handlers.get(HandlerType.COMMANDS) || []), wrapper]);
+					this.handlers.get(HandlerType.COMMAND).push(wrapper);
 				}
 				if (Reflect.hasMetadata(QUERY_HANDLER_METADATA, wrapper.metatype)) {
-					handlers.set(HandlerType.QUERIES, [...(handlers.get(HandlerType.QUERIES) || []), wrapper]);
+					this.handlers.get(HandlerType.QUERY).push(wrapper);
+				}
+				if (Reflect.hasMetadata(EVENT_HANDLER_METADATA, wrapper.metatype)) {
+					this.handlers.get(HandlerType.EVENT).push(wrapper);
 				}
 				if (Reflect.hasMetadata(EVENT_SERIALIZER_METADATA, wrapper.metatype)) {
-					handlers.set(HandlerType.SERIALIZATION, [...(handlers.get(HandlerType.SERIALIZATION) || []), wrapper]);
+					this.handlers.get(HandlerType.SERIALIZATION).push(wrapper);
+				}
+				if (Reflect.hasMetadata(EVENT_PUBLISHER_METADATA, wrapper.metatype)) {
+					this.handlers.get(HandlerType.PUBLISHING).push(wrapper);
 				}
 			}
 		});
-
-		return handlers;
 	}
 
-	private registerCommandHandlers(handlers: InstanceWrapper<ICommandHandler>[]) {
-		handlers?.forEach(({ metatype, instance }) => {
+	private registerCommandHandlers() {
+		this.handlers.get(HandlerType.COMMAND)?.forEach(({ metatype, instance }) => {
 			const { command } = getCommandHandlerMetadata(metatype);
 
 			if (!command) {
@@ -91,8 +112,8 @@ export class HandlersLoader implements OnApplicationBootstrap {
 		});
 	}
 
-	private registerQueryHandlers(handlers: InstanceWrapper[]) {
-		handlers?.forEach(({ metatype, instance }) => {
+	private registerQueryHandlers() {
+		this.handlers.get(HandlerType.QUERY)?.forEach(({ metatype, instance }) => {
 			const { query } = getQueryHandlerMetadata(metatype);
 
 			if (!query) {
@@ -109,17 +130,9 @@ export class HandlersLoader implements OnApplicationBootstrap {
 		});
 	}
 
-	private registerEvents(handlers: InstanceWrapper[]) {
-		handlers?.forEach(({ metatype }) => {
-			const { event } = getEventSerializerMetadata(metatype);
-
-			if (!event) {
-				throw new MissingEventSerializerMetadataException(metatype);
-			}
-		});
-
+	private registerEventSerializers() {
 		this.options?.events.forEach((event) => {
-			const handler = handlers?.find(({ metatype }) => {
+			const handler = this.handlers.get(HandlerType.SERIALIZATION)?.find(({ metatype }) => {
 				const { event: registeredEvent } = getEventSerializerMetadata(metatype);
 				return registeredEvent === event;
 			});
@@ -129,5 +142,35 @@ export class HandlersLoader implements OnApplicationBootstrap {
 
 			return this.eventMap.register(event, serializer);
 		});
+	}
+
+	private registerEventHandlers() {
+		this.handlers.get(HandlerType.EVENT)?.forEach(({ metatype, instance }) => {
+			const { events } = getEventHandlerMetadata(metatype);
+
+			if (!events) {
+				throw new MissingEventHandlerMetadataException(metatype);
+			}
+
+			events.forEach((event) => {
+				const { name } = getEventMetadata(event);
+
+				if (!name) {
+					throw new MissingEventMetadataException(event);
+				}
+
+				this.eventBus.bind(instance, name);
+			});
+		});
+	}
+
+	private registerEventPublishers() {
+		this.handlers.get(HandlerType.PUBLISHING)?.forEach(({ instance }) => {
+			this.eventBus.addPublisher(instance);
+		});
+	}
+
+	private registerEventStore() {
+		this.eventStore.publish = this.eventBus.publish;
 	}
 }

@@ -245,19 +245,29 @@ class AppModule implements OnModuleInit {
 ```
 &nbsp;
 
-### Event listeners
-An event listener is a class that has methods that respond to events that have occurred and were stored. This makes it convenient to trigger actions based on the events that took place in your application, e.g. sending an email when a user signed up.
+### Event envelopes
+Events that get stored to a stream are always wrapped in an EventEnvelope. This envelope contains the name of the event as specified with the `@Event()` decorator, the serialized version of the event and additional metadata. (eventId, aggregateId, version, etc.)
+
+### Event publishers
+Whenever the EventStore appends events, the produced EventEnvelopes get published by the EventPublishers that are registered in the EventBus. A default EventPublisher takes care of publishing events internally, which allows us to create and register EventHandlers that automatically respond to these events.
 
 ```typescript
-@Injectable()
-export class UserEventListener implements IEventListener {
-  
-  constructor(private readonly mailService: MailService) {}
+@EventHandler(AccountOpenedEvent)
+export class AccountOpenedEventHandler implements IEventHandler {
+	handle(envelope: EventEnvelope<AccountOpenedEvent>) {
+		...
+	}
+}
+```
 
-  @OnEvent(UsedSignedUpEvent)
-  handleUserSignedUpEvent(event: UsedSignedUpEvent) {
-    this.mailService.send(...)
-  }
+To register an additional EventPublisher to push your EventEnvelopes to Redis, SNS, Kafka, etc. simply create one and register it as a provider.
+
+```typescript
+@EventPublisher()
+export class CustomEventPublisher implements IEventPublisher {
+	async publish(envelope: EventEnvelope<IEvent>): Promise<void> {
+		...
+	}
 }
 ```
 
@@ -398,8 +408,9 @@ export class GetAccountQueryHandler implements IQueryHandler {
 - **What about materialized views?**
 Event sourcing articles often suggest to listen to published events to create or update a database view that is optimized for reading. While this offers some advantages, there is a lot of overhead to consider when doing so. An alternative is to simply read out your write models. A very interesting read about the benefits and trade-offs can be found [here](https://www.eventstore.com/blog/live-projections-for-read-models-with-event-sourcing-and-cqrs).
 
-- **What about events, sagas and all those other event-sourcing goodies?**
-I'm working on it 🚧
+- **What about sagas?**
+At this point, I haven't created Sagas because in basic use cases EventHandlers can take care of triggering side-effects.
+If the need arises, I'll look into this.
 &nbsp;
 
 ## Contact

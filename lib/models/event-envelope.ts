@@ -13,7 +13,11 @@ export class EventEnvelope<E extends IEvent = IEvent> {
 		payload: IEventPayload<E>,
 		metadata: Omit<EventEnvelopeMetadata, 'eventId' | 'occurredOn'>,
 	): EventEnvelope<E> {
-		return new EventEnvelope<E>(event, payload, { eventId: Id.generate().value, occurredOn: new Date(), ...metadata });
+		return new EventEnvelope<E>(event, payload, {
+			eventId: Id.generate().value,
+			occurredOn: new Date(),
+			...metadata,
+		});
 	}
 
 	static from<E extends IEvent = IEvent>(

@@ -3,7 +3,8 @@ import { EventSourcingModule, EventStore, SnapshotStore } from '@ocoda/event-sou
 import {
 	AggregateRepositories,
 	CommandHandlers,
-	EventListeners,
+	EventHandlers,
+	EventPublishers,
 	Events,
 	QueryHandlers,
 	SnapshotHandlers,
@@ -14,9 +15,9 @@ import { AccountController } from './application/account.controller';
   imports: [
     EventSourcingModule.forRootAsync({
       useFactory: () => ({
+		events: [...Events],
 		eventStore: { client: 'in-memory' },
 		snapshotStore: { client: 'in-memory' },
-		events: [...Events],
 	  }),
     }),
   ],
@@ -25,7 +26,8 @@ import { AccountController } from './application/account.controller';
     ...CommandHandlers,
     ...QueryHandlers,
     ...SnapshotHandlers,
-	...EventListeners,
+	...EventHandlers,
+	...EventPublishers
   ],
   controllers: [AccountController]
 })

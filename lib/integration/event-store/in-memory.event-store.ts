@@ -1,4 +1,3 @@
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DEFAULT_BATCH_SIZE, StreamReadingDirection } from '../../constants';
 import { EventMap } from '../../event-map';
 import { EventFilter, EventStore } from '../../event-store';
@@ -6,18 +5,16 @@ import { EventNotFoundException } from '../../exceptions';
 import { EventEnvelopeMetadata, IEvent, IEventCollection, IEventPayload, IEventPool } from '../../interfaces';
 import { EventCollection, EventEnvelope, EventStream } from '../../models';
 
-export type InMemoryEventEntity =
-	& {
-		streamId: string;
-		event: string;
-		payload: IEventPayload<IEvent>;
-	}
-	& EventEnvelopeMetadata;
+export type InMemoryEventEntity = {
+	streamId: string;
+	event: string;
+	payload: IEventPayload<IEvent>;
+} & EventEnvelopeMetadata;
 
 export class InMemoryEventStore extends EventStore {
 	private collections: Map<IEventCollection, InMemoryEventEntity[]> = new Map();
 
-	constructor(readonly eventMap: EventMap, readonly eventEmitter: EventEmitter2) {
+	constructor(readonly eventMap: EventMap) {
 		super();
 	}
 
@@ -72,12 +69,12 @@ export class InMemoryEventStore extends EventStore {
 		return this.eventMap.deserializeEvent(entity.event, entity.payload);
 	}
 
-	appendEvents(
+	async appendEvents(
 		{ streamId, aggregateId }: EventStream,
 		aggregateVersion: number,
 		events: IEvent[],
 		pool?: IEventPool,
-	): void {
+	): Promise<EventEnvelope[]> {
 		const collection = EventCollection.get(pool);
 		const eventCollection = this.collections.get(collection) || [];
 
@@ -93,7 +90,7 @@ export class InMemoryEventStore extends EventStore {
 			...envelopes.map(({ event, payload, metadata }) => ({ streamId, event, payload, ...metadata })),
 		);
 
-		envelopes.forEach((envelope) => this.emit(envelope));
+		return Promise.resolve(envelopes);
 	}
 
 	async *getEnvelopes({ streamId }: EventStream, filter?: EventFilter): AsyncGenerator<EventEnvelope[]> {
@@ -121,16 +118,15 @@ export class InMemoryEventStore extends EventStore {
 
 		for (let i = 0; i < entities.length; i += batch) {
 			const chunk = entities.slice(i, i + batch);
-			yield chunk.map(
-				({ event, payload, eventId, aggregateId, version, occurredOn, correlationId, causationId }) =>
-					EventEnvelope.from(event, payload, {
-						eventId,
-						aggregateId,
-						version,
-						occurredOn,
-						correlationId,
-						causationId,
-					}),
+			yield chunk.map(({ event, payload, eventId, aggregateId, version, occurredOn, correlationId, causationId }) =>
+				EventEnvelope.from(event, payload, {
+					eventId,
+					aggregateId,
+					version,
+					occurredOn,
+					correlationId,
+					causationId,
+				}),
 			);
 		}
 	}

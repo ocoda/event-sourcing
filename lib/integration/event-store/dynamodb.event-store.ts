@@ -8,7 +8,6 @@ import {
 	QueryCommand,
 } from '@aws-sdk/client-dynamodb';
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DEFAULT_BATCH_SIZE, StreamReadingDirection } from '../../constants';
 import { EventMap } from '../../event-map';
 import { EventFilter, EventStore } from '../../event-store';
@@ -29,7 +28,7 @@ export interface DynamoEventEntity {
 }
 
 export class DynamoDBEventStore extends EventStore {
-	constructor(readonly eventMap: EventMap, readonly eventEmitter: EventEmitter2, readonly client: DynamoDBClient) {
+	constructor(readonly eventMap: EventMap, readonly client: DynamoDBClient) {
 		super();
 	}
 
@@ -126,7 +125,7 @@ export class DynamoDBEventStore extends EventStore {
 		aggregateVersion: number,
 		events: IEvent[],
 		pool?: IEventPool,
-	): Promise<void> {
+	): Promise<EventEnvelope[]> {
 		const collection = EventCollection.get(pool);
 
 		let version = aggregateVersion - events.length + 1;
@@ -140,31 +139,30 @@ export class DynamoDBEventStore extends EventStore {
 
 		const params: BatchWriteItemInput = {
 			RequestItems: {
-				[collection]: envelopes.map(
-					({ event, payload, metadata }) => ({
-						PutRequest: {
-							Item: marshall(
-								{
-									streamId,
-									event,
-									payload,
-									version: metadata.version,
-									eventId: metadata.eventId,
-									aggregateId: metadata.aggregateId,
-									occurredOn: metadata.occurredOn.getTime(),
-									correlationId: metadata.correlationId,
-									causationId: metadata.causationId,
-								},
-								{ removeUndefinedValues: true },
-							),
-						},
-					}),
-				),
+				[collection]: envelopes.map(({ event, payload, metadata }) => ({
+					PutRequest: {
+						Item: marshall(
+							{
+								streamId,
+								event,
+								payload,
+								version: metadata.version,
+								eventId: metadata.eventId,
+								aggregateId: metadata.aggregateId,
+								occurredOn: metadata.occurredOn.getTime(),
+								correlationId: metadata.correlationId,
+								causationId: metadata.causationId,
+							},
+							{ removeUndefinedValues: true },
+						),
+					},
+				})),
 			},
 		};
 
 		await this.client.send(new BatchWriteItemCommand(params));
-		envelopes.forEach((envelope) => this.emit(envelope));
+
+		return envelopes;
 	}
 
 	async *getEnvelopes({ streamId }: EventStream, filter?: EventFilter): AsyncGenerator<EventEnvelope[]> {

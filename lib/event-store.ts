@@ -1,4 +1,3 @@
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import { StreamReadingDirection } from './constants';
 import { EventMap } from './event-map';
 import { IEvent, IEventPool } from './interfaces';
@@ -33,7 +32,28 @@ export interface EventFilter {
 
 export abstract class EventStore {
 	abstract eventMap: EventMap;
-	abstract eventEmitter: EventEmitter2;
+	protected _publish: (envelope: EventEnvelope<IEvent>) => any;
+
+	constructor() {
+		return new Proxy(this, {
+			get(target, propKey) {
+				if (propKey === 'appendEvents') {
+					return async function (...args: unknown[]) {
+						let envelopes = await target[propKey].apply(this, args);
+						for (const envelope of envelopes) {
+							await this._publish(envelope);
+						}
+						return envelopes;
+					};
+				}
+				return target[propKey];
+			},
+		});
+	}
+
+	set publish(fn: (envelope: EventEnvelope<IEvent>) => any) {
+		this._publish = fn;
+	}
 
 	abstract setup(pool?: IEventPool): EventCollection | Promise<EventCollection>;
 	abstract getEvents(eventStream: EventStream, filter?: EventFilter): AsyncGenerator<IEvent[]>;
@@ -43,15 +63,11 @@ export abstract class EventStore {
 		version: number,
 		events: IEvent[],
 		pool?: IEventPool,
-	): void | Promise<void>;
+	): Promise<EventEnvelope[]>;
 	abstract getEnvelopes?(eventStream: EventStream, filter?: EventFilter): AsyncGenerator<EventEnvelope[]>;
 	abstract getEnvelope?(
 		eventStream: EventStream,
 		version: number,
 		pool?: IEventPool,
 	): EventEnvelope | Promise<EventEnvelope>;
-
-	emit(envelope: EventEnvelope) {
-		this.eventEmitter.emit(envelope.event, envelope);
-	}
 }
