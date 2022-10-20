@@ -11,7 +11,8 @@
 	},
 	"formatter": {
 		"enabled": true,
-		"lineWidth": 120
+		"lineWidth": 120,
+		"indentStyle": "tab"
 	},
 	"javascript": {
 		"formatter": {

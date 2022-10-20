@@ -127,7 +127,14 @@ export class MongoDBEventStore extends EventStore {
 				},
 			)
 			.map(({ event, payload, eventId, aggregateId, version, occurredOn, correlationId, causationId }) =>
-				EventEnvelope.from(event, payload, { eventId, aggregateId, version, occurredOn, correlationId, causationId }),
+				EventEnvelope.from(event, payload, {
+					eventId,
+					aggregateId,
+					version,
+					occurredOn,
+					correlationId,
+					causationId,
+				}),
 			);
 
 		const entities = [];
