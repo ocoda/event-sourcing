@@ -7,5 +7,4 @@ export * from './event-serializer.decorator';
 export * from './event-sourcing-options.decorator';
 export * from './event.decorator';
 export * from './query-handler.decorator';
-export * from './saga.decorator';
 export * from './snapshot.decorator';

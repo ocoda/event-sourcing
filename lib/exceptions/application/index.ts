@@ -9,7 +9,6 @@ export * from './missing-event-publisher-metadata.exception';
 export * from './missing-event-serializer-metadata.exception';
 export * from './missing-query-handler-metadata.exception';
 export * from './missing-query-metadata.exception';
-export * from './missing-saga-metadata.exception';
 export * from './missing-snapshot-metadata.exception';
 export * from './missing-store-connection-options.exception';
 export * from './query-handler-not-found.exception';
