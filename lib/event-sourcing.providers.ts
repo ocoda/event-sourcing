@@ -1,6 +1,4 @@
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { Provider } from '@nestjs/common';
-import { MongoClient } from 'mongodb';
 import { EVENT_SOURCING_OPTIONS } from './constants';
 import { EventMap } from './event-map';
 import { EventStore } from './event-store';
@@ -23,6 +21,7 @@ export const EventStoreProvider = {
 					throw new MissingStoreConnectionOptionsException('eventStore', 'mongodb');
 				}
 				const { url, ...clientOptions } = options.eventStore.options;
+				const { MongoClient } = await import('mongodb');
 				const mongoClient = await new MongoClient(url, clientOptions).connect();
 				return new MongoDBEventStore(eventMap, mongoClient.db());
 			}
@@ -30,6 +29,7 @@ export const EventStoreProvider = {
 				if (!options.eventStore.options) {
 					throw new MissingStoreConnectionOptionsException('eventStore', ' dynamodb');
 				}
+				const { DynamoDBClient } = await import('@aws-sdk/client-dynamodb');
 				const dynamoClient = new DynamoDBClient(options.eventStore.options);
 				return new DynamoDBEventStore(eventMap, dynamoClient);
 			}
@@ -50,6 +50,7 @@ export const SnapshotStoreProvider = {
 					throw new MissingStoreConnectionOptionsException('snapshotStore', 'mongodb');
 				}
 				const { url, ...clientOptions } = options.snapshotStore.options;
+				const { MongoClient } = await import('mongodb');
 				const mongoClient = await new MongoClient(url, clientOptions).connect();
 				return new MongoDBSnapshotStore(mongoClient.db());
 			}
@@ -57,6 +58,7 @@ export const SnapshotStoreProvider = {
 				if (!options.snapshotStore.options) {
 					throw new MissingStoreConnectionOptionsException('snapshotStore', 'dynamodb');
 				}
+				const { DynamoDBClient } = await import('@aws-sdk/client-dynamodb');
 				const dynamoClient = new DynamoDBClient(options.snapshotStore.options);
 				return new DynamoDBSnapshotStore(dynamoClient);
 			}
