@@ -17,7 +17,7 @@ specifiers:
   jest: 29.3.0
   jest-mock: 29.3.0
   mongodb: 4.11.0
-  mongodb-memory-server: 8.9.5
+  mongodb-memory-server: 8.10.0
   reflect-metadata: 0.1.13
   release-it: 15.5.0
   rome: 0.10.1-next
@@ -43,7 +43,7 @@ devDependencies:
   jest: 29.3.0_@types+node@18.11.9
   jest-mock: 29.3.0
   mongodb: 4.11.0
-  mongodb-memory-server: 8.9.5
+  mongodb-memory-server: 8.10.0
   reflect-metadata: 0.1.13
   release-it: 15.5.0
   rome: 0.10.1-next
@@ -4877,7 +4877,7 @@ packages:
       jest-util: 29.2.1
       natural-compare: 1.4.0
       pretty-format: 29.2.1
-      semver: 7.3.7
+      semver: 7.3.8
     transitivePeerDependencies:
       - supports-color
     dev: true
@@ -5192,8 +5192,8 @@ packages:
       whatwg-url: 11.0.0
     dev: true
 
-  /mongodb-memory-server-core/8.9.5:
-    resolution: {integrity: sha512-AOI7Ut8Z5vZqvI0KlRW9j5qoR7pbR/RCojDiN8oLmfshfq5twi/4l8kXjG9nChGqloNNgfMYVF2Rvbr8hoHjxA==}
+  /mongodb-memory-server-core/8.10.0:
+    resolution: {integrity: sha512-otLYpVARSBXh1zaMRHet2MiUi+rl7rUQe9eXxDAPunC70ZhoGjxIvbQOsVA+n6o09UlxbupWjE4pUu8Ezq7zYQ==}
     engines: {node: '>=12.22.0'}
     dependencies:
       '@types/tmp': 0.2.3
@@ -5204,26 +5204,28 @@ packages:
       get-port: 5.1.1
       https-proxy-agent: 5.0.1
       md5-file: 5.0.0
-      mongodb: 4.9.1
+      mongodb: 4.11.0
       new-find-package-json: 2.0.0
-      semver: 7.3.7
+      semver: 7.3.8
       tar-stream: 2.2.0
       tmp: 0.2.1
       tslib: 2.4.1
       uuid: 8.3.2
       yauzl: 2.10.0
     transitivePeerDependencies:
+      - aws-crt
       - supports-color
     dev: true
 
-  /mongodb-memory-server/8.9.5:
-    resolution: {integrity: sha512-NdkUDiTaqwcIa23PX1GQCvXjCE9bQRYZIFhrwc40R99/dvTku1jaZzbzEbfNytqJVUekBwfKdtbLS8SsA48D9g==}
+  /mongodb-memory-server/8.10.0:
+    resolution: {integrity: sha512-LCYIrbzwRZlkDt2OM3gyS7458z68Zf3EdKrcnB0lknOypdWExfhBLUURjfhHCNs+FglDiqLn3uwEUi6Xmye6Fw==}
     engines: {node: '>=12.22.0'}
     requiresBuild: true
     dependencies:
-      mongodb-memory-server-core: 8.9.5
-      tslib: 2.4.0
+      mongodb-memory-server-core: 8.10.0
+      tslib: 2.4.1
     transitivePeerDependencies:
+      - aws-crt
       - supports-color
     dev: true
 
@@ -5240,18 +5242,6 @@ packages:
       saslprep: 1.0.3
     transitivePeerDependencies:
       - aws-crt
-    dev: true
-
-  /mongodb/4.9.1:
-    resolution: {integrity: sha512-ZhgI/qBf84fD7sI4waZBoLBNJYPQN5IOC++SBCiPiyhzpNKOxN/fi0tBHvH2dEC42HXtNEbFB0zmNz4+oVtorQ==}
-    engines: {node: '>=12.9.0'}
-    dependencies:
-      bson: 4.7.0
-      denque: 2.1.0
-      mongodb-connection-string-url: 2.5.4
-      socks: 2.7.1
-    optionalDependencies:
-      saslprep: 1.0.3
     dev: true
 
   /ms/2.0.0:
@@ -5544,7 +5534,7 @@ packages:
       got: 12.5.1
       registry-auth-token: 5.0.1
       registry-url: 6.0.1
-      semver: 7.3.7
+      semver: 7.3.8
     dev: true
 
   /parent-module/1.0.1:
@@ -6014,7 +6004,7 @@ packages:
     resolution: {integrity: sha512-0Ju4+6A8iOnpL/Thra7dZsSlOHYAHIeMxfhWQRI1/VLcT3WDBZKKtQt/QkBOsiIN9ZpuvHE6cGZ0x4glCMmfiA==}
     engines: {node: '>=12'}
     dependencies:
-      semver: 7.3.7
+      semver: 7.3.8
     dev: true
 
   /semver/6.3.0:
@@ -6024,6 +6014,14 @@ packages:
 
   /semver/7.3.7:
     resolution: {integrity: sha512-QlYTucUYOews+WeEujDoEGziz4K6c47V/Bd+LjSSYcA94p+DmINdf7ncaUinThfvZyu13lN9OY1XDxt8C0Tw0g==}
+    engines: {node: '>=10'}
+    hasBin: true
+    dependencies:
+      lru-cache: 6.0.0
+    dev: true
+
+  /semver/7.3.8:
+    resolution: {integrity: sha512-NB1ctGL5rlHrPJtFDVIVzTyQylMLu9N9VICA6HSFJo8MCGVTMW6gfpicwKmmK/dAjTOrqu5l63JJOpDSrAis3A==}
     engines: {node: '>=10'}
     hasBin: true
     dependencies:
@@ -6496,7 +6494,7 @@ packages:
       is-yarn-global: 0.4.0
       latest-version: 7.0.0
       pupa: 3.1.0
-      semver: 7.3.7
+      semver: 7.3.8
       semver-diff: 4.0.0
       xdg-basedir: 5.1.0
     dev: true
