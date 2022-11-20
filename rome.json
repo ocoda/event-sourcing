@@ -3,9 +3,12 @@
 		"enabled": true,
 		"rules": {
 			"recommended": true,
-			"nursery": {
-				"recommended": true,
+			"correctness": {
+				"useSingleCaseStatement": "off",
 				"noUnusedVariables": "off"
+			},
+			"style": {
+				"useShorthandArrayType": "off"
 			}
 		}
 	},
