@@ -3,9 +3,11 @@ import {
 	BatchWriteItemCommand,
 	BatchWriteItemInput,
 	CreateTableCommand,
+	DescribeTableCommand,
 	DynamoDBClient,
 	GetItemCommand,
 	QueryCommand,
+	ResourceNotFoundException,
 } from '@aws-sdk/client-dynamodb';
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
 import { DEFAULT_BATCH_SIZE, StreamReadingDirection } from '../../constants';
@@ -34,24 +36,35 @@ export class DynamoDBEventStore extends EventStore {
 
 	async setup(pool?: IEventPool): Promise<EventCollection> {
 		const collection = EventCollection.get(pool);
-		await this.client.send(
-			new CreateTableCommand({
-				TableName: collection,
-				KeySchema: [
-					{ AttributeName: 'streamId', KeyType: 'HASH' },
-					{ AttributeName: 'version', KeyType: 'RANGE' },
-				],
-				AttributeDefinitions: [
-					{ AttributeName: 'streamId', AttributeType: 'S' },
-					{ AttributeName: 'version', AttributeType: 'N' },
-				],
-				ProvisionedThroughput: {
-					ReadCapacityUnits: 1,
-					WriteCapacityUnits: 1,
-				},
-				BillingMode: 'PAY_PER_REQUEST',
-			}),
-		);
+
+		try {
+			await this.client.send(new DescribeTableCommand({ TableName: collection }));
+		} catch (err) {
+			switch (err.constructor) {
+				case ResourceNotFoundException:
+					await this.client.send(
+						new CreateTableCommand({
+							TableName: collection,
+							KeySchema: [
+								{ AttributeName: 'streamId', KeyType: 'HASH' },
+								{ AttributeName: 'version', KeyType: 'RANGE' },
+							],
+							AttributeDefinitions: [
+								{ AttributeName: 'streamId', AttributeType: 'S' },
+								{ AttributeName: 'version', AttributeType: 'N' },
+							],
+							ProvisionedThroughput: {
+								ReadCapacityUnits: 1,
+								WriteCapacityUnits: 1,
+							},
+							BillingMode: 'PAY_PER_REQUEST',
+						}),
+					);
+					break;
+				default:
+					throw err;
+			}
+		}
 
 		return collection;
 	}
