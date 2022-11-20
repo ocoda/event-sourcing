@@ -22,6 +22,11 @@ export class MongoDBSnapshotStore extends SnapshotStore {
 	async setup(pool?: ISnapshotPool): Promise<SnapshotCollection> {
 		const collection = SnapshotCollection.get(pool);
 
+		const [existingCollection] = await this.database.listCollections({ name: collection }).toArray();
+		if (existingCollection) {
+			return collection;
+		}
+
 		const snapshotCollection = await this.database.createCollection(collection);
 		await snapshotCollection.createIndex({ streamId: 1, version: 1 }, { unique: true });
 		await snapshotCollection.createIndex({ aggregateName: 1, latest: 1 }, { unique: false });
