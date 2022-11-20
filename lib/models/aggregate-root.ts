@@ -26,7 +26,7 @@ export abstract class AggregateRoot {
 		}
 
 		const handler = this.getEventHandler(event);
-		handler && handler.call(this, event);
+		handler?.call(this, event);
 	}
 
 	private getEventHandler<T extends IEvent = IEvent>(event: T): Type<typeof AggregateRoot> | undefined {

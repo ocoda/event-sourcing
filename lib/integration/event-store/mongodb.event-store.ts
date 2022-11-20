@@ -21,6 +21,12 @@ export class MongoDBEventStore extends EventStore {
 
 	async setup(pool?: IEventPool): Promise<EventCollection> {
 		const collection = EventCollection.get(pool);
+
+		const [existingCollection] = await this.database.listCollections({ name: collection }).toArray();
+		if (existingCollection) {
+			return collection;
+		}
+
 		const eventCollection = await this.database.createCollection<MongoEventEntity>(collection);
 		await eventCollection.createIndex({ streamId: 1, version: 1 }, { unique: true });
 		return collection;

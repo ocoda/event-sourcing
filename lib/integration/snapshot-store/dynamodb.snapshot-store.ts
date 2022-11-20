@@ -1,9 +1,11 @@
 import {
 	AttributeValue,
 	CreateTableCommand,
+	DescribeTableCommand,
 	DynamoDBClient,
 	GetItemCommand,
 	QueryCommand,
+	ResourceNotFoundException,
 	TransactWriteItemsCommand,
 } from '@aws-sdk/client-dynamodb';
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
@@ -31,38 +33,49 @@ export class DynamoDBSnapshotStore extends SnapshotStore {
 
 	async setup(pool?: ISnapshotPool): Promise<SnapshotCollection> {
 		const collection = SnapshotCollection.get(pool);
-		await this.client.send(
-			new CreateTableCommand({
-				TableName: collection,
-				KeySchema: [
-					{ AttributeName: 'streamId', KeyType: 'HASH' },
-					{ AttributeName: 'version', KeyType: 'RANGE' },
-				],
-				AttributeDefinitions: [
-					{ AttributeName: 'streamId', AttributeType: 'S' },
-					{ AttributeName: 'version', AttributeType: 'N' },
-					{ AttributeName: 'aggregateName', AttributeType: 'S' },
-					{ AttributeName: 'latest', AttributeType: 'S' },
-				],
-				GlobalSecondaryIndexes: [
-					{
-						IndexName: 'aggregate_index',
-						KeySchema: [
-							{ AttributeName: 'aggregateName', KeyType: 'HASH' },
-							{ AttributeName: 'latest', KeyType: 'RANGE' },
-						],
-						Projection: {
-							ProjectionType: 'ALL',
-						},
-					},
-				],
-				ProvisionedThroughput: {
-					ReadCapacityUnits: 1,
-					WriteCapacityUnits: 1,
-				},
-				BillingMode: 'PAY_PER_REQUEST',
-			}),
-		);
+
+		try {
+			await this.client.send(new DescribeTableCommand({ TableName: collection }));
+		} catch (err) {
+			switch (err.constructor) {
+				case ResourceNotFoundException:
+					await this.client.send(
+						new CreateTableCommand({
+							TableName: collection,
+							KeySchema: [
+								{ AttributeName: 'streamId', KeyType: 'HASH' },
+								{ AttributeName: 'version', KeyType: 'RANGE' },
+							],
+							AttributeDefinitions: [
+								{ AttributeName: 'streamId', AttributeType: 'S' },
+								{ AttributeName: 'version', AttributeType: 'N' },
+								{ AttributeName: 'aggregateName', AttributeType: 'S' },
+								{ AttributeName: 'latest', AttributeType: 'S' },
+							],
+							GlobalSecondaryIndexes: [
+								{
+									IndexName: 'aggregate_index',
+									KeySchema: [
+										{ AttributeName: 'aggregateName', KeyType: 'HASH' },
+										{ AttributeName: 'latest', KeyType: 'RANGE' },
+									],
+									Projection: {
+										ProjectionType: 'ALL',
+									},
+								},
+							],
+							ProvisionedThroughput: {
+								ReadCapacityUnits: 1,
+								WriteCapacityUnits: 1,
+							},
+							BillingMode: 'PAY_PER_REQUEST',
+						}),
+					);
+					break;
+				default:
+					throw err;
+			}
+		}
 
 		return collection;
 	}
