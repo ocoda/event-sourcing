@@ -10,7 +10,10 @@ import {
 	SnapshotStream,
 	StreamReadingDirection,
 } from '../../../../lib';
-import { MongoDBSnapshotStore, MongoSnapshotEntity } from '../../../../lib/integration/snapshot-store';
+import {
+	MongoDBSnapshotStore,
+	MongoSnapshotEntity,
+} from '../../../../lib/integration/snapshot-store/mongodb.snapshot-store';
 
 class AccountId extends Id {}
 class CustomerId extends Id {}
