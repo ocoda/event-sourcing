@@ -1,6 +1,6 @@
 {
 	"name": "@ocoda/event-sourcing",
-	"version": "1.0.0-beta.9",
+	"version": "1.0.0-beta.10",
 	"description": "NestJS Event Sourcing Library",
 	"author": "Dries Hooghe <dries@drieshooghe.com>",
 	"license": "MIT",
