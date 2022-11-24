@@ -16,13 +16,14 @@ import { AccountController } from './application/account.controller';
     EventSourcingModule.forRootAsync({
       useFactory: () => ({
 		events: [...Events],
-		eventStore: { client: 'dynamodb',
-		options: {
-			region: 'us-east-1',
-			endpoint: 'http://127.0.0.1:8000',
-			credentials: { accessKeyId: 'foo', secretAccessKey: 'bar' },
-		} 
-	},
+		eventStore: { 
+			client: 'dynamodb',
+			options: {
+				region: 'us-east-1',
+				endpoint: 'http://127.0.0.1:8000',
+				credentials: { accessKeyId: 'foo', secretAccessKey: 'bar' },
+			} 
+		},
 		snapshotStore: { 
 			client: 'dynamodb',
 			options: {

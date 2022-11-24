@@ -13,7 +13,7 @@ import {
 	StreamReadingDirection,
 } from '../../../../lib';
 import { DefaultEventSerializer } from '../../../../lib/helpers';
-import { MongoDBEventStore, MongoEventEntity } from '../../../../lib/integration/event-store';
+import { MongoDBEventStore, MongoEventEntity } from '../../../../lib/integration/event-store/mongodb.event-store';
 
 class AccountId extends Id {}
 

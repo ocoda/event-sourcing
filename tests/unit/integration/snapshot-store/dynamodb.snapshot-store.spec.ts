@@ -12,7 +12,7 @@ import {
 	SnapshotStream,
 	StreamReadingDirection,
 } from '../../../../lib';
-import { DynamoDBSnapshotStore } from '../../../../lib/integration/snapshot-store';
+import { DynamoDBSnapshotStore } from '../../../../lib/integration/snapshot-store/dynamodb.snapshot-store';
 
 class AccountId extends Id {}
 class CustomerId extends Id {}

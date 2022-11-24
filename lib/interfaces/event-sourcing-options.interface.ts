@@ -1,6 +1,6 @@
-import { DynamoDBClientConfig } from '@aws-sdk/client-dynamodb';
+import type { DynamoDBClientConfig } from '@aws-sdk/client-dynamodb';
 import { ModuleMetadata, Type } from '@nestjs/common';
-import { MongoClientOptions } from 'mongodb';
+import type { MongoClientOptions } from 'mongodb';
 import { IEvent } from './events';
 
 type InMemoryStoreConfig = { client: 'in-memory' };
