@@ -17,7 +17,7 @@ specifiers:
   jest: 29.3.1
   jest-mock: 29.3.1
   mongodb: 4.12.1
-  mongodb-memory-server: 8.10.0
+  mongodb-memory-server: 8.10.1
   reflect-metadata: 0.1.13
   release-it: 15.5.0
   rome: 10.0.1
@@ -43,7 +43,7 @@ devDependencies:
   jest: 29.3.1_@types+node@18.11.9
   jest-mock: 29.3.1
   mongodb: 4.12.1
-  mongodb-memory-server: 8.10.0
+  mongodb-memory-server: 8.10.1
   reflect-metadata: 0.1.13
   release-it: 15.5.0
   rome: 10.0.1
@@ -5247,8 +5247,8 @@ packages:
       whatwg-url: 11.0.0
     dev: true
 
-  /mongodb-memory-server-core/8.10.0:
-    resolution: {integrity: sha512-otLYpVARSBXh1zaMRHet2MiUi+rl7rUQe9eXxDAPunC70ZhoGjxIvbQOsVA+n6o09UlxbupWjE4pUu8Ezq7zYQ==}
+  /mongodb-memory-server-core/8.10.1:
+    resolution: {integrity: sha512-Xva73v08VDojH1+423fJA6PWsoSWnkexk8/zSCdQTfKXACAgEaQ5fay89gzYn/bn/4So89hPVdLwEOt2VYMK7Q==}
     engines: {node: '>=12.22.0'}
     dependencies:
       '@types/tmp': 0.2.3
@@ -5272,12 +5272,12 @@ packages:
       - supports-color
     dev: true
 
-  /mongodb-memory-server/8.10.0:
-    resolution: {integrity: sha512-LCYIrbzwRZlkDt2OM3gyS7458z68Zf3EdKrcnB0lknOypdWExfhBLUURjfhHCNs+FglDiqLn3uwEUi6Xmye6Fw==}
+  /mongodb-memory-server/8.10.1:
+    resolution: {integrity: sha512-xBo45TuU4SFjDWixOXJyTBDukYqGeCuh7RBcDm4Nqngd/2Pjja/XYYFFJk/I44mTrZ77W1HDmCA4d69XgNJUJQ==}
     engines: {node: '>=12.22.0'}
     requiresBuild: true
     dependencies:
-      mongodb-memory-server-core: 8.10.0
+      mongodb-memory-server-core: 8.10.1
       tslib: 2.4.1
     transitivePeerDependencies:
       - aws-crt
