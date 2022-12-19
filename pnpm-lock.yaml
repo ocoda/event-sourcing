@@ -22,7 +22,7 @@ specifiers:
   release-it: 15.5.1
   rome: 10.0.1
   rxjs: 7.5.7
-  typescript: 4.9.3
+  typescript: 4.9.4
 
 dependencies:
   class-transformer: 0.5.1
@@ -35,7 +35,7 @@ devDependencies:
   '@nestjs/core': 9.2.1_tuv4y6h3m23xb7odf2gtnrhr3e
   '@nestjs/platform-express': 9.2.1_hjcqpoaebdr7gdo5hgc22hthbe
   '@nestjs/testing': 9.2.1_wdbvfsxfdwzlwdfiyh2gynjl4m
-  '@swc-node/register': 1.5.2_yyq5c7hvgq72ttug2xagkmymyq
+  '@swc-node/register': 1.5.2_iw47evymfow2jlwxd3s5onabde
   '@swc/core': 1.3.22
   '@swc/jest': 0.2.24_@swc+core@1.3.22
   '@types/jest': 29.2.4
@@ -48,7 +48,7 @@ devDependencies:
   release-it: 15.5.1
   rome: 10.0.1
   rxjs: 7.5.7
-  typescript: 4.9.3
+  typescript: 4.9.4
 
 packages:
 
@@ -2448,7 +2448,7 @@ packages:
       '@swc/core': 1.3.22
     dev: true
 
-  /@swc-node/register/1.5.2_yyq5c7hvgq72ttug2xagkmymyq:
+  /@swc-node/register/1.5.2_iw47evymfow2jlwxd3s5onabde:
     resolution: {integrity: sha512-uXgAWEmbrg1zFxv6x/0rTQuToEuCxxZDaA7KyJi5+FwRcBTS79tBYEqUROH8otcTnHdh4njAbWdETFPRD4Pogw==}
     peerDependencies:
       typescript: '>= 4.3'
@@ -2459,7 +2459,7 @@ packages:
       debug: 4.3.4
       pirates: 4.0.5
       tslib: 2.4.0
-      typescript: 4.9.3
+      typescript: 4.9.4
     transitivePeerDependencies:
       - '@swc/core'
       - supports-color
@@ -6455,8 +6455,8 @@ packages:
     resolution: {integrity: sha512-/aCDEGatGvZ2BIk+HmLf4ifCJFwvKFNb9/JeZPMulfgFracn9QFcAf5GO8B/mweUjSoblS5In0cWhqpfs/5PQA==}
     dev: true
 
-  /typescript/4.9.3:
-    resolution: {integrity: sha512-CIfGzTelbKNEnLpLdGFgdyKhG23CKdKgQPOBc+OUNrkJ2vr+KSzsSV5kq5iWhEQbok+quxgGzrAtGWCyU7tHnA==}
+  /typescript/4.9.4:
+    resolution: {integrity: sha512-Uz+dTXYzxXXbsFpM86Wh3dKCxrQqUcVMxwU54orwlJjOpO3ao8L7j5lH+dWfTwgCwIuM9GQ2kvVotzYJMXTBZg==}
     engines: {node: '>=4.2.0'}
     hasBin: true
     dev: true
