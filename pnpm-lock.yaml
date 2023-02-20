@@ -16,7 +16,7 @@ specifiers:
   class-transformer: 0.5.1
   jest: 29.3.1
   jest-mock: 29.3.1
-  mongodb: 4.13.0
+  mongodb: 4.14.0
   mongodb-memory-server: 8.11.3
   reflect-metadata: 0.1.13
   release-it: 15.6.0
@@ -42,7 +42,7 @@ devDependencies:
   '@types/node': 18.13.0
   jest: 29.3.1_@types+node@18.13.0
   jest-mock: 29.3.1
-  mongodb: 4.13.0
+  mongodb: 4.14.0
   mongodb-memory-server: 8.11.3
   reflect-metadata: 0.1.13
   release-it: 15.6.0
@@ -1257,7 +1257,6 @@ packages:
 
   /@aws-sdk/util-base64-browser/3.188.0:
     resolution: {integrity: sha512-qlH+5NZBLiyKziL335BEPedYxX6j+p7KFRWXvDQox9S+s+gLCayednpK+fteOhBenCcR9fUZOVuAPScy1I8qCg==}
-    deprecated: The package @aws-sdk/util-base64-browser has been renamed to @aws-sdk/util-base64. Please install the renamed package.
     dependencies:
       tslib: 2.4.1
     dev: true
@@ -1266,7 +1265,6 @@ packages:
   /@aws-sdk/util-base64-node/3.188.0:
     resolution: {integrity: sha512-r1dccRsRjKq+OhVRUfqFiW3sGgZBjHbMeHLbrAs9jrOjU2PTQ8PSzAXLvX/9lmp7YjmX17Qvlsg0NCr1tbB9OA==}
     engines: {node: '>= 12.0.0'}
-    deprecated: The package @aws-sdk/util-base64-node has been renamed to @aws-sdk/util-base64. Please install the renamed package.
     dependencies:
       '@aws-sdk/util-buffer-from': 3.188.0
       tslib: 2.4.1
@@ -5246,7 +5244,7 @@ packages:
       get-port: 5.1.1
       https-proxy-agent: 5.0.1
       md5-file: 5.0.0
-      mongodb: 4.13.0
+      mongodb: 4.14.0
       new-find-package-json: 2.0.0
       semver: 7.3.8
       tar-stream: 2.2.0
@@ -5271,8 +5269,8 @@ packages:
       - supports-color
     dev: true
 
-  /mongodb/4.13.0:
-    resolution: {integrity: sha512-+taZ/bV8d1pYuHL4U+gSwkhmDrwkWbH1l4aah4YpmpscMwgFBkufIKxgP/G7m87/NUuQzc2Z75ZTI7ZOyqZLbw==}
+  /mongodb/4.14.0:
+    resolution: {integrity: sha512-coGKkWXIBczZPr284tYKFLg+KbGPPLlSbdgfKAb6QqCFt5bo5VFZ50O3FFzsw4rnkqjwT6D8Qcoo9nshYKM7Mg==}
     engines: {node: '>=12.9.0'}
     dependencies:
       bson: 4.7.0
