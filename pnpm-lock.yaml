@@ -17,7 +17,7 @@ specifiers:
   jest: 29.5.0
   jest-mock: 29.5.0
   mongodb: 5.1.0
-  mongodb-memory-server: 8.11.3
+  mongodb-memory-server: 8.11.5
   reflect-metadata: 0.1.13
   release-it: 15.7.0
   rome: 10.0.1
@@ -43,7 +43,7 @@ devDependencies:
   jest: 29.5.0_@types+node@18.14.6
   jest-mock: 29.5.0
   mongodb: 5.1.0
-  mongodb-memory-server: 8.11.3
+  mongodb-memory-server: 8.11.5
   reflect-metadata: 0.1.13
   release-it: 15.7.0
   rome: 10.0.1
@@ -1257,7 +1257,6 @@ packages:
 
   /@aws-sdk/util-base64-browser/3.188.0:
     resolution: {integrity: sha512-qlH+5NZBLiyKziL335BEPedYxX6j+p7KFRWXvDQox9S+s+gLCayednpK+fteOhBenCcR9fUZOVuAPScy1I8qCg==}
-    deprecated: The package @aws-sdk/util-base64-browser has been renamed to @aws-sdk/util-base64. Please install the renamed package.
     dependencies:
       tslib: 2.5.0
     dev: true
@@ -1266,7 +1265,6 @@ packages:
   /@aws-sdk/util-base64-node/3.188.0:
     resolution: {integrity: sha512-r1dccRsRjKq+OhVRUfqFiW3sGgZBjHbMeHLbrAs9jrOjU2PTQ8PSzAXLvX/9lmp7YjmX17Qvlsg0NCr1tbB9OA==}
     engines: {node: '>= 12.0.0'}
-    deprecated: The package @aws-sdk/util-base64-node has been renamed to @aws-sdk/util-base64. Please install the renamed package.
     dependencies:
       '@aws-sdk/util-buffer-from': 3.188.0
       tslib: 2.5.0
@@ -5327,8 +5325,8 @@ packages:
       whatwg-url: 11.0.0
     dev: true
 
-  /mongodb-memory-server-core/8.11.3:
-    resolution: {integrity: sha512-DObY45GHxM3O2/6WeRVxiZhoYLnp3vNjrRpq2WdvwNIzatC86Ac28vgqnILTbPD5w58/Fr97kCNBTAC4YL5YzA==}
+  /mongodb-memory-server-core/8.11.5:
+    resolution: {integrity: sha512-bhptlOruCEYrLofCbjACMoClgP1rFkhSNDzI/bbG/pUAg41UB00eaDPerYVvRf2jvOJqKF4+U9xqXiSvkbMvXw==}
     engines: {node: '>=12.22.0'}
     dependencies:
       '@types/tmp': 0.2.3
@@ -5352,13 +5350,13 @@ packages:
       - supports-color
     dev: true
 
-  /mongodb-memory-server/8.11.3:
-    resolution: {integrity: sha512-DCD2kByVpdSrShgBZjdSDKesF1gyFSDi2RN8I7m/1ZJ6RFdkZyMWfofsQzHiTJ/WoqXLadWJljgg0LPNz31FWg==}
+  /mongodb-memory-server/8.11.5:
+    resolution: {integrity: sha512-/yiw3L2TIMpi9I6GXg379k6d+RG3k+9V9o24kK5h+NBTtYLNuWa5iEvtce/O3jqhg6yo31T5XG2e/Hm4UwBM1A==}
     engines: {node: '>=12.22.0'}
     requiresBuild: true
     dependencies:
-      mongodb-memory-server-core: 8.11.3
-      tslib: 2.4.1
+      mongodb-memory-server-core: 8.11.5
+      tslib: 2.5.0
     transitivePeerDependencies:
       - aws-crt
       - supports-color
