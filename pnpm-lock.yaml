@@ -16,7 +16,7 @@ specifiers:
   class-transformer: 0.5.1
   jest: 29.3.1
   jest-mock: 29.3.1
-  mongodb: 4.13.0
+  mongodb: 5.1.0
   mongodb-memory-server: 8.11.3
   reflect-metadata: 0.1.13
   release-it: 15.7.0
@@ -42,7 +42,7 @@ devDependencies:
   '@types/node': 18.13.0
   jest: 29.3.1_@types+node@18.13.0
   jest-mock: 29.3.1
-  mongodb: 4.13.0
+  mongodb: 5.1.0
   mongodb-memory-server: 8.11.3
   reflect-metadata: 0.1.13
   release-it: 15.7.0
@@ -3088,6 +3088,11 @@ packages:
       buffer: 5.7.1
     dev: true
 
+  /bson/5.0.1:
+    resolution: {integrity: sha512-y09gBGusgHtinMon/GVbv1J6FrXhnr/+6hqLlSmEFzkz6PodqF6TxjyvfvY3AfO+oG1mgUtbC86xSbOlwvM62Q==}
+    engines: {node: '>=14.20.1'}
+    dev: true
+
   /buffer-crc32/0.2.13:
     resolution: {integrity: sha512-VO9Ht/+p3SN7SKWqcrgEzjGbRSJYTx+Q1pTQC0wrWqHx0vpJraQ6GtHx8tvcg1rlK1byhU5gccxgOgj7B0TDkQ==}
     dev: true
@@ -5237,8 +5242,8 @@ packages:
       obliterator: 1.6.1
     dev: true
 
-  /mongodb-connection-string-url/2.5.4:
-    resolution: {integrity: sha512-SeAxuWs0ez3iI3vvmLk/j2y+zHwigTDKQhtdxTgt5ZCOQQS5+HW4g45/Xw5vzzbn7oQXCNQ24Z40AkJsizEy7w==}
+  /mongodb-connection-string-url/2.6.0:
+    resolution: {integrity: sha512-WvTZlI9ab0QYtTYnuMLgobULWhokRjtC7db9LtcVfJ+Hsnyr5eo6ZtNAt3Ly24XZScGMelOcGtm7lSn0332tPQ==}
     dependencies:
       '@types/whatwg-url': 8.2.2
       whatwg-url: 11.0.0
@@ -5286,13 +5291,35 @@ packages:
     engines: {node: '>=12.9.0'}
     dependencies:
       bson: 4.7.0
-      mongodb-connection-string-url: 2.5.4
+      mongodb-connection-string-url: 2.6.0
       socks: 2.7.1
     optionalDependencies:
       '@aws-sdk/credential-providers': 3.194.0
       saslprep: 1.0.3
     transitivePeerDependencies:
       - aws-crt
+    dev: true
+
+  /mongodb/5.1.0:
+    resolution: {integrity: sha512-qgKb7y+EI90y4weY3z5+lIgm8wmexbonz0GalHkSElQXVKtRuwqXuhXKccyvIjXCJVy9qPV82zsinY0W1FBnJw==}
+    engines: {node: '>=14.20.1'}
+    peerDependencies:
+      '@aws-sdk/credential-providers': ^3.201.0
+      mongodb-client-encryption: ^2.3.0
+      snappy: ^7.2.2
+    peerDependenciesMeta:
+      '@aws-sdk/credential-providers':
+        optional: true
+      mongodb-client-encryption:
+        optional: true
+      snappy:
+        optional: true
+    dependencies:
+      bson: 5.0.1
+      mongodb-connection-string-url: 2.6.0
+      socks: 2.7.1
+    optionalDependencies:
+      saslprep: 1.0.3
     dev: true
 
   /ms/2.0.0:

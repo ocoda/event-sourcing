@@ -31,7 +31,7 @@
 		"@aws-sdk/util-dynamodb": "^3.180.0",
 		"@nestjs/common": "^9.0.0",
 		"@nestjs/core": "^9.0.0",
-		"mongodb": "^4.9.1",
+		"mongodb": "^5.0.0",
 		"reflect-metadata": "^0.1.13",
 		"rxjs": "^7.2.0"
 	},
@@ -61,7 +61,7 @@
 		"@types/node": "18.13.0",
 		"jest": "29.3.1",
 		"jest-mock": "29.3.1",
-		"mongodb": "4.13.0",
+		"mongodb": "5.1.0",
 		"mongodb-memory-server": "8.11.3",
 		"reflect-metadata": "0.1.13",
 		"release-it": "15.7.0",
