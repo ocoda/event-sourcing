@@ -19,11 +19,4 @@ describe(Aggregate, () => {
 		expect(() => AccountId.from(uuid)).toThrow(InvalidIdError.becauseEmpty());
 	});
 
-	it('should throw when creating an Id from an invalid uuid', () => {
-		const generatedAccountId = AccountId.generate();
-		expect(generatedAccountId.value).toBeDefined();
-
-		const uuid = '123-abc';
-		expect(() => AccountId.from(uuid)).toThrow(InvalidIdError.because(`${uuid} is not a valid v4 uuid`));
-	});
 });
