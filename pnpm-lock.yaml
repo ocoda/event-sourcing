@@ -17,7 +17,7 @@ specifiers:
   jest: 29.5.0
   jest-mock: 29.5.0
   mongodb: 5.1.0
-  mongodb-memory-server: 8.11.5
+  mongodb-memory-server: 8.12.1
   reflect-metadata: 0.1.13
   release-it: 15.7.0
   rome: 10.0.1
@@ -43,7 +43,7 @@ devDependencies:
   jest: 29.5.0_@types+node@18.14.6
   jest-mock: 29.5.0
   mongodb: 5.1.0
-  mongodb-memory-server: 8.11.5
+  mongodb-memory-server: 8.12.1
   reflect-metadata: 0.1.13
   release-it: 15.7.0
   rome: 10.0.1
@@ -2763,10 +2763,6 @@ packages:
     resolution: {integrity: sha512-Hl219/BT5fLAaz6NDkSuhzasy49dwQS/DSdu4MdggFB8zcXv7vflBI3xp7FEmkmdDkBUI2bPUNeMttp2knYdxw==}
     dev: true
 
-  /@types/tmp/0.2.3:
-    resolution: {integrity: sha512-dDZH/tXzwjutnuk4UacGgFRwV+JSLaXL1ikvidfJprkb7L9Nx1njcRHHmi3Dsvt7pgqqTEeucQuOrWHPFgzVHA==}
-    dev: true
-
   /@types/webidl-conversions/7.0.0:
     resolution: {integrity: sha512-xTE1E+YF4aWPJJeUzaZI5DRntlkY3+BCVJi0axFptnjGmAoWxkyREIh/XMrfxVLejwQxMCfDXdICo0VLxThrog==}
     dev: true
@@ -5333,11 +5329,10 @@ packages:
       whatwg-url: 11.0.0
     dev: true
 
-  /mongodb-memory-server-core/8.11.5:
-    resolution: {integrity: sha512-bhptlOruCEYrLofCbjACMoClgP1rFkhSNDzI/bbG/pUAg41UB00eaDPerYVvRf2jvOJqKF4+U9xqXiSvkbMvXw==}
+  /mongodb-memory-server-core/8.12.1:
+    resolution: {integrity: sha512-uHpwQCg/NWQOrleYmxOmBnuxYytFpw/t7t9zOoypo2ea0AmflTNfZB4aA7E3SPxjnmXKWmbBJbq8PHonGVwmYA==}
     engines: {node: '>=12.22.0'}
     dependencies:
-      '@types/tmp': 0.2.3
       async-mutex: 0.3.2
       camelcase: 6.3.0
       debug: 4.3.4
@@ -5349,7 +5344,6 @@ packages:
       new-find-package-json: 2.0.0
       semver: 7.3.8
       tar-stream: 2.2.0
-      tmp: 0.2.1
       tslib: 2.5.0
       uuid: 9.0.0
       yauzl: 2.10.0
@@ -5358,12 +5352,12 @@ packages:
       - supports-color
     dev: true
 
-  /mongodb-memory-server/8.11.5:
-    resolution: {integrity: sha512-/yiw3L2TIMpi9I6GXg379k6d+RG3k+9V9o24kK5h+NBTtYLNuWa5iEvtce/O3jqhg6yo31T5XG2e/Hm4UwBM1A==}
+  /mongodb-memory-server/8.12.1:
+    resolution: {integrity: sha512-XjIaSsC45d6B106hbubEAFcik1iqKOpImCdIWokMJXFMN48MTbFEv36dRG95TbTXmyMVs1gKhCVE77dLozXdCQ==}
     engines: {node: '>=12.22.0'}
     requiresBuild: true
     dependencies:
-      mongodb-memory-server-core: 8.11.5
+      mongodb-memory-server-core: 8.12.1
       tslib: 2.5.0
     transitivePeerDependencies:
       - aws-crt
@@ -6099,13 +6093,6 @@ packages:
     engines: {iojs: '>=1.0.0', node: '>=0.10.0'}
     dev: true
 
-  /rimraf/3.0.2:
-    resolution: {integrity: sha512-JZkJMZkAGFFPP2YqXZXPbMlMBgsxzE8ILs4lMIX/2o0L9UBw9O/Y3o6wFw/i9YLapcUJWwqbi3kdxIPdC62TIA==}
-    hasBin: true
-    dependencies:
-      glob: 7.2.3
-    dev: true
-
   /rome/10.0.1:
     resolution: {integrity: sha512-RfaDa+cSustBsjX6bj3fWqEhoNxXrK1uNgKHpkCHAqp20QMJXnCRtbokhirNMe0utyGI9GTO/sDoK7hJP7O8Bw==}
     engines: {node: '>=14.*'}
@@ -6492,13 +6479,6 @@ packages:
     engines: {node: '>=0.6.0'}
     dependencies:
       os-tmpdir: 1.0.2
-    dev: true
-
-  /tmp/0.2.1:
-    resolution: {integrity: sha512-76SUhtfqR2Ijn+xllcI5P1oyannHNHByD80W1q447gU3mp9G9PSpGdWmjUOHRDPiHYacIk66W7ubDTuPF3BEtQ==}
-    engines: {node: '>=8.17.0'}
-    dependencies:
-      rimraf: 3.0.2
     dev: true
 
   /tmpl/1.0.5:
