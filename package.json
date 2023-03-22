@@ -47,8 +47,8 @@
 		}
 	},
 	"devDependencies": {
-		"@aws-sdk/client-dynamodb": "3.284.0",
-		"@aws-sdk/util-dynamodb": "3.284.0",
+		"@aws-sdk/client-dynamodb": "3.296.0",
+		"@aws-sdk/util-dynamodb": "3.296.0",
 		"@faker-js/faker": "^7.5.0",
 		"@nestjs/common": "9.3.12",
 		"@nestjs/core": "9.3.12",
