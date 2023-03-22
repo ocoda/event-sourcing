@@ -1,5 +1,5 @@
 import { EventEnvelopeMetadata, IEvent, IEventPayload } from '../interfaces';
-import { Id } from './id';
+import { UUID } from './uuid';
 
 export class EventEnvelope<E extends IEvent = IEvent> {
 	private constructor(
@@ -11,10 +11,12 @@ export class EventEnvelope<E extends IEvent = IEvent> {
 	static create<E extends IEvent = IEvent>(
 		event: string,
 		payload: IEventPayload<E>,
-		metadata: Omit<EventEnvelopeMetadata, 'eventId' | 'occurredOn'>,
+		metadata: Omit<EventEnvelopeMetadata, 'eventId' | 'occurredOn'> & {
+			eventId?: string;
+		},
 	): EventEnvelope<E> {
 		return new EventEnvelope<E>(event, payload, {
-			eventId: Id.generate().value,
+			eventId: metadata.eventId || UUID.generate().value,
 			occurredOn: new Date(),
 			...metadata,
 		});
