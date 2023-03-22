@@ -7,7 +7,7 @@ export class SnapshotEnvelope<A extends AggregateRoot = AggregateRoot> {
 
 	static create<A extends AggregateRoot>(
 		payload: ISnapshot<A>,
-		metadata: Omit<SnapshotEnvelopeMetadata, 'eventId' | 'registeredOn'> & {
+		metadata: Omit<SnapshotEnvelopeMetadata, 'snapshotId' | 'registeredOn'> & {
 			snapshotId?: string;
 		},
 	): SnapshotEnvelope<A> {
