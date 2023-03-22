@@ -4,18 +4,18 @@ import { randomInt } from 'crypto';
 import {
 	Aggregate,
 	AggregateRoot,
-	Id,
 	ISnapshot,
 	SnapshotCollection,
 	SnapshotEnvelope,
 	SnapshotNotFoundException,
 	SnapshotStream,
 	StreamReadingDirection,
+	UUID,
 } from '../../../../lib';
 import { DynamoDBSnapshotStore } from '../../../../lib/integration/snapshot-store/dynamodb.snapshot-store';
 
-class AccountId extends Id {}
-class CustomerId extends Id {}
+class AccountId extends UUID {}
+class CustomerId extends UUID {}
 
 @Aggregate({ streamName: 'account' })
 class Account extends AggregateRoot {
@@ -258,7 +258,7 @@ describe(DynamoDBSnapshotStore, () => {
 		@Aggregate({ streamName: 'foo' })
 		class Foo extends AggregateRoot {}
 
-		const resolvedSnapshot = await snapshotStore.getLastSnapshot(SnapshotStream.for(Foo, Id.generate()));
+		const resolvedSnapshot = await snapshotStore.getLastSnapshot(SnapshotStream.for(Foo, UUID.generate()));
 
 		expect(resolvedSnapshot).toBeUndefined();
 	});
@@ -331,7 +331,7 @@ describe(DynamoDBSnapshotStore, () => {
 		@Aggregate({ streamName: 'foo' })
 		class Foo extends AggregateRoot {}
 
-		class FooId extends Id {}
+		class FooId extends UUID {}
 
 		const fooIds = Array.from({ length: 20 })
 			.map(() => FooId.generate())

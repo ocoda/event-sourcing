@@ -1,17 +1,17 @@
 import {
 	Aggregate,
 	AggregateRoot,
-	Id,
 	ISnapshot,
 	SnapshotEnvelope,
 	SnapshotNotFoundException,
 	SnapshotStream,
 	StreamReadingDirection,
+	UUID,
 } from '../../../../lib';
 import { InMemorySnapshotStore } from '../../../../lib/integration/snapshot-store';
 
-class AccountId extends Id {}
-class CustomerId extends Id {}
+class AccountId extends UUID {}
+class CustomerId extends UUID {}
 
 @Aggregate({ streamName: 'account' })
 class Account extends AggregateRoot {
@@ -217,7 +217,7 @@ describe(InMemorySnapshotStore, () => {
 		@Aggregate({ streamName: 'foo' })
 		class Foo extends AggregateRoot {}
 
-		const resolvedSnapshot = snapshotStore.getLastSnapshot(SnapshotStream.for(Foo, Id.generate()));
+		const resolvedSnapshot = snapshotStore.getLastSnapshot(SnapshotStream.for(Foo, UUID.generate()));
 
 		expect(resolvedSnapshot).toBeUndefined();
 	});

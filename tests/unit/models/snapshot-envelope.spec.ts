@@ -1,7 +1,7 @@
-import { AggregateRoot, Id, ISnapshot, SnapshotEnvelope } from '../../../lib';
+import { AggregateRoot, ISnapshot, SnapshotEnvelope, UUID } from '../../../lib';
 
 describe(SnapshotEnvelope, () => {
-	class AccountId extends Id {}
+	class AccountId extends UUID {}
 	class Account extends AggregateRoot {
 		constructor(public id: AccountId, public balance: number, public openedOn: Date, public closedOn?: Date) {
 			super();
@@ -17,7 +17,10 @@ describe(SnapshotEnvelope, () => {
 			closedOn: undefined,
 		};
 
-		const envelope = SnapshotEnvelope.create(accountSnapshot, { aggregateId: accountId.value, version: 1 });
+		const envelope = SnapshotEnvelope.create(accountSnapshot, {
+			aggregateId: accountId.value,
+			version: 1,
+		});
 
 		expect(envelope.payload).toEqual(accountSnapshot);
 		expect(envelope.metadata.aggregateId).toEqual(accountId.value);

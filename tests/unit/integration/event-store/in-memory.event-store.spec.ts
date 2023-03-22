@@ -6,14 +6,14 @@ import {
 	EventMap,
 	EventNotFoundException,
 	EventStream,
-	Id,
 	IEvent,
 	StreamReadingDirection,
+	UUID,
 } from '../../../../lib';
 import { DefaultEventSerializer } from '../../../../lib/helpers';
 import { InMemoryEventEntity, InMemoryEventStore } from '../../../../lib/integration/event-store';
 
-class AccountId extends Id {}
+class AccountId extends UUID {}
 
 @Aggregate({ streamName: 'account' })
 class Account extends AggregateRoot {

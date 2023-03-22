@@ -1,7 +1,7 @@
-import { Aggregate, Id, InvalidIdError } from '../../../lib';
+import { Aggregate, InvalidIdError, UUID } from '../../../lib';
 
 describe(Aggregate, () => {
-	class AccountId extends Id {}
+	class AccountId extends UUID {}
 
 	it('should generate an AccountId', () => {
 		const generatedAccountId = AccountId.generate();

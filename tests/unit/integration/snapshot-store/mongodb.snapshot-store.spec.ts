@@ -2,21 +2,21 @@ import { MongoClient } from 'mongodb';
 import {
 	Aggregate,
 	AggregateRoot,
-	Id,
 	ISnapshot,
 	SnapshotCollection,
 	SnapshotEnvelope,
 	SnapshotNotFoundException,
 	SnapshotStream,
 	StreamReadingDirection,
+	UUID,
 } from '../../../../lib';
 import {
 	MongoDBSnapshotStore,
 	MongoSnapshotEntity,
 } from '../../../../lib/integration/snapshot-store/mongodb.snapshot-store';
 
-class AccountId extends Id {}
-class CustomerId extends Id {}
+class AccountId extends UUID {}
+class CustomerId extends UUID {}
 
 @Aggregate({ streamName: 'account' })
 class Account extends AggregateRoot {
@@ -240,7 +240,7 @@ describe(MongoDBSnapshotStore, () => {
 		@Aggregate({ streamName: 'foo' })
 		class Foo extends AggregateRoot {}
 
-		const resolvedSnapshot = await snapshotStore.getLastSnapshot(SnapshotStream.for(Foo, Id.generate()));
+		const resolvedSnapshot = await snapshotStore.getLastSnapshot(SnapshotStream.for(Foo, UUID.generate()));
 
 		expect(resolvedSnapshot).toBeUndefined();
 	});

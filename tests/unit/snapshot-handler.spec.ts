@@ -1,7 +1,6 @@
 import {
 	Aggregate,
 	AggregateRoot,
-	Id,
 	ISnapshot,
 	ISnapshotPool,
 	Snapshot,
@@ -9,6 +8,7 @@ import {
 	SnapshotHandler,
 	SnapshotStore,
 	SnapshotStream,
+	UUID,
 } from '@ocoda/event-sourcing';
 
 describe(SnapshotHandler, () => {
@@ -20,7 +20,7 @@ describe(SnapshotHandler, () => {
 		public openedOn: Date;
 	}
 
-	class AccountId extends Id {}
+	class AccountId extends UUID {}
 
 	const snapshotInterval = 5;
 
