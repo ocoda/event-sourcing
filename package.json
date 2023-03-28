@@ -65,7 +65,7 @@
 		"mongodb-memory-server": "8.12.1",
 		"reflect-metadata": "0.1.13",
 		"release-it": "15.7.0",
-		"rome": "10.0.1",
+		"rome": "11.0.0",
 		"rxjs": "7.8.0",
 		"typescript": "4.9.5"
 	},
