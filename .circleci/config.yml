@@ -74,7 +74,7 @@ jobs:
           command: docker ps
       - run:
           name: linting and formatting
-          command: pnpm ci
+          command: pnpm run ci
       - run:
           name: test
           command: pnpm test:ci
