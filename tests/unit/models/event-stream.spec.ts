@@ -1,9 +1,9 @@
-import { Aggregate, AggregateRoot, EventStream, Id, MissingAggregateMetadataException } from '../../../lib';
+import { Aggregate, AggregateRoot, EventStream, MissingAggregateMetadataException, UUID } from '../../../lib';
 
 describe(EventStream, () => {
 	@Aggregate({ streamName: 'account' })
 	class Account extends AggregateRoot {}
-	class AccountId extends Id {}
+	class AccountId extends UUID {}
 
 	it('should create an EventStream from an Aggregate class', () => {
 		const accountId = AccountId.generate();
@@ -23,7 +23,7 @@ describe(EventStream, () => {
 	});
 
 	it('should throw when creating an event-stream for an undecorated aggregate', () => {
-		class FooId extends Id {}
+		class FooId extends UUID {}
 		class Foo extends AggregateRoot {}
 
 		expect(() => EventStream.for(Foo, FooId.generate())).toThrow(new MissingAggregateMetadataException(Foo));

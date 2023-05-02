@@ -9,14 +9,14 @@ import {
 	EventMap,
 	EventNotFoundException,
 	EventStream,
-	Id,
 	IEvent,
 	StreamReadingDirection,
+	UUID,
 } from '../../../../lib';
 import { DefaultEventSerializer } from '../../../../lib/helpers';
 import { DynamoDBEventStore } from '../../../../lib/integration/event-store/dynamodb.event-store';
 
-class AccountId extends Id {}
+class AccountId extends UUID {}
 
 @Aggregate({ streamName: 'account' })
 class Account extends AggregateRoot {

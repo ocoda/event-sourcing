@@ -1,16 +1,18 @@
 import { ISnapshot, SnapshotEnvelopeMetadata } from '../interfaces';
 import { AggregateRoot } from './aggregate-root';
-import { Id } from './id';
+import { UUID } from './uuid';
 
 export class SnapshotEnvelope<A extends AggregateRoot = AggregateRoot> {
 	private constructor(readonly payload: ISnapshot<A>, readonly metadata: SnapshotEnvelopeMetadata) {}
 
 	static create<A extends AggregateRoot>(
 		payload: ISnapshot<A>,
-		metadata: Omit<SnapshotEnvelopeMetadata, 'snapshotId' | 'registeredOn'>,
+		metadata: Omit<SnapshotEnvelopeMetadata, 'snapshotId' | 'registeredOn'> & {
+			snapshotId?: string;
+		},
 	): SnapshotEnvelope<A> {
 		return new SnapshotEnvelope(payload, {
-			snapshotId: Id.generate().value,
+			snapshotId: metadata.snapshotId || UUID.generate().value,
 			registeredOn: new Date(),
 			...metadata,
 		});

@@ -8,14 +8,14 @@ import {
 	EventMap,
 	EventNotFoundException,
 	EventStream,
-	Id,
 	IEvent,
 	StreamReadingDirection,
+	UUID,
 } from '../../../../lib';
 import { DefaultEventSerializer } from '../../../../lib/helpers';
 import { MongoDBEventStore, MongoEventEntity } from '../../../../lib/integration/event-store/mongodb.event-store';
 
-class AccountId extends Id {}
+class AccountId extends UUID {}
 
 @Aggregate({ streamName: 'account' })
 class Account extends AggregateRoot {

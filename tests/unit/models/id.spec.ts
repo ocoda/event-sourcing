@@ -1,29 +1,25 @@
-import { Aggregate, Id, InvalidIdError } from '../../../lib';
+import { Id, InvalidIdError } from '../../../lib';
 
-describe(Aggregate, () => {
-	class AccountId extends Id {}
+describe(Id, () => {
+	class DeviceId extends Id {
+		public static generate(): DeviceId {
+			return new DeviceId('123-abc');
+		}
+	}
 
-	it('should generate an AccountId', () => {
-		const generatedAccountId = AccountId.generate();
-		expect(generatedAccountId.value).toBeDefined();
+	it('should generate a DeviceId', () => {
+		const generatedDeviceId = DeviceId.generate();
+		expect(generatedDeviceId.value).toBeDefined();
 	});
 
-	it('should create an AccountId from an existing uuid', () => {
-		const uuid = 'b6bca415-b7a6-499c-9f39-bf8fbf980a82';
-		const createdAccountId = AccountId.from(uuid);
-		expect(createdAccountId.value).toBe(uuid);
+	it('should create a DeviceId from an existing id', () => {
+		const id = '123-abc';
+		const createdDeviceId = DeviceId.from(id);
+		expect(createdDeviceId.value).toBe(id);
 	});
 
 	it('should throw when trying to create an id from an undefined variable', () => {
-		let uuid: string;
-		expect(() => AccountId.from(uuid)).toThrow(InvalidIdError.becauseEmpty());
-	});
-
-	it('should throw when creating an Id from an invalid uuid', () => {
-		const generatedAccountId = AccountId.generate();
-		expect(generatedAccountId.value).toBeDefined();
-
-		const uuid = '123-abc';
-		expect(() => AccountId.from(uuid)).toThrow(InvalidIdError.because(`${uuid} is not a valid v4 uuid`));
+		let id: string;
+		expect(() => DeviceId.from(id)).toThrow(InvalidIdError.becauseEmpty());
 	});
 });

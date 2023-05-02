@@ -3,6 +3,7 @@ export * from './event-collection';
 export * from './event-envelope';
 export * from './event-stream';
 export * from './id';
+export * from './uuid';
 export * from './snapshot-collection';
 export * from './snapshot-envelope';
 export * from './snapshot-stream';

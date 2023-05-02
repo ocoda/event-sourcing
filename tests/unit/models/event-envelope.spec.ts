@@ -1,7 +1,7 @@
-import { EventEnvelope, Id, IEvent } from '../../../lib';
+import { EventEnvelope, IEvent, UUID } from '../../../lib';
 
 describe(EventEnvelope, () => {
-	class FooId extends Id {}
+	class FooId extends UUID {}
 	class FooCreatedEvent implements IEvent {
 		constructor(public readonly bar: string) {}
 	}

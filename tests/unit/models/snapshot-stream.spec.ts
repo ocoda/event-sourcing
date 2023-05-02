@@ -1,9 +1,9 @@
-import { Aggregate, AggregateRoot, Id, MissingAggregateMetadataException, SnapshotStream } from '../../../lib';
+import { Aggregate, AggregateRoot, MissingAggregateMetadataException, SnapshotStream, UUID } from '../../../lib';
 
 describe(SnapshotStream, () => {
 	@Aggregate({ streamName: 'account' })
 	class Account extends AggregateRoot {}
-	class AccountId extends Id {}
+	class AccountId extends UUID {}
 
 	it('should create a SnapshotStream from an Aggregate class', () => {
 		const accountId = AccountId.generate();
@@ -23,7 +23,7 @@ describe(SnapshotStream, () => {
 	});
 
 	it('should throw when creating a snapshot-stream for an undecorated aggregate', () => {
-		class FooId extends Id {}
+		class FooId extends UUID {}
 		class Foo extends AggregateRoot {}
 
 		expect(() => SnapshotStream.for(Foo, FooId.generate())).toThrow(new MissingAggregateMetadataException(Foo));
