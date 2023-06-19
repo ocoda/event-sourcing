@@ -17,8 +17,8 @@ devDependencies:
     specifier: 3.319.0
     version: 3.319.0
   '@faker-js/faker':
-    specifier: ^7.5.0
-    version: 7.5.0
+    specifier: ^8.0.0
+    version: 8.0.0
   '@nestjs/common':
     specifier: 9.3.12
     version: 9.3.12(class-transformer@0.5.1)(reflect-metadata@0.1.13)(rxjs@7.8.0)
@@ -1888,9 +1888,9 @@ packages:
     resolution: {integrity: sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==}
     dev: true
 
-  /@faker-js/faker@7.5.0:
-    resolution: {integrity: sha512-8wNUCCUHvfvI0gQpDUho/3gPzABffnCn5um65F8dzQ86zz6dlt4+nmAA7PQUc8L+eH+9RgR/qzy5N/8kN0Ozdw==}
-    engines: {node: '>=14.0.0', npm: '>=6.0.0'}
+  /@faker-js/faker@8.0.0:
+    resolution: {integrity: sha512-XDR8sApuf78GHx8mLXl3KL/q7eB52A963UGejVbdbj3OZtfGlNwp0J78b7apVzqRi0GF8l9g3eSkkaL2UmU9Aw==}
+    engines: {node: ^14.17.0 || ^16.13.0 || >=18.0.0, npm: '>=6.14.13'}
     dev: true
 
   /@iarna/toml@2.2.5:
