@@ -27,10 +27,10 @@ export class InMemorySnapshotStore extends SnapshotStore {
 		let entities: InMemorySnapshotEntity<any>[] = [];
 
 		const collection = SnapshotCollection.get(filter?.pool);
-		let fromVersion = filter?.fromVersion;
-		let direction = filter?.direction || StreamReadingDirection.FORWARD;
-		let limit = filter?.limit || Number.MAX_SAFE_INTEGER;
-		let batch = filter?.batch || DEFAULT_BATCH_SIZE;
+		const fromVersion = filter?.fromVersion;
+		const direction = filter?.direction || StreamReadingDirection.FORWARD;
+		const limit = filter?.limit || Number.MAX_SAFE_INTEGER;
+		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
 		entities = this.collections.get(collection).filter(({ streamId: entityStreamId }) => entityStreamId === streamId);
 
@@ -102,7 +102,7 @@ export class InMemorySnapshotStore extends SnapshotStore {
 		const collection = SnapshotCollection.get(pool);
 		const snapshotCollection = this.collections.get(collection) || [];
 
-		let entity = this.getLastStreamEntity<A>(snapshotCollection, streamId);
+		const entity = this.getLastStreamEntity<A>(snapshotCollection, streamId);
 
 		if (entity) {
 			return entity.payload;
@@ -113,7 +113,7 @@ export class InMemorySnapshotStore extends SnapshotStore {
 		const collection = SnapshotCollection.get(pool);
 		const snapshotCollection = this.collections.get(collection) || [];
 
-		let entity = this.getLastStreamEntity<A>(snapshotCollection, streamId);
+		const entity = this.getLastStreamEntity<A>(snapshotCollection, streamId);
 
 		if (entity) {
 			return SnapshotEnvelope.from(entity.payload, {
@@ -132,10 +132,10 @@ export class InMemorySnapshotStore extends SnapshotStore {
 		let entities: InMemorySnapshotEntity<any>[] = [];
 
 		const collection = SnapshotCollection.get(filter?.pool);
-		let fromVersion = filter?.fromVersion;
-		let direction = filter?.direction || StreamReadingDirection.FORWARD;
-		let limit = filter?.limit || Number.MAX_SAFE_INTEGER;
-		let batch = filter?.batch || DEFAULT_BATCH_SIZE;
+		const fromVersion = filter?.fromVersion;
+		const direction = filter?.direction || StreamReadingDirection.FORWARD;
+		const limit = filter?.limit || Number.MAX_SAFE_INTEGER;
+		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
 		entities = this.collections.get(collection).filter(({ streamId: entityStreamId }) => entityStreamId === streamId);
 
@@ -167,7 +167,7 @@ export class InMemorySnapshotStore extends SnapshotStore {
 		const collection = SnapshotCollection.get(pool);
 		const snapshotCollection = this.collections.get(collection) || [];
 
-		let entity = snapshotCollection.find(
+		const entity = snapshotCollection.find(
 			({ streamId: eventStreamId, version: aggregateVersion }) =>
 				eventStreamId === streamId && aggregateVersion === version,
 		);
@@ -192,16 +192,16 @@ export class InMemorySnapshotStore extends SnapshotStore {
 		let entities: InMemorySnapshotEntity<any>[] = [];
 
 		const collection = SnapshotCollection.get(pool);
-		let fromId = filter?.fromId;
-		let limit = filter?.limit || Number.MAX_SAFE_INTEGER;
-		let batch = filter?.batch || DEFAULT_BATCH_SIZE;
+		const fromId = filter?.fromId;
+		const limit = filter?.limit || Number.MAX_SAFE_INTEGER;
+		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
 		entities = this.collections
 			.get(collection)
 			.filter(({ aggregateName: name, latest }) => name === aggregateName && latest)
 			.sort((envelopeA, envelopeB) => {
-				var textA = envelopeA.latest.toLowerCase();
-				var textB = envelopeB.latest.toLowerCase();
+				const textA = envelopeA.latest.toLowerCase();
+				const textB = envelopeB.latest.toLowerCase();
 				return textA < textB ? -1 : textA > textB ? 1 : 0;
 			})
 			.reverse();

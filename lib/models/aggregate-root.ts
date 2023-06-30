@@ -5,7 +5,7 @@ const VERSION = Symbol();
 const EVENTS = Symbol();
 
 export abstract class AggregateRoot {
-	private [VERSION]: number = 0;
+	private [VERSION] = 0;
 	private readonly [EVENTS]: IEvent[] = [];
 
 	set version(version: number) {

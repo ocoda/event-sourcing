@@ -72,10 +72,10 @@ export class DynamoDBEventStore extends EventStore {
 	async *getEvents({ streamId }: EventStream, filter?: EventFilter): AsyncGenerator<IEvent[]> {
 		const collection = EventCollection.get(filter?.pool);
 
-		let fromVersion = filter?.fromVersion;
-		let direction = filter?.direction || StreamReadingDirection.FORWARD;
-		let limit = filter?.limit || Number.MAX_SAFE_INTEGER;
-		let batch = filter?.batch || DEFAULT_BATCH_SIZE;
+		const fromVersion = filter?.fromVersion;
+		const direction = filter?.direction || StreamReadingDirection.FORWARD;
+		const limit = filter?.limit || Number.MAX_SAFE_INTEGER;
+		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
 		const KeyConditionExpression = ['streamId = :streamId'];
 		const ExpressionAttributeValues = {
@@ -181,10 +181,10 @@ export class DynamoDBEventStore extends EventStore {
 	async *getEnvelopes({ streamId }: EventStream, filter?: EventFilter): AsyncGenerator<EventEnvelope[]> {
 		const collection = EventCollection.get(filter?.pool);
 
-		let fromVersion = filter?.fromVersion;
-		let direction = filter?.direction || StreamReadingDirection.FORWARD;
-		let limit = filter?.limit || Number.MAX_SAFE_INTEGER;
-		let batch = filter?.batch || DEFAULT_BATCH_SIZE;
+		const fromVersion = filter?.fromVersion;
+		const direction = filter?.direction || StreamReadingDirection.FORWARD;
+		const limit = filter?.limit || Number.MAX_SAFE_INTEGER;
+		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
 		const KeyConditionExpression = ['streamId = :streamId'];
 		const ExpressionAttributeValues = {

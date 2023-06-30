@@ -35,11 +35,12 @@ export abstract class EventStore {
 	protected _publish: (envelope: EventEnvelope<IEvent>) => any;
 
 	constructor() {
+		// rome-ignore lint/correctness/noConstructorReturn:
 		return new Proxy(this, {
 			get(target, propKey) {
 				if (propKey === 'appendEvents') {
 					return async function (...args: unknown[]) {
-						let envelopes = await target[propKey].apply(this, args);
+						const envelopes = await target[propKey].apply(this, args);
 						for (const envelope of envelopes) {
 							await this._publish(envelope);
 						}

@@ -39,7 +39,6 @@ export const EventStoreProvider = {
 				const dynamoClient = new DynamoDBClient(options.eventStore.options);
 				return new DynamoDBEventStore(eventMap, dynamoClient);
 			}
-			case 'in-memory':
 			default:
 				return new InMemoryEventStore(eventMap);
 		}
@@ -74,7 +73,6 @@ export const SnapshotStoreProvider = {
 				const dynamoClient = new DynamoDBClient(options.snapshotStore.options);
 				return new DynamoDBSnapshotStore(dynamoClient);
 			}
-			case 'in-memory':
 			default:
 				return new InMemorySnapshotStore();
 		}
