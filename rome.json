@@ -4,10 +4,10 @@
 		"rules": {
 			"recommended": true,
 			"correctness": {
-				"useSingleCaseStatement": "off",
 				"noUnusedVariables": "off"
 			},
 			"style": {
+				"useSingleCaseStatement": "off",
 				"useShorthandArrayType": "off"
 			}
 		}
