@@ -26,12 +26,12 @@ export class InMemoryEventStore extends EventStore {
 
 	async *getEvents({ streamId }: EventStream, filter?: EventFilter): AsyncGenerator<IEvent[]> {
 		let entities: InMemoryEventEntity[] = [];
-		let collection = EventCollection.get(filter?.pool);
+		const collection = EventCollection.get(filter?.pool);
 
-		let fromVersion = filter?.fromVersion;
-		let direction = filter?.direction || StreamReadingDirection.FORWARD;
-		let limit = filter?.limit || Number.MAX_SAFE_INTEGER;
-		let batch = filter?.batch || DEFAULT_BATCH_SIZE;
+		const fromVersion = filter?.fromVersion;
+		const direction = filter?.direction || StreamReadingDirection.FORWARD;
+		const limit = filter?.limit || Number.MAX_SAFE_INTEGER;
+		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
 		entities = this.collections.get(collection).filter(({ streamId: entityStreamId }) => entityStreamId === streamId);
 
@@ -57,7 +57,7 @@ export class InMemoryEventStore extends EventStore {
 		const collection = EventCollection.get(pool);
 		const eventCollection = this.collections.get(collection) || [];
 
-		let entity = eventCollection.find(
+		const entity = eventCollection.find(
 			({ streamId: eventStreamId, version: aggregateVersion }) =>
 				eventStreamId === streamId && aggregateVersion === version,
 		);
@@ -97,10 +97,10 @@ export class InMemoryEventStore extends EventStore {
 		let entities: InMemoryEventEntity[] = [];
 		const collection = EventCollection.get(filter?.pool);
 
-		let fromVersion = filter?.fromVersion;
-		let direction = filter?.direction || StreamReadingDirection.FORWARD;
-		let limit = filter?.limit || Number.MAX_SAFE_INTEGER;
-		let batch = filter?.batch || DEFAULT_BATCH_SIZE;
+		const fromVersion = filter?.fromVersion;
+		const direction = filter?.direction || StreamReadingDirection.FORWARD;
+		const limit = filter?.limit || Number.MAX_SAFE_INTEGER;
+		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
 		entities = this.collections.get(collection).filter(({ streamId: entityStreamId }) => entityStreamId === streamId);
 
@@ -135,7 +135,7 @@ export class InMemoryEventStore extends EventStore {
 		const collection = EventCollection.get(pool);
 		const eventCollection = this.collections.get(collection) || [];
 
-		let entity = eventCollection.find(
+		const entity = eventCollection.find(
 			({ streamId: eventStreamId, version: aggregateVersion }) =>
 				eventStreamId === streamId && aggregateVersion === version,
 		);

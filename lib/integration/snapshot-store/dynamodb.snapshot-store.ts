@@ -86,10 +86,10 @@ export class DynamoDBSnapshotStore extends SnapshotStore {
 	): AsyncGenerator<ISnapshot<A>[]> {
 		const collection = SnapshotCollection.get(filter?.pool);
 
-		let fromVersion = filter?.fromVersion;
-		let direction = filter?.direction || StreamReadingDirection.FORWARD;
-		let limit = filter?.limit || Number.MAX_SAFE_INTEGER;
-		let batch = filter?.batch || DEFAULT_BATCH_SIZE;
+		const fromVersion = filter?.fromVersion;
+		const direction = filter?.direction || StreamReadingDirection.FORWARD;
+		const limit = filter?.limit || Number.MAX_SAFE_INTEGER;
+		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
 		const KeyConditionExpression = ['streamId = :streamId'];
 		const ExpressionAttributeValues = { ':streamId': { S: streamId } };
@@ -242,10 +242,10 @@ export class DynamoDBSnapshotStore extends SnapshotStore {
 	): AsyncGenerator<SnapshotEnvelope<A>[]> {
 		const collection = SnapshotCollection.get(filter?.pool);
 
-		let fromVersion = filter?.fromVersion;
-		let direction = filter?.direction || StreamReadingDirection.FORWARD;
-		let limit = filter?.limit || Number.MAX_SAFE_INTEGER;
-		let batch = filter?.batch || DEFAULT_BATCH_SIZE;
+		const fromVersion = filter?.fromVersion;
+		const direction = filter?.direction || StreamReadingDirection.FORWARD;
+		const limit = filter?.limit || Number.MAX_SAFE_INTEGER;
+		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
 		const KeyConditionExpression = ['streamId = :streamId'];
 		const ExpressionAttributeValues = {
@@ -312,9 +312,9 @@ export class DynamoDBSnapshotStore extends SnapshotStore {
 	): AsyncGenerator<SnapshotEnvelope<A>[]> {
 		const collection = SnapshotCollection.get(pool);
 
-		let fromId = filter?.fromId;
-		let limit = filter?.limit || Number.MAX_SAFE_INTEGER;
-		let batch = filter?.batch || DEFAULT_BATCH_SIZE;
+		const fromId = filter?.fromId;
+		const limit = filter?.limit || Number.MAX_SAFE_INTEGER;
+		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
 		const KeyConditionExpression = ['aggregateName = :aggregateName'];
 		const ExpressionAttributeValues = { ':aggregateName': { S: aggregateName } };

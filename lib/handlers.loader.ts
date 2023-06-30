@@ -35,11 +35,11 @@ import { EventSourcingModuleOptions } from './interfaces';
 import { QueryBus } from './query-bus';
 
 enum HandlerType {
-	COMMAND,
-	QUERY,
-	EVENT,
-	SERIALIZATION,
-	PUBLISHING,
+	COMMAND = 0,
+	QUERY = 1,
+	EVENT = 2,
+	SERIALIZATION = 3,
+	PUBLISHING = 4,
 }
 
 @Injectable()
