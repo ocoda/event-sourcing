@@ -33,7 +33,7 @@ devDependencies:
     version: 10.1.0(@nestjs/common@10.1.0)(@nestjs/core@10.1.0)(@nestjs/platform-express@10.1.0)
   '@swc-node/register':
     specifier: ^1.5.2
-    version: 1.5.2(@swc/core@1.3.70)(typescript@5.1.3)
+    version: 1.5.2(@swc/core@1.3.70)(typescript@5.1.6)
   '@swc/core':
     specifier: 1.3.70
     version: 1.3.70
@@ -71,8 +71,8 @@ devDependencies:
     specifier: 7.8.0
     version: 7.8.0
   typescript:
-    specifier: 5.1.3
-    version: 5.1.3
+    specifier: 5.1.6
+    version: 5.1.6
 
 packages:
 
@@ -2686,7 +2686,7 @@ packages:
       '@swc/core': 1.3.70
     dev: true
 
-  /@swc-node/register@1.5.2(@swc/core@1.3.70)(typescript@5.1.3):
+  /@swc-node/register@1.5.2(@swc/core@1.3.70)(typescript@5.1.6):
     resolution: {integrity: sha512-uXgAWEmbrg1zFxv6x/0rTQuToEuCxxZDaA7KyJi5+FwRcBTS79tBYEqUROH8otcTnHdh4njAbWdETFPRD4Pogw==}
     peerDependencies:
       typescript: '>= 4.3'
@@ -2697,7 +2697,7 @@ packages:
       debug: 4.3.4
       pirates: 4.0.5
       tslib: 2.4.0
-      typescript: 5.1.3
+      typescript: 5.1.6
     transitivePeerDependencies:
       - '@swc/core'
       - supports-color
@@ -6929,8 +6929,8 @@ packages:
     resolution: {integrity: sha512-/aCDEGatGvZ2BIk+HmLf4ifCJFwvKFNb9/JeZPMulfgFracn9QFcAf5GO8B/mweUjSoblS5In0cWhqpfs/5PQA==}
     dev: true
 
-  /typescript@5.1.3:
-    resolution: {integrity: sha512-XH627E9vkeqhlZFQuL+UsyAXEnibT0kWR2FWONlr4sTjvxyJYnyefgrkyECLzM5NenmKzRAy2rR/OlYLA1HkZw==}
+  /typescript@5.1.6:
+    resolution: {integrity: sha512-zaWCozRZ6DLEWAWFrVDz1H6FVXzUSfTy5FUMWsQlU8Ym5JP9eO4xkTIROFCQvhQf61z6O/G6ugw3SgAnvvm+HA==}
     engines: {node: '>=14.17'}
     hasBin: true
     dev: true
