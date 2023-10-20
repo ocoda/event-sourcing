@@ -56,8 +56,8 @@ devDependencies:
     specifier: 29.7.0
     version: 29.7.0
   mongodb:
-    specifier: 5.8.0
-    version: 5.8.0
+    specifier: 5.9.1
+    version: 5.9.1
   mongodb-memory-server:
     specifier: 8.16.0
     version: 8.16.0
@@ -3368,8 +3368,8 @@ packages:
       buffer: 5.7.1
     dev: true
 
-  /bson@5.4.0:
-    resolution: {integrity: sha512-WRZ5SQI5GfUuKnPTNmAYPiKIof3ORXAF4IRU5UcgmivNIon01rWQlw5RUH954dpu8yGL8T59YShVddIPaU/gFA==}
+  /bson@5.5.1:
+    resolution: {integrity: sha512-ix0EwukN2EpC0SRWIj/7B5+A6uQMQy6KMREI9qQqvgpkV2frH63T0UDVd1SYedL6dNCmDBYB3QtXi4ISk9YT+g==}
     engines: {node: '>=14.20.1'}
     dev: true
 
@@ -5800,8 +5800,8 @@ packages:
       - aws-crt
     dev: true
 
-  /mongodb@5.8.0:
-    resolution: {integrity: sha512-xx4CXmxcj3bNe7iGBlhntVrUqrNARYhUZteXaz4epEESv4oXD/FONAovcyoCaEffdYlw25Yz284OxMfpnPLlgQ==}
+  /mongodb@5.9.1:
+    resolution: {integrity: sha512-NBGA8AfJxGPeB12F73xXwozt8ZpeIPmCUeWRwl9xejozTXFes/3zaep9zhzs1B/nKKsw4P3I4iPfXl3K7s6g+Q==}
     engines: {node: '>=14.20.1'}
     peerDependencies:
       '@aws-sdk/credential-providers': ^3.188.0
@@ -5821,7 +5821,7 @@ packages:
       snappy:
         optional: true
     dependencies:
-      bson: 5.4.0
+      bson: 5.5.1
       mongodb-connection-string-url: 2.6.0
       socks: 2.7.1
     optionalDependencies:
