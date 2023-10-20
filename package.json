@@ -7,9 +7,9 @@
 	"main": "dist/index.js",
 	"scripts": {
 		"build": "rm -rf dist && tsc -p tsconfig.build.json",
-		"ci": "rome ci ./lib",
-		"format": "rome format ./lib ./tests ./example --write",
-		"lint": "rome check ./lib ./tests ./example --apply-suggested",
+		"ci": "biome ci ./lib",
+		"format": "biome format ./lib ./tests ./example --write",
+		"lint": "biome check ./lib ./tests ./example --apply",
 		"test": "jest --config jest.config.js --runInBand",
 		"test:ci": "jest --config jest.config.js --runInBand --coverage",
 		"run:example": "node -r @swc-node/register ./example/src/main.ts",

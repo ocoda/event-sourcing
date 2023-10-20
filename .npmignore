@@ -11,6 +11,6 @@ docker-compose.yml
 jest.config.js
 pnpm-lock.yaml
 renovate.json
-rome.json
+biome.json
 tsconfig.build.json
 tsconfig.json
