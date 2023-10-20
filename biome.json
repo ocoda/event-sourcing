@@ -12,6 +12,9 @@
 			},
 			"suspicious": {
 				"noExplicitAny": "off"
+			},
+			"complexity": {
+				"noStaticOnlyClass": "off"
 			}
 		}
 	},
