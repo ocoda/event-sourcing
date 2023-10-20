@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import 'reflect-metadata';
 import { CommandHandlerNotFoundException, MissingCommandMetadataException } from './exceptions';
-import { DefaultCommandPubSub, getCommandMetadata, ObservableBus } from './helpers';
+import { DefaultCommandPubSub, ObservableBus, getCommandMetadata } from './helpers';
 import { ICommand, ICommandBus, ICommandHandler, ICommandPublisher } from './interfaces';
 
 @Injectable()

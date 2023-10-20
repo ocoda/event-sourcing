@@ -1,12 +1,19 @@
-import { AggregateRoot, Snapshot, SnapshotMetadata, SNAPSHOT_METADATA } from '../../../lib';
+import { AggregateRoot, ISnapshotHandler, SNAPSHOT_METADATA, Snapshot, SnapshotMetadata } from '../../../lib';
 import { getSnapshotMetadata } from '../../../lib/helpers';
 
 describe('@Snapshot', () => {
 	class Account extends AggregateRoot {}
 
 	it('should add snapshot metadata to the handler', () => {
-		@Snapshot(Account, { name: "foo", interval: 20 })
-		class AccountSnapshotHandler {}
+		@Snapshot(Account, { name: 'foo', interval: 20 })
+		class AccountSnapshotHandler implements ISnapshotHandler<Account> {
+			serialize() {
+				return {};
+			}
+			deserialize() {
+				return new Account();
+			}
+		}
 
 		const { aggregate, name, interval }: SnapshotMetadata<Account> = getSnapshotMetadata(AccountSnapshotHandler);
 		expect(aggregate).toEqual(Account);

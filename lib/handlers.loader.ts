@@ -1,4 +1,4 @@
-import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
+import { Injectable, OnApplicationBootstrap, Type } from '@nestjs/common';
 import { DiscoveryService } from '@nestjs/core';
 import { InstanceWrapper } from '@nestjs/core/injector/instance-wrapper';
 import { CommandBus } from './command-bus';
@@ -31,7 +31,15 @@ import {
 	getQueryMetadata,
 } from './helpers';
 import { getEventHandlerMetadata } from './helpers/metadata/get-event-handler-metadata';
-import { EventSourcingModuleOptions } from './interfaces';
+import {
+	EventSourcingModuleOptions,
+	ICommand,
+	ICommandHandler,
+	IEventHandler,
+	IEventPublisher,
+	IEventSerializer,
+	IQueryHandler,
+} from './interfaces';
 import { QueryBus } from './query-bus';
 
 enum HandlerType {
@@ -44,13 +52,13 @@ enum HandlerType {
 
 @Injectable()
 export class HandlersLoader implements OnApplicationBootstrap {
-	private handlers: Map<HandlerType, InstanceWrapper<any>[]> = new Map(
-		Object.values(HandlerType).map((key) => [HandlerType[key], []]),
-	);
+	private handlers: Map<
+		HandlerType,
+		InstanceWrapper<ICommandHandler | IQueryHandler | IEventSerializer | IEventHandler | IEventPublisher | EventStore>[]
+	> = new Map(Object.values(HandlerType).map((key) => [HandlerType[key], []]));
 
 	constructor(
-		@InjectEventSourcingOptions()
-		private readonly options: EventSourcingModuleOptions,
+		@InjectEventSourcingOptions() private readonly options: EventSourcingModuleOptions,
 		private readonly discoveryService: DiscoveryService,
 		private readonly commandBus: CommandBus,
 		private readonly queryBus: QueryBus,
@@ -73,7 +81,7 @@ export class HandlersLoader implements OnApplicationBootstrap {
 	private loadHandlers() {
 		const providers = this.discoveryService.getProviders();
 
-		providers.forEach((wrapper) => {
+		for (const wrapper of providers) {
 			if (wrapper.metatype) {
 				if (Reflect.hasMetadata(COMMAND_HANDLER_METADATA, wrapper.metatype)) {
 					this.handlers.get(HandlerType.COMMAND).push(wrapper);
@@ -91,12 +99,12 @@ export class HandlersLoader implements OnApplicationBootstrap {
 					this.handlers.get(HandlerType.PUBLISHING).push(wrapper);
 				}
 			}
-		});
+		}
 	}
 
 	private registerCommandHandlers() {
-		this.handlers.get(HandlerType.COMMAND)?.forEach(({ metatype, instance }) => {
-			const { command } = getCommandHandlerMetadata(metatype);
+		for (const { metatype, instance } of this.handlers.get(HandlerType.COMMAND) || []) {
+			const { command } = getCommandHandlerMetadata(metatype as Type<ICommandHandler>);
 
 			if (!command) {
 				throw new MissingCommandHandlerMetadataException(metatype);
@@ -108,13 +116,13 @@ export class HandlersLoader implements OnApplicationBootstrap {
 				throw new MissingCommandMetadataException(command);
 			}
 
-			this.commandBus.bind(instance, id);
-		});
+			this.commandBus.bind(instance as ICommandHandler, id);
+		}
 	}
 
 	private registerQueryHandlers() {
-		this.handlers.get(HandlerType.QUERY)?.forEach(({ metatype, instance }) => {
-			const { query } = getQueryHandlerMetadata(metatype);
+		for (const { metatype, instance } of this.handlers.get(HandlerType.QUERY) || []) {
+			const { query } = getQueryHandlerMetadata(metatype as Type<IQueryHandler>);
 
 			if (!query) {
 				throw new MissingQueryHandlerMetadataException(metatype);
@@ -126,48 +134,48 @@ export class HandlersLoader implements OnApplicationBootstrap {
 				throw new MissingQueryMetadataException(query);
 			}
 
-			this.queryBus.bind(instance, id);
-		});
+			this.queryBus.bind(instance as IQueryHandler, id);
+		}
 	}
 
 	private registerEventSerializers() {
-		this.options?.events.forEach((event) => {
+		for (const event of this.options?.events || []) {
 			const handler = this.handlers.get(HandlerType.SERIALIZATION)?.find(({ metatype }) => {
-				const { event: registeredEvent } = getEventSerializerMetadata(metatype);
+				const { event: registeredEvent } = getEventSerializerMetadata(metatype as Type<IEventSerializer>);
 				return registeredEvent === event;
 			});
 
 			const serializer =
 				handler?.instance || (!this.options.disableDefaultSerializer && DefaultEventSerializer.for(event));
 
-			return this.eventMap.register(event, serializer);
-		});
+			this.eventMap.register(event, serializer as IEventSerializer);
+		}
 	}
 
 	private registerEventHandlers() {
-		this.handlers.get(HandlerType.EVENT)?.forEach(({ metatype, instance }) => {
-			const { events } = getEventHandlerMetadata(metatype);
+		for (const { metatype, instance } of this.handlers.get(HandlerType.EVENT) || []) {
+			const { events } = getEventHandlerMetadata(metatype as Type<IEventHandler>);
 
 			if (!events) {
 				throw new MissingEventHandlerMetadataException(metatype);
 			}
 
-			events.forEach((event) => {
+			for (const event of events) {
 				const { name } = getEventMetadata(event);
 
 				if (!name) {
 					throw new MissingEventMetadataException(event);
 				}
 
-				this.eventBus.bind(instance, name);
-			});
-		});
+				this.eventBus.bind(instance as IEventHandler, name);
+			}
+		}
 	}
 
 	private registerEventPublishers() {
-		this.handlers.get(HandlerType.PUBLISHING)?.forEach(({ instance }) => {
-			this.eventBus.addPublisher(instance);
-		});
+		for (const { instance } of this.handlers.get(HandlerType.PUBLISHING) || []) {
+			this.eventBus.addPublisher(instance as IEventPublisher);
+		}
 	}
 
 	private registerEventStore() {

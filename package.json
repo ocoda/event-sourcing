@@ -7,9 +7,9 @@
 	"main": "dist/index.js",
 	"scripts": {
 		"build": "rm -rf dist && tsc -p tsconfig.build.json",
-		"ci": "rome ci ./lib",
-		"format": "rome format ./lib ./tests ./example --write",
-		"lint": "rome check ./lib ./tests ./example --apply-suggested",
+		"ci": "biome ci ./lib",
+		"format": "biome format ./lib ./tests ./example --write",
+		"lint": "biome check ./lib ./tests ./example --apply",
 		"test": "jest --config jest.config.js --runInBand",
 		"test:ci": "jest --config jest.config.js --runInBand --coverage",
 		"run:example": "node -r @swc-node/register ./example/src/main.ts",
@@ -65,7 +65,7 @@
 		"mongodb-memory-server": "8.13.0",
 		"reflect-metadata": "0.1.13",
 		"release-it": "16.1.5",
-		"rome": "12.1.3",
+		"@biomejs/biome": "1.3.1",
 		"rxjs": "7.8.1",
 		"typescript": "5.1.6"
 	},

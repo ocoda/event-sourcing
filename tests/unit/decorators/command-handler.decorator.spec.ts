@@ -1,11 +1,13 @@
-import { CommandHandler, ICommand } from '../../../lib';
+import { CommandHandler, ICommand, ICommandHandler } from '../../../lib';
 import { getCommandHandlerMetadata, getCommandMetadata } from '../../../lib/helpers';
 
 describe('@CommandHandler', () => {
 	class TestCommand implements ICommand {}
 
 	@CommandHandler(TestCommand)
-	class TestCommandHandler {}
+	class TestCommandHandler implements ICommandHandler {
+		async execute() {}
+	}
 
 	it('should specify which command the command-handler handles', () => {
 		const { command } = getCommandHandlerMetadata(TestCommandHandler);

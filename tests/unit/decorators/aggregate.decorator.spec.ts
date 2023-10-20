@@ -1,4 +1,4 @@
-import { Aggregate, AggregateMetadata, AggregateRoot, AGGREGATE_METADATA } from '../../../lib';
+import { AGGREGATE_METADATA, Aggregate, AggregateMetadata, AggregateRoot } from '../../../lib';
 
 describe('@Aggregate', () => {
 	it('should add aggregate metadata to the aggregate', () => {

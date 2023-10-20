@@ -45,7 +45,7 @@ describe(MongoDBEventStore, () => {
 	let eventStore: MongoDBEventStore;
 	let envelopesAccountA: EventEnvelope[];
 	let envelopesAccountB: EventEnvelope[];
-	let publish = jest.fn(async () => Promise.resolve());
+	const publish = jest.fn(async () => Promise.resolve());
 
 	const eventMap = new EventMap();
 	eventMap.register(AccountOpenedEvent, DefaultEventSerializer.for(AccountOpenedEvent));
@@ -159,23 +159,23 @@ describe(MongoDBEventStore, () => {
 		expect(entitiesAccountA).toHaveLength(events.length);
 		expect(entitiesAccountB).toHaveLength(events.length);
 
-		entitiesAccountA.forEach((entity, index) => {
+		for (const [index, entity] of entitiesAccountA.entries()) {
 			expect(entity.streamId).toEqual(eventStreamAccountA.streamId);
 			expect(entity.event).toEqual(envelopesAccountA[index].event);
 			expect(entity.payload).toEqual(envelopesAccountA[index].payload);
 			expect(entity.aggregateId).toEqual(envelopesAccountA[index].metadata.aggregateId);
 			expect(entity.occurredOn).toBeInstanceOf(Date);
 			expect(entity.version).toEqual(envelopesAccountA[index].metadata.version);
-		});
+		}
 
-		entitiesAccountB.forEach((entity, index) => {
+		for (const [index, entity] of entitiesAccountB.entries()) {
 			expect(entity.streamId).toEqual(eventStreamAccountB.streamId);
 			expect(entity.event).toEqual(envelopesAccountB[index].event);
 			expect(entity.payload).toEqual(envelopesAccountB[index].payload);
 			expect(entity.aggregateId).toEqual(envelopesAccountB[index].metadata.aggregateId);
 			expect(entity.occurredOn).toBeInstanceOf(Date);
 			expect(entity.version).toEqual(envelopesAccountB[index].metadata.version);
-		});
+		}
 
 		expect(publish).toHaveBeenCalledTimes(events.length * 2);
 	});
@@ -278,12 +278,12 @@ describe(MongoDBEventStore, () => {
 
 		expect(resolvedEnvelopes).toHaveLength(envelopesAccountA.length);
 
-		resolvedEnvelopes.forEach((envelope, index) => {
+		for (const [index, envelope] of resolvedEnvelopes.entries()) {
 			expect(envelope.event).toEqual(envelopesAccountA[index].event);
 			expect(envelope.payload).toEqual(envelopesAccountA[index].payload);
 			expect(envelope.metadata.aggregateId).toEqual(envelopesAccountA[index].metadata.aggregateId);
 			expect(envelope.metadata.occurredOn).toBeInstanceOf(Date);
 			expect(envelope.metadata.version).toEqual(envelopesAccountA[index].metadata.version);
-		});
+		}
 	});
 });

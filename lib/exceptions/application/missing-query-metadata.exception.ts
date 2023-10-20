@@ -1,5 +1,5 @@
 export class MissingQueryMetadataException extends Error {
-	constructor(query: Function) {
+	constructor(query: { name: string }) {
 		super(`Missing query metadata exception for ${query.name}`);
 	}
 }

@@ -117,7 +117,9 @@ export class DynamoDBSnapshotStore extends SnapshotStore {
 			);
 
 			ExclusiveStartKey = LastEvaluatedKey;
-			Items.forEach((item) => entities.push(this.hydrate<A>(item).payload));
+			for (const item of Items) {
+				entities.push(this.hydrate<A>(item).payload);
+			}
 			leftToFetch -= Items.length;
 
 			if (entities.length > 0 && (entities.length === batch || !ExclusiveStartKey || leftToFetch <= 0)) {
@@ -275,7 +277,9 @@ export class DynamoDBSnapshotStore extends SnapshotStore {
 			);
 
 			ExclusiveStartKey = LastEvaluatedKey;
-			Items.forEach((item) => entities.push(this.hydrateEnvelope(item)));
+			for (const item of Items) {
+				entities.push(this.hydrateEnvelope(item));
+			}
 			leftToFetch -= Items.length;
 
 			if (entities.length > 0 && (entities.length === batch || !ExclusiveStartKey || leftToFetch <= 0)) {
@@ -344,7 +348,9 @@ export class DynamoDBSnapshotStore extends SnapshotStore {
 			);
 
 			ExclusiveStartKey = LastEvaluatedKey;
-			Items.forEach((item) => entities.push(this.hydrateEnvelope(item)));
+			for (const item of Items) {
+				entities.push(this.hydrateEnvelope(item));
+			}
 			leftToFetch -= Items.length;
 
 			if (entities.length > 0 && (entities.length === batch || !ExclusiveStartKey || leftToFetch <= 0)) {

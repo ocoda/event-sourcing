@@ -10,10 +10,13 @@ export class GetAccountsQueryHandler implements IQueryHandler<GetAccountsQuery, 
 	constructor(private readonly accountRepository: AccountRepository) {}
 
 	public async execute(query: GetAccountsQuery): Promise<AccountDto[]> {
-		const accounts = await this.accountRepository.getAll();
+		const accounts: AccountDto[] = [];
+		for (const account of await this.accountRepository.getAll()) {
+			if (!account.closedOn) {
+				accounts.push(AccountDto.from(account));
+			}
+		}
 
-		return accounts.reduce<AccountDto[]>((acc, account) => {
-			return account.closedOn ? acc : [...acc, AccountDto.from(account)];
-		}, []);
+		return accounts;
 	}
 }

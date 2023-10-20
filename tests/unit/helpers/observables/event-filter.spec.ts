@@ -1,14 +1,11 @@
 import { randomUUID } from 'crypto';
 import { Subject } from 'rxjs';
-import { Event, EventEnvelope, eventFilter, IEvent } from '../../../../lib';
+import { Event, EventEnvelope, IEvent, eventFilter } from '../../../../lib';
 
 describe(eventFilter, () => {
-	@Event('A')
-	class A implements IEvent {}
-	@Event('B')
-	class B implements IEvent {}
-	@Event('C')
-	class C implements IEvent {}
+	@Event('A') class A implements IEvent {}
+	@Event('B') class B implements IEvent {}
+	@Event('C') class C implements IEvent {}
 
 	let stream: Subject<any>;
 	let output: IEvent[];

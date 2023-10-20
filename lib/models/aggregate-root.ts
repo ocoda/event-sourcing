@@ -48,7 +48,9 @@ export abstract class AggregateRoot {
 
 	async loadFromHistory(eventCursor: AsyncGenerator<IEvent[]>) {
 		for await (const events of eventCursor) {
-			events.forEach((event) => this.applyEvent(event, true));
+			for (const event of events) {
+				this.applyEvent(event, true);
+			}
 		}
 	}
 }

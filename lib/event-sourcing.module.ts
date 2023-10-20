@@ -4,7 +4,7 @@ import { CommandBus } from './command-bus';
 import { EVENT_SOURCING_OPTIONS } from './constants';
 import { EventBus } from './event-bus';
 import { EventMap } from './event-map';
-import { createEventSourcingProviders, EventStoreProvider, SnapshotStoreProvider } from './event-sourcing.providers';
+import { EventStoreProvider, SnapshotStoreProvider, createEventSourcingProviders } from './event-sourcing.providers';
 import { HandlersLoader } from './handlers.loader';
 import { EventSourcingModuleAsyncOptions, EventSourcingModuleOptions, EventSourcingOptionsFactory } from './interfaces';
 import { QueryBus } from './query-bus';

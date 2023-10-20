@@ -12,6 +12,9 @@
 			},
 			"suspicious": {
 				"noExplicitAny": "off"
+			},
+			"complexity": {
+				"noStaticOnlyClass": "off"
 			}
 		}
 	},
@@ -23,6 +26,9 @@
 	"javascript": {
 		"formatter": {
 			"quoteStyle": "single"
+		},
+		"parser": {
+			"unsafeParameterDecoratorsEnabled": true
 		}
 	}
 }

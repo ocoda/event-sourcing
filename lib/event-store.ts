@@ -35,7 +35,7 @@ export abstract class EventStore {
 	protected _publish: (envelope: EventEnvelope<IEvent>) => any;
 
 	constructor() {
-		// rome-ignore lint/correctness/noConstructorReturn:
+		// biome-ignore lint/correctness/noConstructorReturn:
 		return new Proxy(this, {
 			get(target, propKey) {
 				if (propKey === 'appendEvents') {

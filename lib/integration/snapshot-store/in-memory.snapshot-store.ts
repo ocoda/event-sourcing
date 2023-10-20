@@ -12,7 +12,7 @@ export type InMemorySnapshotEntity<A extends AggregateRoot> = {
 } & SnapshotEnvelopeMetadata;
 
 export class InMemorySnapshotStore extends SnapshotStore {
-	private collections: Map<ISnapshotPool, InMemorySnapshotEntity<any>[]> = new Map();
+	public readonly collections: Map<ISnapshotPool, InMemorySnapshotEntity<any>[]> = new Map();
 
 	setup(pool?: ISnapshotPool): EventCollection {
 		const collection = SnapshotCollection.get(pool);
