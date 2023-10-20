@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import 'reflect-metadata';
 import { MissingQueryMetadataException, QueryHandlerNotFoundException } from './exceptions';
-import { DefaultQueryPubSub, getQueryMetadata, ObservableBus } from './helpers';
+import { DefaultQueryPubSub, ObservableBus, getQueryMetadata } from './helpers';
 import { IQuery, IQueryBus, IQueryHandler, IQueryPublisher } from './interfaces';
 
 @Injectable()

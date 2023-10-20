@@ -12,8 +12,7 @@ import {
 } from '@ocoda/event-sourcing';
 
 describe(SnapshotHandler, () => {
-	@Aggregate()
-	class Account extends AggregateRoot {
+	@Aggregate() class Account extends AggregateRoot {
 		public id: AccountId;
 		public name: string;
 		public balance: number;
@@ -24,8 +23,10 @@ describe(SnapshotHandler, () => {
 
 	const snapshotInterval = 5;
 
-	@Snapshot(Account, { name: 'account', interval: snapshotInterval })
-	class AccountSnapshotHandler extends SnapshotHandler<Account> {
+	@Snapshot(Account, {
+		name: 'account',
+		interval: snapshotInterval,
+	}) class AccountSnapshotHandler extends SnapshotHandler<Account> {
 		serialize({ id, name, balance, openedOn }: Account) {
 			return {
 				id: id.value,

@@ -1,4 +1,4 @@
-import { EventHandler, IEvent } from '../../../lib';
+import { EventHandler, IEvent, IEventHandler } from '../../../lib';
 import { getEventHandlerMetadata } from '../../../lib/helpers';
 
 describe('@EventHandler', () => {
@@ -6,13 +6,19 @@ describe('@EventHandler', () => {
 	class BarEvent implements IEvent {}
 
 	@EventHandler(FooEvent)
-	class FooEventhandler {}
+	class FooEventhandler implements IEventHandler {
+		async handle() {}
+	}
 
 	@EventHandler(BarEvent)
-	class BarEventhandler {}
+	class BarEventhandler implements IEventHandler {
+		async handle() {}
+	}
 
 	@EventHandler(FooEvent, BarEvent)
-	class FooBarEventhandler {}
+	class FooBarEventhandler implements IEventHandler {
+		async handle() {}
+	}
 
 	it('should specify which events the event-handler handles', () => {
 		const { events: fooEvents } = getEventHandlerMetadata(FooEventhandler);

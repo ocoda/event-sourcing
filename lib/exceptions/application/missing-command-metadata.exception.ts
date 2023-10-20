@@ -1,5 +1,5 @@
 export class MissingCommandMetadataException extends Error {
-	constructor(command: Function) {
+	constructor(command: { name: string }) {
 		super(`Missing command metadata exception for ${command.name}`);
 	}
 }

@@ -92,12 +92,14 @@ export class MongoDBEventStore extends EventStore {
 		const collection = EventCollection.get(pool);
 
 		let version = aggregateVersion - events.length + 1;
-		const envelopes = events.reduce<EventEnvelope[]>((acc, event) => {
+
+		const envelopes: EventEnvelope[] = [];
+		for (const event of events) {
 			const name = this.eventMap.getName(event);
 			const payload = this.eventMap.serializeEvent(event);
 			const envelope = EventEnvelope.create(name, payload, { aggregateId, version: version++ });
-			return [...acc, envelope];
-		}, []);
+			envelopes.push(envelope);
+		}
 
 		const entities = envelopes.map<MongoEventEntity>(({ event, payload, metadata }) => ({
 			_id: metadata.eventId,

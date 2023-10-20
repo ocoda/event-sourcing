@@ -1,5 +1,5 @@
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
-import { from, Observable, Subscription } from 'rxjs';
+import { Observable, Subscription, from } from 'rxjs';
 import { filter, mergeMap } from 'rxjs/operators';
 import { ObservableBus } from './helpers';
 import { DefaultEventPubSub } from './helpers/default-event-publisher';
@@ -12,10 +12,16 @@ export class EventBus extends ObservableBus<EventEnvelope> implements IEventBus,
 	private publishers: IEventPublisher[] = [new DefaultEventPubSub(this.subject$)];
 
 	onModuleDestroy() {
-		this.subscriptions.forEach((subscription) => subscription.unsubscribe());
+		for (const subscription of this.subscriptions) {
+			subscription.unsubscribe();
+		}
 	}
 
-	publish = (envelope: EventEnvelope) => this.publishers.forEach((publisher) => publisher.publish(envelope));
+	publish = (envelope: EventEnvelope) => {
+		for (const publisher of this.publishers) {
+			publisher.publish(envelope);
+		}
+	};
 
 	bind(handler: IEventHandler, name: string) {
 		const stream$ = name ? this.ofEventName(name) : this.subject$;

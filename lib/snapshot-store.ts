@@ -39,34 +39,42 @@ export abstract class SnapshotStore {
 		snapshotStream: SnapshotStream,
 		filter?: SnapshotFilter,
 	): AsyncGenerator<ISnapshot<A>[]>;
+	// biome-ignore lint/suspicious/noRedeclare:
 	abstract getSnapshot<A extends AggregateRoot>(
 		snapshotStream: SnapshotStream,
 		version: number,
 		pool?: ISnapshotPool,
 	): ISnapshot<A> | Promise<ISnapshot<A>>;
+	// biome-ignore lint/suspicious/noRedeclare:
 	abstract getLastSnapshot<A extends AggregateRoot>(
 		snapshotStream: SnapshotStream,
 		pool?: ISnapshotPool,
 	): ISnapshot<A> | Promise<ISnapshot<A>>;
+	// biome-ignore lint/suspicious/noRedeclare:
 	abstract appendSnapshot<A extends AggregateRoot>(
 		snapshotStream: SnapshotStream,
 		version: number,
 		snapshot: ISnapshot<A>,
 		pool?: ISnapshotPool,
+		// biome-ignore lint/suspicious/noConfusingVoidType:
 	): void | Promise<void>;
+	// biome-ignore lint/suspicious/noRedeclare:
 	abstract getLastEnvelope<A extends AggregateRoot>(
 		snapshotStream: SnapshotStream,
 		pool?: ISnapshotPool,
 	): SnapshotEnvelope<A> | Promise<SnapshotEnvelope<A>>;
+	// biome-ignore lint/suspicious/noRedeclare:
 	abstract getEnvelopes?<A extends AggregateRoot>(
 		snapshotStream: SnapshotStream,
 		filter?: SnapshotFilter,
 	): AsyncGenerator<SnapshotEnvelope<A>[]>;
+	// biome-ignore lint/suspicious/noRedeclare:
 	abstract getEnvelope?<A extends AggregateRoot>(
 		snapshotStream: SnapshotStream,
 		version: number,
 		pool?: ISnapshotPool,
 	): SnapshotEnvelope<A> | Promise<SnapshotEnvelope<A>>;
+	// biome-ignore lint/suspicious/noRedeclare:
 	abstract getLastEnvelopes?<A extends AggregateRoot>(
 		aggregateName: string,
 		filter?: LatestSnapshotFilter,

@@ -3,16 +3,17 @@ import { MissingAggregateMetadataException, MissingSnapshotMetadataException } f
 import { getAggregateMetadata, getSnapshotMetadata } from '../../helpers';
 import { AggregateRoot, Id, SnapshotEnvelope, SnapshotStream } from '../../models';
 import { SnapshotStore } from '../../snapshot-store';
+import { ISnapshotHandler } from './snapshot-handler.interface';
 import { ISnapshotPool } from './snapshot-pool.type';
 import { ISnapshot } from './snapshot.interface';
 
-export abstract class SnapshotHandler<A extends AggregateRoot = AggregateRoot> {
+export abstract class SnapshotHandler<A extends AggregateRoot = AggregateRoot> implements ISnapshotHandler<A> {
 	private readonly aggregate: Type<A>;
 	private readonly streamName: string;
 	private readonly interval: number;
 
 	constructor(@Inject(SnapshotStore) readonly snapshotStore: SnapshotStore) {
-		const { aggregate, interval } = getSnapshotMetadata<A>(this.constructor);
+		const { aggregate, interval } = getSnapshotMetadata<A>(this.constructor as Type<ISnapshotHandler<A>>);
 
 		if (!(aggregate && interval)) {
 			throw new MissingSnapshotMetadataException(this.constructor);

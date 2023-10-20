@@ -11,22 +11,22 @@ import {
 } from './app.providers';
 
 @Module({
-  imports: [
-    EventSourcingModule.forRootAsync({
-      useFactory: () => ({
-		events: [...Events],
-		eventStore: { client: 'in-memory' },
-		snapshotStore: { client: 'in-memory' },
-	  }),
-    }),
-  ],
-  providers: [
-    ...AggregateRepositories,
-    ...CommandHandlers,
-    ...QueryHandlers,
-    ...SnapshotHandlers,
-	...EventHandlers,
-	...EventPublishers
-  ],
+	imports: [
+		EventSourcingModule.forRootAsync({
+			useFactory: () => ({
+				events: [...Events],
+				eventStore: { client: 'in-memory' },
+				snapshotStore: { client: 'in-memory' },
+			}),
+		}),
+	],
+	providers: [
+		...AggregateRepositories,
+		...CommandHandlers,
+		...QueryHandlers,
+		...SnapshotHandlers,
+		...EventHandlers,
+		...EventPublishers,
+	],
 })
 export class AppModule {}

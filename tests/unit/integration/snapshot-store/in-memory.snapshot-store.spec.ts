@@ -110,7 +110,7 @@ describe(InMemorySnapshotStore, () => {
 		snapshotStore.appendSnapshot(snapshotStreamCustomer, 1, customerSnapshot);
 		snapshotStore.appendSnapshot(snapshotStreamCustomer, 10, customerSnapshot);
 
-		const entities = snapshotStore['collections'].get('snapshots') || [];
+		const entities = snapshotStore.collections.get('snapshots') || [];
 		const entitiesAccountA = entities.filter(
 			({ streamId: entityStreamId }) => entityStreamId === snapshotStreamAccountA.streamId,
 		);
@@ -125,13 +125,13 @@ describe(InMemorySnapshotStore, () => {
 		expect(entitiesAccountB).toHaveLength(snapshotsAccountB.length);
 		expect(entitiesCustomer).toHaveLength(2);
 
-		entitiesAccountA.forEach((entity, index) => {
+		for (const [index, entity] of entitiesAccountA.entries()) {
 			expect(entity.streamId).toEqual(snapshotStreamAccountA.streamId);
 			expect(entity.payload).toEqual(envelopesAccountA[index].payload);
 			expect(entity.aggregateId).toEqual(envelopesAccountA[index].metadata.aggregateId);
 			expect(entity.registeredOn).toBeInstanceOf(Date);
 			expect(entity.version).toEqual(envelopesAccountA[index].metadata.version);
-		});
+		}
 	});
 
 	it('should retrieve a single snapshot from a specified stream', () => {
@@ -214,8 +214,7 @@ describe(InMemorySnapshotStore, () => {
 	});
 
 	it('should return undefined if there is no last snapshot', () => {
-		@Aggregate({ streamName: 'foo' })
-		class Foo extends AggregateRoot {}
+		@Aggregate({ streamName: 'foo' }) class Foo extends AggregateRoot {}
 
 		const resolvedSnapshot = snapshotStore.getLastSnapshot(SnapshotStream.for(Foo, UUID.generate()));
 
@@ -230,12 +229,12 @@ describe(InMemorySnapshotStore, () => {
 
 		expect(resolvedEnvelopes).toHaveLength(envelopesAccountA.length);
 
-		resolvedEnvelopes.forEach((envelope, index) => {
+		for (const [index, envelope] of resolvedEnvelopes.entries()) {
 			expect(envelope.payload).toEqual(envelopesAccountA[index].payload);
 			expect(envelope.metadata.aggregateId).toEqual(envelopesAccountA[index].metadata.aggregateId);
 			expect(envelope.metadata.registeredOn).toBeInstanceOf(Date);
 			expect(envelope.metadata.version).toEqual(envelopesAccountA[index].metadata.version);
-		});
+		}
 	});
 
 	it('should retrieve a single snapshot-envelope', async () => {

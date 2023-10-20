@@ -12,7 +12,7 @@ export type InMemoryEventEntity = {
 } & EventEnvelopeMetadata;
 
 export class InMemoryEventStore extends EventStore {
-	private collections: Map<IEventCollection, InMemoryEventEntity[]> = new Map();
+	public readonly collections: Map<IEventCollection, InMemoryEventEntity[]> = new Map();
 
 	constructor(readonly eventMap: EventMap) {
 		super();
@@ -79,12 +79,14 @@ export class InMemoryEventStore extends EventStore {
 		const eventCollection = this.collections.get(collection) || [];
 
 		let version = aggregateVersion - events.length + 1;
-		const envelopes = events.reduce<EventEnvelope[]>((acc, event) => {
+
+		const envelopes: EventEnvelope[] = [];
+		for (const event of events) {
 			const name = this.eventMap.getName(event);
 			const payload = this.eventMap.serializeEvent(event);
 			const envelope = EventEnvelope.create(name, payload, { aggregateId, version: version++ });
-			return [...acc, envelope];
-		}, []);
+			envelopes.push(envelope);
+		}
 
 		eventCollection.push(
 			...envelopes.map(({ event, payload, metadata }) => ({ streamId, event, payload, ...metadata })),
