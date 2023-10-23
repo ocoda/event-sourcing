@@ -27,7 +27,7 @@ jobs:
   build:
     working_directory: ~/ocoda
     docker:
-      - image: node:20
+      - image: node:21
     steps:
       - checkout
       - *restore-cache
