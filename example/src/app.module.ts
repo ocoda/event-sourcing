@@ -46,7 +46,10 @@ import { AccountController } from './application/account.controller';
 	controllers: [AccountController],
 })
 export class AppModule implements OnModuleInit {
-	constructor(private readonly eventStore: EventStore, private readonly snapshotStore: SnapshotStore) {}
+	constructor(
+		private readonly eventStore: EventStore,
+		private readonly snapshotStore: SnapshotStore,
+	) {}
 
 	onModuleInit() {
 		this.eventStore.setup();

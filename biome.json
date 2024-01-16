@@ -11,7 +11,9 @@
 				"useShorthandArrayType": "off"
 			},
 			"suspicious": {
-				"noExplicitAny": "off"
+				"noExplicitAny": "off",
+				"noRedeclare": "off",
+				"noConfusingVoidType": "off"
 			},
 			"complexity": {
 				"noStaticOnlyClass": "off"

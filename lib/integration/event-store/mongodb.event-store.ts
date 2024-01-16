@@ -15,7 +15,10 @@ export type MongoEventEntity = {
 	EventEnvelopeMetadata;
 
 export class MongoDBEventStore extends EventStore {
-	constructor(readonly eventMap: EventMap, readonly database: Db) {
+	constructor(
+		readonly eventMap: EventMap,
+		readonly database: Db,
+	) {
 		super();
 	}
 

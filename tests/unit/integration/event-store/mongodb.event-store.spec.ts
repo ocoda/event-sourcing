@@ -19,7 +19,10 @@ class AccountId extends UUID {}
 
 @Aggregate({ streamName: 'account' })
 class Account extends AggregateRoot {
-	constructor(private readonly id: AccountId, private readonly balance: number) {
+	constructor(
+		private readonly id: AccountId,
+		private readonly balance: number,
+	) {
 		super();
 	}
 }

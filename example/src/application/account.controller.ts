@@ -33,7 +33,10 @@ import { AccountNotFoundException } from './repositories/exceptions/account-not-
 
 @Controller('account')
 export class AccountController {
-	constructor(private readonly commandBus: CommandBus, private readonly queryBus: QueryBus) {}
+	constructor(
+		private readonly commandBus: CommandBus,
+		private readonly queryBus: QueryBus,
+	) {}
 
 	@Post('open')
 	async open(): Promise<string> {

@@ -4,7 +4,10 @@ import { AccountId, AccountOwnerId } from '../../domain/models';
 import { AccountRepository } from '../repositories';
 
 export class RemoveAccountOwnerCommand implements ICommand {
-	constructor(public readonly accountId: string, public readonly accountOwnerId: string) {}
+	constructor(
+		public readonly accountId: string,
+		public readonly accountOwnerId: string,
+	) {}
 }
 
 @CommandHandler(RemoveAccountOwnerCommand)
