@@ -3,7 +3,10 @@ import { AccountId } from '../../domain/models';
 import { AccountRepository } from '../repositories';
 
 export class DebitAccountCommand implements ICommand {
-	constructor(public readonly accountId: string, public readonly amount: number) {}
+	constructor(
+		public readonly accountId: string,
+		public readonly amount: number,
+	) {}
 }
 
 @CommandHandler(DebitAccountCommand)

@@ -30,7 +30,10 @@ export interface DynamoEventEntity {
 }
 
 export class DynamoDBEventStore extends EventStore {
-	constructor(readonly eventMap: EventMap, readonly client: DynamoDBClient) {
+	constructor(
+		readonly eventMap: EventMap,
+		readonly client: DynamoDBClient,
+	) {
 		super();
 	}
 

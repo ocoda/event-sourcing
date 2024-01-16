@@ -1,7 +1,8 @@
 import { Aggregate, AggregateRoot, MissingAggregateMetadataException, SnapshotStream, UUID } from '../../../lib';
 
 describe(SnapshotStream, () => {
-	@Aggregate({ streamName: 'account' }) class Account extends AggregateRoot {}
+	@Aggregate({ streamName: 'account' })
+	class Account extends AggregateRoot {}
 	class AccountId extends UUID {}
 
 	it('should create a SnapshotStream from an Aggregate class', () => {

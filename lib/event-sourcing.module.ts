@@ -39,7 +39,7 @@ export class EventSourcingModule {
 	 */
 	static forRootAsync(options: EventSourcingModuleAsyncOptions): DynamicModule {
 		const providers = [
-			...this.createAsyncProviders(options),
+			...EventSourcingModule.createAsyncProviders(options),
 			EventMap,
 			HandlersLoader,
 			CommandBus,
@@ -58,10 +58,10 @@ export class EventSourcingModule {
 
 	private static createAsyncProviders(options: EventSourcingModuleAsyncOptions): Provider[] {
 		if (options.useExisting || options.useFactory) {
-			return [this.createAsyncOptionsProvider(options)];
+			return [EventSourcingModule.createAsyncOptionsProvider(options)];
 		}
 		return [
-			this.createAsyncOptionsProvider(options),
+			EventSourcingModule.createAsyncOptionsProvider(options),
 			{
 				provide: options.useClass,
 				useClass: options.useClass,

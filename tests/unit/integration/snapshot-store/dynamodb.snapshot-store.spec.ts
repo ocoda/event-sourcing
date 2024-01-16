@@ -19,14 +19,20 @@ class CustomerId extends UUID {}
 
 @Aggregate({ streamName: 'account' })
 class Account extends AggregateRoot {
-	constructor(private readonly id: AccountId, private readonly balance: number) {
+	constructor(
+		private readonly id: AccountId,
+		private readonly balance: number,
+	) {
 		super();
 	}
 }
 
 @Aggregate({ streamName: 'customer' })
 class Customer extends AggregateRoot {
-	constructor(private readonly id: CustomerId, private readonly name: string) {
+	constructor(
+		private readonly id: CustomerId,
+		private readonly name: string,
+	) {
 		super();
 	}
 }
@@ -255,7 +261,8 @@ describe(DynamoDBSnapshotStore, () => {
 	});
 
 	it('should return undefined if there is no last snapshot', async () => {
-		@Aggregate({ streamName: 'foo' }) class Foo extends AggregateRoot {}
+		@Aggregate({ streamName: 'foo' })
+		class Foo extends AggregateRoot {}
 
 		const resolvedSnapshot = await snapshotStore.getLastSnapshot(SnapshotStream.for(Foo, UUID.generate()));
 
@@ -327,7 +334,8 @@ describe(DynamoDBSnapshotStore, () => {
 	});
 
 	it('should filter the last snapshot-envelopes by streamId', async () => {
-		@Aggregate({ streamName: 'foo' }) class Foo extends AggregateRoot {}
+		@Aggregate({ streamName: 'foo' })
+		class Foo extends AggregateRoot {}
 
 		class FooId extends UUID {}
 

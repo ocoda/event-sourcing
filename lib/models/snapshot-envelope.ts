@@ -3,7 +3,10 @@ import { AggregateRoot } from './aggregate-root';
 import { UUID } from './uuid';
 
 export class SnapshotEnvelope<A extends AggregateRoot = AggregateRoot> {
-	private constructor(readonly payload: ISnapshot<A>, readonly metadata: SnapshotEnvelopeMetadata) {}
+	private constructor(
+		readonly payload: ISnapshot<A>,
+		readonly metadata: SnapshotEnvelopeMetadata,
+	) {}
 
 	static create<A extends AggregateRoot>(
 		payload: ISnapshot<A>,

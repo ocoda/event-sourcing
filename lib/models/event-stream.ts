@@ -5,7 +5,10 @@ import { AggregateRoot } from './aggregate-root';
 import { Id } from './id';
 
 export class EventStream {
-	private constructor(private _aggregate: string, private _aggregateId: string) {}
+	private constructor(
+		private _aggregate: string,
+		private _aggregateId: string,
+	) {}
 
 	get aggregateId(): string {
 		return this._aggregateId;

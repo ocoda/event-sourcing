@@ -7,7 +7,7 @@ describe(ValueObject, () => {
 		}
 
 		public static from(x: number, y: number): Point {
-			return new this(x, y);
+			return new Point(x, y);
 		}
 
 		get x(): number {
