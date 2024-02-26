@@ -21,7 +21,7 @@ devDependencies:
     version: 1.5.3
   '@faker-js/faker':
     specifier: ^8.0.0
-    version: 8.0.0
+    version: 8.4.1
   '@nestjs/common':
     specifier: 10.3.0
     version: 10.3.0(class-transformer@0.5.1)(reflect-metadata@0.2.1)(rxjs@7.8.1)
@@ -1042,8 +1042,8 @@ packages:
     dev: true
     optional: true
 
-  /@faker-js/faker@8.0.0:
-    resolution: {integrity: sha512-XDR8sApuf78GHx8mLXl3KL/q7eB52A963UGejVbdbj3OZtfGlNwp0J78b7apVzqRi0GF8l9g3eSkkaL2UmU9Aw==}
+  /@faker-js/faker@8.4.1:
+    resolution: {integrity: sha512-XQ3cU+Q8Uqmrbf2e0cIC/QN43sTBSC8KF12u29Mb47tWrt2hAgBXSgpZMj4Ao8Uk0iJcU99QsOCaIL8934obCg==}
     engines: {node: ^14.17.0 || ^16.13.0 || >=18.0.0, npm: '>=6.14.13'}
     dev: true
 
@@ -1344,6 +1344,14 @@ packages:
     dependencies:
       sparse-bitfield: 3.0.3
     dev: true
+
+  /@mongodb-js/saslprep@1.1.4:
+    resolution: {integrity: sha512-8zJ8N1x51xo9hwPh6AWnKdLGEC5N3lDa6kms1YHmFBoRhTpJR6HG8wWk0td1MVCu9cD4YBrvjZEtd5Obw0Fbnw==}
+    requiresBuild: true
+    dependencies:
+      sparse-bitfield: 3.0.3
+    dev: true
+    optional: true
 
   /@nestjs/common@10.3.0(class-transformer@0.5.1)(reflect-metadata@0.2.1)(rxjs@7.8.1):
     resolution: {integrity: sha512-DGv34UHsZBxCM3H5QGE2XE/+oLJzz5+714JQjBhjD9VccFlQs3LRxo/epso4l7nJIiNlZkPyIUC8WzfU/5RTsQ==}
@@ -3574,8 +3582,8 @@ packages:
     resolution: {integrity: sha512-OO0pH2lK6a0hZnAdau5ItzHPI6pUlvI7jMVnxUQRtw4owF2wk8lOSabtGDCTP4Ggrg2MbGnWO9X8K1t4+fGMDw==}
     dev: true
 
-  /fsevents@2.3.2:
-    resolution: {integrity: sha512-xiqMQR4xAeHTuB9uWm+fFRcIOgKBMiOBP+eXiyT7jsgVCq1bkVygt00oASowB7EdtpOHaaPgKt812P9ab+DDKA==}
+  /fsevents@2.3.3:
+    resolution: {integrity: sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==}
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
     os: [darwin]
     requiresBuild: true
@@ -4492,7 +4500,7 @@ packages:
       micromatch: 4.0.5
       walker: 1.0.8
     optionalDependencies:
-      fsevents: 2.3.2
+      fsevents: 2.3.3
     dev: true
 
   /jest-leak-detector@29.7.0:
@@ -5070,7 +5078,7 @@ packages:
       mongodb-connection-string-url: 2.6.0
       socks: 2.7.1
     optionalDependencies:
-      '@mongodb-js/saslprep': 1.1.0
+      '@mongodb-js/saslprep': 1.1.4
     dev: true
 
   /mongodb@6.3.0:
