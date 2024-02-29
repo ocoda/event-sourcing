@@ -1,19 +1,47 @@
 {
-	"semanticCommits": true,
-	"rangeStrategy": "update-lockfile",
-	"rebaseConflictedPrs": true,
-	"packageRules": [
-		{
-			"depTypeList": [
-				"devDependencies"
-			],
-			"automerge": true
-		}
-	],
+	"$schema": "https://docs.renovatebot.com/renovate-schema.json",
 	"schedule": [
 		"before 5am on monday"
 	],
 	"extends": [
 		"config:base"
+	],
+	"semanticCommits": "enabled",
+	"commitMessagePrefix": ":arrow_up:",
+	"rangeStrategy": "update-lockfile",
+	"rebaseConflictedPrs": true,
+	"packageRules": [
+		{
+			"groupName": "AWS packages",
+			"matchPackagePatterns": [
+				"aws-sdk"
+			]
+		},
+		{
+			"groupName": "NestJS",
+			"matchPackagePrefixes": [
+				"@nestjs/"
+			]
+		},
+		{
+			"groupName": "types",
+			"matchPackagePrefixes": [
+				"@types/"
+			],
+			"automerge": true,
+			"addLabels": [
+				"automerge"
+			]
+		},
+		{
+			"groupName": "Jest packages",
+			"matchPackagePatterns": [
+				"jest"
+			],
+			"automerge": true,
+			"addLabels": [
+				"automerge"
+			]
+		}
 	]
 }
