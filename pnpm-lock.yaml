@@ -59,8 +59,8 @@ devDependencies:
     specifier: 6.3.0
     version: 6.3.0
   mongodb-memory-server:
-    specifier: 9.1.6
-    version: 9.1.6
+    specifier: 9.1.8
+    version: 9.1.8
   reflect-metadata:
     specifier: 0.2.1
     version: 0.2.1
@@ -3688,8 +3688,8 @@ packages:
       path-exists: 4.0.0
     dev: true
 
-  /follow-redirects@1.15.5(debug@4.3.4):
-    resolution: {integrity: sha512-vSFWUON1B+yAw1VN4xMfxgn5fTUiaOzAJCKBwIIgT/+7CuGy9+r+5gITvP62j3RmaD5Ph65UaERdOSRGUzZtgw==}
+  /follow-redirects@1.15.6(debug@4.3.4):
+    resolution: {integrity: sha512-wWN62YITEaOpSK584EZXJafH1AGpO8RVgElfkuXbTOrPX4fIfOyEpW/CsiNd8JdYrAoOvafRTOEnvsO++qCqFA==}
     engines: {node: '>=4.0'}
     peerDependencies:
       debug: '*'
@@ -4018,16 +4018,6 @@ packages:
     dependencies:
       quick-lru: 5.1.1
       resolve-alpn: 1.2.1
-    dev: true
-
-  /https-proxy-agent@7.0.2:
-    resolution: {integrity: sha512-NmLNjm6ucYwtcUmL7JQC1ZQ57LmHP4lT15FQ8D61nak1rO6DH+fz5qNK2Ap5UN4ZapYICE3/0KodcLYSPsPbaA==}
-    engines: {node: '>= 14'}
-    dependencies:
-      agent-base: 7.1.0
-      debug: 4.3.4
-    transitivePeerDependencies:
-      - supports-color
     dev: true
 
   /https-proxy-agent@7.0.4:
@@ -4452,7 +4442,7 @@ packages:
       '@babel/parser': 7.18.9
       '@istanbuljs/schema': 0.1.3
       istanbul-lib-coverage: 3.2.0
-      semver: 7.5.4
+      semver: 7.6.0
     transitivePeerDependencies:
       - supports-color
     dev: true
@@ -5180,19 +5170,19 @@ packages:
       whatwg-url: 13.0.0
     dev: true
 
-  /mongodb-memory-server-core@9.1.6:
-    resolution: {integrity: sha512-3H/dq5II+XcSbK80hicMw4zFlDxcpjt4oWJq76RlOVuLoaf3AFqVheR6Vqx9ymlIqER4Jni58FMCIIRbesia1A==}
+  /mongodb-memory-server-core@9.1.8:
+    resolution: {integrity: sha512-iCWwaP7De4lm1lRCUKB2ffUYr6GB0I/cj6fK0NV9dgwc9fA3xapHTTT/cPYRNx29M5gmAOSaOpUgjP7i2GZ/LQ==}
     engines: {node: '>=14.20.1'}
     dependencies:
       async-mutex: 0.4.0
       camelcase: 6.3.0
       debug: 4.3.4
       find-cache-dir: 3.3.2
-      follow-redirects: 1.15.5(debug@4.3.4)
-      https-proxy-agent: 7.0.2
+      follow-redirects: 1.15.6(debug@4.3.4)
+      https-proxy-agent: 7.0.4
       mongodb: 5.9.2
       new-find-package-json: 2.0.0
-      semver: 7.5.4
+      semver: 7.6.0
       tar-stream: 3.1.6
       tslib: 2.6.2
       yauzl: 2.10.0
@@ -5205,12 +5195,12 @@ packages:
       - supports-color
     dev: true
 
-  /mongodb-memory-server@9.1.6:
-    resolution: {integrity: sha512-gzcpgGYlPhuKmria37W+bvYy6W+OkX2UVG7MoP41OWFvQv2Hn7A+fLXkV+lsMmhog1lMQprdV6AR+gixgheLaw==}
+  /mongodb-memory-server@9.1.8:
+    resolution: {integrity: sha512-QumPTOlWWWzgW6dtV4bf+ZFdTxenHSSGS4ZT85Vbb+FzPVoOtfcFwYlSfC9IM4e2nw7xvnQZvWtILYseO6HE9Q==}
     engines: {node: '>=14.20.1'}
     requiresBuild: true
     dependencies:
-      mongodb-memory-server-core: 9.1.6
+      mongodb-memory-server-core: 9.1.8
       tslib: 2.6.2
     transitivePeerDependencies:
       - '@aws-sdk/credential-providers'
