@@ -1,4 +1,4 @@
-import { randomInt } from 'crypto';
+import { randomInt } from 'node:crypto';
 import { DeleteTableCommand, DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb';
 import { unmarshall } from '@aws-sdk/util-dynamodb';
 import {

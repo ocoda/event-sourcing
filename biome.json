@@ -1,4 +1,7 @@
 {
+	"organizeImports": {
+		"enabled": true
+	},
 	"linter": {
 		"enabled": true,
 		"rules": {
@@ -8,7 +11,8 @@
 			},
 			"style": {
 				"useSingleCaseStatement": "off",
-				"useShorthandArrayType": "off"
+				"useShorthandArrayType": "off",
+				"useImportType": "off"
 			},
 			"suspicious": {
 				"noExplicitAny": "off",

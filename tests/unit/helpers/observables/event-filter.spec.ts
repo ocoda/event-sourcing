@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto';
+import { randomUUID } from 'node:crypto';
 import { Subject } from 'rxjs';
 import { Event, EventEnvelope, IEvent, eventFilter } from '../../../../lib';
 

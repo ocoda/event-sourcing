@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto';
+import { randomUUID } from 'node:crypto';
 import 'reflect-metadata';
 import { EventPublisherMetadata } from '../interfaces';
 import { EVENT_PUBLISHER_METADATA } from './constants';
