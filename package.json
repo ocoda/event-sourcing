@@ -63,7 +63,7 @@
 		"jest-mock": "29.7.0",
 		"mongodb": "6.3.0",
 		"mongodb-memory-server": "9.1.6",
-		"reflect-metadata": "0.2.1",
+		"reflect-metadata": "0.2.2",
 		"release-it": "17.1.1",
 		"@biomejs/biome": "1.5.3",
 		"rxjs": "7.8.1",
