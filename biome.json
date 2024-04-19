@@ -8,7 +8,8 @@
 			},
 			"style": {
 				"useSingleCaseStatement": "off",
-				"useShorthandArrayType": "off"
+				"useShorthandArrayType": "off",
+				"useImportType": "off"
 			},
 			"suspicious": {
 				"noExplicitAny": "off",
