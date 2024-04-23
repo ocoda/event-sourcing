@@ -58,8 +58,8 @@ importers:
         specifier: 29.7.0
         version: 29.7.0
       mongodb:
-        specifier: 6.3.0
-        version: 6.3.0(socks@2.7.1)
+        specifier: 6.5.0
+        version: 6.5.0(socks@2.7.1)
       mongodb-memory-server:
         specifier: 9.2.0
         version: 9.2.0
@@ -573,9 +573,6 @@ packages:
   '@lukeed/csprng@1.0.1':
     resolution: {integrity: sha512-uSvJdwQU5nK+Vdf6zxcWAY2A8r7uqe+gePwLWzJ+fsQehq18pc0I2hJKwypZ2aLM90+Er9u1xn4iLJPZ+xlL4g==}
     engines: {node: '>=8'}
-
-  '@mongodb-js/saslprep@1.1.0':
-    resolution: {integrity: sha512-Xfijy7HvfzzqiOAhAepF4SGN5e9leLkMvg/OPOF97XemjfVCYN/oWa75wnkc6mltMSTwY+XlbhWgUOJmkFspSw==}
 
   '@mongodb-js/saslprep@1.1.5':
     resolution: {integrity: sha512-XLNOMH66KhJzUJNwT/qlMnS4WsNDWD5ASdyaSH3EtK+F4r/CFGa3jT4GNi4mfOitGvWXtdLgQJkQjxSVrio+jA==}
@@ -1188,8 +1185,8 @@ packages:
     resolution: {integrity: sha512-ix0EwukN2EpC0SRWIj/7B5+A6uQMQy6KMREI9qQqvgpkV2frH63T0UDVd1SYedL6dNCmDBYB3QtXi4ISk9YT+g==}
     engines: {node: '>=14.20.1'}
 
-  bson@6.2.0:
-    resolution: {integrity: sha512-ID1cI+7bazPDyL9wYy9GaQ8gEEohWvcUl/Yf0dIdutJxnmInEEyCsb4awy/OiBfall7zBA179Pahi3vCdFze3Q==}
+  bson@6.6.0:
+    resolution: {integrity: sha512-BVINv2SgcMjL4oYbBuCQTpE3/VKOSxrOA8Cj/wQP7izSzlBGVomdm+TcUd0Pzy0ytLSSDweCKQ6X3f5veM5LQA==}
     engines: {node: '>=16.20.1'}
 
   buffer-crc32@0.2.13:
@@ -2470,8 +2467,8 @@ packages:
       snappy:
         optional: true
 
-  mongodb@6.3.0:
-    resolution: {integrity: sha512-tt0KuGjGtLUhLoU263+xvQmPHEGTw5LbcNC73EoFRYgSHwZt5tsoJC110hDyO1kjQzpgNrpdcSza9PknWN4LrA==}
+  mongodb@6.5.0:
+    resolution: {integrity: sha512-Fozq68InT+JKABGLqctgtb8P56pRrJFkbhW0ux+x1mdHeyinor8oNzJqwLjV/t5X5nJGfTlluxfyMnOXNggIUA==}
     engines: {node: '>=16.20.1'}
     peerDependencies:
       '@aws-sdk/credential-providers': ^3.188.0
@@ -4241,14 +4238,9 @@ snapshots:
 
   '@lukeed/csprng@1.0.1': {}
 
-  '@mongodb-js/saslprep@1.1.0':
-    dependencies:
-      sparse-bitfield: 3.0.3
-
   '@mongodb-js/saslprep@1.1.5':
     dependencies:
       sparse-bitfield: 3.0.3
-    optional: true
 
   '@nestjs/common@10.3.8(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1)':
     dependencies:
@@ -5019,7 +5011,7 @@ snapshots:
 
   bson@5.5.1: {}
 
-  bson@6.2.0: {}
+  bson@6.6.0: {}
 
   buffer-crc32@0.2.13: {}
 
@@ -6522,10 +6514,10 @@ snapshots:
     optionalDependencies:
       '@mongodb-js/saslprep': 1.1.5
 
-  mongodb@6.3.0(socks@2.7.1):
+  mongodb@6.5.0(socks@2.7.1):
     dependencies:
-      '@mongodb-js/saslprep': 1.1.0
-      bson: 6.2.0
+      '@mongodb-js/saslprep': 1.1.5
+      bson: 6.6.0
       mongodb-connection-string-url: 3.0.0
     optionalDependencies:
       socks: 2.7.1
