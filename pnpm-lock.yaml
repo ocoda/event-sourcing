@@ -61,8 +61,8 @@ importers:
         specifier: 6.7.0
         version: 6.7.0(socks@2.7.1)
       mongodb-memory-server:
-        specifier: 9.4.0
-        version: 9.4.0
+        specifier: 9.4.1
+        version: 9.4.1
       reflect-metadata:
         specifier: 0.2.2
         version: 0.2.2
@@ -2438,12 +2438,12 @@ packages:
   mongodb-connection-string-url@3.0.0:
     resolution: {integrity: sha512-t1Vf+m1I5hC2M5RJx/7AtxgABy1cZmIPQRMXw+gEIPn/cZNF3Oiy+l0UIypUwVB5trcWHq3crg2g3uAR9aAwsQ==}
 
-  mongodb-memory-server-core@9.4.0:
-    resolution: {integrity: sha512-irqdj/RPHJ2M9lgtxrvhXUbqFv/DfmUG+wvcAqtgtBJ8qVq1VGBD5rkKkLP5b3g8OoadP3OzsXTGCi1P2dDBQQ==}
+  mongodb-memory-server-core@9.4.1:
+    resolution: {integrity: sha512-lobapXaysH64zrn521NTkmqHc3krSPUFkuuZ8A/BmQV8ON7p2SzAEvpoJPDXIeJkxIzYw06dYL6Gn5OcZdEElA==}
     engines: {node: '>=14.20.1'}
 
-  mongodb-memory-server@9.4.0:
-    resolution: {integrity: sha512-O6n7TxWvcLSSDP3IrXsLsdG0iouljlqdZ7sH3ZaqEyymzZglMroV3CwMj1lvMNks7fRVj8HMrza0gnwF3MyFGA==}
+  mongodb-memory-server@9.4.1:
+    resolution: {integrity: sha512-qONlW4sKPbtk9pqFnlPn7R73G3Q4TuebJJ5pHfoiKTqVJquojQ8xWmkCyz+/YnpA2vYBo/jib+nXvjfKwh7cjg==}
     engines: {node: '>=14.20.1'}
 
   mongodb@5.9.2:
@@ -6447,7 +6447,7 @@ snapshots:
       '@types/whatwg-url': 11.0.3
       whatwg-url: 13.0.0
 
-  mongodb-memory-server-core@9.4.0:
+  mongodb-memory-server-core@9.4.1:
     dependencies:
       async-mutex: 0.4.1
       camelcase: 6.3.0
@@ -6469,9 +6469,9 @@ snapshots:
       - snappy
       - supports-color
 
-  mongodb-memory-server@9.4.0:
+  mongodb-memory-server@9.4.1:
     dependencies:
-      mongodb-memory-server-core: 9.4.0
+      mongodb-memory-server-core: 9.4.1
       tslib: 2.6.3
     transitivePeerDependencies:
       - '@aws-sdk/credential-providers'
