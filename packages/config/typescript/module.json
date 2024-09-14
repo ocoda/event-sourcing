@@ -1,0 +1,11 @@
+{
+	"$schema": "https://json.schemastore.org/tsconfig",
+	"display": "Ocoda Event Sourcing Module",
+	"extends": "./base.json",
+	"compilerOptions": {
+		"paths": {
+			"@ocoda/event-sourcing": ["../../core/lib"],
+			"@ocoda/event-sourcing/*": ["../../core/lib/*"]
+		}
+	}
+}

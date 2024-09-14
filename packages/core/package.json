@@ -35,6 +35,7 @@
 		"@nestjs/core": "10.3.10",
 		"@nestjs/platform-express": "10.3.10",
 		"@nestjs/testing": "10.3.10",
+		"@ocoda/event-sourcing-config": "workspace:*",
 		"@swc-node/register": "^1.5.2",
 		"@swc/core": "1.7.3",
 		"@swc/jest": "0.2.36",

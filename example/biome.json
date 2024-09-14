@@ -1,0 +1,10 @@
+{
+	"extends": ["../biome.json"],
+	"overrides": [
+		{
+			"linter": {
+				"enabled": false
+			}
+		}
+	]
+}

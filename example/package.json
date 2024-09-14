@@ -1,0 +1,13 @@
+{
+	"name": "@ocoda/event-sourcing-example",
+	"version": "0.0.0",
+	"private": true,
+	"license": "MIT",
+	"publishConfig": {
+		"access": "public"
+	},
+	"devDependencies": {
+		"@ocoda/event-sourcing-config": "workspace:*",
+		"typescript": "5.5.4"
+	}
+}

@@ -1,19 +1,8 @@
 {
-	"extends": "./tsconfig.json",
+	"extends": "@ocoda/event-sourcing-config/typescript/module.build.json",
 	"compilerOptions": {
-		"module": "commonjs",
-		"declaration": true,
-		"noImplicitAny": false,
-		"removeComments": true,
-		"noLib": false,
-		"emitDecoratorMetadata": true,
-		"experimentalDecorators": true,
-		"target": "es6",
-		"sourceMap": false,
-		"outDir": "dist",
 		"rootDir": "./lib",
-		"skipLibCheck": true
+		"outDir": "dist"
 	},
-	"include": ["lib/**/*", "../index.ts"],
-	"exclude": ["node_modules", "**/*.spec.ts"]
+	"include": ["lib/**/*.ts"]
 }

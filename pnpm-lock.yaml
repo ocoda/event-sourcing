@@ -79,6 +79,17 @@ importers:
         specifier: 5.5.4
         version: 5.5.4
 
+  example:
+    devDependencies:
+      '@ocoda/event-sourcing-config':
+        specifier: workspace:*
+        version: link:../packages/config
+      typescript:
+        specifier: 5.5.4
+        version: 5.5.4
+
+  packages/config: {}
+
   packages/core:
     dependencies:
       class-transformer:
@@ -103,6 +114,9 @@ importers:
       '@nestjs/testing':
         specifier: 10.3.10
         version: 10.3.10(@nestjs/common@10.3.10(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/core@10.3.10(@nestjs/common@10.3.10(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/platform-express@10.3.10)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/platform-express@10.3.10(@nestjs/common@10.3.10(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/core@10.3.10))
+      '@ocoda/event-sourcing-config':
+        specifier: workspace:*
+        version: link:../config
       '@swc-node/register':
         specifier: ^1.5.2
         version: 1.10.9(@swc/core@1.7.3)(@swc/types@0.1.12)(typescript@5.5.4)
