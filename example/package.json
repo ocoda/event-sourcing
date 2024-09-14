@@ -6,6 +6,11 @@
 	"publishConfig": {
 		"access": "public"
 	},
+	"scripts": {
+		"ci": "biome ci",
+		"format": "biome format --write",
+		"lint": "biome check --write"
+	},
 	"devDependencies": {
 		"@ocoda/event-sourcing-config": "workspace:*",
 		"typescript": "5.5.4"

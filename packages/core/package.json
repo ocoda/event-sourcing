@@ -10,6 +10,7 @@
 		"build": "rm -rf dist && tsc -p tsconfig.build.json",
 		"test": "jest --config jest.config.js --runInBand",
 		"test:ci": "jest --config jest.config.js --runInBand --coverage",
+		"ci": "biome ci",
 		"format": "biome format --write",
 		"lint": "biome check --write"
 	},
@@ -17,7 +18,7 @@
 		"url": "https://github.com/ocoda/event-sourcing/issues"
 	},
 	"engines": {
-		"node": ">= 20.0.0"
+		"node": ">= 18.0.0"
 	},
 	"dependencies": {
 		"class-transformer": "0.5.1"

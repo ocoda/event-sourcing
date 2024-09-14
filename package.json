@@ -8,6 +8,7 @@
 	"scripts": {
 		"build": "turbo build",
 		"test": "turbo test",
+		"ci": "turbo ci",
 		"lint": "turbo lint",
 		"format": "turbo format"
 	},

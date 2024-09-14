@@ -1,3 +1,6 @@
 {
-	"extends": ["../../biome.json"]
+	"extends": ["../../biome.json"],
+	"files": {
+		"include": ["index.ts", "index.d.ts", "lib/**/*.ts", "tests/**/*.ts", "package.json"]
+	}
 }
