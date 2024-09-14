@@ -1,5 +1,6 @@
 module.exports = {
 	moduleFileExtensions: ['js', 'json', 'ts'],
+    testPathIgnorePatterns: ['/tests/unit/integration/'], // TODO: re-enable when the integrations are moved out of the core package
 	rootDir: '.',
 	testRegex: '.*\\.spec\\.ts$',
 	transform: {
