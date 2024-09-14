@@ -13,20 +13,10 @@
 		"rootDir": "./",
 		"skipLibCheck": true,
 		"paths": {
-			"@ocoda/event-sourcing": [
-				"./lib"
-			],
-			"@ocoda/event-sourcing/*": [
-				"./lib/*"
-			],
-		},
+			"@ocoda/event-sourcing": ["./lib"],
+			"@ocoda/event-sourcing/*": ["./lib/*"]
+		}
 	},
-	"include": [
-		"lib/**/*",
-		"tests/**/*",
-		"example/**/*"
-	],
-	"exclude": [
-		"node_modules"
-	]
+	"include": ["lib/**/*", "tests/**/*"],
+	"exclude": ["dist", "node_modules"]
 }

@@ -6,19 +6,10 @@
 	"license": "MIT",
 	"main": "dist/index.js",
 	"scripts": {
-		"build": "rm -rf dist && tsc -p tsconfig.build.json",
-		"ci": "biome ci ./lib",
-		"format": "biome format ./lib ./tests ./example --write",
-		"lint": "biome check ./lib ./tests ./example --apply",
-		"test": "jest --config jest.config.js --runInBand",
-		"test:ci": "jest --config jest.config.js --runInBand --coverage",
-		"run:example": "node -r @swc-node/register ./example/src/main.ts",
-		"prepublish:npm": "pnpm build",
-		"publish:npm": "pnpm publish --access public",
-		"prepublish:next": "pnpm build",
-		"publish:next": "pnpm publish --access public --tag next",
-		"prerelease": "pnpm build",
-		"release": "release-it"
+		"build": "turbo build",
+		"test": "turbo test",
+		"lint": "turbo lint",
+		"format": "turbo format"
 	},
 	"engines": {
 		"node": ">= 18.0.0"
@@ -73,5 +64,6 @@
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/ocoda/event-sourcing"
-	}
+	},
+	"packageManager": "pnpm@9.0.5"
 }
