@@ -1,4 +1,4 @@
-import { EventEnvelope } from '@ocoda/event-sourcing/models';
+import type { EventEnvelope } from '../../models';
 
 export interface IEventPublisher {
 	publish(envelope: EventEnvelope, ...params): any;

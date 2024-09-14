@@ -1,8 +1,8 @@
 import { Type } from '@nestjs/common';
-import { IEvent } from '@ocoda/event-sourcing/interfaces';
-import { EventEnvelope } from '@ocoda/event-sourcing/models';
 import { Observable } from 'rxjs';
 import { filter } from 'rxjs/operators';
+import { IEvent } from '../../interfaces';
+import { EventEnvelope } from '../../models';
 import { getEventMetadata } from '../metadata';
 
 /**

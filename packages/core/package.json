@@ -1,16 +1,21 @@
 {
-	"name": "@ocoda/event-sourcing",
-	"version": "1.0.0-beta.21",
-	"description": "NestJS Event Sourcing Library",
+	"name": "@ocoda/event-sourcing-core",
+	"version": "1.0.1-beta.0",
+	"description": "NestJS Event Sourcing Library (@core)",
 	"author": "Dries Hooghe <dries@drieshooghe.com>",
 	"license": "MIT",
-	"main": "dist/index.js",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
 	"scripts": {
-		"build": "turbo build",
-		"test": "turbo test",
-		"ci": "turbo ci",
-		"lint": "turbo lint",
-		"format": "turbo format"
+		"build": "rm -rf dist && tsc -p tsconfig.build.json",
+		"test": "jest --config jest.config.js --runInBand",
+		"test:ci": "jest --config jest.config.js --runInBand --coverage",
+		"ci": "biome ci",
+		"format": "biome format --write",
+		"lint": "biome check --write"
+	},
+	"bugs": {
+		"url": "https://github.com/ocoda/event-sourcing/issues"
 	},
 	"engines": {
 		"node": ">= 18.0.0"
@@ -19,34 +24,19 @@
 		"class-transformer": "0.5.1"
 	},
 	"peerDependencies": {
-		"@aws-sdk/client-dynamodb": "^3.180.0",
-		"@aws-sdk/util-dynamodb": "^3.180.0",
 		"@nestjs/common": "^10.0.0",
 		"@nestjs/core": "^10.0.0",
-		"mongodb": "^6.0.0",
 		"reflect-metadata": "^0.2.0",
 		"rxjs": "^7.2.0"
 	},
-	"peerDependenciesMeta": {
-		"@aws-sdk/client-dynamodb": {
-			"optional": true
-		},
-		"@aws-sdk/util-dynamodb": {
-			"optional": true
-		},
-		"mongodb": {
-			"optional": true
-		}
-	},
 	"devDependencies": {
-		"@aws-sdk/client-dynamodb": "3.620.0",
-		"@aws-sdk/util-dynamodb": "3.620.0",
 		"@biomejs/biome": "1.8.3",
 		"@faker-js/faker": "^8.0.0",
 		"@nestjs/common": "10.3.10",
 		"@nestjs/core": "10.3.10",
 		"@nestjs/platform-express": "10.3.10",
 		"@nestjs/testing": "10.3.10",
+		"@ocoda/event-sourcing-config": "workspace:*",
 		"@swc-node/register": "^1.5.2",
 		"@swc/core": "1.7.3",
 		"@swc/jest": "0.2.36",
@@ -54,17 +44,13 @@
 		"@types/node": "20.16.5",
 		"jest": "29.7.0",
 		"jest-mock": "29.7.0",
-		"mongodb": "6.8.0",
-		"mongodb-memory-server": "10.0.0",
 		"reflect-metadata": "0.2.2",
-		"release-it": "17.6.0",
 		"rxjs": "7.8.1",
-		"turbo": "^2.1.2",
 		"typescript": "5.5.4"
 	},
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/ocoda/event-sourcing"
-	},
-	"packageManager": "pnpm@9.0.5"
+		"url": "https://github.com/ocoda/event-sourcing",
+		"directory": "packages/core"
+	}
 }

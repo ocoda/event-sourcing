@@ -1,0 +1,8 @@
+packages:
+  - 'example'
+  - 'packages/*'
+
+pnpm:
+  store: .pnpm-store
+  hoistPattern: '*'
+  linkWorkspacePackages: true
