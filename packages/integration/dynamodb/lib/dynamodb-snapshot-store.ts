@@ -9,29 +9,31 @@ import {
 	TransactWriteItemsCommand,
 } from '@aws-sdk/client-dynamodb';
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
-import { DEFAULT_BATCH_SIZE, StreamReadingDirection } from '../../constants';
-import { SnapshotNotFoundException } from '../../exceptions';
-import { ISnapshot, ISnapshotPool } from '../../interfaces';
-import { AggregateRoot, SnapshotCollection, SnapshotEnvelope, SnapshotStream } from '../../models';
-import { LatestSnapshotFilter, SnapshotFilter, SnapshotStore } from '../../snapshot-store';
+import {
+	AggregateRoot,
+	DEFAULT_BATCH_SIZE,
+	ISnapshot,
+	ISnapshotPool,
+	LatestSnapshotFilter,
+	SnapshotCollection,
+	SnapshotEnvelope,
+	SnapshotFilter,
+	SnapshotNotFoundException,
+	SnapshotStore,
+	SnapshotStream,
+	StreamReadingDirection,
+} from '@ocoda/event-sourcing';
+import { DynamoDBSnapshotStoreConfig, DynamoSnapshotEntity } from './interfaces';
 
-export interface DynamoSnapshotEntity<A extends AggregateRoot> {
-	streamId: string;
-	version: number;
-	payload: ISnapshot<A>;
-	snapshotId: string;
-	aggregateId: string;
-	registeredOn: number;
-	aggregateName: string;
-	latest?: string;
-}
+export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreConfig> {
+	private client: DynamoDBClient;
 
-export class DynamoDBSnapshotStore extends SnapshotStore {
-	constructor(readonly client: DynamoDBClient) {
-		super();
-	}
+	public async start(): Promise<void> {
+		this.logger.log('Starting store');
+		const { pool, ...params } = this.options;
 
-	async setup(pool?: ISnapshotPool): Promise<SnapshotCollection> {
+		this.client = new DynamoDBClient(params);
+
 		const collection = SnapshotCollection.get(pool);
 
 		try {
@@ -76,8 +78,10 @@ export class DynamoDBSnapshotStore extends SnapshotStore {
 					throw err;
 			}
 		}
+	}
 
-		return collection;
+	public async stop(): Promise<void> {
+		void this.client.destroy();
 	}
 
 	async *getSnapshots<A extends AggregateRoot>(

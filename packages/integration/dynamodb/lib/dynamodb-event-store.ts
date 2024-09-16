@@ -10,34 +10,30 @@ import {
 	ResourceNotFoundException,
 } from '@aws-sdk/client-dynamodb';
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
-import { DEFAULT_BATCH_SIZE, StreamReadingDirection } from '../../constants';
-import { EventMap } from '../../event-map';
-import { EventFilter, EventStore } from '../../event-store';
-import { EventNotFoundException } from '../../exceptions';
-import { IEvent, IEventPool } from '../../interfaces';
-import { EventCollection, EventEnvelope, EventStream } from '../../models';
+import { Logger } from '@nestjs/common';
+import {
+	DEFAULT_BATCH_SIZE,
+	EventCollection,
+	EventEnvelope,
+	EventFilter,
+	EventNotFoundException,
+	EventStore,
+	EventStream,
+	IEvent,
+	IEventPool,
+	StreamReadingDirection,
+} from '@ocoda/event-sourcing';
+import { DynamoDBEventStoreConfig, DynamoEventEntity } from './interfaces';
 
-export interface DynamoEventEntity {
-	streamId: string;
-	version: number;
-	event: string;
-	payload: any;
-	eventId: string;
-	aggregateId: string;
-	occurredOn: number;
-	correlationId?: string;
-	causationId?: string;
-}
+export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
+	private client: DynamoDBClient;
 
-export class DynamoDBEventStore extends EventStore {
-	constructor(
-		readonly eventMap: EventMap,
-		readonly client: DynamoDBClient,
-	) {
-		super();
-	}
+	public async start(): Promise<void> {
+		this.logger.log('Starting store');
+		const { pool, ...params } = this.options;
 
-	async setup(pool?: IEventPool): Promise<EventCollection> {
+		this.client = new DynamoDBClient(params);
+
 		const collection = EventCollection.get(pool);
 
 		try {
@@ -68,8 +64,10 @@ export class DynamoDBEventStore extends EventStore {
 					throw err;
 			}
 		}
+	}
 
-		return collection;
+	public stop(): void {
+		this.client.destroy();
 	}
 
 	async *getEvents({ streamId }: EventStream, filter?: EventFilter): AsyncGenerator<IEvent[]> {

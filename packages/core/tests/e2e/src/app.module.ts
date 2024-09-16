@@ -12,12 +12,8 @@ import {
 
 @Module({
 	imports: [
-		EventSourcingModule.forRootAsync({
-			useFactory: () => ({
-				events: [...Events],
-				eventStore: { client: 'in-memory' },
-				snapshotStore: { client: 'in-memory' },
-			}),
+		EventSourcingModule.forRoot({
+			events: [...Events],
 		}),
 	],
 	providers: [

@@ -1,19 +1,22 @@
-import { MongoClient } from 'mongodb';
+import { randomInt } from 'node:crypto';
+import { DeleteTableCommand, DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb';
+import { unmarshall } from '@aws-sdk/util-dynamodb';
+import { NestApplication, NestFactory } from '@nestjs/core';
 import {
 	Aggregate,
 	AggregateRoot,
+	EventSourcingModule,
 	ISnapshot,
 	SnapshotCollection,
 	SnapshotEnvelope,
 	SnapshotNotFoundException,
+	SnapshotStore,
 	SnapshotStream,
 	StreamReadingDirection,
 	UUID,
-} from '../../../../lib';
-import {
-	MongoDBSnapshotStore,
-	MongoSnapshotEntity,
-} from '../../../../lib/integration/snapshot-store/mongodb.snapshot-store';
+} from '@ocoda/event-sourcing';
+import { DynamoDBSnapshotStore, DynamoDBSnapshotStoreConfig } from '@ocoda/event-sourcing-dynamodb';
+import { InMemoryEventStore, InMemoryEventStoreConfig } from '@ocoda/event-sourcing/integration/event-store';
 
 class AccountId extends UUID {}
 class CustomerId extends UUID {}
@@ -38,11 +41,10 @@ class Customer extends AggregateRoot {
 	}
 }
 
-describe(MongoDBSnapshotStore, () => {
-	let client: MongoClient;
-	let snapshotStore: MongoDBSnapshotStore;
-	let envelopesAccountA: SnapshotEnvelope[];
-	let envelopesAccountB: SnapshotEnvelope[];
+describe(DynamoDBSnapshotStore, () => {
+	let app: NestApplication;
+	let snapshotStore: DynamoDBSnapshotStore;
+	let client: DynamoDBClient;
 
 	const idAccountA = AccountId.generate();
 	const snapshotStreamAccountA = SnapshotStream.for(Account, idAccountA);
@@ -63,56 +65,75 @@ describe(MongoDBSnapshotStore, () => {
 	const customerId = CustomerId.generate();
 	const snapshotStreamCustomer = SnapshotStream.for(Customer, customerId);
 
-	beforeAll(async () => {
-		client = new MongoClient('mongodb://127.0.0.1:27017');
-		snapshotStore = new MongoDBSnapshotStore(client.db());
-		await snapshotStore.setup();
+	const envelopesAccountA = [
+		SnapshotEnvelope.create<Account>(snapshotsAccountA[0], {
+			aggregateId: idAccountA.value,
+			version: 1,
+		}),
+		SnapshotEnvelope.create<Account>(snapshotsAccountA[1], {
+			aggregateId: idAccountA.value,
+			version: 10,
+		}),
+		SnapshotEnvelope.create<Account>(snapshotsAccountA[2], {
+			aggregateId: idAccountA.value,
+			version: 20,
+		}),
+		SnapshotEnvelope.create<Account>(snapshotsAccountA[3], {
+			aggregateId: idAccountA.value,
+			version: 30,
+		}),
+		SnapshotEnvelope.create<Account>(snapshotsAccountA[4], {
+			aggregateId: idAccountA.value,
+			version: 40,
+		}),
+	];
+	const envelopesAccountB = [
+		SnapshotEnvelope.create<Account>(snapshotsAccountB[0], {
+			aggregateId: idAccountB.value,
+			version: 1,
+		}),
+		SnapshotEnvelope.create<Account>(snapshotsAccountB[1], {
+			aggregateId: idAccountB.value,
+			version: 10,
+		}),
+		SnapshotEnvelope.create<Account>(snapshotsAccountB[2], {
+			aggregateId: idAccountB.value,
+			version: 20,
+		}),
+		SnapshotEnvelope.create<Account>(snapshotsAccountB[3], {
+			aggregateId: idAccountB.value,
+			version: 30,
+		}),
+	];
 
-		envelopesAccountA = [
-			SnapshotEnvelope.create<Account>(snapshotsAccountA[0], {
-				aggregateId: idAccountA.value,
-				version: 1,
+	beforeAll(async () => {
+		app = await NestFactory.create(
+			EventSourcingModule.forRootAsync<InMemoryEventStoreConfig, DynamoDBSnapshotStoreConfig>({
+				useFactory: () => ({
+					events: [],
+					eventStore: {
+						driver: InMemoryEventStore,
+					},
+					snapshotStore: {
+						driver: DynamoDBSnapshotStore,
+						region: 'us-east-1',
+						endpoint: 'http://127.0.0.1:8000',
+						credentials: { accessKeyId: 'foo', secretAccessKey: 'bar' },
+					},
+				}),
 			}),
-			SnapshotEnvelope.create<Account>(snapshotsAccountA[1], {
-				aggregateId: idAccountA.value,
-				version: 10,
-			}),
-			SnapshotEnvelope.create<Account>(snapshotsAccountA[2], {
-				aggregateId: idAccountA.value,
-				version: 20,
-			}),
-			SnapshotEnvelope.create<Account>(snapshotsAccountA[3], {
-				aggregateId: idAccountA.value,
-				version: 30,
-			}),
-			SnapshotEnvelope.create<Account>(snapshotsAccountA[4], {
-				aggregateId: idAccountA.value,
-				version: 40,
-			}),
-		];
-		envelopesAccountB = [
-			SnapshotEnvelope.create<Account>(snapshotsAccountB[0], {
-				aggregateId: idAccountB.value,
-				version: 1,
-			}),
-			SnapshotEnvelope.create<Account>(snapshotsAccountB[1], {
-				aggregateId: idAccountB.value,
-				version: 10,
-			}),
-			SnapshotEnvelope.create<Account>(snapshotsAccountB[2], {
-				aggregateId: idAccountB.value,
-				version: 20,
-			}),
-			SnapshotEnvelope.create<Account>(snapshotsAccountB[3], {
-				aggregateId: idAccountB.value,
-				version: 30,
-			}),
-		];
+		);
+		await app.init();
+
+		snapshotStore = app.get<DynamoDBSnapshotStore>(SnapshotStore);
+
+		// biome-ignore lint/complexity/useLiteralKeys: Needed to check the internal workings of the event store
+		client = snapshotStore['client'];
 	});
 
 	afterAll(async () => {
-		await client.db().dropCollection(SnapshotCollection.get());
-		await client.close();
+		await client.send(new DeleteTableCommand({ TableName: SnapshotCollection.get() }));
+		client.destroy();
 	});
 
 	it('should append snapshot envelopes', async () => {
@@ -128,22 +149,39 @@ describe(MongoDBSnapshotStore, () => {
 		await snapshotStore.appendSnapshot(snapshotStreamCustomer, 1, customerSnapshot);
 		await snapshotStore.appendSnapshot(snapshotStreamCustomer, 10, customerSnapshot);
 
-		const entities = await client
-			.db()
-			.collection<MongoSnapshotEntity<Account>>(SnapshotCollection.get())
-			.find()
-			.sort({ version: 1 })
-			.toArray();
+		const { Items: itemsAccountA } = await client.send(
+			new QueryCommand({
+				TableName: SnapshotCollection.get(),
+				KeyConditionExpression: 'streamId = :streamId',
+				ExpressionAttributeValues: {
+					':streamId': { S: snapshotStreamAccountA.streamId },
+				},
+			}),
+		);
 
-		const entitiesAccountA = entities.filter(
-			({ streamId: entityStreamId }) => entityStreamId === snapshotStreamAccountA.streamId,
+		const entitiesAccountA = itemsAccountA?.map((item) => unmarshall(item)) || [];
+
+		const { Items: itemsAccountB } = await client.send(
+			new QueryCommand({
+				TableName: SnapshotCollection.get(),
+				KeyConditionExpression: 'streamId = :streamId',
+				ExpressionAttributeValues: {
+					':streamId': { S: snapshotStreamAccountB.streamId },
+				},
+			}),
 		);
-		const entitiesAccountB = entities.filter(
-			({ streamId: entityStreamId }) => entityStreamId === snapshotStreamAccountB.streamId,
+		const entitiesAccountB = itemsAccountB?.map((item) => unmarshall(item)) || [];
+
+		const { Items: itemsCustomer } = await client.send(
+			new QueryCommand({
+				TableName: SnapshotCollection.get(),
+				KeyConditionExpression: 'streamId = :streamId',
+				ExpressionAttributeValues: {
+					':streamId': { S: snapshotStreamCustomer.streamId },
+				},
+			}),
 		);
-		const entitiesCustomer = entities.filter(
-			({ streamId: entityStreamId }) => entityStreamId === snapshotStreamCustomer.streamId,
-		);
+		const entitiesCustomer = itemsCustomer?.map((item) => unmarshall(item)) || [];
 
 		expect(entitiesAccountA).toHaveLength(snapshotsAccountA.length);
 		expect(entitiesAccountB).toHaveLength(snapshotsAccountB.length);
@@ -153,7 +191,7 @@ describe(MongoDBSnapshotStore, () => {
 			expect(entity.streamId).toEqual(snapshotStreamAccountA.streamId);
 			expect(entity.payload).toEqual(envelopesAccountA[index].payload);
 			expect(entity.aggregateId).toEqual(envelopesAccountA[index].metadata.aggregateId);
-			expect(entity.registeredOn).toBeInstanceOf(Date);
+			expect(typeof entity.registeredOn).toBe('number');
 			expect(entity.version).toEqual(envelopesAccountA[index].metadata.version);
 		}
 	});
@@ -161,10 +199,10 @@ describe(MongoDBSnapshotStore, () => {
 	it('should retrieve a single snapshot from a specified stream', async () => {
 		const resolvedSnapshot = await snapshotStore.getSnapshot(
 			snapshotStreamAccountA,
-			envelopesAccountA[1].metadata.version,
+			envelopesAccountA[2].metadata.version,
 		);
 
-		expect(resolvedSnapshot).toEqual(snapshotsAccountA[1]);
+		expect(resolvedSnapshot).toEqual(snapshotsAccountA[2]);
 	});
 
 	it('should retrieve snapshots by stream', async () => {
@@ -178,9 +216,7 @@ describe(MongoDBSnapshotStore, () => {
 
 	it('should filter snapshots by stream and version', async () => {
 		const resolvedSnapshots: ISnapshot<Account>[] = [];
-		for await (const snapshots of snapshotStore.getSnapshots(snapshotStreamAccountA, {
-			fromVersion: 30,
-		})) {
+		for await (const snapshots of snapshotStore.getSnapshots(snapshotStreamAccountA, { fromVersion: 30 })) {
 			resolvedSnapshots.push(...snapshots);
 		}
 
@@ -313,5 +349,47 @@ describe(MongoDBSnapshotStore, () => {
 		expect(resolvedEnvelopes[1].metadata.aggregateId).toEqual(envelopeAccountA.metadata.aggregateId);
 		expect(resolvedEnvelopes[1].metadata.registeredOn).toBeInstanceOf(Date);
 		expect(resolvedEnvelopes[1].metadata.version).toEqual(envelopeAccountA.metadata.version);
+	});
+
+	it('should filter the last snapshot-envelopes by streamId', async () => {
+		@Aggregate({ streamName: 'foo' })
+		class Foo extends AggregateRoot {}
+
+		class FooId extends UUID {}
+
+		const fooIds = Array.from({ length: 20 })
+			.map(() => FooId.generate())
+			.sort();
+		for await (const id of fooIds) {
+			await snapshotStore.appendSnapshot(SnapshotStream.for(Foo, id), randomInt(1, 10) * 10, {
+				balance: randomInt(1000),
+			});
+		}
+
+		const fetchedAccountIds: Set<string> = new Set();
+		const firstPageEnvelopes: SnapshotEnvelope<Account>[] = [];
+		for await (const envelopes of snapshotStore.getLastEnvelopes('foo', { limit: 15 })) {
+			firstPageEnvelopes.push(...envelopes);
+		}
+
+		expect(firstPageEnvelopes).toHaveLength(15);
+		for (const { metadata } of firstPageEnvelopes) {
+			fetchedAccountIds.add(metadata.aggregateId);
+		}
+
+		const lastPageEnvelopes: SnapshotEnvelope<Account>[] = [];
+		for await (const envelopes of snapshotStore.getLastEnvelopes('foo', {
+			limit: 5,
+			fromId: firstPageEnvelopes[14].metadata.aggregateId,
+		})) {
+			lastPageEnvelopes.push(...envelopes);
+		}
+
+		expect(lastPageEnvelopes).toHaveLength(5);
+		for (const { metadata } of lastPageEnvelopes) {
+			fetchedAccountIds.add(metadata.aggregateId);
+		}
+
+		expect(fooIds).toHaveLength(20);
 	});
 });

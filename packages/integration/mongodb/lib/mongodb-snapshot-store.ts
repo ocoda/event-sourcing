@@ -1,25 +1,33 @@
-import { Db, Document } from 'mongodb';
-import { DEFAULT_BATCH_SIZE, StreamReadingDirection } from '../../constants';
-import { SnapshotNotFoundException } from '../../exceptions';
-import { ISnapshot, ISnapshotPool, SnapshotEnvelopeMetadata } from '../../interfaces';
-import { AggregateRoot, SnapshotCollection, SnapshotEnvelope, SnapshotStream } from '../../models';
-import { LatestSnapshotFilter, SnapshotFilter, SnapshotStore } from '../../snapshot-store';
+import { Logger } from '@nestjs/common';
+import {
+	AggregateRoot,
+	DEFAULT_BATCH_SIZE,
+	ISnapshot,
+	ISnapshotCollection,
+	ISnapshotPool,
+	LatestSnapshotFilter,
+	SnapshotCollection,
+	SnapshotEnvelope,
+	SnapshotFilter,
+	SnapshotNotFoundException,
+	SnapshotStore,
+	SnapshotStream,
+	StreamReadingDirection,
+} from '@ocoda/event-sourcing';
+import { Db, MongoClient } from 'mongodb';
+import { MongoDBSnapshotStoreConfig, MongoSnapshotEntity } from './interfaces';
 
-export type MongoSnapshotEntity<A extends AggregateRoot> = {
-	_id: string;
-	streamId: string;
-	payload: ISnapshot<A>;
-	aggregateName: string;
-	latest?: string;
-} & Document &
-	SnapshotEnvelopeMetadata;
+export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConfig> {
+	private client: MongoClient;
+	private database: Db;
 
-export class MongoDBSnapshotStore extends SnapshotStore {
-	constructor(readonly database: Db) {
-		super();
-	}
+	async start(): Promise<ISnapshotCollection> {
+		this.logger.log('Starting store');
+		const { url, pool, ...options } = this.options;
 
-	async setup(pool?: ISnapshotPool): Promise<SnapshotCollection> {
+		this.client = await new MongoClient(url, options).connect();
+		this.database = this.client.db();
+
 		const collection = SnapshotCollection.get(pool);
 
 		const [existingCollection] = await this.database.listCollections({ name: collection }).toArray();
@@ -32,6 +40,11 @@ export class MongoDBSnapshotStore extends SnapshotStore {
 		await snapshotCollection.createIndex({ aggregateName: 1, latest: 1 }, { unique: false });
 
 		return collection;
+	}
+
+	async stop(): Promise<void> {
+		this.logger.log('Stopping store');
+		await this.client.close();
 	}
 
 	async *getSnapshots<A extends AggregateRoot>(

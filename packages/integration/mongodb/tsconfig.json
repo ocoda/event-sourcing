@@ -1,12 +1,11 @@
 {
-	"$schema": "https://json.schemastore.org/tsconfig",
-	"display": "Ocoda Event Sourcing Example",
-	"extends": "./base.json",
+	"extends": "@ocoda/event-sourcing-config/typescript/module.json",
+	"include": ["index.ts", "index.d.ts", "lib/**/*.ts", "tests/**/*.ts"],
 	"compilerOptions": {
 		"paths": {
 			"@ocoda/event-sourcing": ["../../core/lib"],
 			"@ocoda/event-sourcing/*": ["../../core/lib/*"],
-            "@ocoda/event-sourcing-mongodb": ["../../integration/mongodb/lib"],
+			"@ocoda/event-sourcing-mongodb": ["../../integration/mongodb/lib"],
 			"@ocoda/event-sourcing-mongodb/*": ["../../integration/mongodb/lib/*"]
 		}
 	}

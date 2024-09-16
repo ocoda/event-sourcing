@@ -1,19 +1,23 @@
-import { MongoClient } from 'mongodb';
+import { NestApplication, NestFactory } from '@nestjs/core';
 import {
 	Aggregate,
 	AggregateRoot,
+	DefaultEventSerializer,
 	Event,
 	EventCollection,
 	EventEnvelope,
 	EventMap,
 	EventNotFoundException,
+	EventSourcingModule,
+	EventStore,
 	EventStream,
 	IEvent,
 	StreamReadingDirection,
 	UUID,
-} from '../../../../lib';
-import { DefaultEventSerializer } from '../../../../lib/helpers';
-import { MongoDBEventStore, MongoEventEntity } from '../../../../lib/integration/event-store/mongodb.event-store';
+} from '@ocoda/event-sourcing';
+import { MongoDBEventStore, MongoDBEventStoreConfig, MongoEventEntity } from '@ocoda/event-sourcing-mongodb';
+import { InMemorySnapshotStore } from '@ocoda/event-sourcing/integration/snapshot-store';
+import { MongoClient } from 'mongodb';
 
 class AccountId extends UUID {}
 
@@ -44,10 +48,10 @@ class AccountDebitedEvent implements IEvent {
 class AccountClosedEvent implements IEvent {}
 
 describe(MongoDBEventStore, () => {
-	let client: MongoClient;
+	let app: NestApplication;
 	let eventStore: MongoDBEventStore;
-	let envelopesAccountA: EventEnvelope[];
-	let envelopesAccountB: EventEnvelope[];
+
+	let client: MongoClient;
 	const publish = jest.fn(async () => Promise.resolve());
 
 	const eventMap = new EventMap();
@@ -71,69 +75,88 @@ describe(MongoDBEventStore, () => {
 	const idAccountB = AccountId.generate();
 	const eventStreamAccountB = EventStream.for(Account, idAccountB);
 
-	beforeAll(async () => {
-		client = new MongoClient('mongodb://127.0.0.1:27017');
-		eventStore = new MongoDBEventStore(eventMap, client.db());
-		eventStore.publish = publish;
-		await eventStore.setup();
+	const envelopesAccountA = [
+		EventEnvelope.create('account-opened', eventMap.serializeEvent(events[0]), {
+			aggregateId: idAccountA.value,
+			version: 1,
+		}),
+		EventEnvelope.create('account-credited', eventMap.serializeEvent(events[1]), {
+			aggregateId: idAccountA.value,
+			version: 2,
+		}),
+		EventEnvelope.create('account-debited', eventMap.serializeEvent(events[2]), {
+			aggregateId: idAccountA.value,
+			version: 3,
+		}),
+		EventEnvelope.create('account-credited', eventMap.serializeEvent(events[3]), {
+			aggregateId: idAccountA.value,
+			version: 4,
+		}),
+		EventEnvelope.create('account-debited', eventMap.serializeEvent(events[4]), {
+			aggregateId: idAccountA.value,
+			version: 5,
+		}),
+		EventEnvelope.create('account-closed', eventMap.serializeEvent(events[5]), {
+			aggregateId: idAccountA.value,
+			version: 6,
+		}),
+	];
+	const envelopesAccountB = [
+		EventEnvelope.create('account-opened', eventMap.serializeEvent(events[0]), {
+			aggregateId: idAccountB.value,
+			version: 1,
+		}),
+		EventEnvelope.create('account-credited', eventMap.serializeEvent(events[1]), {
+			aggregateId: idAccountB.value,
+			version: 2,
+		}),
+		EventEnvelope.create('account-debited', eventMap.serializeEvent(events[2]), {
+			aggregateId: idAccountB.value,
+			version: 3,
+		}),
+		EventEnvelope.create('account-credited', eventMap.serializeEvent(events[3]), {
+			aggregateId: idAccountB.value,
+			version: 4,
+		}),
+		EventEnvelope.create('account-debited', eventMap.serializeEvent(events[4]), {
+			aggregateId: idAccountB.value,
+			version: 5,
+		}),
+		EventEnvelope.create('account-closed', eventMap.serializeEvent(events[5]), {
+			aggregateId: idAccountB.value,
+			version: 6,
+		}),
+	];
 
-		envelopesAccountA = [
-			EventEnvelope.create('account-opened', eventMap.serializeEvent(events[0]), {
-				aggregateId: idAccountA.value,
-				version: 1,
+	beforeAll(async () => {
+		app = await NestFactory.create(
+			EventSourcingModule.forRootAsync<MongoDBEventStoreConfig>({
+				useFactory: () => ({
+					events: [AccountOpenedEvent, AccountCreditedEvent, AccountDebitedEvent, AccountClosedEvent],
+					eventStore: {
+						driver: MongoDBEventStore,
+						url: 'mongodb://localhost:27017',
+						pool: 'test-events',
+					},
+					snapshotStore: {
+						driver: InMemorySnapshotStore,
+						pool: 'test-snapshots',
+					},
+				}),
 			}),
-			EventEnvelope.create('account-credited', eventMap.serializeEvent(events[1]), {
-				aggregateId: idAccountA.value,
-				version: 2,
-			}),
-			EventEnvelope.create('account-debited', eventMap.serializeEvent(events[2]), {
-				aggregateId: idAccountA.value,
-				version: 3,
-			}),
-			EventEnvelope.create('account-credited', eventMap.serializeEvent(events[3]), {
-				aggregateId: idAccountA.value,
-				version: 4,
-			}),
-			EventEnvelope.create('account-debited', eventMap.serializeEvent(events[4]), {
-				aggregateId: idAccountA.value,
-				version: 5,
-			}),
-			EventEnvelope.create('account-closed', eventMap.serializeEvent(events[5]), {
-				aggregateId: idAccountA.value,
-				version: 6,
-			}),
-		];
-		envelopesAccountB = [
-			EventEnvelope.create('account-opened', eventMap.serializeEvent(events[0]), {
-				aggregateId: idAccountB.value,
-				version: 1,
-			}),
-			EventEnvelope.create('account-credited', eventMap.serializeEvent(events[1]), {
-				aggregateId: idAccountB.value,
-				version: 2,
-			}),
-			EventEnvelope.create('account-debited', eventMap.serializeEvent(events[2]), {
-				aggregateId: idAccountB.value,
-				version: 3,
-			}),
-			EventEnvelope.create('account-credited', eventMap.serializeEvent(events[3]), {
-				aggregateId: idAccountB.value,
-				version: 4,
-			}),
-			EventEnvelope.create('account-debited', eventMap.serializeEvent(events[4]), {
-				aggregateId: idAccountB.value,
-				version: 5,
-			}),
-			EventEnvelope.create('account-closed', eventMap.serializeEvent(events[5]), {
-				aggregateId: idAccountB.value,
-				version: 6,
-			}),
-		];
+		);
+		await app.init();
+
+		eventStore = app.get<MongoDBEventStore>(EventStore);
+		eventStore.publish = publish;
+
+		// biome-ignore lint/complexity/useLiteralKeys: Needed to check the internal workings of the event store
+		client = eventStore['client'];
 	});
 
 	afterAll(async () => {
 		await client.db().dropCollection(EventCollection.get());
-		await client.close();
+		await app.close();
 	});
 
 	it('should append event envelopes', async () => {

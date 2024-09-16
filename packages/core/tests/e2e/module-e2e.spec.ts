@@ -46,9 +46,6 @@ describe('EventSourcingModule - e2e', () => {
 		app = moduleRef.createNestApplication();
 		await app.init();
 
-		app.get<SnapshotStore>(SnapshotStore).setup();
-		app.get<EventStore>(EventStore).setup();
-
 		commandBus = app.get<CommandBus>(CommandBus);
 		queryBus = app.get<QueryBus>(QueryBus);
 		customEventPublisher = app.get<IEventPublisher>(CustomEventPublisher);

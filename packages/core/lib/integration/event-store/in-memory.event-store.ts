@@ -1,8 +1,16 @@
+import { Inject, Logger, Type } from '@nestjs/common';
 import { DEFAULT_BATCH_SIZE, StreamReadingDirection } from '../../constants';
 import { EventMap } from '../../event-map';
 import { EventFilter, EventStore } from '../../event-store';
 import { EventNotFoundException } from '../../exceptions';
-import { EventEnvelopeMetadata, IEvent, IEventCollection, IEventPayload, IEventPool } from '../../interfaces';
+import {
+	EventEnvelopeMetadata,
+	EventStoreConfig,
+	IEvent,
+	IEventCollection,
+	IEventPayload,
+	IEventPool,
+} from '../../interfaces';
 import { EventCollection, EventEnvelope, EventStream } from '../../models';
 
 export type InMemoryEventEntity = {
@@ -11,17 +19,24 @@ export type InMemoryEventEntity = {
 	payload: IEventPayload<IEvent>;
 } & EventEnvelopeMetadata;
 
-export class InMemoryEventStore extends EventStore {
+export interface InMemoryEventStoreConfig extends EventStoreConfig {
+	driver: Type<InMemoryEventStore>;
+}
+
+export class InMemoryEventStore extends EventStore<InMemoryEventStoreConfig> {
 	public readonly collections: Map<IEventCollection, InMemoryEventEntity[]> = new Map();
 
-	constructor(readonly eventMap: EventMap) {
-		super();
-	}
+	public start(): void {
+		this.logger.log('Starting store');
+		const { pool } = this.options;
 
-	setup(pool?: IEventPool): EventCollection {
 		const collection = EventCollection.get(pool);
 		this.collections.set(collection, []);
-		return collection;
+	}
+
+	public stop(): void {
+		this.logger.log('Stopping store');
+		this.collections.clear();
 	}
 
 	async *getEvents({ streamId }: EventStream, filter?: EventFilter): AsyncGenerator<IEvent[]> {

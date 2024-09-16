@@ -1,38 +1,46 @@
-import { Db, Document } from 'mongodb';
-import { DEFAULT_BATCH_SIZE, StreamReadingDirection } from '../../constants';
-import { EventMap } from '../../event-map';
-import { EventFilter, EventStore } from '../../event-store';
-import { EventNotFoundException } from '../../exceptions';
-import { EventEnvelopeMetadata, IEvent, IEventPayload, IEventPool } from '../../interfaces';
-import { EventCollection, EventEnvelope, EventStream } from '../../models';
+import { Injectable, Logger } from '@nestjs/common';
+import {
+	DEFAULT_BATCH_SIZE,
+	EventCollection,
+	EventEnvelope,
+	EventFilter,
+	EventNotFoundException,
+	EventStore,
+	EventStream,
+	IEvent,
+	IEventCollection,
+	IEventPool,
+	StreamReadingDirection,
+} from '@ocoda/event-sourcing';
+import { Db, MongoClient } from 'mongodb';
+import { MongoDBEventStoreConfig, MongoEventEntity } from './interfaces';
 
-export type MongoEventEntity = {
-	_id: string;
-	streamId: string;
-	event: string;
-	payload: IEventPayload<IEvent>;
-} & Document &
-	EventEnvelopeMetadata;
+@Injectable()
+export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
+	private client: MongoClient;
+	private database: Db;
 
-export class MongoDBEventStore extends EventStore {
-	constructor(
-		readonly eventMap: EventMap,
-		readonly database: Db,
-	) {
-		super();
-	}
+	async start(): Promise<IEventCollection> {
+		this.logger.log('Starting store');
+		const { url, pool, ...params } = this.options;
 
-	async setup(pool?: IEventPool): Promise<EventCollection> {
+		this.client = await new MongoClient(url, params).connect();
+		this.database = this.client.db();
+
 		const collection = EventCollection.get(pool);
 
 		const [existingCollection] = await this.database.listCollections({ name: collection }).toArray();
-		if (existingCollection) {
-			return collection;
+		if (!existingCollection) {
+			const eventCollection = await this.database.createCollection<MongoEventEntity>(collection);
+			await eventCollection.createIndex({ streamId: 1, version: 1 }, { unique: true });
 		}
 
-		const eventCollection = await this.database.createCollection<MongoEventEntity>(collection);
-		await eventCollection.createIndex({ streamId: 1, version: 1 }, { unique: true });
 		return collection;
+	}
+
+	async stop(): Promise<void> {
+		this.logger.log('Stopping store');
+		await this.client.close();
 	}
 
 	async *getEvents({ streamId }: EventStream, filter?: EventFilter): AsyncGenerator<IEvent[]> {

@@ -1,7 +1,7 @@
 {
-	"name": "@ocoda/event-sourcing",
+	"name": "@ocoda/event-sourcing-mongodb",
 	"version": "1.0.1-beta.0",
-	"description": "NestJS Event Sourcing Library (@core)",
+	"description": "NestJS Event Sourcing Library (@mongodb)",
 	"author": "Dries Hooghe <dries@drieshooghe.com>",
 	"license": "MIT",
 	"main": "./dist/index.js",
@@ -9,7 +9,7 @@
 	"scripts": {
 		"build": "rm -rf dist && tsc -p tsconfig.build.json",
 		"test": "jest --config jest.config.js",
-		"test:ci": "jest --config jest.config.js --coverage",
+		"test:ci": "jest --config jest.config.js --runInBand --coverage",
 		"ci": "biome ci",
 		"format": "biome format --write",
 		"lint": "biome check --write"
@@ -21,10 +21,10 @@
 		"node": ">= 18.0.0"
 	},
 	"dependencies": {
-		"class-transformer": "0.5.1"
+		"mongodb": "^6.9.0"
 	},
 	"peerDependencies": {
-		"@nestjs/common": "^10.0.0",
+		"@ocoda/event-sourcing": "workspace:*",
 		"@nestjs/core": "^10.0.0",
 		"reflect-metadata": "^0.2.0",
 		"rxjs": "^7.2.0"
@@ -40,7 +40,7 @@
 		"@swc-node/register": "^1.5.2",
 		"@swc/core": "1.7.3",
 		"@swc/jest": "0.2.36",
-		"@types/jest": "29.5.13",
+		"@types/jest": "29.5.12",
 		"@types/node": "20.16.5",
 		"jest": "29.7.0",
 		"jest-mock": "29.7.0",
@@ -51,6 +51,6 @@
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/ocoda/event-sourcing",
-		"directory": "packages/core"
+		"directory": "packages/integration/mongodb"
 	}
 }
