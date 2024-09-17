@@ -90,7 +90,7 @@ jobs:
     strategy:
       matrix:
         node-version: [18.x, 20.x, 22.x]
-        database: [mongodb, dynamodb]
+        database: [mongodb, dynamodb, postgres]
 
     name: Tests @ocoda/event-sourcing-${{ matrix.database }} [Node.js ${{ matrix.node-version }}]
 
