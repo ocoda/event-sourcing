@@ -1,4 +1,4 @@
-import { Id, InvalidIdError } from '../../../lib';
+import { Id, InvalidIdError } from '@ocoda/event-sourcing';
 
 describe(Id, () => {
 	class DeviceId extends Id {

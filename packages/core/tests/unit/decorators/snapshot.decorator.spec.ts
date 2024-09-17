@@ -1,5 +1,5 @@
-import { AggregateRoot, ISnapshotHandler, SNAPSHOT_METADATA, Snapshot, SnapshotMetadata } from '../../../lib';
-import { getSnapshotMetadata } from '../../../lib/helpers';
+import { AggregateRoot, ISnapshotHandler, SNAPSHOT_METADATA, Snapshot, SnapshotMetadata } from '@ocoda/event-sourcing';
+import { getSnapshotMetadata } from '@ocoda/event-sourcing/helpers';
 
 describe('@Snapshot', () => {
 	class Account extends AggregateRoot {}

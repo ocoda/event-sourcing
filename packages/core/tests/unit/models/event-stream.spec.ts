@@ -1,4 +1,4 @@
-import { Aggregate, AggregateRoot, EventStream, MissingAggregateMetadataException, UUID } from '../../../lib';
+import { Aggregate, AggregateRoot, EventStream, MissingAggregateMetadataException, UUID } from '@ocoda/event-sourcing';
 
 describe(EventStream, () => {
 	@Aggregate({ streamName: 'account' })

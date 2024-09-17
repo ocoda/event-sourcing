@@ -7,8 +7,8 @@ import {
 	SnapshotStream,
 	StreamReadingDirection,
 	UUID,
-} from '../../../../lib';
-import { InMemorySnapshotStore } from '../../../../lib/integration/snapshot-store';
+} from '@ocoda/event-sourcing';
+import { InMemorySnapshotStore } from '@ocoda/event-sourcing/integration/snapshot-store';
 
 class AccountId extends UUID {}
 class CustomerId extends UUID {}

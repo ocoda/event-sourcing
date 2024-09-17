@@ -1,4 +1,4 @@
-import { Aggregate, AggregateRoot, IEvent } from '../../../lib';
+import { Aggregate, AggregateRoot, IEvent } from '@ocoda/event-sourcing';
 
 describe(Aggregate, () => {
 	class AccountOpenedEvent implements IEvent {}

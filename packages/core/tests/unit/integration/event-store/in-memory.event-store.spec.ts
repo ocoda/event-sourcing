@@ -9,9 +9,9 @@ import {
 	IEvent,
 	StreamReadingDirection,
 	UUID,
-} from '../../../../lib';
-import { DefaultEventSerializer } from '../../../../lib/helpers';
-import { InMemoryEventEntity, InMemoryEventStore } from '../../../../lib/integration/event-store';
+} from '@ocoda/event-sourcing';
+import { DefaultEventSerializer } from '@ocoda/event-sourcing/helpers';
+import { InMemoryEventEntity, InMemoryEventStore } from '@ocoda/event-sourcing/integration/event-store';
 
 class AccountId extends UUID {}
 

@@ -1,4 +1,4 @@
-import { AGGREGATE_METADATA, Aggregate, AggregateMetadata, AggregateRoot } from '../../../lib';
+import { AGGREGATE_METADATA, Aggregate, AggregateMetadata, AggregateRoot } from '@ocoda/event-sourcing';
 
 describe('@Aggregate', () => {
 	it('should add aggregate metadata to the aggregate', () => {

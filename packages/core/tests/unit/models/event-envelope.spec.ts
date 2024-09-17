@@ -1,4 +1,4 @@
-import { EventEnvelope, IEvent, UUID } from '../../../lib';
+import { EventEnvelope, IEvent, UUID } from '@ocoda/event-sourcing';
 
 describe(EventEnvelope, () => {
 	class FooId extends UUID {}

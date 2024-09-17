@@ -1,4 +1,4 @@
-import { ValueObject } from '../../../lib';
+import { ValueObject } from '@ocoda/event-sourcing';
 
 describe(ValueObject, () => {
 	class Point extends ValueObject<{ x: number; y: number }> {
