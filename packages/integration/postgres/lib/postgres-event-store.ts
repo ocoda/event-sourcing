@@ -1,4 +1,3 @@
-import { Injectable } from '@nestjs/common';
 import {
 	DEFAULT_BATCH_SIZE,
 	EventCollection,
@@ -16,7 +15,6 @@ import { Pool, PoolClient } from 'pg';
 import Cursor from 'pg-cursor';
 import { PostgresEventEntity, PostgresEventStoreConfig } from './interfaces';
 
-@Injectable()
 export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 	private pool: Pool;
 	private client: PoolClient;
@@ -62,7 +60,6 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 		const limit = filter?.limit || Number.MAX_SAFE_INTEGER;
 		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
-		// Build the SQL query with parameterized inputs
 		const query = `
             SELECT event, payload
             FROM ${collection}
