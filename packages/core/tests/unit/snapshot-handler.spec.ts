@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import {
 	Aggregate,
 	AggregateRoot,
@@ -10,6 +11,7 @@ import {
 	SnapshotStream,
 	UUID,
 } from '@ocoda/event-sourcing';
+import { InMemorySnapshotStore } from '@ocoda/event-sourcing/integration/snapshot-store';
 
 describe(SnapshotHandler, () => {
 	@Aggregate()
@@ -72,6 +74,8 @@ describe(SnapshotHandler, () => {
 		};
 
 		snapshotStore = {
+			options: {},
+			logger: new Logger(),
 			appendSnapshot: jest.fn(),
 			getLastEnvelope: <any>(
 				jest.fn((snapshotStream: SnapshotStream, pool?: ISnapshotPool) => Promise.resolve(snapshotEnvelope))
@@ -79,8 +83,9 @@ describe(SnapshotHandler, () => {
 			getLastSnapshot: jest.fn(),
 			getSnapshot: jest.fn(),
 			getSnapshots: jest.fn(),
-			setup: jest.fn(),
-		};
+			start: jest.fn(),
+			stop: jest.fn(),
+		} as unknown as jest.Mocked<SnapshotStore>;
 
 		snapshotHandler = new AccountSnapshotHandler(snapshotStore);
 	});

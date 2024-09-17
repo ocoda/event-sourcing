@@ -69,9 +69,9 @@ describe(InMemoryEventStore, () => {
 	const eventStreamAccountB = EventStream.for(Account, idAccountB);
 
 	beforeAll(() => {
-		eventStore = new InMemoryEventStore(eventMap);
+		eventStore = new InMemoryEventStore(eventMap, { driver: InMemoryEventStore });
 		eventStore.publish = publish;
-		eventStore.setup();
+		eventStore.start();
 
 		envelopesAccountA = [
 			EventEnvelope.create('account-opened', eventMap.serializeEvent(events[0]), {
@@ -126,6 +126,8 @@ describe(InMemoryEventStore, () => {
 			}),
 		];
 	});
+
+	afterAll(() => eventStore.stop());
 
 	it('should append event envelopes', async () => {
 		await Promise.all([
