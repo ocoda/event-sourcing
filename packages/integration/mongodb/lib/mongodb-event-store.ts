@@ -1,4 +1,3 @@
-import { Injectable } from '@nestjs/common';
 import {
 	DEFAULT_BATCH_SIZE,
 	EventCollection,
@@ -15,7 +14,6 @@ import {
 import { Db, MongoClient } from 'mongodb';
 import { MongoDBEventStoreConfig, MongoEventEntity } from './interfaces';
 
-@Injectable()
 export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 	private client: MongoClient;
 	private database: Db;
