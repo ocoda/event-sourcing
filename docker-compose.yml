@@ -19,3 +19,16 @@ services:
     volumes:
       - type: tmpfs
         target: /home/dynamodblocal/data
+
+  postgres:
+    container_name: es-postgres
+    image: postgres:latest
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    volumes:
+      - type: tmpfs
+        target: /var/lib/postgresql/data
