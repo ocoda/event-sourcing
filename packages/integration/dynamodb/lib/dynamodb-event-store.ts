@@ -10,7 +10,6 @@ import {
 	ResourceNotFoundException,
 } from '@aws-sdk/client-dynamodb';
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
-import { Logger } from '@nestjs/common';
 import {
 	DEFAULT_BATCH_SIZE,
 	EventCollection,

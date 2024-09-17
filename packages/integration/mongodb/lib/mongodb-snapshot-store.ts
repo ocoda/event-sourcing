@@ -1,4 +1,3 @@
-import { Logger } from '@nestjs/common';
 import {
 	AggregateRoot,
 	DEFAULT_BATCH_SIZE,
