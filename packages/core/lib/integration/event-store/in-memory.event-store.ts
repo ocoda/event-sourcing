@@ -1,6 +1,5 @@
-import { Inject, Logger, Type } from '@nestjs/common';
+import { Type } from '@nestjs/common';
 import { DEFAULT_BATCH_SIZE, StreamReadingDirection } from '../../constants';
-import { EventMap } from '../../event-map';
 import { EventFilter, EventStore } from '../../event-store';
 import { EventNotFoundException } from '../../exceptions';
 import {

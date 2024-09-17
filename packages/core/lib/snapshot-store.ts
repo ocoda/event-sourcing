@@ -1,7 +1,7 @@
-import { Inject, Logger } from '@nestjs/common';
-import { EVENT_SOURCING_OPTIONS, StreamReadingDirection } from './constants';
+import { Logger } from '@nestjs/common';
+import { StreamReadingDirection } from './constants';
 import { EventSourcingModuleOptions, ISnapshot, ISnapshotPool } from './interfaces';
-import { AggregateRoot, SnapshotCollection, SnapshotEnvelope, SnapshotStream } from './models';
+import { AggregateRoot, SnapshotEnvelope, SnapshotStream } from './models';
 
 export interface SnapshotFilter {
 	/**

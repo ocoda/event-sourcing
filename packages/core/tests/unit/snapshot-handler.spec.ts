@@ -11,7 +11,6 @@ import {
 	SnapshotStream,
 	UUID,
 } from '@ocoda/event-sourcing';
-import { InMemorySnapshotStore } from '@ocoda/event-sourcing/integration/snapshot-store';
 
 describe(SnapshotHandler, () => {
 	@Aggregate()
