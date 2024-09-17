@@ -1,0 +1,14 @@
+{
+	"$schema": "https://turbo.build/schema.json",
+	"extends": ["//"],
+	"tasks": {
+		"build": {
+			"dependsOn": ["@ocoda/event-sourcing#build"],
+			"outputs": ["dist/integration/mongodb/**"]
+		},
+		"test": {},
+		"test:ci": {},
+		"lint": {},
+		"format": {}
+	}
+}

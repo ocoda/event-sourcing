@@ -1,7 +1,8 @@
+import { Logger } from '@nestjs/common';
 import { StreamReadingDirection } from './constants';
 import { EventMap } from './event-map';
-import { IEvent, IEventPool } from './interfaces';
-import { EventCollection, EventEnvelope, EventStream } from './models';
+import { EventSourcingModuleOptions, EventStoreDriver, IEvent, IEventPool } from './interfaces';
+import { EventEnvelope, EventStream } from './models';
 
 export interface EventFilter {
 	/**
@@ -30,11 +31,16 @@ export interface EventFilter {
 	batch?: number;
 }
 
-export abstract class EventStore {
-	abstract eventMap: EventMap;
+export abstract class EventStore<TOptions = Omit<EventSourcingModuleOptions['eventStore'], 'driver'>>
+	implements EventStoreDriver<TOptions>
+{
+	protected readonly logger = new Logger(this.constructor.name);
 	protected _publish: (envelope: EventEnvelope<IEvent>) => any;
 
-	constructor() {
+	constructor(
+		protected readonly eventMap: EventMap,
+		protected readonly options: TOptions,
+	) {
 		// biome-ignore lint/correctness/noConstructorReturn:
 		return new Proxy(this, {
 			get(target, propKey) {
@@ -56,7 +62,9 @@ export abstract class EventStore {
 		this._publish = fn;
 	}
 
-	abstract setup(pool?: IEventPool): EventCollection | Promise<EventCollection>;
+	public abstract start(): unknown | Promise<unknown>;
+	public abstract stop(): void | Promise<void>;
+
 	abstract getEvents(eventStream: EventStream, filter?: EventFilter): AsyncGenerator<IEvent[]>;
 	abstract getEvent(eventStream: EventStream, version: number, pool?: IEventPool): IEvent | Promise<IEvent>;
 	abstract appendEvents(

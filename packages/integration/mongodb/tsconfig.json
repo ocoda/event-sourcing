@@ -1,0 +1,12 @@
+{
+	"extends": "@ocoda/event-sourcing-config/typescript/module.json",
+	"include": ["index.ts", "index.d.ts", "lib/**/*.ts", "tests/**/*.ts"],
+	"compilerOptions": {
+		"paths": {
+			"@ocoda/event-sourcing": ["../../core/lib"],
+			"@ocoda/event-sourcing/*": ["../../core/lib/*"],
+			"@ocoda/event-sourcing-mongodb": ["../../integration/mongodb/lib"],
+			"@ocoda/event-sourcing-mongodb/*": ["../../integration/mongodb/lib/*"]
+		}
+	}
+}

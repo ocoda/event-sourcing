@@ -1,4 +1,4 @@
-import { InvalidIdError, UUID } from '../../../lib';
+import { InvalidIdError, UUID } from '@ocoda/event-sourcing';
 
 describe(UUID, () => {
 	class AccountId extends UUID {}

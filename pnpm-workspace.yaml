@@ -1,6 +1,7 @@
 packages:
   - 'example'
   - 'packages/*'
+  - 'packages/integration/*'
 
 pnpm:
   store: .pnpm-store

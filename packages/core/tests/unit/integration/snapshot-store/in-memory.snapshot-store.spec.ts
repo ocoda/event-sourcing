@@ -7,8 +7,8 @@ import {
 	SnapshotStream,
 	StreamReadingDirection,
 	UUID,
-} from '../../../../lib';
-import { InMemorySnapshotStore } from '../../../../lib/integration/snapshot-store';
+} from '@ocoda/event-sourcing';
+import { InMemorySnapshotStore } from '@ocoda/event-sourcing/integration/snapshot-store';
 
 class AccountId extends UUID {}
 class CustomerId extends UUID {}
@@ -58,8 +58,8 @@ describe(InMemorySnapshotStore, () => {
 	const snapshotStreamCustomer = SnapshotStream.for(Customer, customerId);
 
 	beforeAll(() => {
-		snapshotStore = new InMemorySnapshotStore();
-		snapshotStore.setup();
+		snapshotStore = new InMemorySnapshotStore({ driver: InMemorySnapshotStore });
+		snapshotStore.start();
 
 		envelopesAccountA = [
 			SnapshotEnvelope.create<Account>(snapshotsAccountA[0], {
@@ -102,6 +102,8 @@ describe(InMemorySnapshotStore, () => {
 			}),
 		];
 	});
+
+	afterAll(() => snapshotStore.stop());
 
 	it('should append snapshot envelopes', () => {
 		snapshotStore.appendSnapshot(snapshotStreamAccountA, 1, snapshotsAccountA[0]);

@@ -33,7 +33,6 @@ import {
 import { getEventHandlerMetadata } from './helpers/metadata/get-event-handler-metadata';
 import {
 	EventSourcingModuleOptions,
-	ICommand,
 	ICommandHandler,
 	IEventHandler,
 	IEventPublisher,

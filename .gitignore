@@ -1,7 +1,7 @@
 # compiled output
-.turbo
+**/.turbo
 **/dist
-/node_modules
+**/node_modules
 
 # Logs
 logs

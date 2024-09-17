@@ -1,12 +1,12 @@
 import {
+	DefaultEventSerializer,
 	Event,
 	EventMap,
 	IEvent,
 	MissingEventMetadataException,
 	UnregisteredEventException,
 	UnregisteredSerializerException,
-} from '../../lib';
-import { DefaultEventSerializer } from '../../lib/helpers';
+} from '@ocoda/event-sourcing';
 
 describe(EventMap, () => {
 	const now = new Date();

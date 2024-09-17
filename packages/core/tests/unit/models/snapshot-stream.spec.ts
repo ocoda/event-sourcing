@@ -1,4 +1,10 @@
-import { Aggregate, AggregateRoot, MissingAggregateMetadataException, SnapshotStream, UUID } from '../../../lib';
+import {
+	Aggregate,
+	AggregateRoot,
+	MissingAggregateMetadataException,
+	SnapshotStream,
+	UUID,
+} from '@ocoda/event-sourcing';
 
 describe(SnapshotStream, () => {
 	@Aggregate({ streamName: 'account' })

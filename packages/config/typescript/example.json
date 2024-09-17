@@ -5,7 +5,9 @@
 	"compilerOptions": {
 		"paths": {
 			"@ocoda/event-sourcing": ["../../core/lib"],
-			"@ocoda/event-sourcing/*": ["../../core/lib/*"]
+			"@ocoda/event-sourcing/*": ["../../core/lib/*"],
+            "@ocoda/event-sourcing-mongodb": ["../../integration/mongodb/lib"],
+			"@ocoda/event-sourcing-mongodb/*": ["../../integration/mongodb/lib/*"]
 		}
 	}
 }

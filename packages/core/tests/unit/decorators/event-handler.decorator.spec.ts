@@ -1,5 +1,5 @@
-import { EventHandler, IEvent, IEventHandler } from '../../../lib';
-import { getEventHandlerMetadata } from '../../../lib/helpers';
+import { EventHandler, IEvent, IEventHandler } from '@ocoda/event-sourcing';
+import { getEventHandlerMetadata } from '@ocoda/event-sourcing/helpers';
 
 describe('@EventHandler', () => {
 	class FooEvent implements IEvent {}

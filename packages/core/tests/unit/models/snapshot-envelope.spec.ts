@@ -1,4 +1,4 @@
-import { AggregateRoot, ISnapshot, SnapshotEnvelope, UUID } from '../../../lib';
+import { AggregateRoot, ISnapshot, SnapshotEnvelope, UUID } from '@ocoda/event-sourcing';
 
 describe(SnapshotEnvelope, () => {
 	class AccountId extends UUID {}

@@ -9,4 +9,6 @@ export * from './event-publisher-metadata.interface';
 export * from './event-publisher.interface';
 export * from './event-serializer-metadata.interface';
 export * from './event-serializer.interface';
+export * from './event-store-config.interface';
+export * from './event-store.interface';
 export * from './event.interface';

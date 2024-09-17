@@ -11,7 +11,8 @@
 		"rules": {
 			"recommended": true,
 			"correctness": {
-				"noUnusedVariables": "off"
+				"noUnusedVariables": "off",
+				"noUnusedImports": "error"
 			},
 			"style": {
 				"useSingleCaseStatement": "off",

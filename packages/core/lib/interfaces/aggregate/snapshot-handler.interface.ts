@@ -1,4 +1,4 @@
-import { AggregateRoot, EventEnvelope } from '../../models';
+import { AggregateRoot } from '../../models';
 import { ISnapshot } from './snapshot.interface';
 
 export interface ISnapshotHandler<A extends AggregateRoot> {

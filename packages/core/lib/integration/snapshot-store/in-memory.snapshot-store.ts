@@ -1,7 +1,8 @@
+import { Type } from '@nestjs/common';
 import { DEFAULT_BATCH_SIZE, StreamReadingDirection } from '../../constants';
 import { SnapshotNotFoundException } from '../../exceptions';
-import { ISnapshot, ISnapshotPool, SnapshotEnvelopeMetadata } from '../../interfaces';
-import { AggregateRoot, EventCollection, SnapshotCollection, SnapshotEnvelope, SnapshotStream } from '../../models';
+import { ISnapshot, ISnapshotPool, SnapshotEnvelopeMetadata, SnapshotStoreConfig } from '../../interfaces';
+import { AggregateRoot, SnapshotCollection, SnapshotEnvelope, SnapshotStream } from '../../models';
 import { LatestSnapshotFilter, SnapshotFilter, SnapshotStore } from '../../snapshot-store';
 
 export type InMemorySnapshotEntity<A extends AggregateRoot> = {
@@ -11,13 +12,24 @@ export type InMemorySnapshotEntity<A extends AggregateRoot> = {
 	latest?: string;
 } & SnapshotEnvelopeMetadata;
 
-export class InMemorySnapshotStore extends SnapshotStore {
+export interface InMemorySnapshotStoreConfig extends SnapshotStoreConfig {
+	driver: Type<InMemorySnapshotStore>;
+}
+
+export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreConfig> {
 	public readonly collections: Map<ISnapshotPool, InMemorySnapshotEntity<any>[]> = new Map();
 
-	setup(pool?: ISnapshotPool): EventCollection {
+	public start(): void {
+		this.logger.log('Starting store');
+		const { pool } = this.options;
+
 		const collection = SnapshotCollection.get(pool);
 		this.collections.set(collection, []);
-		return collection;
+	}
+
+	public stop(): void {
+		this.logger.log('Stopping store');
+		this.collections.clear();
 	}
 
 	async *getSnapshots<A extends AggregateRoot>(
