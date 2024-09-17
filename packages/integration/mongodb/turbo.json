@@ -3,6 +3,7 @@
 	"extends": ["//"],
 	"tasks": {
 		"build": {
+			"dependsOn": ["@ocoda/event-sourcing#build"],
 			"outputs": ["dist/integration/mongodb/**"]
 		},
 		"test": {},
