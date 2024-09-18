@@ -4,7 +4,7 @@
 	"tasks": {
 		"build": {
 			"dependsOn": ["@ocoda/event-sourcing#build"],
-			"outputs": ["dist/integration/postgres/**"]
+			"outputs": ["dist/**"]
 		},
 		"test": {},
 		"test:ci": {},
