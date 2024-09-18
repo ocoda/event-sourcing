@@ -30,7 +30,7 @@ export interface SnapshotFilter {
 	batch?: number;
 }
 
-export interface LatestSnapshotFilter extends Pick<SnapshotFilter, 'batch' | 'limit'> {
+export interface LatestSnapshotFilter extends Pick<SnapshotFilter, 'batch' | 'limit' | 'pool'> {
 	fromId?: string;
 }
 
@@ -77,6 +77,5 @@ export abstract class SnapshotStore<TOptions = Omit<EventSourcingModuleOptions['
 	abstract getLastEnvelopes?<A extends AggregateRoot>(
 		aggregateName: string,
 		filter?: LatestSnapshotFilter,
-		pool?: ISnapshotPool,
 	): AsyncGenerator<SnapshotEnvelope<A>[]>;
 }

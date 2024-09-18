@@ -90,7 +90,7 @@ jobs:
     strategy:
       matrix:
         node-version: [18.x, 20.x, 22.x]
-        database: [mongodb, dynamodb, postgres]
+        database: [mongodb, dynamodb, postgres, mariadb]
 
     name: Test ${{ matrix.database }} lib [Node.js ${{ matrix.node-version }}]
 

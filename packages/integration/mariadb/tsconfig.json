@@ -1,0 +1,13 @@
+{
+	"extends": "@ocoda/event-sourcing-config/typescript/module.json",
+	"include": ["index.ts", "index.d.ts", "lib/**/*.ts", "tests/**/*.ts"],
+	"compilerOptions": {
+		"esModuleInterop": true,
+		"paths": {
+			"@ocoda/event-sourcing": ["../../core/lib"],
+			"@ocoda/event-sourcing/*": ["../../core/lib/*"],
+			"@ocoda/event-sourcing-mariadb": ["../../integration/mariadb/lib"],
+			"@ocoda/event-sourcing-mariadb/*": ["../../integration/mariadb/lib/*"]
+		}
+	}
+}

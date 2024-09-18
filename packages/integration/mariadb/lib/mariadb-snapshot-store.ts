@@ -13,28 +13,25 @@ import {
 	SnapshotStream,
 	StreamReadingDirection,
 } from '@ocoda/event-sourcing';
-import { Pool, PoolClient } from 'pg';
-import Cursor from 'pg-cursor';
-import { PostgresSnapshotEntity, PostgresSnapshotStoreConfig } from './interfaces';
+import { type Pool, createPool } from 'mariadb';
+import { MariaDBSnapshotEntity, MariaDBSnapshotStoreConfig } from './interfaces';
 
-export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreConfig> {
+export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConfig> {
 	private pool: Pool;
-	private client: PoolClient;
 
 	async start(): Promise<ISnapshotCollection> {
 		this.logger.log('Starting store');
 		const { pool, ...params } = this.options;
 
-		this.pool = new Pool(params);
-		this.client = await this.pool.connect();
+		this.pool = createPool(params);
 
 		const collection = SnapshotCollection.get(pool);
 
-		await this.client.query(
-			`CREATE TABLE IF NOT EXISTS "${collection}" (
+		await this.pool.query(
+			`CREATE TABLE IF NOT EXISTS \`${collection}\` (
                 stream_id VARCHAR(255) NOT NULL,
                 version INT NOT NULL,
-                payload JSONB NOT NULL,
+                payload JSON NOT NULL,
                 snapshot_id VARCHAR(255) NOT NULL,
                 aggregate_id VARCHAR(255) NOT NULL,
                 registered_on TIMESTAMP NOT NULL,
@@ -49,7 +46,6 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 
 	async stop(): Promise<void> {
 		this.logger.log('Stopping store');
-		this.client.release();
 		await this.pool.end();
 	}
 
@@ -57,6 +53,7 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 		{ streamId }: SnapshotStream,
 		filter?: SnapshotFilter,
 	): AsyncGenerator<ISnapshot<A>[]> {
+		const connection = this.pool.getConnection();
 		const collection = SnapshotCollection.get(filter?.pool);
 
 		const fromVersion = filter?.fromVersion;
@@ -66,32 +63,35 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 
 		const query = `
 	        SELECT payload
-	        FROM "${collection}"
-	        WHERE stream_id = $1
-	        ${fromVersion ? 'AND version >= $2' : ''}
+	        FROM \`${collection}\`
+	        WHERE stream_id = ?
+	        ${fromVersion ? 'AND version >= ?' : ''}
 	        ORDER BY version ${direction === StreamReadingDirection.FORWARD ? 'ASC' : 'DESC'}
-	        LIMIT ${fromVersion ? '$3' : '$2'}
+	        LIMIT ?
 	    `;
 
 		const params = fromVersion ? [streamId, fromVersion, limit] : [streamId, limit];
 
-		const cursor = this.client.query(new Cursor<Pick<PostgresSnapshotEntity<A>, 'payload'>>(query, params));
+		const client = await connection;
+		const stream = client.queryStream(query, params);
 
-		let done = false;
-
-		while (!done) {
-			const rows: Array<Pick<PostgresSnapshotEntity<A>, 'payload'>> = await new Promise((resolve, reject) =>
-				cursor.read(batch, (err, result) => (err ? reject(err) : resolve(result))),
-			);
-
-			if (rows.length === 0) {
-				done = true;
-			} else {
-				yield rows.map(({ payload }) => payload);
+		try {
+			let batchedEvents: ISnapshot<A>[] = [];
+			for await (const { payload } of stream as unknown as Pick<MariaDBSnapshotEntity<A>, 'payload'>[]) {
+				batchedEvents.push(payload);
+				if (batchedEvents.length === batch) {
+					yield batchedEvents;
+					batchedEvents = [];
+				}
 			}
+			if (batchedEvents.length > 0) {
+				yield batchedEvents;
+			}
+		} catch (e) {
+			stream.destroy();
+		} finally {
+			await client.release();
 		}
-
-		cursor.close(() => {});
 	}
 
 	async getSnapshot<A extends AggregateRoot>(
@@ -101,11 +101,10 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 	): Promise<ISnapshot<A>> {
 		const collection = SnapshotCollection.get(pool);
 
-		const { rows: entities } = await this.client.query<Pick<PostgresSnapshotEntity<A>, 'payload'>>(
-			`SELECT payload FROM "${collection}" WHERE stream_id = $1 AND version = $2`,
+		const [entity] = await this.pool.query<Pick<MariaDBSnapshotEntity<A>, 'payload'>[]>(
+			`SELECT payload FROM \`${collection}\` WHERE stream_id = ? AND version = ?`,
 			[streamId, version],
 		);
-		const entity = entities[0];
 
 		if (!entity) {
 			throw new SnapshotNotFoundException(streamId, version);
@@ -130,28 +129,22 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 		const lastStreamEntity = await this.getLastStreamEntity(collection, streamId);
 
 		if (lastStreamEntity) {
-			await this.client.query(`UPDATE "${collection}" SET latest = null WHERE stream_id = $1 AND version = $2`, [
+			await this.pool.query(`UPDATE \`${collection}\` SET latest = null WHERE stream_id = ? AND version = ?`, [
 				lastStreamEntity.stream_id,
 				lastStreamEntity.version,
 			]);
 		}
 
-		await this.client.query(
-			`
-            INSERT INTO "${collection}" (stream_id, version, payload, snapshot_id, aggregate_id, registered_on, aggregate_name, latest)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		`,
-			[
-				streamId,
-				metadata.version,
-				JSON.stringify(payload),
-				metadata.snapshotId,
-				metadata.aggregateId,
-				metadata.registeredOn,
-				aggregate,
-				`latest#${streamId}`,
-			],
-		);
+		await this.pool.query(`INSERT INTO \`${collection}\` VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [
+			streamId,
+			metadata.version,
+			JSON.stringify(payload),
+			metadata.snapshotId,
+			metadata.aggregateId,
+			metadata.registeredOn,
+			aggregate,
+			`latest#${streamId}`,
+		]);
 	}
 
 	async getLastSnapshot<A extends AggregateRoot>(
@@ -189,6 +182,7 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 		{ streamId }: SnapshotStream,
 		filter?: SnapshotFilter,
 	): AsyncGenerator<SnapshotEnvelope<A>[]> {
+		const connection = this.pool.getConnection();
 		const collection = SnapshotCollection.get(filter?.pool);
 
 		const fromVersion = filter?.fromVersion;
@@ -198,28 +192,25 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 
 		const query = `
 	        SELECT payload, aggregate_id, registered_on, snapshot_id, version
-	        FROM "${collection}"
-	        WHERE stream_id = $1
-	        ${fromVersion ? 'AND version >= $2' : ''}
+	        FROM \`${collection}\`
+	        WHERE stream_id = ?
+	        ${fromVersion ? 'AND version >= ?' : ''}
 	        ORDER BY version ${direction === StreamReadingDirection.FORWARD ? 'ASC' : 'DESC'}
-	        LIMIT ${fromVersion ? '$3' : '$2'}
+	        LIMIT ?
 	    `;
 
 		const params = fromVersion ? [streamId, fromVersion, limit] : [streamId, limit];
 
-		const cursor = this.client.query(new Cursor<Omit<PostgresSnapshotEntity<A>, 'stream_id'>>(query, params));
+		const client = await connection;
+		const stream = client.queryStream(query, params);
 
-		let done = false;
-
-		while (!done) {
-			const rows: Array<Omit<PostgresSnapshotEntity<A>, 'stream_id'>> = await new Promise((resolve, reject) =>
-				cursor.read(batch, (err, result) => (err ? reject(err) : resolve(result))),
-			);
-
-			if (rows.length === 0) {
-				done = true;
-			} else {
-				yield rows.map(({ payload, aggregate_id, registered_on, snapshot_id, version }) =>
+		try {
+			let batchedSnapshots: SnapshotEnvelope<A>[] = [];
+			for await (const { payload, aggregate_id, registered_on, snapshot_id, version } of stream as unknown as Omit<
+				MariaDBSnapshotEntity<A>,
+				'stream_id'
+			>[]) {
+				batchedSnapshots.push(
 					SnapshotEnvelope.from<A>(payload, {
 						aggregateId: aggregate_id,
 						registeredOn: registered_on,
@@ -227,10 +218,19 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 						version,
 					}),
 				);
+				if (batchedSnapshots.length === batch) {
+					yield batchedSnapshots;
+					batchedSnapshots = [];
+				}
 			}
+			if (batchedSnapshots.length > 0) {
+				yield batchedSnapshots;
+			}
+		} catch (e) {
+			stream.destroy();
+		} finally {
+			await client.release();
 		}
-
-		cursor.close(() => {});
 	}
 
 	async getEnvelope<A extends AggregateRoot>(
@@ -240,14 +240,10 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 	): Promise<SnapshotEnvelope<A>> {
 		const collection = SnapshotCollection.get(pool);
 
-		const { rows: entities } = await this.client.query<
-			Omit<PostgresSnapshotEntity<A>, 'stream_id' | 'aggregate_name' | 'latest'>
-		>(
-			`SELECT payload, aggregate_id, registered_on, snapshot_id, version
-            FROM "${collection}" WHERE stream_id = $1 AND version = $2`,
+		const [entity] = await this.pool.query<MariaDBSnapshotEntity<A>[]>(
+			`SELECT payload, aggregate_id, registered_on, snapshot_id, version FROM \`${collection}\` WHERE stream_id = ? AND version = ?`,
 			[streamId, version],
 		);
-		const entity = entities[0];
 
 		if (!entity) {
 			throw new SnapshotNotFoundException(streamId, version);
@@ -265,6 +261,7 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 		aggregateName: string,
 		filter?: LatestSnapshotFilter,
 	): AsyncGenerator<SnapshotEnvelope<A>[]> {
+		const connection = this.pool.getConnection();
 		const collection = SnapshotCollection.get(filter?.pool);
 
 		const fromId = filter?.fromId;
@@ -272,31 +269,25 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
 		const query = `
-            SELECT payload, aggregate_id, registered_on, snapshot_id, version
-            FROM "${collection}"
-            WHERE aggregate_name = $1
-            AND ${fromId ? 'latest >= $2' : "latest LIKE 'latest%'"}
-            ORDER BY latest DESC
-            LIMIT ${fromId ? '$3' : '$2'}
-        `;
+	        SELECT payload, aggregate_id, registered_on, snapshot_id, version
+	        FROM \`${collection}\`
+	        WHERE aggregate_name = ?
+	        AND ${fromId ? 'latest >= ?' : "latest LIKE 'latest%'"}
+	        LIMIT ?
+	    `;
 
 		const params = fromId ? [aggregateName, fromId, limit] : [aggregateName, limit];
 
-		const cursor = this.client.query(
-			new Cursor<Omit<PostgresSnapshotEntity<A>, 'stream_id' | 'aggregate_name' | 'latest'>>(query, params),
-		);
+		const client = await connection;
+		const stream = client.queryStream(query, params);
 
-		let done = false;
-
-		while (!done) {
-			const rows: Array<Omit<PostgresSnapshotEntity<A>, 'stream_id' | 'aggregate_name' | 'latest'>> = await new Promise(
-				(resolve, reject) => cursor.read(batch, (err, result) => (err ? reject(err) : resolve(result))),
-			);
-
-			if (rows.length === 0) {
-				done = true;
-			} else {
-				yield rows.map(({ payload, aggregate_id, registered_on, snapshot_id, version }) =>
+		try {
+			let batchedSnapshots: SnapshotEnvelope<A>[] = [];
+			for await (const { payload, aggregate_id, registered_on, snapshot_id, version } of stream as unknown as Omit<
+				MariaDBSnapshotEntity<A>,
+				'stream_id'
+			>[]) {
+				batchedSnapshots.push(
 					SnapshotEnvelope.from<A>(payload, {
 						aggregateId: aggregate_id,
 						registeredOn: registered_on,
@@ -304,22 +295,29 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 						version,
 					}),
 				);
+				if (batchedSnapshots.length === batch) {
+					yield batchedSnapshots;
+					batchedSnapshots = [];
+				}
 			}
+			if (batchedSnapshots.length > 0) {
+				yield batchedSnapshots;
+			}
+		} catch (e) {
+			stream.destroy();
+		} finally {
+			await client.release();
 		}
-
-		cursor.close(() => {});
 	}
 
 	private async getLastStreamEntity<A extends AggregateRoot>(
 		collection: string,
 		streamId: string,
-	): Promise<Omit<PostgresSnapshotEntity<A>, 'aggregate_name' | 'latest'>> {
-		const { rows: entities } = await this.client.query<Omit<PostgresSnapshotEntity<A>, 'aggregate_name' | 'latest'>>(
-			`SELECT stream_id, payload, aggregate_id, registered_on, snapshot_id, version
-             FROM "${collection}" WHERE stream_id = $1 ORDER BY version DESC LIMIT 1`,
+	): Promise<Omit<MariaDBSnapshotEntity<A>, 'aggregate_name' | 'latest'>> {
+		const [entity] = await this.pool.query<Omit<MariaDBSnapshotEntity<A>, 'aggregate_name' | 'latest'>[]>(
+			`SELECT stream_id, payload, aggregate_id, registered_on, snapshot_id, version FROM \`${collection}\` WHERE stream_id = ? ORDER BY version DESC LIMIT 1`,
 			[streamId],
 		);
-		const entity = entities[0];
 
 		if (entity) {
 			return entity;

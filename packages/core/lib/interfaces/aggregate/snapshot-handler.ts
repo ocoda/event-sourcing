@@ -51,7 +51,7 @@ export abstract class SnapshotHandler<A extends AggregateRoot = AggregateRoot> i
 
 		return aggregate;
 	}
-	async *loadMany(filter?: { fromId?: Id; limit?: number }): AsyncGenerator<SnapshotEnvelope<A>[]> {
+	async *loadMany(filter?: { fromId?: Id; limit?: number; pool?: string }): AsyncGenerator<SnapshotEnvelope<A>[]> {
 		const id = filter?.fromId?.value;
 		for await (const envelopes of this.snapshotStore.getLastEnvelopes<A>(this.streamName, {
 			...filter,
