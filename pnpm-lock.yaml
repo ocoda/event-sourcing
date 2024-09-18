@@ -12,8 +12,8 @@ importers:
         specifier: 1.9.1
         version: 1.9.1
       '@faker-js/faker':
-        specifier: ^8.0.0
-        version: 8.4.1
+        specifier: ^9.0.0
+        version: 9.0.1
       '@nestjs/common':
         specifier: 10.4.3
         version: 10.4.3(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1)
@@ -84,8 +84,8 @@ importers:
         specifier: 1.9.1
         version: 1.9.1
       '@faker-js/faker':
-        specifier: ^8.0.0
-        version: 8.4.1
+        specifier: ^9.0.0
+        version: 9.0.1
       '@nestjs/common':
         specifier: 10.4.3
         version: 10.4.3(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1)
@@ -148,8 +148,8 @@ importers:
         specifier: 1.9.1
         version: 1.9.1
       '@faker-js/faker':
-        specifier: ^8.0.0
-        version: 8.4.1
+        specifier: ^9.0.0
+        version: 9.0.1
       '@nestjs/common':
         specifier: 10.4.3
         version: 10.4.3(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1)
@@ -209,8 +209,8 @@ importers:
         specifier: 1.9.1
         version: 1.9.1
       '@faker-js/faker':
-        specifier: ^8.0.0
-        version: 8.4.1
+        specifier: ^9.0.0
+        version: 9.0.1
       '@nestjs/common':
         specifier: 10.4.3
         version: 10.4.3(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1)
@@ -270,8 +270,8 @@ importers:
         specifier: 1.9.1
         version: 1.9.1
       '@faker-js/faker':
-        specifier: ^8.0.0
-        version: 8.4.1
+        specifier: ^9.0.0
+        version: 9.0.1
       '@nestjs/common':
         specifier: 10.4.3
         version: 10.4.3(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1)
@@ -334,8 +334,8 @@ importers:
         specifier: 1.9.1
         version: 1.9.1
       '@faker-js/faker':
-        specifier: ^8.0.0
-        version: 8.4.1
+        specifier: ^9.0.0
+        version: 9.0.1
       '@nestjs/common':
         specifier: 10.4.3
         version: 10.4.3(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1)
@@ -754,9 +754,9 @@ packages:
   '@emnapi/wasi-threads@1.0.1':
     resolution: {integrity: sha512-iIBu7mwkq4UQGeMEM8bLwNK962nXdhodeScX4slfQnRhEMMzvYivHhutCIk8uojvmASXXPC2WNEjwxFWk72Oqw==}
 
-  '@faker-js/faker@8.4.1':
-    resolution: {integrity: sha512-XQ3cU+Q8Uqmrbf2e0cIC/QN43sTBSC8KF12u29Mb47tWrt2hAgBXSgpZMj4Ao8Uk0iJcU99QsOCaIL8934obCg==}
-    engines: {node: ^14.17.0 || ^16.13.0 || >=18.0.0, npm: '>=6.14.13'}
+  '@faker-js/faker@9.0.1':
+    resolution: {integrity: sha512-4mDeYIgM3By7X6t5E6eYwLAa+2h4DeZDF7thhzIg6XB76jeEvMwadYAMCFJL/R4AnEBcAUO9+gL0vhy3s+qvZA==}
+    engines: {node: '>=18.0.0', npm: '>=9.0.0'}
 
   '@iarna/toml@2.2.5':
     resolution: {integrity: sha512-trnsAYxU3xnS1gPHPyU961coFyLkh4gAD/0zQ5mymY4yOZ+CYvsPqUbOFSw0aDM4y0tV7tiFxL/1XfXPNC6IPg==}
@@ -4238,7 +4238,7 @@ snapshots:
       tslib: 2.6.3
     optional: true
 
-  '@faker-js/faker@8.4.1': {}
+  '@faker-js/faker@9.0.1': {}
 
   '@iarna/toml@2.2.5': {}
 
