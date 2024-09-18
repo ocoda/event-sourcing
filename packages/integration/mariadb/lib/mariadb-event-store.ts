@@ -11,7 +11,7 @@ import {
 	IEventPool,
 	StreamReadingDirection,
 } from '@ocoda/event-sourcing';
-import { Pool, createPool } from 'mariadb';
+import { type Pool, createPool } from 'mariadb';
 import { MariaDBEventEntity, MariaDBEventStoreConfig } from './interfaces';
 
 export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
@@ -93,11 +93,10 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 	async getEvent({ streamId }: EventStream, version: number, pool?: IEventPool): Promise<IEvent> {
 		const collection = EventCollection.get(pool);
 
-		const entities = await this.pool.query<Pick<MariaDBEventEntity, 'event' | 'payload'>[]>(
+		const [entity] = await this.pool.query<Pick<MariaDBEventEntity, 'event' | 'payload'>[]>(
 			`SELECT event, payload FROM \`${collection}\` WHERE stream_id = ? AND version = ?`,
 			[streamId, version],
 		);
-		const entity = entities[0];
 
 		if (!entity) {
 			throw new EventNotFoundException(streamId, version);
@@ -152,7 +151,7 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
 		const query = `
-            SELECT *
+            SELECT event, payload, event_id, aggregate_id, version, occurred_on, correlation_id, causation_id
             FROM \`${collection}\`
             WHERE stream_id = ?
             ${fromVersion ? 'AND version >= ?' : ''}
@@ -176,7 +175,7 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 				occurred_on,
 				correlation_id,
 				causation_id,
-			} of stream as unknown as MariaDBEventEntity[]) {
+			} of stream as unknown as Omit<MariaDBEventEntity, 'stream_id'>[]) {
 				batchedEvents.push(
 					EventEnvelope.from(event, payload, {
 						eventId: event_id,
@@ -205,11 +204,10 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 	async getEnvelope({ streamId }: EventStream, version: number, pool?: IEventPool): Promise<EventEnvelope> {
 		const collection = EventCollection.get(pool);
 
-		const entities = await this.pool.query<MariaDBEventEntity>(
-			`SELECT * FROM \`${collection}\` WHERE stream_id = ? AND version = ?`,
+		const [entity] = await this.pool.query<Omit<MariaDBEventEntity, 'stream_id'>[]>(
+			`SELECT event, payload, event_id, aggregate_id, version, occurred_on, correlation_id, causation_id FROM \`${collection}\` WHERE stream_id = ? AND version = ?`,
 			[streamId, version],
 		);
-		const entity: MariaDBEventEntity = entities[0];
 
 		if (!entity) {
 			throw new EventNotFoundException(streamId, version);
