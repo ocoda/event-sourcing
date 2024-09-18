@@ -101,8 +101,8 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 	): Promise<ISnapshot<A>> {
 		const collection = SnapshotCollection.get(pool);
 
-		const { rows: entities } = await this.client.query<PostgresSnapshotEntity<A>>(
-			`SELECT * FROM "${collection}" WHERE stream_id = $1 AND version = $2`,
+		const { rows: entities } = await this.client.query<Pick<PostgresSnapshotEntity<A>, 'payload'>>(
+			`SELECT payload FROM "${collection}" WHERE stream_id = $1 AND version = $2`,
 			[streamId, version],
 		);
 		const entity = entities[0];
@@ -197,7 +197,7 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
 		const query = `
-	        SELECT *
+	        SELECT payload, aggregate_id, registered_on, snapshot_id, version
 	        FROM ${collection}
 	        WHERE stream_id = $1
 	        ${fromVersion ? 'AND version >= $2' : ''}
@@ -207,12 +207,12 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 
 		const params = fromVersion ? [streamId, fromVersion, limit] : [streamId, limit];
 
-		const cursor = this.client.query(new Cursor<PostgresSnapshotEntity<A>>(query, params));
+		const cursor = this.client.query(new Cursor<Omit<PostgresSnapshotEntity<A>, 'stream_id'>>(query, params));
 
 		let done = false;
 
 		while (!done) {
-			const rows: Array<PostgresSnapshotEntity<A>> = await new Promise((resolve, reject) =>
+			const rows: Array<Omit<PostgresSnapshotEntity<A>, 'stream_id'>> = await new Promise((resolve, reject) =>
 				cursor.read(batch, (err, result) => (err ? reject(err) : resolve(result))),
 			);
 
@@ -240,8 +240,11 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 	): Promise<SnapshotEnvelope<A>> {
 		const collection = SnapshotCollection.get(pool);
 
-		const { rows: entities } = await this.client.query<PostgresSnapshotEntity<A>>(
-			`SELECT * FROM "${collection}" WHERE stream_id = $1 AND version = $2`,
+		const { rows: entities } = await this.client.query<
+			Omit<PostgresSnapshotEntity<A>, 'stream_id' | 'aggregate_name' | 'latest'>
+		>(
+			`SELECT payload, aggregate_id, registered_on, snapshot_id, version
+            FROM "${collection}" WHERE stream_id = $1 AND version = $2`,
 			[streamId, version],
 		);
 		const entity = entities[0];
@@ -270,7 +273,7 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
 		const query = `
-            SELECT *
+            SELECT payload, aggregate_id, registered_on, snapshot_id, version
             FROM ${collection}
             WHERE aggregate_name = $1
             AND ${fromId ? 'latest >= $2' : "latest LIKE 'latest%'"}
@@ -280,13 +283,15 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 
 		const params = fromId ? [aggregateName, fromId, limit] : [aggregateName, limit];
 
-		const cursor = this.client.query(new Cursor<PostgresSnapshotEntity<A>>(query, params));
+		const cursor = this.client.query(
+			new Cursor<Omit<PostgresSnapshotEntity<A>, 'stream_id' | 'aggregate_name' | 'latest'>>(query, params),
+		);
 
 		let done = false;
 
 		while (!done) {
-			const rows: Array<PostgresSnapshotEntity<A>> = await new Promise((resolve, reject) =>
-				cursor.read(batch, (err, result) => (err ? reject(err) : resolve(result))),
+			const rows: Array<Omit<PostgresSnapshotEntity<A>, 'stream_id' | 'aggregate_name' | 'latest'>> = await new Promise(
+				(resolve, reject) => cursor.read(batch, (err, result) => (err ? reject(err) : resolve(result))),
 			);
 
 			if (rows.length === 0) {
@@ -309,9 +314,10 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 	private async getLastStreamEntity<A extends AggregateRoot>(
 		collection: string,
 		streamId: string,
-	): Promise<PostgresSnapshotEntity<A>> {
-		const { rows: entities } = await this.client.query<PostgresSnapshotEntity<A>>(
-			`SELECT * FROM "${collection}" WHERE stream_id = $1 ORDER BY version DESC LIMIT 1`,
+	): Promise<Omit<PostgresSnapshotEntity<A>, 'aggregate_name' | 'latest'>> {
+		const { rows: entities } = await this.client.query<Omit<PostgresSnapshotEntity<A>, 'aggregate_name' | 'latest'>>(
+			`SELECT stream_id, payload, aggregate_id, registered_on, snapshot_id, version
+             FROM "${collection}" WHERE stream_id = $1 ORDER BY version DESC LIMIT 1`,
 			[streamId],
 		);
 		const entity = entities[0];
