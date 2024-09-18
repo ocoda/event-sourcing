@@ -149,7 +149,7 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 		// Build the SQL query with parameterized inputs
 		const query = `
             SELECT *
-            FROM ${collection}
+            FROM "${collection}"
             WHERE stream_id = $1
             ${fromVersion ? 'AND version >= $2' : ''}
             ORDER BY version ${direction === StreamReadingDirection.FORWARD ? 'ASC' : 'DESC'}
