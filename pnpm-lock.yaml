@@ -198,6 +198,9 @@ importers:
 
   packages/integration/mariadb:
     dependencies:
+      '@ocoda/event-sourcing':
+        specifier: workspace:*
+        version: link:../../core
       mariadb:
         specifier: ^3.3.1
         version: 3.3.1
