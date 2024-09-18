@@ -22,7 +22,7 @@
 		"rxjs": "^7.2.0"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "1.8.3",
+		"@biomejs/biome": "1.9.1",
 		"@faker-js/faker": "^8.0.0",
 		"@nestjs/common": "10.3.10",
 		"@nestjs/core": "10.3.10",
