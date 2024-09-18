@@ -3,8 +3,8 @@
 </p>
 
 <p align="center">
-  <a href="https://dl.circleci.com/status-badge/redirect/gh/ocoda/event-sourcing/tree/master">
-    <img src="https://dl.circleci.com/status-badge/img/gh/ocoda/event-sourcing/tree/master.svg?style=shield">
+  <a href="https://github.com/ocoda/event-sourcing/actions/workflows/ci-libraries.yml">
+    <img src="https://github.com/ocoda/event-sourcing/actions/workflows/ci-libraries.yml/badge.svg">
   </a>
   <a href="https://codecov.io/gh/ocoda/event-sourcing">
     <img src="https://codecov.io/gh/ocoda/event-sourcing/branch/master/graph/badge.svg?token=D6BRXUY0J8">
