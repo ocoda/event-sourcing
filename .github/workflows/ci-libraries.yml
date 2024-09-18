@@ -51,7 +51,7 @@ jobs:
       matrix:
         node-version: [18.x, 20.x, 22.x]
 
-    name: Tests @ocoda/event-sourcing [Node.js ${{ matrix.node-version }}]
+    name: Test core lib [Node.js ${{ matrix.node-version }}]
 
     steps:
       - uses: actions/checkout@v4
@@ -92,7 +92,7 @@ jobs:
         node-version: [18.x, 20.x, 22.x]
         database: [mongodb, dynamodb, postgres]
 
-    name: Tests @ocoda/event-sourcing-${{ matrix.database }} [Node.js ${{ matrix.node-version }}]
+    name: Test ${{ matrix.database }} lib [Node.js ${{ matrix.node-version }}]
 
     steps:
       - uses: actions/checkout@v4
