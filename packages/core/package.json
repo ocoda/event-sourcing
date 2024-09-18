@@ -38,7 +38,7 @@
 		"@nestjs/testing": "10.3.10",
 		"@ocoda/event-sourcing-config": "workspace:*",
 		"@swc-node/register": "^1.5.2",
-		"@swc/core": "1.7.3",
+		"@swc/core": "1.7.26",
 		"@swc/jest": "0.2.36",
 		"@types/jest": "29.5.13",
 		"@types/node": "20.16.5",
