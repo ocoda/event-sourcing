@@ -66,7 +66,7 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 
 		const query = `
 	        SELECT payload
-	        FROM ${collection}
+	        FROM "${collection}"
 	        WHERE stream_id = $1
 	        ${fromVersion ? 'AND version >= $2' : ''}
 	        ORDER BY version ${direction === StreamReadingDirection.FORWARD ? 'ASC' : 'DESC'}
@@ -198,7 +198,7 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 
 		const query = `
 	        SELECT payload, aggregate_id, registered_on, snapshot_id, version
-	        FROM ${collection}
+	        FROM "${collection}"
 	        WHERE stream_id = $1
 	        ${fromVersion ? 'AND version >= $2' : ''}
 	        ORDER BY version ${direction === StreamReadingDirection.FORWARD ? 'ASC' : 'DESC'}
@@ -274,7 +274,7 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 
 		const query = `
             SELECT payload, aggregate_id, registered_on, snapshot_id, version
-            FROM ${collection}
+            FROM "${collection}"
             WHERE aggregate_name = $1
             AND ${fromId ? 'latest >= $2' : "latest LIKE 'latest%'"}
             ORDER BY latest DESC

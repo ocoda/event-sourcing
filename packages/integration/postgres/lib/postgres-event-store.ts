@@ -62,7 +62,7 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 
 		const query = `
             SELECT event, payload
-            FROM ${collection}
+            FROM "${collection}"
             WHERE stream_id = $1
             ${fromVersion ? 'AND version >= $2' : ''}
             ORDER BY version ${direction === StreamReadingDirection.FORWARD ? 'ASC' : 'DESC'}
