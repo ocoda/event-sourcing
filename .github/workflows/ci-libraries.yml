@@ -24,9 +24,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .turbo
-          key: node-${{ matrix.node-version }}-build-turbo-${{ github.sha }}
+          key: node-${{ matrix.node-version }}-turbo-${{ github.sha }}
           restore-keys: |
-            node-${{ matrix.node-version }}-build-turbo-
+            node-${{ matrix.node-version }}-turbo-
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -60,9 +60,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .turbo
-          key: node-${{ matrix.node-version }}-test-turbo-${{ github.sha }}
+          key: node-${{ matrix.node-version }}-turbo-${{ github.sha }}
           restore-keys: |
-            node-${{ matrix.node-version }}-test-turbo-
+            node-${{ matrix.node-version }}-turbo-
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -104,9 +104,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .turbo
-          key: node-${{ matrix.node-version }}-db-${{ matrix.database }}-test-turbo-${{ github.sha }}
+          key: node-${{ matrix.node-version }}-turbo-${{ github.sha }}
           restore-keys: |
-            node-${{ matrix.node-version }}-db-${{ matrix.database }}-test-turbo-
+            node-${{ matrix.node-version }}-turbo-
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
