@@ -264,9 +264,8 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 	async *getLastEnvelopes<A extends AggregateRoot>(
 		aggregateName: string,
 		filter?: LatestSnapshotFilter,
-		pool?: ISnapshotPool,
 	): AsyncGenerator<SnapshotEnvelope<A>[]> {
-		const collection = SnapshotCollection.get(pool);
+		const collection = SnapshotCollection.get(filter?.pool);
 
 		const fromId = filter?.fromId;
 		const limit = filter?.limit || Number.MAX_SAFE_INTEGER;

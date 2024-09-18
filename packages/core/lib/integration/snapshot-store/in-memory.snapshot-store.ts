@@ -199,11 +199,10 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 	async *getLastEnvelopes<A extends AggregateRoot>(
 		aggregateName: string,
 		filter?: LatestSnapshotFilter,
-		pool?: ISnapshotPool,
 	): AsyncGenerator<SnapshotEnvelope<A>[]> {
 		let entities: InMemorySnapshotEntity<any>[] = [];
 
-		const collection = SnapshotCollection.get(pool);
+		const collection = SnapshotCollection.get(filter?.pool);
 		const fromId = filter?.fromId;
 		const limit = filter?.limit || Number.MAX_SAFE_INTEGER;
 		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
