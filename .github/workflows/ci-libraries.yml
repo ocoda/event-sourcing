@@ -24,9 +24,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .turbo
-          key: node-${{ matrix.node-version }}-build-turbo-${{ github.sha }}
+          key: node-${{ matrix.node-version }}-turbo-${{ github.sha }}
           restore-keys: |
-            node-${{ matrix.node-version }}-build-turbo-
+            node-${{ matrix.node-version }}-turbo-
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -51,7 +51,7 @@ jobs:
       matrix:
         node-version: [18.x, 20.x, 22.x]
 
-    name: Tests @ocoda/event-sourcing [Node.js ${{ matrix.node-version }}]
+    name: Test core lib [Node.js ${{ matrix.node-version }}]
 
     steps:
       - uses: actions/checkout@v4
@@ -60,9 +60,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .turbo
-          key: node-${{ matrix.node-version }}-test-turbo-${{ github.sha }}
+          key: node-${{ matrix.node-version }}-turbo-${{ github.sha }}
           restore-keys: |
-            node-${{ matrix.node-version }}-test-turbo-
+            node-${{ matrix.node-version }}-turbo-
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -92,7 +92,7 @@ jobs:
         node-version: [18.x, 20.x, 22.x]
         database: [mongodb, dynamodb, postgres]
 
-    name: Tests @ocoda/event-sourcing-${{ matrix.database }} [Node.js ${{ matrix.node-version }}]
+    name: Test ${{ matrix.database }} lib [Node.js ${{ matrix.node-version }}]
 
     steps:
       - uses: actions/checkout@v4
@@ -104,9 +104,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .turbo
-          key: node-${{ matrix.node-version }}-db-${{ matrix.database }}-test-turbo-${{ github.sha }}
+          key: node-${{ matrix.node-version }}-turbo-${{ github.sha }}
           restore-keys: |
-            node-${{ matrix.node-version }}-db-${{ matrix.database }}-test-turbo-
+            node-${{ matrix.node-version }}-turbo-
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
