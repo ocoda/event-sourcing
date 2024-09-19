@@ -11,6 +11,7 @@ import {
 	SnapshotEnvelope,
 	SnapshotNotFoundException,
 	SnapshotStore,
+	SnapshotStorePersistenceException,
 	SnapshotStream,
 	StreamReadingDirection,
 	UUID,
@@ -194,6 +195,12 @@ describe(DynamoDBSnapshotStore, () => {
 			expect(typeof entity.registeredOn).toBe('number');
 			expect(entity.version).toEqual(envelopesAccountA[index].metadata.version);
 		}
+	});
+
+	it("should throw when a snapshot envelope can't be appended", async () => {
+		expect(() =>
+			snapshotStore.appendSnapshot(snapshotStreamAccountA, 1, snapshotsAccountA[0], 'not-a-pool'),
+		).rejects.toThrow(SnapshotStorePersistenceException);
 	});
 
 	it('should retrieve a single snapshot from a specified stream', async () => {

@@ -12,6 +12,7 @@ import {
 	EventNotFoundException,
 	EventSourcingModule,
 	EventStore,
+	EventStorePersistenceException,
 	EventStream,
 	IEvent,
 	StreamReadingDirection,
@@ -212,6 +213,12 @@ describe(DynamoDBEventStore, () => {
 		}
 
 		expect(publish).toHaveBeenCalledTimes(events.length * 2);
+	});
+
+	it("should throw when event envelopes can't be appended", async () => {
+		expect(() => eventStore.appendEvents(eventStreamAccountA, 3, events.slice(0, 3), 'not-a-pool')).rejects.toThrow(
+			EventStorePersistenceException,
+		);
 	});
 
 	it('should retrieve a single event from a specified stream', async () => {

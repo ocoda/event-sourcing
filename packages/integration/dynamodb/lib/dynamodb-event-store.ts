@@ -17,6 +17,7 @@ import {
 	EventFilter,
 	EventNotFoundException,
 	EventStore,
+	EventStorePersistenceException,
 	EventStream,
 	IEvent,
 	IEventCollection,
@@ -144,42 +145,46 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 	): Promise<EventEnvelope[]> {
 		const collection = EventCollection.get(pool);
 
-		let version = aggregateVersion - events.length + 1;
+		try {
+			let version = aggregateVersion - events.length + 1;
 
-		const envelopes: EventEnvelope[] = [];
-		for (const event of events) {
-			const name = this.eventMap.getName(event);
-			const payload = this.eventMap.serializeEvent(event);
-			const envelope = EventEnvelope.create(name, payload, { aggregateId, version: version++ });
-			envelopes.push(envelope);
+			const envelopes: EventEnvelope[] = [];
+			for (const event of events) {
+				const name = this.eventMap.getName(event);
+				const payload = this.eventMap.serializeEvent(event);
+				const envelope = EventEnvelope.create(name, payload, { aggregateId, version: version++ });
+				envelopes.push(envelope);
+			}
+
+			const params: BatchWriteItemInput = {
+				RequestItems: {
+					[collection]: envelopes.map(({ event, payload, metadata }) => ({
+						PutRequest: {
+							Item: marshall(
+								{
+									streamId,
+									event,
+									payload,
+									version: metadata.version,
+									eventId: metadata.eventId,
+									aggregateId: metadata.aggregateId,
+									occurredOn: metadata.occurredOn.getTime(),
+									correlationId: metadata.correlationId,
+									causationId: metadata.causationId,
+								},
+								{ removeUndefinedValues: true },
+							),
+						},
+					})),
+				},
+			};
+
+			await this.client.send(new BatchWriteItemCommand(params));
+
+			return envelopes;
+		} catch (error) {
+			throw new EventStorePersistenceException(collection, error);
 		}
-
-		const params: BatchWriteItemInput = {
-			RequestItems: {
-				[collection]: envelopes.map(({ event, payload, metadata }) => ({
-					PutRequest: {
-						Item: marshall(
-							{
-								streamId,
-								event,
-								payload,
-								version: metadata.version,
-								eventId: metadata.eventId,
-								aggregateId: metadata.aggregateId,
-								occurredOn: metadata.occurredOn.getTime(),
-								correlationId: metadata.correlationId,
-								causationId: metadata.causationId,
-							},
-							{ removeUndefinedValues: true },
-						),
-					},
-				})),
-			},
-		};
-
-		await this.client.send(new BatchWriteItemCommand(params));
-
-		return envelopes;
 	}
 
 	async *getEnvelopes({ streamId }: EventStream, filter?: EventFilter): AsyncGenerator<EventEnvelope[]> {

@@ -21,6 +21,7 @@ import {
 	SnapshotFilter,
 	SnapshotNotFoundException,
 	SnapshotStore,
+	SnapshotStorePersistenceException,
 	SnapshotStream,
 	StreamReadingDirection,
 } from '@ocoda/event-sourcing';
@@ -167,50 +168,56 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 		aggregateVersion: number,
 		snapshot: ISnapshot<A>,
 		pool?: ISnapshotPool,
-	): Promise<void> {
+	): Promise<SnapshotEnvelope<A>> {
 		const collection = SnapshotCollection.get(pool);
 
-		const { payload, metadata } = SnapshotEnvelope.create<A>(snapshot, {
-			aggregateId,
-			version: aggregateVersion,
-		});
-
-		const updateLastItem = [];
-		const lastStreamEntity = await this.getLastStreamEntity(collection, streamId);
-
-		if (lastStreamEntity) {
-			const snapshot = this.hydrate<A>(lastStreamEntity);
-			updateLastItem.push({
-				Update: {
-					TableName: collection,
-					Key: marshall({ streamId, version: snapshot.version }),
-					UpdateExpression: 'REMOVE latest',
-				},
+		try {
+			const envelope = SnapshotEnvelope.create<A>(snapshot, {
+				aggregateId,
+				version: aggregateVersion,
 			});
-		}
 
-		await this.client.send(
-			new TransactWriteItemsCommand({
-				TransactItems: [
-					...updateLastItem,
-					{
-						Put: {
-							TableName: collection,
-							Item: marshall({
-								streamId,
-								payload,
-								version: metadata.version,
-								aggregateName: aggregate,
-								snapshotId: metadata.snapshotId,
-								aggregateId: metadata.aggregateId,
-								registeredOn: metadata.registeredOn.getTime(),
-								latest: `latest#${streamId}`,
-							}),
-						},
+			const updateLastItem = [];
+			const lastStreamEntity = await this.getLastStreamEntity(collection, streamId);
+
+			if (lastStreamEntity) {
+				const snapshot = this.hydrate<A>(lastStreamEntity);
+				updateLastItem.push({
+					Update: {
+						TableName: collection,
+						Key: marshall({ streamId, version: snapshot.version }),
+						UpdateExpression: 'REMOVE latest',
 					},
-				],
-			}),
-		);
+				});
+			}
+
+			await this.client.send(
+				new TransactWriteItemsCommand({
+					TransactItems: [
+						...updateLastItem,
+						{
+							Put: {
+								TableName: collection,
+								Item: marshall({
+									streamId,
+									payload: envelope.payload,
+									version: envelope.metadata.version,
+									aggregateName: aggregate,
+									snapshotId: envelope.metadata.snapshotId,
+									aggregateId: envelope.metadata.aggregateId,
+									registeredOn: envelope.metadata.registeredOn.getTime(),
+									latest: `latest#${streamId}`,
+								}),
+							},
+						},
+					],
+				}),
+			);
+
+			return envelope;
+		} catch (error) {
+			throw new SnapshotStorePersistenceException(collection, error);
+		}
 	}
 
 	async getLastSnapshot<A extends AggregateRoot>(
