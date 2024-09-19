@@ -127,6 +127,7 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 		snapshot: ISnapshot<A>,
 		pool?: ISnapshotPool,
 	): Promise<SnapshotEnvelope<A>> {
+		const connection = await this.pool.connect();
 		const collection = SnapshotCollection.get(pool);
 
 		try {
@@ -135,8 +136,9 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 				version: aggregateVersion,
 			});
 
-			const lastStreamEntity = await this.getLastStreamEntity(collection, streamId);
+			const lastStreamEntity = await this.getLastStreamEntity(collection, streamId, connection);
 
+			await connection.query('BEGIN');
 			if (lastStreamEntity) {
 				await this.client.query(`UPDATE "${collection}" SET latest = null WHERE stream_id = $1 AND version = $2`, [
 					lastStreamEntity.stream_id,
@@ -144,7 +146,7 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 				]);
 			}
 
-			await this.client.query(
+			await connection.query(
 				`
             INSERT INTO "${collection}" (stream_id, version, payload, snapshot_id, aggregate_id, registered_on, aggregate_name, latest)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -160,10 +162,14 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 					`latest#${streamId}`,
 				],
 			);
+			await connection.query('COMMIT');
 
 			return envelope;
 		} catch (error) {
+			await connection.query('ROLLBACK');
 			throw new SnapshotStorePersistenceException(collection, error);
+		} finally {
+			connection.release();
 		}
 	}
 
@@ -326,8 +332,11 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 	private async getLastStreamEntity<A extends AggregateRoot>(
 		collection: string,
 		streamId: string,
+		connection?: PoolClient,
 	): Promise<Omit<PostgresSnapshotEntity<A>, 'aggregate_name' | 'latest'>> {
-		const { rows: entities } = await this.client.query<Omit<PostgresSnapshotEntity<A>, 'aggregate_name' | 'latest'>>(
+		const { rows: entities } = await (connection || this.client).query<
+			Omit<PostgresSnapshotEntity<A>, 'aggregate_name' | 'latest'>
+		>(
 			`SELECT stream_id, payload, aggregate_id, registered_on, snapshot_id, version
              FROM "${collection}" WHERE stream_id = $1 ORDER BY version DESC LIMIT 1`,
 			[streamId],
