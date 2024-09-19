@@ -1,7 +1,7 @@
 import { Type } from '@nestjs/common';
 import { DEFAULT_BATCH_SIZE, StreamReadingDirection } from '../../constants';
 import { EventFilter, EventStore } from '../../event-store';
-import { EventNotFoundException } from '../../exceptions';
+import { EventNotFoundException, EventStorePersistenceException } from '../../exceptions';
 import {
 	EventEnvelopeMetadata,
 	EventStoreConfig,
@@ -93,23 +93,32 @@ export class InMemoryEventStore extends EventStore<InMemoryEventStoreConfig> {
 		pool?: IEventPool,
 	): Promise<EventEnvelope[]> {
 		const collection = EventCollection.get(pool);
-		const eventCollection = this.collections.get(collection) || [];
 
-		let version = aggregateVersion - events.length + 1;
+		try {
+			const eventCollection = this.collections.get(collection);
 
-		const envelopes: EventEnvelope[] = [];
-		for (const event of events) {
-			const name = this.eventMap.getName(event);
-			const payload = this.eventMap.serializeEvent(event);
-			const envelope = EventEnvelope.create(name, payload, { aggregateId, version: version++ });
-			envelopes.push(envelope);
+			if (!eventCollection) {
+				throw new Error('Event collection not found');
+			}
+
+			let version = aggregateVersion - events.length + 1;
+
+			const envelopes: EventEnvelope[] = [];
+			for (const event of events) {
+				const name = this.eventMap.getName(event);
+				const payload = this.eventMap.serializeEvent(event);
+				const envelope = EventEnvelope.create(name, payload, { aggregateId, version: version++ });
+				envelopes.push(envelope);
+			}
+
+			eventCollection.push(
+				...envelopes.map(({ event, payload, metadata }) => ({ streamId, event, payload, ...metadata })),
+			);
+
+			return Promise.resolve(envelopes);
+		} catch (error) {
+			throw new EventStorePersistenceException(collection, error);
 		}
-
-		eventCollection.push(
-			...envelopes.map(({ event, payload, metadata }) => ({ streamId, event, payload, ...metadata })),
-		);
-
-		return Promise.resolve(envelopes);
 	}
 
 	async *getEnvelopes({ streamId }: EventStream, filter?: EventFilter): AsyncGenerator<EventEnvelope[]> {

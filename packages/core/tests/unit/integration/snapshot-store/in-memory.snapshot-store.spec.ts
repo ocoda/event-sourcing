@@ -4,6 +4,7 @@ import {
 	ISnapshot,
 	SnapshotEnvelope,
 	SnapshotNotFoundException,
+	SnapshotStorePersistenceException,
 	SnapshotStream,
 	StreamReadingDirection,
 	UUID,
@@ -141,6 +142,12 @@ describe(InMemorySnapshotStore, () => {
 			expect(entity.registeredOn).toBeInstanceOf(Date);
 			expect(entity.version).toEqual(envelopesAccountA[index].metadata.version);
 		}
+	});
+
+	it("should throw when a snapshot envelope can't be appended", async () => {
+		expect(() =>
+			snapshotStore.appendSnapshot(snapshotStreamAccountA, 1, snapshotsAccountA[0], 'not-a-pool'),
+		).rejects.toThrow(SnapshotStorePersistenceException);
 	});
 
 	it('should retrieve a single snapshot from a specified stream', () => {

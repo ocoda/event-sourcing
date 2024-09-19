@@ -1,6 +1,6 @@
 import { Type } from '@nestjs/common';
 import { DEFAULT_BATCH_SIZE, StreamReadingDirection } from '../../constants';
-import { SnapshotNotFoundException } from '../../exceptions';
+import { SnapshotNotFoundException, SnapshotStorePersistenceException } from '../../exceptions';
 import {
 	ISnapshot,
 	ISnapshotCollection,
@@ -93,30 +93,41 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 		return entity.payload;
 	}
 
-	appendSnapshot<A extends AggregateRoot>(
+	async appendSnapshot<A extends AggregateRoot>(
 		{ streamId, aggregateId, aggregate }: SnapshotStream,
 		aggregateVersion: number,
 		snapshot: ISnapshot<A>,
 		pool?: ISnapshotPool,
-	): void {
+	): Promise<SnapshotEnvelope<A>> {
 		const collection = SnapshotCollection.get(pool);
-		const snapshotCollection = this.collections.get(collection) || [];
 
-		const envelope = SnapshotEnvelope.create<A>(snapshot, { aggregateId, version: aggregateVersion });
+		try {
+			const snapshotCollection = this.collections.get(collection);
 
-		for (const entity of snapshotCollection) {
-			if (entity.streamId === streamId) {
-				entity.latest = undefined;
+			if (!snapshotCollection) {
+				throw new Error('Snapshot collection not found');
 			}
-		}
 
-		snapshotCollection.push({
-			streamId,
-			payload: envelope.payload,
-			aggregateName: aggregate,
-			latest: `latest#${streamId}`,
-			...envelope.metadata,
-		});
+			const envelope = SnapshotEnvelope.create<A>(snapshot, { aggregateId, version: aggregateVersion });
+
+			for (const entity of snapshotCollection) {
+				if (entity.streamId === streamId) {
+					entity.latest = undefined;
+				}
+			}
+
+			snapshotCollection.push({
+				streamId,
+				payload: envelope.payload,
+				aggregateName: aggregate,
+				latest: `latest#${streamId}`,
+				...envelope.metadata,
+			});
+
+			return Promise.resolve(envelope);
+		} catch (error) {
+			throw new SnapshotStorePersistenceException(collection, error);
+		}
 	}
 
 	getLastSnapshot<A extends AggregateRoot>({ streamId }: SnapshotStream, pool?: ISnapshotPool): ISnapshot<A> {
