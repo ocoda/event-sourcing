@@ -112,6 +112,7 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 		events: IEvent[],
 		pool?: IEventPool,
 	): Promise<EventEnvelope[]> {
+		const connection = await this.pool.getConnection();
 		const collection = EventCollection.get(pool);
 
 		try {
@@ -125,7 +126,8 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 				envelopes.push(envelope);
 			}
 
-			await this.pool.batch(
+			await connection.beginTransaction();
+			await connection.batch(
 				`INSERT INTO \`${collection}\` VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 				envelopes.map(({ event, payload, metadata }) => [
 					streamId,
@@ -139,10 +141,14 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 					metadata.causationId ?? null,
 				]),
 			);
+			await connection.commit();
 
 			return envelopes;
 		} catch (error) {
+			await connection.rollback();
 			throw new EventStorePersistenceException(collection, error);
+		} finally {
+			connection.release();
 		}
 	}
 
