@@ -27,7 +27,7 @@ export class InMemoryEventStore extends EventStore<InMemoryEventStoreConfig> {
 
 	public async connect(): Promise<void> {
 		this.logger.log('Starting store');
-        this.collections = new Map();
+		this.collections = new Map();
 	}
 
 	public async disconnect(): Promise<void> {
@@ -38,7 +38,7 @@ export class InMemoryEventStore extends EventStore<InMemoryEventStoreConfig> {
 	public async ensureCollection(pool?: IEventPool): Promise<IEventCollection> {
 		const collection = EventCollection.get(pool);
 		this.collections.set(collection, []);
-        return collection;
+		return collection;
 	}
 
 	async *getEvents({ streamId }: EventStream, filter?: EventFilter): AsyncGenerator<IEvent[]> {

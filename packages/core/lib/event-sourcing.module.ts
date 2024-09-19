@@ -1,4 +1,4 @@
-import { DynamicModule, Module, OnModuleInit, Provider } from '@nestjs/common';
+import { DynamicModule, Inject, Module, OnModuleInit, Provider } from '@nestjs/common';
 import { DiscoveryModule } from '@nestjs/core';
 import { CommandBus } from './command-bus';
 import { EVENT_SOURCING_OPTIONS } from './constants';
@@ -107,12 +107,23 @@ export class EventSourcingModule implements OnModuleInit {
 	}
 
 	constructor(
+		@Inject(EVENT_SOURCING_OPTIONS) private readonly options: EventSourcingModuleOptions,
 		private readonly eventStore: EventStore,
 		private readonly snapshotStore: SnapshotStore,
 	) {}
 
 	async onModuleInit() {
-		await Promise.all([this.eventStore.connect(), this.snapshotStore.connect()]); // TODO: Add error handling
+		const createDefaultEventPool = this.options.eventStore?.useDefaultPool ?? true;
+		const createDefaultSnapshotPool = this.options.snapshotStore?.useDefaultPool ?? true;
+
+		const loadConnections = [this.eventStore.connect(), this.snapshotStore.connect()];
+		await Promise.all(loadConnections);
+
+		const loadCollections = [
+			createDefaultEventPool && this.eventStore.ensureCollection(),
+			createDefaultSnapshotPool && this.snapshotStore.ensureCollection(),
+		];
+		await Promise.all(loadCollections);
 	}
 
 	async onModuleDestroy() {

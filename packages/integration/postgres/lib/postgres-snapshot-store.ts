@@ -21,7 +21,7 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 	private pool: Pool;
 	private client: PoolClient;
 
-    public async connect(): Promise<void> {
+	public async connect(): Promise<void> {
 		this.logger.log('Starting store');
 		this.pool = new Pool(this.options);
 		this.client = await this.pool.connect();
