@@ -8,6 +8,7 @@ import {
 	SnapshotEnvelope,
 	SnapshotNotFoundException,
 	SnapshotStore,
+	SnapshotStorePersistenceException,
 	SnapshotStream,
 	StreamReadingDirection,
 	UUID,
@@ -121,10 +122,12 @@ describe(MongoDBSnapshotStore, () => {
 		// biome-ignore lint/complexity/useLiteralKeys: Needed to check the internal workings of the event store
 		client = snapshotStore['client'];
 	});
+
 	afterAll(async () => {
 		await client.db().dropCollection(SnapshotCollection.get());
 		await client.close();
 	});
+
 	it('should append snapshot envelopes', async () => {
 		await snapshotStore.appendSnapshot(snapshotStreamAccountA, 1, snapshotsAccountA[0]);
 		await snapshotStore.appendSnapshot(snapshotStreamAccountB, 1, snapshotsAccountB[0]);
@@ -163,6 +166,13 @@ describe(MongoDBSnapshotStore, () => {
 			expect(entity.version).toEqual(envelopesAccountA[index].metadata.version);
 		}
 	});
+
+	it("should throw when a snapshot envelope can't be appended", async () => {
+		expect(() =>
+			snapshotStore.appendSnapshot(snapshotStreamAccountA, 1, snapshotsAccountA[0], 'not-a-pool'),
+		).rejects.toThrow(SnapshotStorePersistenceException);
+	});
+
 	it('should retrieve a single snapshot from a specified stream', async () => {
 		const resolvedSnapshot = await snapshotStore.getSnapshot(
 			snapshotStreamAccountA,
@@ -170,6 +180,7 @@ describe(MongoDBSnapshotStore, () => {
 		);
 		expect(resolvedSnapshot).toEqual(snapshotsAccountA[1]);
 	});
+
 	it('should retrieve snapshots by stream', async () => {
 		const resolvedSnapshots: ISnapshot<Account>[] = [];
 		for await (const snapshots of snapshotStore.getSnapshots(snapshotStreamAccountA)) {
@@ -177,6 +188,7 @@ describe(MongoDBSnapshotStore, () => {
 		}
 		expect(resolvedSnapshots).toEqual(snapshotsAccountA);
 	});
+
 	it('should filter snapshots by stream and version', async () => {
 		const resolvedSnapshots: ISnapshot<Account>[] = [];
 		for await (const snapshots of snapshotStore.getSnapshots(snapshotStreamAccountA, {
@@ -186,10 +198,12 @@ describe(MongoDBSnapshotStore, () => {
 		}
 		expect(resolvedSnapshots).toEqual(snapshotsAccountA.slice(3));
 	});
+
 	it("should throw when a snapshot isn't found in a specified stream", () => {
 		const stream = SnapshotStream.for(Account, AccountId.generate());
 		expect(snapshotStore.getSnapshot(stream, 20)).rejects.toThrow(new SnapshotNotFoundException(stream.streamId, 20));
 	});
+
 	it('should retrieve snapshots backwards', async () => {
 		const resolvedSnapshots: ISnapshot<Account>[] = [];
 		for await (const snapshots of snapshotStore.getSnapshots(snapshotStreamAccountA, {
@@ -199,6 +213,7 @@ describe(MongoDBSnapshotStore, () => {
 		}
 		expect(resolvedSnapshots).toEqual(snapshotsAccountA.slice().reverse());
 	});
+
 	it('should retrieve snapshots backwards from a certain version', async () => {
 		const resolvedSnapshots: ISnapshot<Account>[] = [];
 		for await (const snapshots of snapshotStore.getSnapshots(snapshotStreamAccountA, {
@@ -211,6 +226,7 @@ describe(MongoDBSnapshotStore, () => {
 			snapshotsAccountA.filter((_, index) => (index + 1) * 10 >= envelopesAccountA[2].metadata.version).reverse(),
 		);
 	});
+
 	it('should limit the returned snapshots', async () => {
 		const resolvedSnapshots: ISnapshot<Account>[] = [];
 		for await (const snapshots of snapshotStore.getSnapshots(snapshotStreamAccountA, { limit: 2 })) {
@@ -218,6 +234,7 @@ describe(MongoDBSnapshotStore, () => {
 		}
 		expect(resolvedSnapshots).toEqual(snapshotsAccountA.slice(0, 2));
 	});
+
 	it('should batch the returned snapshots', async () => {
 		const resolvedSnapshots: ISnapshot<Account>[] = [];
 		for await (const snapshots of snapshotStore.getSnapshots(snapshotStreamAccountA, { limit: 2 })) {
@@ -226,16 +243,19 @@ describe(MongoDBSnapshotStore, () => {
 		}
 		expect(resolvedSnapshots).toEqual(snapshotsAccountA.slice(0, 2));
 	});
+
 	it('should retrieve the last snapshot', async () => {
 		const resolvedSnapshot = await snapshotStore.getLastSnapshot(snapshotStreamAccountA);
 		expect(resolvedSnapshot).toEqual(snapshotsAccountA[snapshotsAccountA.length - 1]);
 	});
+
 	it('should return undefined if there is no last snapshot', async () => {
 		@Aggregate({ streamName: 'foo' })
 		class Foo extends AggregateRoot {}
 		const resolvedSnapshot = await snapshotStore.getLastSnapshot(SnapshotStream.for(Foo, UUID.generate()));
 		expect(resolvedSnapshot).toBeUndefined();
 	});
+
 	it('should retrieve snapshot-envelopes', async () => {
 		const resolvedEnvelopes: SnapshotEnvelope<Account>[] = [];
 		for await (const envelopes of snapshotStore.getEnvelopes(snapshotStreamAccountA)) {
@@ -249,6 +269,7 @@ describe(MongoDBSnapshotStore, () => {
 			expect(envelope.metadata.version).toEqual(envelopesAccountA[index].metadata.version);
 		}
 	});
+
 	it('should retrieve a single snapshot-envelope', async () => {
 		const { metadata, payload } = await snapshotStore.getEnvelope(
 			snapshotStreamAccountA,
@@ -259,6 +280,7 @@ describe(MongoDBSnapshotStore, () => {
 		expect(metadata.registeredOn).toBeInstanceOf(Date);
 		expect(metadata.version).toEqual(envelopesAccountA[3].metadata.version);
 	});
+
 	it('should retrieve the last snapshot-envelope', async () => {
 		const lastEnvelope = envelopesAccountA[envelopesAccountA.length - 1];
 		const { metadata, payload } = await snapshotStore.getLastEnvelope(snapshotStreamAccountA);
@@ -267,6 +289,7 @@ describe(MongoDBSnapshotStore, () => {
 		expect(metadata.registeredOn).toBeInstanceOf(Date);
 		expect(metadata.version).toEqual(lastEnvelope.metadata.version);
 	});
+
 	it('should retrieve the last snapshot-envelopes', async () => {
 		let resolvedEnvelopes: SnapshotEnvelope<Account>[] = [];
 		for await (const envelopes of snapshotStore.getLastEnvelopes('account')) {

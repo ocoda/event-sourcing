@@ -10,6 +10,7 @@ import {
 	SnapshotFilter,
 	SnapshotNotFoundException,
 	SnapshotStore,
+	SnapshotStorePersistenceException,
 	SnapshotStream,
 	StreamReadingDirection,
 } from '@ocoda/event-sourcing';
@@ -116,30 +117,42 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 		aggregateVersion: number,
 		snapshot: ISnapshot<A>,
 		pool?: ISnapshotPool,
-	): Promise<void> {
+	): Promise<SnapshotEnvelope<A>> {
 		const collection = SnapshotCollection.get(pool);
 
-		const { payload, metadata } = SnapshotEnvelope.create<A>(snapshot, {
-			aggregateId,
-			version: aggregateVersion,
-		});
+		try {
+			const collections = await this.database.listCollections({ name: collection }).toArray();
 
-		const lastStreamEntity = await this.getLastStreamEntity(collection, streamId);
+			if (collections.length === 0) {
+				throw new Error(`Collection "${collection}" does not exist.`);
+			}
 
-		if (lastStreamEntity) {
-			await this.database
-				.collection<MongoSnapshotEntity<A>>(collection)
-				.updateOne({ _id: lastStreamEntity._id }, { $set: { latest: null } });
+			const envelope = SnapshotEnvelope.create<A>(snapshot, {
+				aggregateId,
+				version: aggregateVersion,
+			});
+
+			const lastStreamEntity = await this.getLastStreamEntity(collection, streamId);
+
+			if (lastStreamEntity) {
+				await this.database
+					.collection<MongoSnapshotEntity<A>>(collection)
+					.updateOne({ _id: lastStreamEntity._id }, { $set: { latest: null } });
+			}
+
+			await this.database.collection<MongoSnapshotEntity<A>>(collection).insertOne({
+				_id: envelope.metadata.snapshotId,
+				streamId,
+				payload: envelope.payload,
+				aggregateName: aggregate,
+				latest: `latest#${streamId}`,
+				...envelope.metadata,
+			});
+
+			return envelope;
+		} catch (error) {
+			throw new SnapshotStorePersistenceException(collection, error);
 		}
-
-		await this.database.collection<MongoSnapshotEntity<A>>(collection).insertOne({
-			_id: metadata.snapshotId,
-			streamId,
-			payload,
-			aggregateName: aggregate,
-			latest: `latest#${streamId}`,
-			...metadata,
-		});
 	}
 
 	async getLastSnapshot<A extends AggregateRoot>(
