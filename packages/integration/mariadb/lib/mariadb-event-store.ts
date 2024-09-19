@@ -5,6 +5,7 @@ import {
 	EventFilter,
 	EventNotFoundException,
 	EventStore,
+	EventStorePersistenceException,
 	EventStream,
 	IEvent,
 	IEventCollection,
@@ -113,32 +114,36 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 	): Promise<EventEnvelope[]> {
 		const collection = EventCollection.get(pool);
 
-		let version = aggregateVersion - events.length + 1;
+		try {
+			let version = aggregateVersion - events.length + 1;
 
-		const envelopes: EventEnvelope[] = [];
-		for (const event of events) {
-			const name = this.eventMap.getName(event);
-			const payload = this.eventMap.serializeEvent(event);
-			const envelope = EventEnvelope.create(name, payload, { aggregateId, version: version++ });
-			envelopes.push(envelope);
+			const envelopes: EventEnvelope[] = [];
+			for (const event of events) {
+				const name = this.eventMap.getName(event);
+				const payload = this.eventMap.serializeEvent(event);
+				const envelope = EventEnvelope.create(name, payload, { aggregateId, version: version++ });
+				envelopes.push(envelope);
+			}
+
+			await this.pool.batch(
+				`INSERT INTO \`${collection}\` VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				envelopes.map(({ event, payload, metadata }) => [
+					streamId,
+					metadata.version,
+					event,
+					JSON.stringify(payload),
+					metadata.eventId,
+					metadata.aggregateId,
+					metadata.occurredOn,
+					metadata.correlationId ?? null,
+					metadata.causationId ?? null,
+				]),
+			);
+
+			return envelopes;
+		} catch (error) {
+			throw new EventStorePersistenceException(collection, error);
 		}
-
-		await this.pool.batch(
-			`INSERT INTO \`${collection}\` VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			envelopes.map(({ event, payload, metadata }) => [
-				streamId,
-				metadata.version,
-				event,
-				JSON.stringify(payload),
-				metadata.eventId,
-				metadata.aggregateId,
-				metadata.occurredOn,
-				metadata.correlationId ?? null,
-				metadata.causationId ?? null,
-			]),
-		);
-
-		return envelopes;
 	}
 
 	async *getEnvelopes({ streamId }: EventStream, filter?: EventFilter): AsyncGenerator<EventEnvelope[]> {
