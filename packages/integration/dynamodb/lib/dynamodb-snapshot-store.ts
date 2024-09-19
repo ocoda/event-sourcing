@@ -1,6 +1,8 @@
 import {
 	AttributeValue,
+	BillingMode,
 	CreateTableCommand,
+	CreateTableCommandInput,
 	DescribeTableCommand,
 	DynamoDBClient,
 	GetItemCommand,
@@ -40,7 +42,10 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 		this.client.destroy();
 	}
 
-	public async ensureCollection(pool?: ISnapshotPool): Promise<ISnapshotCollection> {
+	public async ensureCollection(
+		pool?: ISnapshotPool,
+		config?: Pick<CreateTableCommandInput, 'BillingMode' | 'ProvisionedThroughput' | 'OnDemandThroughput'>,
+	): Promise<ISnapshotCollection> {
 		const collection = SnapshotCollection.get(pool);
 
 		try {
@@ -74,11 +79,12 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 									},
 								},
 							],
-							ProvisionedThroughput: {
+							ProvisionedThroughput: config?.ProvisionedThroughput || {
 								ReadCapacityUnits: 1,
 								WriteCapacityUnits: 1,
 							},
-							BillingMode: 'PAY_PER_REQUEST',
+							OnDemandThroughput: config?.OnDemandThroughput,
+							BillingMode: config?.BillingMode || BillingMode.PAY_PER_REQUEST,
 						}),
 					);
 					break;

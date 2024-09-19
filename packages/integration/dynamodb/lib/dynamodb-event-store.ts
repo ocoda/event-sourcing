@@ -2,7 +2,9 @@ import {
 	AttributeValue,
 	BatchWriteItemCommand,
 	BatchWriteItemInput,
+	BillingMode,
 	CreateTableCommand,
+	CreateTableCommandInput,
 	DescribeTableCommand,
 	DynamoDBClient,
 	GetItemCommand,
@@ -39,7 +41,10 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 		this.client.destroy();
 	}
 
-	public async ensureCollection(pool?: IEventPool): Promise<IEventCollection> {
+	public async ensureCollection(
+		pool?: IEventPool,
+		config?: Pick<CreateTableCommandInput, 'BillingMode' | 'ProvisionedThroughput' | 'OnDemandThroughput'>,
+	): Promise<IEventCollection> {
 		const collection = EventCollection.get(pool);
 
 		try {
@@ -59,11 +64,12 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 								{ AttributeName: 'streamId', AttributeType: 'S' },
 								{ AttributeName: 'version', AttributeType: 'N' },
 							],
-							ProvisionedThroughput: {
+							ProvisionedThroughput: config?.ProvisionedThroughput || {
 								ReadCapacityUnits: 1,
 								WriteCapacityUnits: 1,
 							},
-							BillingMode: 'PAY_PER_REQUEST',
+							OnDemandThroughput: config?.OnDemandThroughput,
+							BillingMode: config?.BillingMode || BillingMode.PAY_PER_REQUEST,
 						}),
 					);
 					break;
