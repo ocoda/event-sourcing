@@ -1,7 +1,13 @@
 import { Type } from '@nestjs/common';
 import { DEFAULT_BATCH_SIZE, StreamReadingDirection } from '../../constants';
 import { SnapshotNotFoundException } from '../../exceptions';
-import { ISnapshot, ISnapshotPool, SnapshotEnvelopeMetadata, SnapshotStoreConfig } from '../../interfaces';
+import {
+	ISnapshot,
+	ISnapshotCollection,
+	ISnapshotPool,
+	SnapshotEnvelopeMetadata,
+	SnapshotStoreConfig,
+} from '../../interfaces';
 import { AggregateRoot, SnapshotCollection, SnapshotEnvelope, SnapshotStream } from '../../models';
 import { LatestSnapshotFilter, SnapshotFilter, SnapshotStore } from '../../snapshot-store';
 
@@ -17,19 +23,22 @@ export interface InMemorySnapshotStoreConfig extends SnapshotStoreConfig {
 }
 
 export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreConfig> {
-	public readonly collections: Map<ISnapshotPool, InMemorySnapshotEntity<any>[]> = new Map();
+	public collections: Map<ISnapshotPool, InMemorySnapshotEntity<any>[]>;
 
-	public start(): void {
+	public async connect(): Promise<void> {
 		this.logger.log('Starting store');
-		const { pool } = this.options;
-
-		const collection = SnapshotCollection.get(pool);
-		this.collections.set(collection, []);
+		this.collections = new Map();
 	}
 
-	public stop(): void {
+	public async disconnect(): Promise<void> {
 		this.logger.log('Stopping store');
 		this.collections.clear();
+	}
+
+	public async ensureCollection(pool?: ISnapshotPool): Promise<ISnapshotCollection> {
+		const collection = SnapshotCollection.get(pool);
+		this.collections.set(collection, []);
+		return collection;
 	}
 
 	async *getSnapshots<A extends AggregateRoot>(

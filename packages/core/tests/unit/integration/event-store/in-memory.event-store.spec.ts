@@ -71,7 +71,8 @@ describe(InMemoryEventStore, () => {
 	beforeAll(() => {
 		eventStore = new InMemoryEventStore(eventMap, { driver: InMemoryEventStore });
 		eventStore.publish = publish;
-		eventStore.start();
+		eventStore.connect();
+		eventStore.ensureCollection();
 
 		envelopesAccountA = [
 			EventEnvelope.create('account-opened', eventMap.serializeEvent(events[0]), {
@@ -127,7 +128,7 @@ describe(InMemoryEventStore, () => {
 		];
 	});
 
-	afterAll(() => eventStore.stop());
+	afterAll(() => eventStore.disconnect());
 
 	it('should append event envelopes', async () => {
 		await Promise.all([

@@ -19,12 +19,17 @@ import { MariaDBSnapshotEntity, MariaDBSnapshotStoreConfig } from './interfaces'
 export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConfig> {
 	private pool: Pool;
 
-	async start(): Promise<ISnapshotCollection> {
+	public async connect(): Promise<void> {
 		this.logger.log('Starting store');
-		const { pool, ...params } = this.options;
+		this.pool = createPool(this.options);
+	}
 
-		this.pool = createPool(params);
+	public async disconnect(): Promise<void> {
+		this.logger.log('Stopping store');
+		await this.pool.end();
+	}
 
+	public async ensureCollection(pool?: ISnapshotPool): Promise<ISnapshotCollection> {
 		const collection = SnapshotCollection.get(pool);
 
 		await this.pool.query(

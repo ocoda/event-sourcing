@@ -3,5 +3,4 @@ import { SnapshotStoreDriver } from './snapshot-store.interface';
 
 export interface SnapshotStoreConfig {
 	driver: Type<SnapshotStoreDriver>;
-	pool?: string;
 }

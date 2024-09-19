@@ -23,19 +23,22 @@ export interface InMemoryEventStoreConfig extends EventStoreConfig {
 }
 
 export class InMemoryEventStore extends EventStore<InMemoryEventStoreConfig> {
-	public readonly collections: Map<IEventCollection, InMemoryEventEntity[]> = new Map();
+	public collections: Map<IEventCollection, InMemoryEventEntity[]>;
 
-	public start(): void {
+	public async connect(): Promise<void> {
 		this.logger.log('Starting store');
-		const { pool } = this.options;
-
-		const collection = EventCollection.get(pool);
-		this.collections.set(collection, []);
+        this.collections = new Map();
 	}
 
-	public stop(): void {
+	public async disconnect(): Promise<void> {
 		this.logger.log('Stopping store');
 		this.collections.clear();
+	}
+
+	public async ensureCollection(pool?: IEventPool): Promise<IEventCollection> {
+		const collection = EventCollection.get(pool);
+		this.collections.set(collection, []);
+        return collection;
 	}
 
 	async *getEvents({ streamId }: EventStream, filter?: EventFilter): AsyncGenerator<IEvent[]> {

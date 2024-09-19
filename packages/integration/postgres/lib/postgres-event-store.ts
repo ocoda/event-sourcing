@@ -19,13 +19,19 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 	private pool: Pool;
 	private client: PoolClient;
 
-	async start(): Promise<IEventCollection> {
+	public async connect(): Promise<void> {
 		this.logger.log('Starting store');
-		const { pool, ...params } = this.options;
-
-		this.pool = new Pool(params);
+		this.pool = new Pool(this.options);
 		this.client = await this.pool.connect();
+	}
 
+	public async disconnect(): Promise<void> {
+		this.logger.log('Stopping store');
+		this.client.release();
+		await this.pool.end();
+	}
+
+	public async ensureCollection(pool?: IEventPool): Promise<IEventCollection> {
 		const collection = EventCollection.get(pool);
 
 		await this.client.query(
@@ -44,12 +50,6 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 		);
 
 		return collection;
-	}
-
-	async stop(): Promise<void> {
-		this.logger.log('Stopping store');
-		this.client.release();
-		await this.pool.end();
 	}
 
 	async *getEvents({ streamId }: EventStream, filter?: EventFilter): AsyncGenerator<IEvent[]> {

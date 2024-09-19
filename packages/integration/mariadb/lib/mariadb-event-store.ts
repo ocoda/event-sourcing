@@ -17,12 +17,17 @@ import { MariaDBEventEntity, MariaDBEventStoreConfig } from './interfaces';
 export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 	private pool: Pool;
 
-	async start(): Promise<IEventCollection> {
+	public async connect(): Promise<void> {
 		this.logger.log('Starting store');
-		const { pool, ...params } = this.options;
+		this.pool = createPool(this.options);
+	}
 
-		this.pool = createPool(params);
+	public async disconnect(): Promise<void> {
+		this.logger.log('Stopping store');
+		await this.pool.end();
+	}
 
+	public async ensureCollection(pool?: IEventPool): Promise<IEventCollection> {
 		const collection = EventCollection.get(pool);
 
 		await this.pool.query(
@@ -41,11 +46,6 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 		);
 
 		return collection;
-	}
-
-	async stop(): Promise<void> {
-		this.logger.log('Stopping store');
-		await this.pool.end();
 	}
 
 	async *getEvents({ streamId }: EventStream, filter?: EventFilter): AsyncGenerator<IEvent[]> {

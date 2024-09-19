@@ -13,6 +13,7 @@ import {
 	AggregateRoot,
 	DEFAULT_BATCH_SIZE,
 	ISnapshot,
+	ISnapshotCollection,
 	ISnapshotPool,
 	LatestSnapshotFilter,
 	SnapshotCollection,
@@ -28,16 +29,22 @@ import { DynamoDBSnapshotStoreConfig, DynamoSnapshotEntity } from './interfaces'
 export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreConfig> {
 	private client: DynamoDBClient;
 
-	public async start(): Promise<void> {
+	public async connect(): Promise<void> {
 		this.logger.log('Starting store');
-		const { pool, ...params } = this.options;
+		this.client = new DynamoDBClient(this.options);
+	}
 
-		this.client = new DynamoDBClient(params);
+	public async disconnect(): Promise<void> {
+		this.logger.log('Stopping store');
+		this.client.destroy();
+	}
 
+	public async ensureCollection(pool?: ISnapshotPool): Promise<ISnapshotCollection> {
 		const collection = SnapshotCollection.get(pool);
 
 		try {
 			await this.client.send(new DescribeTableCommand({ TableName: collection }));
+			return collection;
 		} catch (err) {
 			switch (err.constructor) {
 				case ResourceNotFoundException:

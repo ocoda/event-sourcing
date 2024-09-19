@@ -3,5 +3,4 @@ import { EventStoreDriver } from './event-store.interface';
 
 export interface EventStoreConfig {
 	driver: Type<EventStoreDriver>;
-	pool?: string;
 }

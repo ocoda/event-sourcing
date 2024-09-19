@@ -24,12 +24,10 @@ import { AccountController } from './application/account.controller';
 				events: [...Events],
 				eventStore: {
 					driver: MongoDBEventStore,
-					pool: 'example-events',
 					url: 'mongodb://127.0.0.1:27017',
 				},
 				snapshotStore: {
 					driver: MongoDBSnapshotStore,
-					pool: 'example-snapshots',
 					url: 'mongodb://127.0.0.1:27017',
 				},
 			}),

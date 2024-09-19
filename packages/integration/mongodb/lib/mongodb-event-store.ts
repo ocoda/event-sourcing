@@ -18,13 +18,19 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 	private client: MongoClient;
 	private database: Db;
 
-	async start(): Promise<IEventCollection> {
+	public async connect(): Promise<void> {
 		this.logger.log('Starting store');
-		const { url, pool, ...params } = this.options;
-
+		const { url, ...params } = this.options;
 		this.client = await new MongoClient(url, params).connect();
 		this.database = this.client.db();
+	}
 
+	public async disconnect(): Promise<void> {
+		this.logger.log('Stopping store');
+		await this.client.close();
+	}
+
+	public async ensureCollection(pool?: IEventPool): Promise<IEventCollection> {
 		const collection = EventCollection.get(pool);
 
 		const [existingCollection] = await this.database.listCollections({ name: collection }).toArray();
@@ -34,11 +40,6 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 		}
 
 		return collection;
-	}
-
-	async stop(): Promise<void> {
-		this.logger.log('Stopping store');
-		await this.client.close();
 	}
 
 	async *getEvents({ streamId }: EventStream, filter?: EventFilter): AsyncGenerator<IEvent[]> {

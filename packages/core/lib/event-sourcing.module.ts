@@ -112,10 +112,10 @@ export class EventSourcingModule implements OnModuleInit {
 	) {}
 
 	async onModuleInit() {
-		await Promise.all([this.eventStore.start(), this.snapshotStore.start()]); // TODO: Add error handling
+		await Promise.all([this.eventStore.connect(), this.snapshotStore.connect()]); // TODO: Add error handling
 	}
 
 	async onModuleDestroy() {
-		await Promise.all([this.eventStore.stop(), this.snapshotStore.stop()]); // TODO: Add error handling
+		await Promise.all([this.eventStore.disconnect(), this.snapshotStore.disconnect()]); // TODO: Add error handling
 	}
 }
