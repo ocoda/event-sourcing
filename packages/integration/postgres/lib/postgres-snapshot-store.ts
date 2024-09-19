@@ -10,6 +10,7 @@ import {
 	SnapshotFilter,
 	SnapshotNotFoundException,
 	SnapshotStore,
+	SnapshotStorePersistenceException,
 	SnapshotStream,
 	StreamReadingDirection,
 } from '@ocoda/event-sourcing';
@@ -125,39 +126,45 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 		aggregateVersion: number,
 		snapshot: ISnapshot<A>,
 		pool?: ISnapshotPool,
-	): Promise<void> {
+	): Promise<SnapshotEnvelope<A>> {
 		const collection = SnapshotCollection.get(pool);
 
-		const { payload, metadata } = SnapshotEnvelope.create<A>(snapshot, {
-			aggregateId,
-			version: aggregateVersion,
-		});
+		try {
+			const envelope = SnapshotEnvelope.create<A>(snapshot, {
+				aggregateId,
+				version: aggregateVersion,
+			});
 
-		const lastStreamEntity = await this.getLastStreamEntity(collection, streamId);
+			const lastStreamEntity = await this.getLastStreamEntity(collection, streamId);
 
-		if (lastStreamEntity) {
-			await this.client.query(`UPDATE "${collection}" SET latest = null WHERE stream_id = $1 AND version = $2`, [
-				lastStreamEntity.stream_id,
-				lastStreamEntity.version,
-			]);
-		}
+			if (lastStreamEntity) {
+				await this.client.query(`UPDATE "${collection}" SET latest = null WHERE stream_id = $1 AND version = $2`, [
+					lastStreamEntity.stream_id,
+					lastStreamEntity.version,
+				]);
+			}
 
-		await this.client.query(
-			`
+			await this.client.query(
+				`
             INSERT INTO "${collection}" (stream_id, version, payload, snapshot_id, aggregate_id, registered_on, aggregate_name, latest)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		`,
-			[
-				streamId,
-				metadata.version,
-				JSON.stringify(payload),
-				metadata.snapshotId,
-				metadata.aggregateId,
-				metadata.registeredOn,
-				aggregate,
-				`latest#${streamId}`,
-			],
-		);
+				[
+					streamId,
+					envelope.metadata.version,
+					JSON.stringify(envelope.payload),
+					envelope.metadata.snapshotId,
+					envelope.metadata.aggregateId,
+					envelope.metadata.registeredOn,
+					aggregate,
+					`latest#${streamId}`,
+				],
+			);
+
+			return envelope;
+		} catch (error) {
+			throw new SnapshotStorePersistenceException(collection, error);
+		}
 	}
 
 	async getLastSnapshot<A extends AggregateRoot>(

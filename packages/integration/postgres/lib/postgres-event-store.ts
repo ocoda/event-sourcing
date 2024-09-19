@@ -5,6 +5,7 @@ import {
 	EventFilter,
 	EventNotFoundException,
 	EventStore,
+	EventStorePersistenceException,
 	EventStream,
 	IEvent,
 	IEventCollection,
@@ -115,27 +116,31 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 	): Promise<EventEnvelope[]> {
 		const collection = EventCollection.get(pool);
 
-		let version = aggregateVersion - events.length + 1;
+		try {
+			let version = aggregateVersion - events.length + 1;
 
-		const envelopes: EventEnvelope[] = [];
-		for (const event of events) {
-			const name = this.eventMap.getName(event);
-			const payload = this.eventMap.serializeEvent(event);
-			const envelope = EventEnvelope.create(name, payload, { aggregateId, version: version++ });
-			envelopes.push(envelope);
-		}
+			const envelopes: EventEnvelope[] = [];
+			for (const event of events) {
+				const name = this.eventMap.getName(event);
+				const payload = this.eventMap.serializeEvent(event);
+				const envelope = EventEnvelope.create(name, payload, { aggregateId, version: version++ });
+				envelopes.push(envelope);
+			}
 
-		const entities = envelopes.map(
-			({ event, payload, metadata }) =>
-				`('${streamId}', ${metadata.version}, '${event}', '${JSON.stringify(payload)}', '${metadata.eventId}', '${metadata.aggregateId}', '${metadata.occurredOn.toISOString()}', ${metadata.correlationId ?? null}, ${metadata.causationId ?? null})`,
-		);
+			const entities = envelopes.map(
+				({ event, payload, metadata }) =>
+					`('${streamId}', ${metadata.version}, '${event}', '${JSON.stringify(payload)}', '${metadata.eventId}', '${metadata.aggregateId}', '${metadata.occurredOn.toISOString()}', ${metadata.correlationId ?? null}, ${metadata.causationId ?? null})`,
+			);
 
-		await this.client.query(`
+			await this.client.query(`
             INSERT INTO "${collection}" (stream_id, version, event, payload, event_id, aggregate_id, occurred_on, correlation_id, causation_id)
 		    VALUES ${entities.join(',')}
 		`);
 
-		return envelopes;
+			return envelopes;
+		} catch (error) {
+			throw new EventStorePersistenceException(collection, error);
+		}
 	}
 
 	async *getEnvelopes({ streamId }: EventStream, filter?: EventFilter): AsyncGenerator<EventEnvelope[]> {
