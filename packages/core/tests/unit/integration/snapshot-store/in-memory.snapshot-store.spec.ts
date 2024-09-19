@@ -107,18 +107,18 @@ describe(InMemorySnapshotStore, () => {
 
 	afterAll(() => snapshotStore.disconnect());
 
-	it('should append snapshot envelopes', () => {
-		snapshotStore.appendSnapshot(snapshotStreamAccountA, 1, snapshotsAccountA[0]);
-		snapshotStore.appendSnapshot(snapshotStreamAccountB, 1, snapshotsAccountB[0]);
-		snapshotStore.appendSnapshot(snapshotStreamAccountA, 10, snapshotsAccountA[1]);
-		snapshotStore.appendSnapshot(snapshotStreamAccountB, 10, snapshotsAccountB[1]);
-		snapshotStore.appendSnapshot(snapshotStreamAccountA, 20, snapshotsAccountA[2]);
-		snapshotStore.appendSnapshot(snapshotStreamAccountB, 20, snapshotsAccountB[2]);
-		snapshotStore.appendSnapshot(snapshotStreamAccountA, 30, snapshotsAccountA[3]);
-		snapshotStore.appendSnapshot(snapshotStreamAccountB, 30, snapshotsAccountB[3]);
-		snapshotStore.appendSnapshot(snapshotStreamAccountA, 40, snapshotsAccountA[4]);
-		snapshotStore.appendSnapshot(snapshotStreamCustomer, 1, customerSnapshot);
-		snapshotStore.appendSnapshot(snapshotStreamCustomer, 10, customerSnapshot);
+	it('should append snapshot envelopes', async () => {
+		await snapshotStore.appendSnapshot(snapshotStreamAccountA, 1, snapshotsAccountA[0]);
+		await snapshotStore.appendSnapshot(snapshotStreamAccountB, 1, snapshotsAccountB[0]);
+		await snapshotStore.appendSnapshot(snapshotStreamAccountA, 10, snapshotsAccountA[1]);
+		await snapshotStore.appendSnapshot(snapshotStreamAccountB, 10, snapshotsAccountB[1]);
+		await snapshotStore.appendSnapshot(snapshotStreamAccountA, 20, snapshotsAccountA[2]);
+		await snapshotStore.appendSnapshot(snapshotStreamAccountB, 20, snapshotsAccountB[2]);
+		await snapshotStore.appendSnapshot(snapshotStreamAccountA, 30, snapshotsAccountA[3]);
+		await snapshotStore.appendSnapshot(snapshotStreamAccountB, 30, snapshotsAccountB[3]);
+		await snapshotStore.appendSnapshot(snapshotStreamAccountA, 40, snapshotsAccountA[4]);
+		await snapshotStore.appendSnapshot(snapshotStreamCustomer, 1, customerSnapshot);
+		await snapshotStore.appendSnapshot(snapshotStreamCustomer, 10, customerSnapshot);
 
 		const entities = snapshotStore.collections.get('snapshots') || [];
 		const entitiesAccountA = entities.filter(
