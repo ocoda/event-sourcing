@@ -1,7 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { StreamReadingDirection } from './constants';
 import { EventMap } from './event-map';
-import { EventSourcingModuleOptions, EventStoreDriver, IEvent, IEventPool } from './interfaces';
+import { EventSourcingModuleOptions, EventStoreDriver, IEvent, IEventCollection, IEventPool } from './interfaces';
 import { EventEnvelope, EventStream } from './models';
 
 export interface EventFilter {
@@ -32,7 +32,7 @@ export interface EventFilter {
 }
 
 export abstract class EventStore<TOptions = Omit<EventSourcingModuleOptions['eventStore'], 'driver'>>
-	implements EventStoreDriver<TOptions>
+	implements EventStoreDriver
 {
 	protected readonly logger = new Logger(this.constructor.name);
 	protected _publish: (envelope: EventEnvelope<IEvent>) => any;
@@ -62,8 +62,10 @@ export abstract class EventStore<TOptions = Omit<EventSourcingModuleOptions['eve
 		this._publish = fn;
 	}
 
-	public abstract start(): unknown | Promise<unknown>;
-	public abstract stop(): void | Promise<void>;
+	public abstract connect(): void | Promise<void>;
+	public abstract disconnect(): void | Promise<void>;
+
+	public abstract ensureCollection(pool?: string): IEventCollection | Promise<unknown>;
 
 	abstract getEvents(eventStream: EventStream, filter?: EventFilter): AsyncGenerator<IEvent[]>;
 	abstract getEvent(eventStream: EventStream, version: number, pool?: IEventPool): IEvent | Promise<IEvent>;

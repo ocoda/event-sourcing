@@ -1,4 +1,7 @@
-export interface EventStoreDriver<TOptions = any> {
-	start(options: TOptions): unknown | Promise<unknown>;
-	stop(): void | Promise<void>;
+import { IEventPool } from './event-pool.type';
+
+export interface EventStoreDriver {
+	connect(): void | Promise<void>;
+	disconnect(): void | Promise<void>;
+	ensureCollection(pool?: IEventPool): unknown | Promise<unknown>;
 }

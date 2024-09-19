@@ -19,6 +19,7 @@ import {
 	EventStore,
 	EventStream,
 	IEvent,
+	IEventCollection,
 	IEventPool,
 	StreamReadingDirection,
 } from '@ocoda/event-sourcing';
@@ -27,16 +28,22 @@ import { DynamoDBEventStoreConfig, DynamoEventEntity } from './interfaces';
 export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 	private client: DynamoDBClient;
 
-	public async start(): Promise<void> {
+	public async connect(): Promise<void> {
 		this.logger.log('Starting store');
-		const { pool, ...params } = this.options;
+		this.client = new DynamoDBClient(this.options);
+	}
 
-		this.client = new DynamoDBClient(params);
+	public async disconnect(): Promise<void> {
+		this.logger.log('Stopping store');
+		this.client.destroy();
+	}
 
+	public async ensureCollection(pool?: IEventPool): Promise<IEventCollection> {
 		const collection = EventCollection.get(pool);
 
 		try {
 			await this.client.send(new DescribeTableCommand({ TableName: collection }));
+			return collection;
 		} catch (err) {
 			switch (err.constructor) {
 				case ResourceNotFoundException:
@@ -63,10 +70,6 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 					throw err;
 			}
 		}
-	}
-
-	public stop(): void {
-		this.client.destroy();
 	}
 
 	async *getEvents({ streamId }: EventStream, filter?: EventFilter): AsyncGenerator<IEvent[]> {

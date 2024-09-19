@@ -20,13 +20,19 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 	private client: MongoClient;
 	private database: Db;
 
-	async start(): Promise<ISnapshotCollection> {
+	public async connect(): Promise<void> {
 		this.logger.log('Starting store');
-		const { url, pool, ...options } = this.options;
-
-		this.client = await new MongoClient(url, options).connect();
+		const { url, ...params } = this.options;
+		this.client = await new MongoClient(url, params).connect();
 		this.database = this.client.db();
+	}
 
+	public async disconnect(): Promise<void> {
+		this.logger.log('Stopping store');
+		await this.client.close();
+	}
+
+	public async ensureCollection(pool?: ISnapshotPool): Promise<ISnapshotCollection> {
 		const collection = SnapshotCollection.get(pool);
 
 		const [existingCollection] = await this.database.listCollections({ name: collection }).toArray();

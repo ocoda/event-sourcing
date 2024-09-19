@@ -106,14 +106,10 @@ describe(MongoDBSnapshotStore, () => {
 			EventSourcingModule.forRootAsync<InMemoryEventStoreConfig, MongoDBSnapshotStoreConfig>({
 				useFactory: () => ({
 					events: [],
-					eventStore: {
-						driver: InMemoryEventStore,
-						pool: 'test-events',
-					},
+					eventStore: { driver: InMemoryEventStore },
 					snapshotStore: {
 						driver: MongoDBSnapshotStore,
 						url: 'mongodb://localhost:27017',
-						pool: 'test-snapshots',
 					},
 				}),
 			}),

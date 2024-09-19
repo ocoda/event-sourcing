@@ -59,7 +59,8 @@ describe(InMemorySnapshotStore, () => {
 
 	beforeAll(() => {
 		snapshotStore = new InMemorySnapshotStore({ driver: InMemorySnapshotStore });
-		snapshotStore.start();
+		snapshotStore.connect();
+		snapshotStore.ensureCollection();
 
 		envelopesAccountA = [
 			SnapshotEnvelope.create<Account>(snapshotsAccountA[0], {
@@ -103,7 +104,7 @@ describe(InMemorySnapshotStore, () => {
 		];
 	});
 
-	afterAll(() => snapshotStore.stop());
+	afterAll(() => snapshotStore.disconnect());
 
 	it('should append snapshot envelopes', () => {
 		snapshotStore.appendSnapshot(snapshotStreamAccountA, 1, snapshotsAccountA[0]);

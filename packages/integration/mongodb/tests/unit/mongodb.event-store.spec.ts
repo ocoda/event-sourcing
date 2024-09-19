@@ -136,12 +136,8 @@ describe(MongoDBEventStore, () => {
 					eventStore: {
 						driver: MongoDBEventStore,
 						url: 'mongodb://localhost:27017',
-						pool: 'test-events',
 					},
-					snapshotStore: {
-						driver: InMemorySnapshotStore,
-						pool: 'test-snapshots',
-					},
+					snapshotStore: { driver: InMemorySnapshotStore },
 				}),
 			}),
 		);

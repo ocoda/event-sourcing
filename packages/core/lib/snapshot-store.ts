@@ -1,6 +1,12 @@
 import { Logger } from '@nestjs/common';
 import { StreamReadingDirection } from './constants';
-import { EventSourcingModuleOptions, ISnapshot, ISnapshotPool } from './interfaces';
+import {
+	EventSourcingModuleOptions,
+	ISnapshot,
+	ISnapshotCollection,
+	ISnapshotPool,
+	SnapshotStoreDriver,
+} from './interfaces';
 import { AggregateRoot, SnapshotEnvelope, SnapshotStream } from './models';
 
 export interface SnapshotFilter {
@@ -34,13 +40,17 @@ export interface LatestSnapshotFilter extends Pick<SnapshotFilter, 'batch' | 'li
 	fromId?: string;
 }
 
-export abstract class SnapshotStore<TOptions = Omit<EventSourcingModuleOptions['snapshotStore'], 'driver'>> {
+export abstract class SnapshotStore<TOptions = Omit<EventSourcingModuleOptions['snapshotStore'], 'driver'>>
+	implements SnapshotStoreDriver
+{
 	protected readonly logger = new Logger(this.constructor.name);
 
 	constructor(protected readonly options: TOptions) {}
 
-	public abstract start(): unknown | Promise<unknown>;
-	public abstract stop(): void | Promise<void>;
+	public abstract connect(): void | Promise<void>;
+	public abstract disconnect(): void | Promise<void>;
+
+	public abstract ensureCollection(pool?: ISnapshotPool): ISnapshotCollection | Promise<ISnapshotCollection>;
 
 	abstract getSnapshots<A extends AggregateRoot>(
 		snapshotStream: SnapshotStream,
