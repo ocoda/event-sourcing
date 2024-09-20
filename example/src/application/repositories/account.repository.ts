@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 // biome-ignore lint/style/useImportType: DI
 import { EventStore, EventStream } from '@ocoda/event-sourcing';
 // biome-ignore lint/style/useImportType: DI
-import { Account, type AccountId, AccountSnapshotHandler } from '../../domain/models';
+import { Account, AccountId, AccountSnapshotHandler } from '../../domain/models';
 import { AccountNotFoundException } from './exceptions/account-not-found.exception';
 
 @Injectable()
@@ -32,16 +32,18 @@ export class AccountRepository {
 
 	async getAll(fromAccountId?: AccountId, limit?: number): Promise<Account[]> {
 		const accounts = [];
-		for await (const snapshots of this.accountSnapshotHandler.loadMany({
+		for await (const envelopes of this.accountSnapshotHandler.loadMany({
 			fromId: fromAccountId,
 			limit,
 		})) {
-			for (const snapshot of snapshots) {
-				const eventStream = EventStream.for<Account>(Account, snapshot.id);
-				const eventCursor = this.eventStore.getEvents(eventStream, {
-					fromVersion: snapshot.version + 1,
-				});
-				const account = await snapshot.loadFromHistory(eventCursor);
+			for (const { metadata, payload } of envelopes) {
+				const id = AccountId.from(metadata.aggregateId);
+				const eventStream = EventStream.for<Account>(Account, id);
+				const account = this.accountSnapshotHandler.deserialize(payload);
+
+				const eventCursor = this.eventStore.getEvents(eventStream, { fromVersion: metadata.version + 1 });
+				await account.loadFromHistory(eventCursor);
+
 				accounts.push(account);
 			}
 		}
