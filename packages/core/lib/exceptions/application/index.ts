@@ -1,6 +1,7 @@
 export * from './command-handler-not-found.exception';
 export * from './event-not-found.exception';
 export * from './invalid-aggregate-stream-name.exception';
+export * from './invalid-event-stream-name.exception';
 export * from './missing-aggregate-metadata.exception';
 export * from './missing-command-handler-metadata.exception';
 export * from './missing-command-metadata.exception';

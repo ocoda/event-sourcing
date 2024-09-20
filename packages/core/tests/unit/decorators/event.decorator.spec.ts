@@ -1,4 +1,4 @@
-import { Event, IEvent } from '@ocoda/event-sourcing';
+import { Event, IEvent, InvalidEventStreamNameError } from '@ocoda/event-sourcing';
 import { getEventMetadata } from '@ocoda/event-sourcing/helpers';
 
 describe('@Event', () => {
@@ -14,5 +14,15 @@ describe('@Event', () => {
 
 		const { name: implicitEventName } = getEventMetadata(BarCreated);
 		expect(implicitEventName).toEqual('BarCreated');
+	});
+
+	it('should throw when an event name exceeds 80 characters', () => {
+		const decorate = (length: number) => {
+			@Event('a'.repeat(length))
+			class InvalidEvent implements IEvent {}
+		};
+
+		expect(() => decorate(80)).not.toThrow();
+		expect(() => decorate(81)).toThrow(InvalidEventStreamNameError.becauseExceedsMaxLength('InvalidEvent', 80));
 	});
 });
