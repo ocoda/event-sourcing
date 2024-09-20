@@ -24,8 +24,8 @@
 		"mongodb": "^6.9.0"
 	},
 	"peerDependencies": {
-		"@ocoda/event-sourcing": "workspace:*",
 		"@nestjs/core": "^10.0.0",
+		"@ocoda/event-sourcing": "workspace:*",
 		"reflect-metadata": "^0.2.0",
 		"rxjs": "^7.2.0"
 	},
@@ -46,6 +46,7 @@
 		"jest-mock": "29.7.0",
 		"reflect-metadata": "0.2.2",
 		"rxjs": "7.8.1",
+		"tsup": "^8.3.0",
 		"typescript": "5.6.2"
 	},
 	"repository": {
