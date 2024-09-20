@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
+// biome-ignore lint/style/useImportType: DI
 import { EventStore, EventStream } from '@ocoda/event-sourcing';
-import { Account, AccountId, AccountSnapshotHandler } from '../../domain/models';
+// biome-ignore lint/style/useImportType: DI
+import { Account, type AccountId, AccountSnapshotHandler } from '../../domain/models';
 import { AccountNotFoundException } from './exceptions/account-not-found.exception';
 
 @Injectable()
