@@ -35,23 +35,36 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 	}
 
 	public async ensureCollection(pool?: ISnapshotPool): Promise<ISnapshotCollection> {
+		const connection = await this.pool.connect();
 		const collection = SnapshotCollection.get(pool);
 
-		await this.client.query(
-			`CREATE TABLE IF NOT EXISTS "${collection}" (
-                stream_id VARCHAR(255) NOT NULL,
-                version INT NOT NULL,
-                payload JSONB NOT NULL,
-                snapshot_id VARCHAR(255) NOT NULL,
-                aggregate_id VARCHAR(255) NOT NULL,
-                registered_on TIMESTAMP NOT NULL,
-                aggregate_name VARCHAR(255) NOT NULL,
-                latest VARCHAR(255),
-                PRIMARY KEY (stream_id, version)
-            )`,
-		);
+		try {
+			await connection.query('BEGIN');
+			await connection.query(
+				`CREATE TABLE IF NOT EXISTS "${collection}" (
+                    stream_id VARCHAR(255) NOT NULL,
+                    version INT NOT NULL,
+                    payload JSONB NOT NULL,
+                    snapshot_id VARCHAR(255) NOT NULL,
+                    aggregate_id VARCHAR(255) NOT NULL,
+                    registered_on TIMESTAMP NOT NULL,
+                    aggregate_name VARCHAR(255) NOT NULL,
+                    latest VARCHAR(255),
+                    PRIMARY KEY (stream_id, version)
+                )`,
+			);
+			await connection.query(
+				`CREATE INDEX IF NOT EXISTS "idx_aggregate_name_latest" ON "${collection}" (aggregate_name, latest)`,
+			);
+			await connection.query('COMMIT');
 
-		return collection;
+			return collection;
+		} catch (err) {
+			await connection.query('ROLLBACK');
+			throw new SnapshotStorePersistenceException(collection, err);
+		} finally {
+			connection.release();
+		}
 	}
 
 	async stop(): Promise<void> {
@@ -338,8 +351,8 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 			Omit<PostgresSnapshotEntity<A>, 'aggregate_name' | 'latest'>
 		>(
 			`SELECT stream_id, payload, aggregate_id, registered_on, snapshot_id, version
-             FROM "${collection}" WHERE stream_id = $1 ORDER BY version DESC LIMIT 1`,
-			[streamId],
+             FROM "${collection}" WHERE latest = $1 LIMIT 1`,
+			[`latest#${streamId}`],
 		);
 		const entity = entities[0];
 

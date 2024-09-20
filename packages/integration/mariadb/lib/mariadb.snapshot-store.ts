@@ -43,7 +43,8 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
                 registered_on TIMESTAMP NOT NULL,
                 aggregate_name VARCHAR(255) NOT NULL,
                 latest VARCHAR(255),
-                PRIMARY KEY (stream_id, version)
+                PRIMARY KEY (stream_id, version),
+                INDEX idx_aggregate_name_latest (aggregate_name, latest)
             )`,
 		);
 
@@ -337,8 +338,8 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 		const [entity] = await (connection || this.pool).query<
 			Omit<MariaDBSnapshotEntity<A>, 'aggregate_name' | 'latest'>[]
 		>(
-			`SELECT stream_id, payload, aggregate_id, registered_on, snapshot_id, version FROM \`${collection}\` WHERE stream_id = ? ORDER BY version DESC LIMIT 1`,
-			[streamId],
+			`SELECT stream_id, payload, aggregate_id, registered_on, snapshot_id, version FROM \`${collection}\` WHERE latest = ? LIMIT 1`,
+			[`latest#${streamId}`],
 		);
 
 		if (entity) {
