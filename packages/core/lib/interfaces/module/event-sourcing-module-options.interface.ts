@@ -1,8 +1,8 @@
 import { ModuleMetadata, Type } from '@nestjs/common';
-import { InMemoryEventStoreConfig } from '../integration/event-store';
-import { InMemorySnapshotStoreConfig } from '../integration/snapshot-store';
-import { SnapshotStoreConfig } from './aggregate';
-import { EventStoreConfig, IEvent } from './events';
+import { InMemoryEventStoreConfig } from '../../integration/event-store';
+import { InMemorySnapshotStoreConfig } from '../../integration/snapshot-store';
+import { SnapshotStoreConfig } from '../aggregate';
+import { EventStoreConfig, IEvent } from '../events';
 
 export interface EventSourcingModuleOptions<
 	TEventStoreConfig extends EventStoreConfig = InMemoryEventStoreConfig,
