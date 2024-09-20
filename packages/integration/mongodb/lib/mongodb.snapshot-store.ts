@@ -42,8 +42,10 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 		}
 
 		const snapshotCollection = await this.database.createCollection(collection);
-		await snapshotCollection.createIndex({ streamId: 1, version: 1 }, { unique: true });
-		await snapshotCollection.createIndex({ aggregateName: 1, latest: 1 }, { unique: false });
+		await snapshotCollection.createIndexes([
+			{ key: { streamId: 1, version: 1 }, unique: true },
+			{ key: { aggregateName: 1, latest: 1 }, unique: false },
+		]);
 
 		return collection;
 	}
