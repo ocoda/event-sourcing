@@ -1,8 +1,0 @@
-{
-	"extends": "@ocoda/event-sourcing-config/typescript/module.build.json",
-	"compilerOptions": {
-		"rootDir": "./lib",
-		"outDir": "dist"
-	},
-	"include": ["lib/**/*.ts"]
-}
