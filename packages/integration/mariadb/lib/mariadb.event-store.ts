@@ -35,10 +35,10 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 			`CREATE TABLE IF NOT EXISTS \`${collection}\` (
                 stream_id VARCHAR(120) NOT NULL,
                 version INT NOT NULL,
-                event VARCHAR(255) NOT NULL,
+                event VARCHAR(80) NOT NULL,
                 payload JSON NOT NULL,
-                event_id VARCHAR(255) NOT NULL,
-                aggregate_id VARCHAR(255) NOT NULL,
+                event_id VARCHAR(40) NOT NULL,
+                aggregate_id VARCHAR(40) NOT NULL,
                 occurred_on TIMESTAMP NOT NULL,
                 correlation_id VARCHAR(255),
                 causation_id VARCHAR(255),

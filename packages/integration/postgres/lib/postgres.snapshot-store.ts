@@ -45,11 +45,11 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
                     stream_id VARCHAR(90) NOT NULL,
                     version INT NOT NULL,
                     payload JSONB NOT NULL,
-                    snapshot_id VARCHAR(255) NOT NULL,
-                    aggregate_id VARCHAR(255) NOT NULL,
+                    snapshot_id VARCHAR(40) NOT NULL,
+                    aggregate_id VARCHAR(40) NOT NULL,
                     registered_on TIMESTAMP NOT NULL,
-                    aggregate_name VARCHAR(255) NOT NULL,
-                    latest VARCHAR(255),
+                    aggregate_name VARCHAR(50) NOT NULL,
+                    latest VARCHAR(100),
                     PRIMARY KEY (stream_id, version)
                 )`,
 			);
