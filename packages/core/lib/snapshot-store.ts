@@ -1,13 +1,13 @@
 import { Logger } from '@nestjs/common';
-import { StreamReadingDirection } from './constants';
-import {
+import type { StreamReadingDirection } from './constants';
+import type {
 	EventSourcingModuleOptions,
 	ISnapshot,
 	ISnapshotCollection,
 	ISnapshotPool,
 	SnapshotStoreDriver,
 } from './interfaces';
-import { AggregateRoot, SnapshotEnvelope, SnapshotStream } from './models';
+import type { AggregateRoot, SnapshotEnvelope, SnapshotStream } from './models';
 
 export interface SnapshotFilter {
 	/**

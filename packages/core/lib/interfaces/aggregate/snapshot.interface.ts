@@ -1,4 +1,4 @@
-import { AggregateRoot } from '../../models';
+import type { AggregateRoot } from '../../models';
 
 type AggregatePropertyNames<T> = {
 	// biome-ignore lint/complexity/noBannedTypes:

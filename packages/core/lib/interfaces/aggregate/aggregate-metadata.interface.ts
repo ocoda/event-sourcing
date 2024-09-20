@@ -1,4 +1,4 @@
-import { IEventPublisher } from '../events';
+import type { IEventPublisher } from '../events';
 
 /**
  * `@Aggregate` decorator metadata

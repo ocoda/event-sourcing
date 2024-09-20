@@ -1,8 +1,9 @@
 import { Logger } from '@nestjs/common';
-import { StreamReadingDirection } from './constants';
+import type { StreamReadingDirection } from './constants';
+// biome-ignore lint/style/useImportType: DI
 import { EventMap } from './event-map';
-import { EventSourcingModuleOptions, EventStoreDriver, IEvent, IEventCollection, IEventPool } from './interfaces';
-import { EventEnvelope, EventStream } from './models';
+import type { EventSourcingModuleOptions, EventStoreDriver, IEvent, IEventCollection, IEventPool } from './interfaces';
+import type { EventEnvelope, EventStream } from './models';
 
 export interface EventFilter {
 	/**

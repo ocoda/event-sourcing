@@ -1,6 +1,8 @@
-import { Injectable, OnApplicationBootstrap, Type } from '@nestjs/common';
+import { Injectable, type OnApplicationBootstrap, type Type } from '@nestjs/common';
+// biome-ignore lint/style/useImportType: DI
 import { DiscoveryService } from '@nestjs/core';
-import { InstanceWrapper } from '@nestjs/core/injector/instance-wrapper';
+import type { InstanceWrapper } from '@nestjs/core/injector/instance-wrapper';
+// biome-ignore lint/style/useImportType: DI
 import { CommandBus } from './command-bus';
 import {
 	COMMAND_HANDLER_METADATA,
@@ -10,8 +12,11 @@ import {
 	InjectEventSourcingOptions,
 	QUERY_HANDLER_METADATA,
 } from './decorators';
+// biome-ignore lint/style/useImportType: DI
 import { EventBus } from './event-bus';
+// biome-ignore lint/style/useImportType: DI
 import { EventMap } from './event-map';
+// biome-ignore lint/style/useImportType: DI
 import { EventStore } from './event-store';
 import {
 	MissingCommandHandlerMetadataException,
@@ -31,7 +36,7 @@ import {
 	getQueryMetadata,
 } from './helpers';
 import { getEventHandlerMetadata } from './helpers/metadata/get-event-handler-metadata';
-import {
+import type {
 	EventSourcingModuleOptions,
 	ICommandHandler,
 	IEventHandler,
@@ -39,6 +44,7 @@ import {
 	IEventSerializer,
 	IQueryHandler,
 } from './interfaces';
+// biome-ignore lint/style/useImportType: DI
 import { QueryBus } from './query-bus';
 
 enum HandlerType {

@@ -1,4 +1,4 @@
-import { EventSerializer, IEvent, IEventSerializer } from '@ocoda/event-sourcing';
+import { EventSerializer, type IEvent, type IEventSerializer } from '@ocoda/event-sourcing';
 import { getEventSerializerMetadata } from '@ocoda/event-sourcing/helpers';
 
 describe('@EventSerializer', () => {

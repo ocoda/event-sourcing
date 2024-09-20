@@ -1,4 +1,4 @@
-import { CommandHandler, ICommand, ICommandHandler } from '@ocoda/event-sourcing';
+import { CommandHandler, type ICommand, type ICommandHandler } from '@ocoda/event-sourcing';
 import { getCommandHandlerMetadata, getCommandMetadata } from '@ocoda/event-sourcing/helpers';
 
 describe('@CommandHandler', () => {

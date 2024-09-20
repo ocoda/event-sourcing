@@ -1,4 +1,4 @@
-import { EventEnvelope, EventHandler, IEventHandler } from '@ocoda/event-sourcing';
+import { type EventEnvelope, EventHandler, type IEventHandler } from '@ocoda/event-sourcing';
 import { AccountClosedEvent } from './account-closed.event';
 
 @EventHandler(AccountClosedEvent)

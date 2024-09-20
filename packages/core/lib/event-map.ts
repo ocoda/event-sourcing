@@ -1,11 +1,11 @@
-import { Injectable, Type } from '@nestjs/common';
+import { Injectable, type Type } from '@nestjs/common';
 import {
 	MissingEventMetadataException,
 	UnregisteredEventException,
 	UnregisteredSerializerException,
 } from './exceptions';
 import { getEventMetadata } from './helpers';
-import { IEvent, IEventPayload, IEventSerializer } from './interfaces';
+import type { IEvent, IEventPayload, IEventSerializer } from './interfaces';
 
 export type EventSerializerType = Type<IEventSerializer<IEvent>>;
 

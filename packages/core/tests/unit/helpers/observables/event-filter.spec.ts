@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Event, EventEnvelope, IEvent, eventFilter } from '@ocoda/event-sourcing';
+import { Event, EventEnvelope, type IEvent, eventFilter } from '@ocoda/event-sourcing';
 import { Subject } from 'rxjs';
 
 describe(eventFilter, () => {

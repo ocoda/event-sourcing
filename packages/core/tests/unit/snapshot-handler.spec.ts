@@ -2,12 +2,12 @@ import { Logger } from '@nestjs/common';
 import {
 	Aggregate,
 	AggregateRoot,
-	ISnapshot,
-	ISnapshotPool,
+	type ISnapshot,
+	type ISnapshotPool,
 	Snapshot,
 	SnapshotEnvelope,
 	SnapshotHandler,
-	SnapshotStore,
+	type SnapshotStore,
 	SnapshotStream,
 	UUID,
 } from '@ocoda/event-sourcing';

@@ -1,4 +1,4 @@
-import { EventEnvelopeMetadata, IEvent, IEventPayload } from '../interfaces';
+import type { EventEnvelopeMetadata, IEvent, IEventPayload } from '../interfaces';
 import { UUID } from './uuid';
 
 export class EventEnvelope<E extends IEvent = IEvent> {

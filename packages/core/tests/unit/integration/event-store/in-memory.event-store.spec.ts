@@ -7,12 +7,12 @@ import {
 	EventNotFoundException,
 	EventStorePersistenceException,
 	EventStream,
-	IEvent,
+	type IEvent,
 	StreamReadingDirection,
 	UUID,
 } from '@ocoda/event-sourcing';
 import { DefaultEventSerializer } from '@ocoda/event-sourcing/helpers';
-import { InMemoryEventEntity, InMemoryEventStore } from '@ocoda/event-sourcing/integration/event-store';
+import { type InMemoryEventEntity, InMemoryEventStore } from '@ocoda/event-sourcing/integration/event-store';
 
 class AccountId extends UUID {}
 

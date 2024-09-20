@@ -1,6 +1,6 @@
-import { INestApplication } from '@nestjs/common';
+import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { CommandBus, ICommandBus, IEventPublisher, IQueryBus, QueryBus } from '@ocoda/event-sourcing';
+import { CommandBus, type ICommandBus, type IEventPublisher, type IQueryBus, QueryBus } from '@ocoda/event-sourcing';
 import { AppModule } from './src/app.module';
 import {
 	AddAccountOwnerCommand,
@@ -13,7 +13,7 @@ import {
 import { CustomEventPublisher } from './src/application/publishers';
 import { GetAccountByIdQuery, GetAccountsQuery } from './src/application/queries';
 import { AccountRepository } from './src/application/repositories';
-import { Account, AccountId, AccountOwnerId } from './src/domain/models';
+import { type Account, type AccountId, AccountOwnerId } from './src/domain/models';
 
 describe('EventSourcingModule - e2e', () => {
 	let app: INestApplication;

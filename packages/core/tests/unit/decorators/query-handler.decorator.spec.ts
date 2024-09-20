@@ -1,4 +1,4 @@
-import { IQuery, IQueryHandler, QueryHandler } from '@ocoda/event-sourcing';
+import { type IQuery, type IQueryHandler, QueryHandler } from '@ocoda/event-sourcing';
 import { getQueryHandlerMetadata, getQueryMetadata } from '@ocoda/event-sourcing/helpers';
 
 describe('@QueryHandler', () => {

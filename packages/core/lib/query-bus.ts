@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import 'reflect-metadata';
 import { MissingQueryMetadataException, QueryHandlerNotFoundException } from './exceptions';
 import { DefaultQueryPubSub, ObservableBus, getQueryMetadata } from './helpers';
-import { IQuery, IQueryBus, IQueryHandler, IQueryPublisher } from './interfaces';
+import type { IQuery, IQueryBus, IQueryHandler, IQueryPublisher } from './interfaces';
 
 @Injectable()
 export class QueryBus<QueryBase extends IQuery = IQuery>

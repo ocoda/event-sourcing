@@ -1,4 +1,4 @@
-import { EventEnvelope } from '../../models';
+import type { EventEnvelope } from '../../models';
 
 export interface IEventHandler {
 	handle(envelope: EventEnvelope): any;

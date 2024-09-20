@@ -1,5 +1,5 @@
-import { ISnapshot, SnapshotEnvelopeMetadata } from '../interfaces';
-import { AggregateRoot } from './aggregate-root';
+import type { ISnapshot, SnapshotEnvelopeMetadata } from '../interfaces';
+import type { AggregateRoot } from './aggregate-root';
 import { UUID } from './uuid';
 
 export class SnapshotEnvelope<A extends AggregateRoot = AggregateRoot> {

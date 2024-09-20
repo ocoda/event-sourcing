@@ -1,11 +1,11 @@
-import { Inject, Type } from '@nestjs/common';
-import { MissingAggregateMetadataException, MissingSnapshotMetadataException } from '../../exceptions';
-import { getAggregateMetadata, getSnapshotMetadata } from '../../helpers';
-import { AggregateRoot, Id, SnapshotEnvelope, SnapshotStream } from '../../models';
-import { SnapshotStore } from '../../snapshot-store';
-import { ISnapshotHandler } from './snapshot-handler.interface';
-import { ISnapshotPool } from './snapshot-pool.type';
-import { ISnapshot } from './snapshot.interface';
+import { Inject, type Type } from '@nestjs/common';
+import { MissingAggregateMetadataException, MissingSnapshotMetadataException } from './exceptions';
+import { getAggregateMetadata, getSnapshotMetadata } from './helpers';
+import type { ISnapshotHandler } from './interfaces/aggregate/snapshot-handler.interface';
+import type { ISnapshotPool } from './interfaces/aggregate/snapshot-pool.type';
+import type { ISnapshot } from './interfaces/aggregate/snapshot.interface';
+import { type AggregateRoot, type Id, type SnapshotEnvelope, SnapshotStream } from './models';
+import { SnapshotStore } from './snapshot-store';
 
 export abstract class SnapshotHandler<A extends AggregateRoot = AggregateRoot> implements ISnapshotHandler<A> {
 	private readonly aggregate: Type<A>;

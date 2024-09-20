@@ -1,8 +1,8 @@
-import { Type } from '@nestjs/common';
+import type { Type } from '@nestjs/common';
 import { DEFAULT_BATCH_SIZE, StreamReadingDirection } from '../../constants';
-import { EventFilter, EventStore } from '../../event-store';
+import { type EventFilter, EventStore } from '../../event-store';
 import { EventNotFoundException, EventStorePersistenceException } from '../../exceptions';
-import {
+import type {
 	EventEnvelopeMetadata,
 	EventStoreConfig,
 	IEvent,
@@ -10,7 +10,7 @@ import {
 	IEventPayload,
 	IEventPool,
 } from '../../interfaces';
-import { EventCollection, EventEnvelope, EventStream } from '../../models';
+import { EventCollection, EventEnvelope, type EventStream } from '../../models';
 
 export type InMemoryEventEntity = {
 	streamId: string;

@@ -1,4 +1,4 @@
-import { EventHandler, IEvent, IEventHandler } from '@ocoda/event-sourcing';
+import { EventHandler, type IEvent, type IEventHandler } from '@ocoda/event-sourcing';
 import { getEventHandlerMetadata } from '@ocoda/event-sourcing/helpers';
 
 describe('@EventHandler', () => {

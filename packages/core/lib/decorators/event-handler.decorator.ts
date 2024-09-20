@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { IEvent } from '../interfaces';
+import type { IEvent } from '../interfaces';
 import { EVENT_HANDLER_METADATA } from './constants';
 
 /**

@@ -1,4 +1,4 @@
-import { IEventCollection } from '../interfaces';
+import type { IEventCollection } from '../interfaces';
 
 export class EventCollection {
 	static get(pool?: string): IEventCollection {

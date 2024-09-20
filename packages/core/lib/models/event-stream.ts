@@ -1,8 +1,8 @@
-import { Type } from '@nestjs/common';
+import type { Type } from '@nestjs/common';
 import { MissingAggregateMetadataException } from '../exceptions';
 import { getAggregateMetadata } from '../helpers';
-import { AggregateRoot } from './aggregate-root';
-import { Id } from './id';
+import type { AggregateRoot } from './aggregate-root';
+import type { Id } from './id';
 
 export class EventStream {
 	private constructor(

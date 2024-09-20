@@ -1,15 +1,15 @@
-import { DynamicModule, Inject, Module, OnModuleInit, Provider } from '@nestjs/common';
+import { type DynamicModule, Inject, Module, type OnModuleInit, type Provider } from '@nestjs/common';
 import { DiscoveryModule } from '@nestjs/core';
 import { CommandBus } from './command-bus';
 import { EVENT_SOURCING_OPTIONS } from './constants';
 import { EventBus } from './event-bus';
 import { EventMap } from './event-map';
 import { EventStoreProvider, SnapshotStoreProvider, createEventSourcingProviders } from './event-sourcing.providers';
+// biome-ignore lint/style/useImportType: <explanation>
 import { EventStore } from './event-store';
 import { HandlersLoader } from './handlers.loader';
-import { InMemoryEventStoreConfig } from './integration/event-store';
-import { InMemorySnapshotStoreConfig } from './integration/snapshot-store';
-import {
+import type { InMemoryEventStoreConfig, InMemorySnapshotStoreConfig } from './integration';
+import type {
 	EventSourcingModuleAsyncOptions,
 	EventSourcingModuleOptions,
 	EventSourcingOptionsFactory,
@@ -17,6 +17,7 @@ import {
 	SnapshotStoreConfig,
 } from './interfaces';
 import { QueryBus } from './query-bus';
+// biome-ignore lint/style/useImportType: DI
 import { SnapshotStore } from './snapshot-store';
 
 @Module({})
