@@ -1,6 +1,7 @@
 export type * from './event-bus.interface';
 export type * from './event-collection.type';
 export type * from './event-envelope-metadata.interface';
+export type * from './event-filter.interface';
 export type * from './event-handler-metadata.interface';
 export type * from './event-handler.interface';
 export type * from './event-metadata.interface';

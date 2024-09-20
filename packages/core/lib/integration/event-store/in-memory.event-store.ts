@@ -1,12 +1,13 @@
 import type { Type } from '@nestjs/common';
 import { DEFAULT_BATCH_SIZE, StreamReadingDirection } from '../../constants';
-import { type EventFilter, EventStore } from '../../event-store';
+import { EventStore } from '../../event-store';
 import { EventNotFoundException, EventStorePersistenceException } from '../../exceptions';
 import type {
 	EventEnvelopeMetadata,
 	EventStoreConfig,
 	IEvent,
 	IEventCollection,
+	IEventFilter,
 	IEventPayload,
 	IEventPool,
 } from '../../interfaces';
@@ -41,7 +42,7 @@ export class InMemoryEventStore extends EventStore<InMemoryEventStoreConfig> {
 		return collection;
 	}
 
-	async *getEvents({ streamId }: EventStream, filter?: EventFilter): AsyncGenerator<IEvent[]> {
+	async *getEvents({ streamId }: EventStream, filter?: IEventFilter): AsyncGenerator<IEvent[]> {
 		let entities: InMemoryEventEntity[] = [];
 		const collection = EventCollection.get(filter?.pool);
 
@@ -121,7 +122,7 @@ export class InMemoryEventStore extends EventStore<InMemoryEventStoreConfig> {
 		}
 	}
 
-	async *getEnvelopes({ streamId }: EventStream, filter?: EventFilter): AsyncGenerator<EventEnvelope[]> {
+	async *getEnvelopes({ streamId }: EventStream, filter?: IEventFilter): AsyncGenerator<EventEnvelope[]> {
 		let entities: InMemoryEventEntity[] = [];
 		const collection = EventCollection.get(filter?.pool);
 

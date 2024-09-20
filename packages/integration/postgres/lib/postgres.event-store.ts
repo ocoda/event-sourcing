@@ -2,13 +2,13 @@ import {
 	DEFAULT_BATCH_SIZE,
 	EventCollection,
 	EventEnvelope,
-	EventFilter,
 	EventNotFoundException,
 	EventStore,
 	EventStorePersistenceException,
 	EventStream,
 	IEvent,
 	IEventCollection,
+	IEventFilter,
 	IEventPool,
 	StreamReadingDirection,
 } from '@ocoda/event-sourcing';
@@ -53,7 +53,7 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 		return collection;
 	}
 
-	async *getEvents({ streamId }: EventStream, filter?: EventFilter): AsyncGenerator<IEvent[]> {
+	async *getEvents({ streamId }: EventStream, filter?: IEventFilter): AsyncGenerator<IEvent[]> {
 		const collection = EventCollection.get(filter?.pool);
 
 		const fromVersion = filter?.fromVersion;
@@ -143,7 +143,7 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 		}
 	}
 
-	async *getEnvelopes({ streamId }: EventStream, filter?: EventFilter): AsyncGenerator<EventEnvelope[]> {
+	async *getEnvelopes({ streamId }: EventStream, filter?: IEventFilter): AsyncGenerator<EventEnvelope[]> {
 		const collection = EventCollection.get(filter?.pool);
 
 		const fromVersion = filter?.fromVersion;
