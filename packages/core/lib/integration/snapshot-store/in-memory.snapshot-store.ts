@@ -2,6 +2,7 @@ import type { Type } from '@nestjs/common';
 import { DEFAULT_BATCH_SIZE, StreamReadingDirection } from '../../constants';
 import { SnapshotNotFoundException, SnapshotStorePersistenceException } from '../../exceptions';
 import type {
+	ILatestSnapshotFilter,
 	ISnapshot,
 	ISnapshotCollection,
 	ISnapshotFilter,
@@ -10,7 +11,7 @@ import type {
 	SnapshotStoreConfig,
 } from '../../interfaces';
 import { type AggregateRoot, SnapshotCollection, SnapshotEnvelope, type SnapshotStream } from '../../models';
-import { type LatestSnapshotFilter, SnapshotStore } from '../../snapshot-store';
+import { SnapshotStore } from '../../snapshot-store';
 
 export type InMemorySnapshotEntity<A extends AggregateRoot> = {
 	streamId: string;
@@ -219,7 +220,7 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 
 	async *getLastEnvelopes<A extends AggregateRoot>(
 		aggregateName: string,
-		filter?: LatestSnapshotFilter,
+		filter?: ILatestSnapshotFilter,
 	): AsyncGenerator<SnapshotEnvelope<A>[]> {
 		let entities: InMemorySnapshotEntity<any>[] = [];
 

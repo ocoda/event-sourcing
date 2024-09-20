@@ -1,11 +1,11 @@
 import {
 	AggregateRoot,
 	DEFAULT_BATCH_SIZE,
+	ILatestSnapshotFilter,
 	ISnapshot,
 	ISnapshotCollection,
 	ISnapshotFilter,
 	ISnapshotPool,
-	LatestSnapshotFilter,
 	SnapshotCollection,
 	SnapshotEnvelope,
 	SnapshotNotFoundException,
@@ -295,7 +295,7 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 
 	async *getLastEnvelopes<A extends AggregateRoot>(
 		aggregateName: string,
-		filter?: LatestSnapshotFilter,
+		filter?: ILatestSnapshotFilter,
 	): AsyncGenerator<SnapshotEnvelope<A>[]> {
 		const collection = SnapshotCollection.get(filter?.pool);
 

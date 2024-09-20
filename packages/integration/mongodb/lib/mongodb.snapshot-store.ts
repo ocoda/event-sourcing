@@ -5,7 +5,7 @@ import {
 	ISnapshotCollection,
 	ISnapshotFilter,
 	ISnapshotPool,
-	LatestSnapshotFilter,
+	ILatestSnapshotFilter,
 	SnapshotCollection,
 	SnapshotEnvelope,
 	SnapshotNotFoundException,
@@ -256,7 +256,7 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 
 	async *getLastEnvelopes<A extends AggregateRoot>(
 		aggregateName: string,
-		filter?: LatestSnapshotFilter,
+		filter?: ILatestSnapshotFilter,
 	): AsyncGenerator<SnapshotEnvelope<A>[]> {
 		const collection = SnapshotCollection.get(filter?.pool);
 

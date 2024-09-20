@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import type {
 	EventSourcingModuleOptions,
+	ILatestSnapshotFilter,
 	ISnapshot,
 	ISnapshotCollection,
 	ISnapshotFilter,
@@ -8,10 +9,6 @@ import type {
 	SnapshotStoreDriver,
 } from './interfaces';
 import type { AggregateRoot, SnapshotEnvelope, SnapshotStream } from './models';
-
-export interface LatestSnapshotFilter extends Pick<ISnapshotFilter, 'batch' | 'limit' | 'pool'> {
-	fromId?: string;
-}
 
 export abstract class SnapshotStore<TOptions = Omit<EventSourcingModuleOptions['snapshotStore'], 'driver'>>
 	implements SnapshotStoreDriver
@@ -59,6 +56,6 @@ export abstract class SnapshotStore<TOptions = Omit<EventSourcingModuleOptions['
 	): SnapshotEnvelope<A> | Promise<SnapshotEnvelope<A>>;
 	abstract getLastEnvelopes?<A extends AggregateRoot>(
 		aggregateName: string,
-		filter?: LatestSnapshotFilter,
+		filter?: ILatestSnapshotFilter,
 	): AsyncGenerator<SnapshotEnvelope<A>[]>;
 }

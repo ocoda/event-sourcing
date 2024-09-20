@@ -14,11 +14,11 @@ import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
 import {
 	AggregateRoot,
 	DEFAULT_BATCH_SIZE,
+	ILatestSnapshotFilter,
 	ISnapshot,
 	ISnapshotCollection,
 	ISnapshotFilter,
 	ISnapshotPool,
-	LatestSnapshotFilter,
 	SnapshotCollection,
 	SnapshotEnvelope,
 	SnapshotNotFoundException,
@@ -366,7 +366,7 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 
 	async *getLastEnvelopes<A extends AggregateRoot>(
 		aggregateName: string,
-		filter?: LatestSnapshotFilter,
+		filter?: ILatestSnapshotFilter,
 	): AsyncGenerator<SnapshotEnvelope<A>[]> {
 		const collection = SnapshotCollection.get(filter?.pool);
 
