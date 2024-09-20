@@ -42,7 +42,7 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 			await connection.query('BEGIN');
 			await connection.query(
 				`CREATE TABLE IF NOT EXISTS "${collection}" (
-                    stream_id VARCHAR(255) NOT NULL,
+                    stream_id VARCHAR(90) NOT NULL,
                     version INT NOT NULL,
                     payload JSONB NOT NULL,
                     snapshot_id VARCHAR(255) NOT NULL,

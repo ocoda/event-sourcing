@@ -33,7 +33,7 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 
 		await this.pool.query(
 			`CREATE TABLE IF NOT EXISTS \`${collection}\` (
-                stream_id VARCHAR(255) NOT NULL,
+                stream_id VARCHAR(120) NOT NULL,
                 version INT NOT NULL,
                 event VARCHAR(255) NOT NULL,
                 payload JSON NOT NULL,

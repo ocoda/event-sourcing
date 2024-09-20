@@ -35,7 +35,7 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 
 		await this.pool.query(
 			`CREATE TABLE IF NOT EXISTS \`${collection}\` (
-                stream_id VARCHAR(255) NOT NULL,
+                stream_id VARCHAR(90) NOT NULL,
                 version INT NOT NULL,
                 payload JSON NOT NULL,
                 snapshot_id VARCHAR(255) NOT NULL,
