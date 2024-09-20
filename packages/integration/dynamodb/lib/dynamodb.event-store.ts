@@ -261,7 +261,10 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 	async getEnvelope({ streamId }: EventStream, version: number, pool?: IEventPool): Promise<EventEnvelope> {
 		const collection = EventCollection.get(pool);
 		const { Item } = await this.client.send(
-			new GetItemCommand({ TableName: collection, Key: marshall({ streamId, version }, { removeUndefinedValues: true }) }),
+			new GetItemCommand({
+				TableName: collection,
+				Key: marshall({ streamId, version }, { removeUndefinedValues: true }),
+			}),
 		);
 
 		if (!Item) {
