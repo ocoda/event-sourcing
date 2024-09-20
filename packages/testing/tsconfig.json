@@ -1,0 +1,4 @@
+{
+	"extends": "@ocoda/event-sourcing-config/typescript/base.json",
+	"include": ["e2e/**/*.ts"]
+}
