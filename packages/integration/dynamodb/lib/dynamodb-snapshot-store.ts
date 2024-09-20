@@ -127,6 +127,7 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 					KeyConditionExpression: KeyConditionExpression.join(' AND '),
 					ExclusiveStartKey,
 					ExpressionAttributeValues,
+					ProjectionExpression: 'payload',
 					...(direction === StreamReadingDirection.BACKWARD && {
 						ScanIndexForward: false,
 					}),
@@ -136,7 +137,8 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 
 			ExclusiveStartKey = LastEvaluatedKey;
 			for (const item of Items) {
-				entities.push(this.hydrate<A>(item).payload);
+				const { payload } = this.hydrate<A, ['payload']>(item);
+				entities.push(payload);
 			}
 			leftToFetch -= Items.length;
 
@@ -157,6 +159,7 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 			new GetItemCommand({
 				TableName: collection,
 				Key: marshall({ streamId, version }),
+				ProjectionExpression: 'payload',
 			}),
 		);
 
@@ -164,7 +167,7 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 			throw new SnapshotNotFoundException(streamId, version);
 		}
 
-		const { payload } = this.hydrate<A>(Item);
+		const { payload } = this.hydrate<A, ['payload']>(Item);
 
 		return payload;
 	}
@@ -184,14 +187,13 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 			});
 
 			const updateLastItem = [];
-			const lastStreamEntity = await this.getLastStreamEntity(collection, streamId);
+			const lastStreamEntity = await this.getLastStreamEntity(collection, streamId, ['version']);
 
 			if (lastStreamEntity) {
-				const snapshot = this.hydrate<A>(lastStreamEntity);
 				updateLastItem.push({
 					Update: {
 						TableName: collection,
-						Key: marshall({ streamId, version: snapshot.version }),
+						Key: marshall({ streamId, version: lastStreamEntity.version }),
 						UpdateExpression: 'REMOVE latest',
 					},
 				});
@@ -240,11 +242,12 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 				},
 				ScanIndexForward: false,
 				Limit: 1,
+				ProjectionExpression: 'payload',
 			}),
 		);
 
 		if (Items[0]) {
-			const { payload } = unmarshall(Items[0]);
+			const { payload } = this.hydrate<A, ['payload']>(Items[0]);
 
 			return payload;
 		}
@@ -255,10 +258,21 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 		pool?: ISnapshotPool,
 	): Promise<SnapshotEnvelope<A>> {
 		const collection = SnapshotCollection.get(pool);
-		const lastSnapshotEntity = await this.getLastStreamEntity<A>(collection, streamId);
+		const lastSnapshotEntity = await this.getLastStreamEntity<A>(collection, streamId, [
+			'payload',
+			'snapshotId',
+			'aggregateId',
+			'registeredOn',
+			'version',
+		]);
 
 		if (lastSnapshotEntity) {
-			return this.hydrateEnvelope(lastSnapshotEntity);
+			return SnapshotEnvelope.from<A>(lastSnapshotEntity.payload, {
+				snapshotId: lastSnapshotEntity.snapshotId,
+				aggregateId: lastSnapshotEntity.aggregateId,
+				registeredOn: new Date(lastSnapshotEntity.registeredOn),
+				version: lastSnapshotEntity.version,
+			});
 		}
 	}
 
@@ -283,7 +297,7 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 			ExpressionAttributeValues[':fromVersion'] = { N: fromVersion.toString() };
 		}
 
-		const entities: SnapshotEnvelope<A>[] = [];
+		const envelopes: SnapshotEnvelope<A>[] = [];
 		let leftToFetch = limit;
 		let ExclusiveStartKey: Record<string, AttributeValue>;
 		do {
@@ -293,6 +307,7 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 					KeyConditionExpression: KeyConditionExpression.join(' AND '),
 					ExclusiveStartKey,
 					ExpressionAttributeValues,
+					ProjectionExpression: 'payload, snapshotId, aggregateId, registeredOn, version',
 					...(direction === StreamReadingDirection.BACKWARD && {
 						ScanIndexForward: false,
 					}),
@@ -302,13 +317,21 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 
 			ExclusiveStartKey = LastEvaluatedKey;
 			for (const item of Items) {
-				entities.push(this.hydrateEnvelope(item));
+				const entity = this.hydrate<A, ['payload', 'snapshotId', 'aggregateId', 'registeredOn', 'version']>(item);
+				envelopes.push(
+					SnapshotEnvelope.from<A>(entity.payload, {
+						snapshotId: entity.snapshotId,
+						aggregateId: entity.aggregateId,
+						registeredOn: new Date(entity.registeredOn),
+						version: entity.version,
+					}),
+				);
 			}
 			leftToFetch -= Items.length;
 
-			if (entities.length > 0 && (entities.length === batch || !ExclusiveStartKey || leftToFetch <= 0)) {
-				yield entities;
-				entities.length = 0;
+			if (envelopes.length > 0 && (envelopes.length === batch || !ExclusiveStartKey || leftToFetch <= 0)) {
+				yield envelopes;
+				envelopes.length = 0;
 			}
 		} while (ExclusiveStartKey && leftToFetch > 0);
 	}
@@ -323,6 +346,7 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 			new GetItemCommand({
 				TableName: collection,
 				Key: marshall({ streamId, version }),
+				ProjectionExpression: 'payload, snapshotId, aggregateId, registeredOn, version',
 			}),
 		);
 
@@ -330,7 +354,14 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 			throw new SnapshotNotFoundException(streamId, version);
 		}
 
-		return this.hydrateEnvelope(Item);
+		const entity = this.hydrate<A, ['payload', 'snapshotId', 'aggregateId', 'registeredOn', 'version']>(Item);
+
+		return SnapshotEnvelope.from<A>(entity.payload, {
+			snapshotId: entity.snapshotId,
+			aggregateId: entity.aggregateId,
+			registeredOn: new Date(entity.registeredOn),
+			version: entity.version,
+		});
 	}
 
 	async *getLastEnvelopes<A extends AggregateRoot>(
@@ -366,13 +397,22 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 					ExclusiveStartKey,
 					ExpressionAttributeValues,
 					ScanIndexForward: false,
+					ProjectionExpression: 'payload, snapshotId, aggregateId, registeredOn, version',
 					...(limit && { Limit: Math.min(batch, leftToFetch) }),
 				}),
 			);
 
 			ExclusiveStartKey = LastEvaluatedKey;
 			for (const item of Items) {
-				entities.push(this.hydrateEnvelope(item));
+				const entity = this.hydrate<A, ['payload', 'snapshotId', 'aggregateId', 'registeredOn', 'version']>(item);
+				entities.push(
+					SnapshotEnvelope.from<A>(entity.payload, {
+						snapshotId: entity.snapshotId,
+						aggregateId: entity.aggregateId,
+						registeredOn: new Date(entity.registeredOn),
+						version: entity.version,
+					}),
+				);
 			}
 			leftToFetch -= Items.length;
 
@@ -383,24 +423,16 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 		} while (ExclusiveStartKey && leftToFetch > 0);
 	}
 
-	hydrate<A extends AggregateRoot>(entity: Record<string, AttributeValue>): DynamoSnapshotEntity<A> {
-		return unmarshall(entity) as DynamoSnapshotEntity<A>;
+	hydrate<A extends AggregateRoot, Fields extends (keyof DynamoSnapshotEntity<A>)[]>(
+		entity: Record<string, AttributeValue>,
+	): Pick<DynamoSnapshotEntity<A>, Fields[number]> {
+		return unmarshall(entity) as Pick<DynamoSnapshotEntity<A>, Fields[number]>;
 	}
 
-	hydrateEnvelope<A extends AggregateRoot>(entity: Record<string, AttributeValue>): SnapshotEnvelope<A> {
-		const parsed = this.hydrate<A>(entity);
-		return SnapshotEnvelope.from<A>(parsed.payload, {
-			snapshotId: parsed.snapshotId,
-			aggregateId: parsed.aggregateId,
-			registeredOn: new Date(parsed.registeredOn),
-			version: parsed.version,
-		});
-	}
-
-	private async getLastStreamEntity<A extends AggregateRoot>(
-		collection: string,
-		streamId: string,
-	): Promise<Record<string, AttributeValue>> {
+	private async getLastStreamEntity<
+		A extends AggregateRoot,
+		Fields extends (keyof DynamoSnapshotEntity<A>)[] = (keyof DynamoSnapshotEntity<A>)[],
+	>(collection: string, streamId: string, fields: Fields): Promise<Pick<DynamoSnapshotEntity<A>, Fields[number]>> {
 		const { Items } = await this.client.send(
 			new QueryCommand({
 				TableName: collection,
@@ -408,11 +440,12 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 				ExpressionAttributeValues: {
 					':streamId': { S: streamId },
 				},
+				ProjectionExpression: fields.join(', '),
 				ScanIndexForward: false,
 				Limit: 1,
 			}),
 		);
 
-		return Items.pop();
+		return Items[0] && this.hydrate<A, Fields>(Items[0]);
 	}
 }

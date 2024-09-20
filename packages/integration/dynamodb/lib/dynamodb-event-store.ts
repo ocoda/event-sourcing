@@ -107,6 +107,7 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 					KeyConditionExpression: KeyConditionExpression.join(' AND '),
 					ExclusiveStartKey,
 					ExpressionAttributeValues,
+					ProjectionExpression: 'event, payload',
 					...(direction === StreamReadingDirection.BACKWARD && { ScanIndexForward: false }),
 					...(limit && { Limit: Math.min(batch, leftToFetch) }),
 				}),
@@ -115,8 +116,8 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 			ExclusiveStartKey = LastEvaluatedKey;
 			entities.push(
 				...Items.map((item) => {
-					const { event, payload } = unmarshall(item);
-					return this.eventMap.deserializeEvent(event, payload);
+					const entity = this.hydrate<['event', 'payload']>(item);
+					return this.eventMap.deserializeEvent(entity.event, entity.payload);
 				}),
 			);
 			leftToFetch -= Items.length;
@@ -131,16 +132,20 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 	async getEvent({ streamId }: EventStream, version: number, pool?: IEventPool): Promise<IEvent> {
 		const collection = EventCollection.get(pool);
 		const { Item } = await this.client.send(
-			new GetItemCommand({ TableName: collection, Key: marshall({ streamId, version }) }),
+			new GetItemCommand({
+				TableName: collection,
+				Key: marshall({ streamId, version }),
+				ProjectionExpression: 'event, payload',
+			}),
 		);
 
 		if (!Item) {
 			throw new EventNotFoundException(streamId, version);
 		}
 
-		const { event, payload } = unmarshall(Item);
+		const entity = this.hydrate<['event', 'payload']>(Item);
 
-		return this.eventMap.deserializeEvent(event, payload);
+		return this.eventMap.deserializeEvent(entity.event, entity.payload);
 	}
 
 	async appendEvents(
@@ -221,6 +226,7 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 					KeyConditionExpression: KeyConditionExpression.join(' AND '),
 					ExclusiveStartKey,
 					ExpressionAttributeValues,
+					ProjectionExpression: 'event, payload, aggregateId, eventId, occurredOn, version, correlationId, causationId',
 					...(direction === StreamReadingDirection.BACKWARD && { ScanIndexForward: false }),
 					...(limit && { Limit: Math.min(batch, leftToFetch) }),
 				}),
@@ -229,16 +235,17 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 			ExclusiveStartKey = LastEvaluatedKey;
 			entities.push(
 				...Items.map((item) => {
-					const { event, payload, aggregateId, eventId, occurredOn, version, correlationId, causationId } = unmarshall(
-						item,
-					) as DynamoEventEntity;
-					return EventEnvelope.from(event, payload, {
-						eventId: eventId,
-						aggregateId,
-						version,
-						occurredOn: new Date(occurredOn),
-						correlationId,
-						causationId,
+					const entity =
+						this.hydrate<
+							['event', 'payload', 'aggregateId', 'eventId', 'occurredOn', 'version', 'correlationId', 'causationId']
+						>(item);
+					return EventEnvelope.from(entity.event, entity.payload, {
+						eventId: entity.eventId,
+						aggregateId: entity.aggregateId,
+						version: entity.version,
+						occurredOn: new Date(entity.occurredOn),
+						correlationId: entity.correlationId,
+						causationId: entity.causationId,
 					});
 				}),
 			);
@@ -261,17 +268,24 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 			throw new EventNotFoundException(streamId, version);
 		}
 
-		const { event, payload, aggregateId, eventId, occurredOn, correlationId, causationId } = unmarshall(
-			Item,
-		) as DynamoEventEntity;
+		const entity =
+			this.hydrate<
+				['event', 'payload', 'aggregateId', 'eventId', 'occurredOn', 'version', 'correlationId', 'causationId']
+			>(Item);
 
-		return EventEnvelope.from(event, payload, {
-			eventId: eventId,
-			aggregateId,
-			version,
-			occurredOn: new Date(occurredOn),
-			correlationId,
-			causationId,
+		return EventEnvelope.from(entity.event, entity.payload, {
+			eventId: entity.eventId,
+			aggregateId: entity.aggregateId,
+			version: entity.version,
+			occurredOn: new Date(entity.occurredOn),
+			correlationId: entity.correlationId,
+			causationId: entity.causationId,
 		});
+	}
+
+	hydrate<Fields extends (keyof DynamoEventEntity)[]>(
+		entity: Record<string, AttributeValue>,
+	): Pick<DynamoEventEntity, Fields[number]> {
+		return unmarshall(entity) as Pick<DynamoEventEntity, Fields[number]>;
 	}
 }
