@@ -16,11 +16,11 @@ import {
 	DEFAULT_BATCH_SIZE,
 	ISnapshot,
 	ISnapshotCollection,
+	ISnapshotFilter,
 	ISnapshotPool,
 	LatestSnapshotFilter,
 	SnapshotCollection,
 	SnapshotEnvelope,
-	SnapshotFilter,
 	SnapshotNotFoundException,
 	SnapshotStore,
 	SnapshotStorePersistenceException,
@@ -100,7 +100,7 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 
 	async *getSnapshots<A extends AggregateRoot>(
 		{ streamId }: SnapshotStream,
-		filter?: SnapshotFilter,
+		filter?: ISnapshotFilter,
 	): AsyncGenerator<ISnapshot<A>[]> {
 		const collection = SnapshotCollection.get(filter?.pool);
 
@@ -278,7 +278,7 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 
 	async *getEnvelopes<A extends AggregateRoot>(
 		{ streamId }: SnapshotStream,
-		filter?: SnapshotFilter,
+		filter?: ISnapshotFilter,
 	): AsyncGenerator<SnapshotEnvelope<A>[]> {
 		const collection = SnapshotCollection.get(filter?.pool);
 

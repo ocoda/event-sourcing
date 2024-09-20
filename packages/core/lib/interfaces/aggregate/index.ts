@@ -1,6 +1,7 @@
 export type * from './aggregate-metadata.interface';
 export type * from './snapshot-collection.type';
 export type * from './snapshot-envelope-metadata.interface';
+export type * from './snapshot-filter.interface';
 export type * from './snapshot-handler-metadata.interface';
 export type * from './snapshot-handler.interface';
 export type * from './snapshot-pool.type';

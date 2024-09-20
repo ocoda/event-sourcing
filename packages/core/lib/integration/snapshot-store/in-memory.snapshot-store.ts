@@ -4,12 +4,13 @@ import { SnapshotNotFoundException, SnapshotStorePersistenceException } from '..
 import type {
 	ISnapshot,
 	ISnapshotCollection,
+	ISnapshotFilter,
 	ISnapshotPool,
 	SnapshotEnvelopeMetadata,
 	SnapshotStoreConfig,
 } from '../../interfaces';
 import { type AggregateRoot, SnapshotCollection, SnapshotEnvelope, type SnapshotStream } from '../../models';
-import { type LatestSnapshotFilter, type SnapshotFilter, SnapshotStore } from '../../snapshot-store';
+import { type LatestSnapshotFilter, SnapshotStore } from '../../snapshot-store';
 
 export type InMemorySnapshotEntity<A extends AggregateRoot> = {
 	streamId: string;
@@ -43,7 +44,7 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 
 	async *getSnapshots<A extends AggregateRoot>(
 		{ streamId }: SnapshotStream,
-		filter?: SnapshotFilter,
+		filter?: ISnapshotFilter,
 	): AsyncGenerator<ISnapshot<A>[]> {
 		let entities: InMemorySnapshotEntity<any>[] = [];
 
@@ -159,7 +160,7 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 
 	async *getEnvelopes<A extends AggregateRoot>(
 		{ streamId }: SnapshotStream,
-		filter?: SnapshotFilter,
+		filter?: ISnapshotFilter,
 	): AsyncGenerator<SnapshotEnvelope<A>[]> {
 		let entities: InMemorySnapshotEntity<any>[] = [];
 
