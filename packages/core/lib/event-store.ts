@@ -1,7 +1,14 @@
 import { Logger } from '@nestjs/common';
 // biome-ignore lint/style/useImportType: DI
 import { EventMap } from './event-map';
-import type { EventSourcingModuleOptions, EventStoreDriver, IEvent, IEventCollection, IEventPool } from './interfaces';
+import type {
+	EventSourcingModuleOptions,
+	EventStoreDriver,
+	IEvent,
+	IEventCollection,
+	IEventFilter,
+	IEventPool,
+} from './interfaces';
 import type { EventEnvelope, EventStream } from './models';
 
 export abstract class EventStore<TOptions = Omit<EventSourcingModuleOptions['eventStore'], 'driver'>>
