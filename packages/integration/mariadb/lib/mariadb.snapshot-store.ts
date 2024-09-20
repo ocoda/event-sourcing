@@ -10,10 +10,11 @@ import {
 	SnapshotFilter,
 	SnapshotNotFoundException,
 	SnapshotStore,
+	SnapshotStorePersistenceException,
 	SnapshotStream,
 	StreamReadingDirection,
 } from '@ocoda/event-sourcing';
-import { type Pool, createPool } from 'mariadb';
+import { Connection, type Pool, createPool } from 'mariadb';
 import { MariaDBSnapshotEntity, MariaDBSnapshotStoreConfig } from './interfaces';
 
 export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConfig> {
@@ -34,15 +35,16 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 
 		await this.pool.query(
 			`CREATE TABLE IF NOT EXISTS \`${collection}\` (
-                stream_id VARCHAR(255) NOT NULL,
+                stream_id VARCHAR(90) NOT NULL,
                 version INT NOT NULL,
                 payload JSON NOT NULL,
-                snapshot_id VARCHAR(255) NOT NULL,
-                aggregate_id VARCHAR(255) NOT NULL,
+                snapshot_id VARCHAR(40) NOT NULL,
+                aggregate_id VARCHAR(40) NOT NULL,
                 registered_on TIMESTAMP NOT NULL,
-                aggregate_name VARCHAR(255) NOT NULL,
-                latest VARCHAR(255),
-                PRIMARY KEY (stream_id, version)
+                aggregate_name VARCHAR(50) NOT NULL,
+                latest VARCHAR(100),
+                PRIMARY KEY (stream_id, version),
+                INDEX idx_aggregate_name_latest (aggregate_name, latest)
             )`,
 		);
 
@@ -123,33 +125,46 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 		aggregateVersion: number,
 		snapshot: ISnapshot<A>,
 		pool?: ISnapshotPool,
-	): Promise<void> {
+	): Promise<SnapshotEnvelope<A>> {
+		const connection = await this.pool.getConnection();
 		const collection = SnapshotCollection.get(pool);
 
-		const { payload, metadata } = SnapshotEnvelope.create<A>(snapshot, {
-			aggregateId,
-			version: aggregateVersion,
-		});
+		try {
+			const envelope = SnapshotEnvelope.create<A>(snapshot, {
+				aggregateId,
+				version: aggregateVersion,
+			});
 
-		const lastStreamEntity = await this.getLastStreamEntity(collection, streamId);
+			const lastStreamEntity = await this.getLastStreamEntity(collection, streamId, connection);
+			await connection.beginTransaction();
 
-		if (lastStreamEntity) {
-			await this.pool.query(`UPDATE \`${collection}\` SET latest = null WHERE stream_id = ? AND version = ?`, [
-				lastStreamEntity.stream_id,
-				lastStreamEntity.version,
+			if (lastStreamEntity) {
+				await connection.query(`UPDATE \`${collection}\` SET latest = null WHERE stream_id = ? AND version = ?`, [
+					lastStreamEntity.stream_id,
+					lastStreamEntity.version,
+				]);
+			}
+
+			await connection.query(`INSERT INTO \`${collection}\` VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [
+				streamId,
+				envelope.metadata.version,
+				JSON.stringify(envelope.payload),
+				envelope.metadata.snapshotId,
+				envelope.metadata.aggregateId,
+				envelope.metadata.registeredOn,
+				aggregate,
+				`latest#${streamId}`,
 			]);
-		}
 
-		await this.pool.query(`INSERT INTO \`${collection}\` VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [
-			streamId,
-			metadata.version,
-			JSON.stringify(payload),
-			metadata.snapshotId,
-			metadata.aggregateId,
-			metadata.registeredOn,
-			aggregate,
-			`latest#${streamId}`,
-		]);
+			await connection.commit();
+
+			return envelope;
+		} catch (error) {
+			await connection.rollback();
+			throw new SnapshotStorePersistenceException(collection, error);
+		} finally {
+			connection.release();
+		}
 	}
 
 	async getLastSnapshot<A extends AggregateRoot>(
@@ -318,10 +333,13 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 	private async getLastStreamEntity<A extends AggregateRoot>(
 		collection: string,
 		streamId: string,
+		connection?: Connection,
 	): Promise<Omit<MariaDBSnapshotEntity<A>, 'aggregate_name' | 'latest'>> {
-		const [entity] = await this.pool.query<Omit<MariaDBSnapshotEntity<A>, 'aggregate_name' | 'latest'>[]>(
-			`SELECT stream_id, payload, aggregate_id, registered_on, snapshot_id, version FROM \`${collection}\` WHERE stream_id = ? ORDER BY version DESC LIMIT 1`,
-			[streamId],
+		const [entity] = await (connection || this.pool).query<
+			Omit<MariaDBSnapshotEntity<A>, 'aggregate_name' | 'latest'>[]
+		>(
+			`SELECT stream_id, payload, aggregate_id, registered_on, snapshot_id, version FROM \`${collection}\` WHERE latest = ? LIMIT 1`,
+			[`latest#${streamId}`],
 		);
 
 		if (entity) {

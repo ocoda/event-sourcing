@@ -10,6 +10,7 @@ import {
 	EventNotFoundException,
 	EventSourcingModule,
 	EventStore,
+	EventStorePersistenceException,
 	EventStream,
 	IEvent,
 	StreamReadingDirection,
@@ -162,12 +163,10 @@ describe(PostgresEventStore, () => {
 	});
 
 	it('should append event envelopes', async () => {
-		await Promise.all([
-			eventStore.appendEvents(eventStreamAccountA, 3, events.slice(0, 3)),
-			eventStore.appendEvents(eventStreamAccountB, 3, events.slice(0, 3)),
-			eventStore.appendEvents(eventStreamAccountA, 6, events.slice(3)),
-			eventStore.appendEvents(eventStreamAccountB, 6, events.slice(3)),
-		]);
+		await eventStore.appendEvents(eventStreamAccountA, 3, events.slice(0, 3));
+		await eventStore.appendEvents(eventStreamAccountB, 3, events.slice(0, 3));
+		await eventStore.appendEvents(eventStreamAccountA, 6, events.slice(3));
+		await eventStore.appendEvents(eventStreamAccountB, 6, events.slice(3));
 
 		const { rows: entities } = await client.query<PostgresEventEntity>(`
             SELECT * FROM "${EventCollection.get()}" ORDER BY version ASC
@@ -203,6 +202,12 @@ describe(PostgresEventStore, () => {
 		}
 
 		expect(publish).toHaveBeenCalledTimes(events.length * 2);
+	});
+
+	it("should throw when event envelopes can't be appended", async () => {
+		expect(() => eventStore.appendEvents(eventStreamAccountA, 3, events.slice(0, 3), 'not-a-pool')).rejects.toThrow(
+			EventStorePersistenceException,
+		);
 	});
 
 	it('should retrieve a single event from a specified stream', async () => {

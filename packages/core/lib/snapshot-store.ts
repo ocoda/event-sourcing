@@ -70,7 +70,7 @@ export abstract class SnapshotStore<TOptions = Omit<EventSourcingModuleOptions['
 		version: number,
 		snapshot: ISnapshot<A>,
 		pool?: ISnapshotPool,
-	): void | Promise<void>;
+	): SnapshotEnvelope<A> | Promise<SnapshotEnvelope<A>>;
 	abstract getLastEnvelope<A extends AggregateRoot>(
 		snapshotStream: SnapshotStream,
 		pool?: ISnapshotPool,

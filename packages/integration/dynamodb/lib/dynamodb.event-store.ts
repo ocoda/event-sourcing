@@ -2,7 +2,9 @@ import {
 	AttributeValue,
 	BatchWriteItemCommand,
 	BatchWriteItemInput,
+	BillingMode,
 	CreateTableCommand,
+	CreateTableCommandInput,
 	DescribeTableCommand,
 	DynamoDBClient,
 	GetItemCommand,
@@ -17,6 +19,7 @@ import {
 	EventFilter,
 	EventNotFoundException,
 	EventStore,
+	EventStorePersistenceException,
 	EventStream,
 	IEvent,
 	IEventCollection,
@@ -38,7 +41,10 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 		this.client.destroy();
 	}
 
-	public async ensureCollection(pool?: IEventPool): Promise<IEventCollection> {
+	public async ensureCollection(
+		pool?: IEventPool,
+		config?: Pick<CreateTableCommandInput, 'BillingMode' | 'ProvisionedThroughput' | 'OnDemandThroughput'>,
+	): Promise<IEventCollection> {
 		const collection = EventCollection.get(pool);
 
 		try {
@@ -58,11 +64,12 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 								{ AttributeName: 'streamId', AttributeType: 'S' },
 								{ AttributeName: 'version', AttributeType: 'N' },
 							],
-							ProvisionedThroughput: {
+							ProvisionedThroughput: config?.ProvisionedThroughput || {
 								ReadCapacityUnits: 1,
 								WriteCapacityUnits: 1,
 							},
-							BillingMode: 'PAY_PER_REQUEST',
+							OnDemandThroughput: config?.OnDemandThroughput,
+							BillingMode: config?.BillingMode || BillingMode.PAY_PER_REQUEST,
 						}),
 					);
 					break;
@@ -100,6 +107,7 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 					KeyConditionExpression: KeyConditionExpression.join(' AND '),
 					ExclusiveStartKey,
 					ExpressionAttributeValues,
+					ProjectionExpression: 'event, payload',
 					...(direction === StreamReadingDirection.BACKWARD && { ScanIndexForward: false }),
 					...(limit && { Limit: Math.min(batch, leftToFetch) }),
 				}),
@@ -108,8 +116,8 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 			ExclusiveStartKey = LastEvaluatedKey;
 			entities.push(
 				...Items.map((item) => {
-					const { event, payload } = unmarshall(item);
-					return this.eventMap.deserializeEvent(event, payload);
+					const entity = this.hydrate<['event', 'payload']>(item);
+					return this.eventMap.deserializeEvent(entity.event, entity.payload);
 				}),
 			);
 			leftToFetch -= Items.length;
@@ -124,16 +132,20 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 	async getEvent({ streamId }: EventStream, version: number, pool?: IEventPool): Promise<IEvent> {
 		const collection = EventCollection.get(pool);
 		const { Item } = await this.client.send(
-			new GetItemCommand({ TableName: collection, Key: marshall({ streamId, version }) }),
+			new GetItemCommand({
+				TableName: collection,
+				Key: marshall({ streamId, version }),
+				ProjectionExpression: 'event, payload',
+			}),
 		);
 
 		if (!Item) {
 			throw new EventNotFoundException(streamId, version);
 		}
 
-		const { event, payload } = unmarshall(Item);
+		const entity = this.hydrate<['event', 'payload']>(Item);
 
-		return this.eventMap.deserializeEvent(event, payload);
+		return this.eventMap.deserializeEvent(entity.event, entity.payload);
 	}
 
 	async appendEvents(
@@ -144,42 +156,46 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 	): Promise<EventEnvelope[]> {
 		const collection = EventCollection.get(pool);
 
-		let version = aggregateVersion - events.length + 1;
+		try {
+			let version = aggregateVersion - events.length + 1;
 
-		const envelopes: EventEnvelope[] = [];
-		for (const event of events) {
-			const name = this.eventMap.getName(event);
-			const payload = this.eventMap.serializeEvent(event);
-			const envelope = EventEnvelope.create(name, payload, { aggregateId, version: version++ });
-			envelopes.push(envelope);
+			const envelopes: EventEnvelope[] = [];
+			for (const event of events) {
+				const name = this.eventMap.getName(event);
+				const payload = this.eventMap.serializeEvent(event);
+				const envelope = EventEnvelope.create(name, payload, { aggregateId, version: version++ });
+				envelopes.push(envelope);
+			}
+
+			const params: BatchWriteItemInput = {
+				RequestItems: {
+					[collection]: envelopes.map(({ event, payload, metadata }) => ({
+						PutRequest: {
+							Item: marshall(
+								{
+									streamId,
+									event,
+									payload,
+									version: metadata.version,
+									eventId: metadata.eventId,
+									aggregateId: metadata.aggregateId,
+									occurredOn: metadata.occurredOn.getTime(),
+									correlationId: metadata.correlationId,
+									causationId: metadata.causationId,
+								},
+								{ removeUndefinedValues: true },
+							),
+						},
+					})),
+				},
+			};
+
+			await this.client.send(new BatchWriteItemCommand(params));
+
+			return envelopes;
+		} catch (error) {
+			throw new EventStorePersistenceException(collection, error);
 		}
-
-		const params: BatchWriteItemInput = {
-			RequestItems: {
-				[collection]: envelopes.map(({ event, payload, metadata }) => ({
-					PutRequest: {
-						Item: marshall(
-							{
-								streamId,
-								event,
-								payload,
-								version: metadata.version,
-								eventId: metadata.eventId,
-								aggregateId: metadata.aggregateId,
-								occurredOn: metadata.occurredOn.getTime(),
-								correlationId: metadata.correlationId,
-								causationId: metadata.causationId,
-							},
-							{ removeUndefinedValues: true },
-						),
-					},
-				})),
-			},
-		};
-
-		await this.client.send(new BatchWriteItemCommand(params));
-
-		return envelopes;
 	}
 
 	async *getEnvelopes({ streamId }: EventStream, filter?: EventFilter): AsyncGenerator<EventEnvelope[]> {
@@ -210,6 +226,7 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 					KeyConditionExpression: KeyConditionExpression.join(' AND '),
 					ExclusiveStartKey,
 					ExpressionAttributeValues,
+					ProjectionExpression: 'event, payload, aggregateId, eventId, occurredOn, version, correlationId, causationId',
 					...(direction === StreamReadingDirection.BACKWARD && { ScanIndexForward: false }),
 					...(limit && { Limit: Math.min(batch, leftToFetch) }),
 				}),
@@ -218,16 +235,17 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 			ExclusiveStartKey = LastEvaluatedKey;
 			entities.push(
 				...Items.map((item) => {
-					const { event, payload, aggregateId, eventId, occurredOn, version, correlationId, causationId } = unmarshall(
-						item,
-					) as DynamoEventEntity;
-					return EventEnvelope.from(event, payload, {
-						eventId: eventId,
-						aggregateId,
-						version,
-						occurredOn: new Date(occurredOn),
-						correlationId,
-						causationId,
+					const entity =
+						this.hydrate<
+							['event', 'payload', 'aggregateId', 'eventId', 'occurredOn', 'version', 'correlationId', 'causationId']
+						>(item);
+					return EventEnvelope.from(entity.event, entity.payload, {
+						eventId: entity.eventId,
+						aggregateId: entity.aggregateId,
+						version: entity.version,
+						occurredOn: new Date(entity.occurredOn),
+						correlationId: entity.correlationId,
+						causationId: entity.causationId,
 					});
 				}),
 			);
@@ -250,17 +268,24 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 			throw new EventNotFoundException(streamId, version);
 		}
 
-		const { event, payload, aggregateId, eventId, occurredOn, correlationId, causationId } = unmarshall(
-			Item,
-		) as DynamoEventEntity;
+		const entity =
+			this.hydrate<
+				['event', 'payload', 'aggregateId', 'eventId', 'occurredOn', 'version', 'correlationId', 'causationId']
+			>(Item);
 
-		return EventEnvelope.from(event, payload, {
-			eventId: eventId,
-			aggregateId,
-			version,
-			occurredOn: new Date(occurredOn),
-			correlationId,
-			causationId,
+		return EventEnvelope.from(entity.event, entity.payload, {
+			eventId: entity.eventId,
+			aggregateId: entity.aggregateId,
+			version: entity.version,
+			occurredOn: new Date(entity.occurredOn),
+			correlationId: entity.correlationId,
+			causationId: entity.causationId,
 		});
+	}
+
+	hydrate<Fields extends (keyof DynamoEventEntity)[]>(
+		entity: Record<string, AttributeValue>,
+	): Pick<DynamoEventEntity, Fields[number]> {
+		return unmarshall(entity) as Pick<DynamoEventEntity, Fields[number]>;
 	}
 }

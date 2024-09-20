@@ -7,6 +7,7 @@ import {
 	SnapshotCollection,
 	SnapshotEnvelope,
 	SnapshotNotFoundException,
+	SnapshotStorePersistenceException,
 	SnapshotStream,
 	StreamReadingDirection,
 	UUID,
@@ -172,7 +173,19 @@ describe(PostgresSnapshotStore, () => {
 			expect(entity.aggregate_id).toEqual(envelopesAccountA[index].metadata.aggregateId);
 			expect(entity.registered_on).toBeInstanceOf(Date);
 			expect(entity.version).toEqual(envelopesAccountA[index].metadata.version);
+
+			if (index === entitiesAccountA.length - 1) {
+				expect(entity.latest).toEqual(`latest#${snapshotStreamAccountA.streamId}`);
+			} else {
+				expect(entity.latest).toBeNull();
+			}
 		}
+	});
+
+	it("should throw when a snapshot envelope can't be appended", async () => {
+		expect(() =>
+			snapshotStore.appendSnapshot(snapshotStreamAccountA, 1, snapshotsAccountA[0], 'not-a-pool'),
+		).rejects.toThrow(SnapshotStorePersistenceException);
 	});
 
 	it('should retrieve a single snapshot from a specified stream', async () => {

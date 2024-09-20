@@ -5,6 +5,7 @@ import {
 	EventFilter,
 	EventNotFoundException,
 	EventStore,
+	EventStorePersistenceException,
 	EventStream,
 	IEvent,
 	IEventCollection,
@@ -32,12 +33,12 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 
 		await this.pool.query(
 			`CREATE TABLE IF NOT EXISTS \`${collection}\` (
-                stream_id VARCHAR(255) NOT NULL,
+                stream_id VARCHAR(120) NOT NULL,
                 version INT NOT NULL,
-                event VARCHAR(255) NOT NULL,
+                event VARCHAR(80) NOT NULL,
                 payload JSON NOT NULL,
-                event_id VARCHAR(255) NOT NULL,
-                aggregate_id VARCHAR(255) NOT NULL,
+                event_id VARCHAR(40) NOT NULL,
+                aggregate_id VARCHAR(40) NOT NULL,
                 occurred_on TIMESTAMP NOT NULL,
                 correlation_id VARCHAR(255),
                 causation_id VARCHAR(255),
@@ -111,34 +112,44 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 		events: IEvent[],
 		pool?: IEventPool,
 	): Promise<EventEnvelope[]> {
+		const connection = await this.pool.getConnection();
 		const collection = EventCollection.get(pool);
 
-		let version = aggregateVersion - events.length + 1;
+		try {
+			let version = aggregateVersion - events.length + 1;
 
-		const envelopes: EventEnvelope[] = [];
-		for (const event of events) {
-			const name = this.eventMap.getName(event);
-			const payload = this.eventMap.serializeEvent(event);
-			const envelope = EventEnvelope.create(name, payload, { aggregateId, version: version++ });
-			envelopes.push(envelope);
+			const envelopes: EventEnvelope[] = [];
+			for (const event of events) {
+				const name = this.eventMap.getName(event);
+				const payload = this.eventMap.serializeEvent(event);
+				const envelope = EventEnvelope.create(name, payload, { aggregateId, version: version++ });
+				envelopes.push(envelope);
+			}
+
+			await connection.beginTransaction();
+			await connection.batch(
+				`INSERT INTO \`${collection}\` VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				envelopes.map(({ event, payload, metadata }) => [
+					streamId,
+					metadata.version,
+					event,
+					JSON.stringify(payload),
+					metadata.eventId,
+					metadata.aggregateId,
+					metadata.occurredOn,
+					metadata.correlationId ?? null,
+					metadata.causationId ?? null,
+				]),
+			);
+			await connection.commit();
+
+			return envelopes;
+		} catch (error) {
+			await connection.rollback();
+			throw new EventStorePersistenceException(collection, error);
+		} finally {
+			connection.release();
 		}
-
-		await this.pool.batch(
-			`INSERT INTO \`${collection}\` VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			envelopes.map(({ event, payload, metadata }) => [
-				streamId,
-				metadata.version,
-				event,
-				JSON.stringify(payload),
-				metadata.eventId,
-				metadata.aggregateId,
-				metadata.occurredOn,
-				metadata.correlationId ?? null,
-				metadata.causationId ?? null,
-			]),
-		);
-
-		return envelopes;
 	}
 
 	async *getEnvelopes({ streamId }: EventStream, filter?: EventFilter): AsyncGenerator<EventEnvelope[]> {

@@ -5,6 +5,7 @@ import {
 	EventFilter,
 	EventNotFoundException,
 	EventStore,
+	EventStorePersistenceException,
 	EventStream,
 	IEvent,
 	IEventCollection,
@@ -101,27 +102,37 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 	): Promise<EventEnvelope[]> {
 		const collection = EventCollection.get(pool);
 
-		let version = aggregateVersion - events.length + 1;
+		try {
+			let version = aggregateVersion - events.length + 1;
 
-		const envelopes: EventEnvelope[] = [];
-		for (const event of events) {
-			const name = this.eventMap.getName(event);
-			const payload = this.eventMap.serializeEvent(event);
-			const envelope = EventEnvelope.create(name, payload, { aggregateId, version: version++ });
-			envelopes.push(envelope);
+			const collections = await this.database.listCollections({ name: collection }).toArray();
+
+			if (collections.length === 0) {
+				throw new Error(`Collection "${collection}" does not exist.`);
+			}
+
+			const envelopes: EventEnvelope[] = [];
+			for (const event of events) {
+				const name = this.eventMap.getName(event);
+				const payload = this.eventMap.serializeEvent(event);
+				const envelope = EventEnvelope.create(name, payload, { aggregateId, version: version++ });
+				envelopes.push(envelope);
+			}
+
+			const entities = envelopes.map<MongoEventEntity>(({ event, payload, metadata }) => ({
+				_id: metadata.eventId,
+				streamId,
+				event,
+				payload,
+				...metadata,
+			}));
+
+			await this.database.collection<MongoEventEntity>(collection, {}).insertMany(entities);
+
+			return envelopes;
+		} catch (error) {
+			throw new EventStorePersistenceException(collection, error);
 		}
-
-		const entities = envelopes.map<MongoEventEntity>(({ event, payload, metadata }) => ({
-			_id: metadata.eventId,
-			streamId,
-			event,
-			payload,
-			...metadata,
-		}));
-
-		await this.database.collection<MongoEventEntity>(collection).insertMany(entities);
-
-		return envelopes;
 	}
 
 	async *getEnvelopes({ streamId }: EventStream, filter?: EventFilter): AsyncGenerator<EventEnvelope[]> {

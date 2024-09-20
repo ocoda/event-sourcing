@@ -4,6 +4,7 @@ import {
 	ISnapshot,
 	SnapshotEnvelope,
 	SnapshotNotFoundException,
+	SnapshotStorePersistenceException,
 	SnapshotStream,
 	StreamReadingDirection,
 	UUID,
@@ -106,18 +107,18 @@ describe(InMemorySnapshotStore, () => {
 
 	afterAll(() => snapshotStore.disconnect());
 
-	it('should append snapshot envelopes', () => {
-		snapshotStore.appendSnapshot(snapshotStreamAccountA, 1, snapshotsAccountA[0]);
-		snapshotStore.appendSnapshot(snapshotStreamAccountB, 1, snapshotsAccountB[0]);
-		snapshotStore.appendSnapshot(snapshotStreamAccountA, 10, snapshotsAccountA[1]);
-		snapshotStore.appendSnapshot(snapshotStreamAccountB, 10, snapshotsAccountB[1]);
-		snapshotStore.appendSnapshot(snapshotStreamAccountA, 20, snapshotsAccountA[2]);
-		snapshotStore.appendSnapshot(snapshotStreamAccountB, 20, snapshotsAccountB[2]);
-		snapshotStore.appendSnapshot(snapshotStreamAccountA, 30, snapshotsAccountA[3]);
-		snapshotStore.appendSnapshot(snapshotStreamAccountB, 30, snapshotsAccountB[3]);
-		snapshotStore.appendSnapshot(snapshotStreamAccountA, 40, snapshotsAccountA[4]);
-		snapshotStore.appendSnapshot(snapshotStreamCustomer, 1, customerSnapshot);
-		snapshotStore.appendSnapshot(snapshotStreamCustomer, 10, customerSnapshot);
+	it('should append snapshot envelopes', async () => {
+		await snapshotStore.appendSnapshot(snapshotStreamAccountA, 1, snapshotsAccountA[0]);
+		await snapshotStore.appendSnapshot(snapshotStreamAccountB, 1, snapshotsAccountB[0]);
+		await snapshotStore.appendSnapshot(snapshotStreamAccountA, 10, snapshotsAccountA[1]);
+		await snapshotStore.appendSnapshot(snapshotStreamAccountB, 10, snapshotsAccountB[1]);
+		await snapshotStore.appendSnapshot(snapshotStreamAccountA, 20, snapshotsAccountA[2]);
+		await snapshotStore.appendSnapshot(snapshotStreamAccountB, 20, snapshotsAccountB[2]);
+		await snapshotStore.appendSnapshot(snapshotStreamAccountA, 30, snapshotsAccountA[3]);
+		await snapshotStore.appendSnapshot(snapshotStreamAccountB, 30, snapshotsAccountB[3]);
+		await snapshotStore.appendSnapshot(snapshotStreamAccountA, 40, snapshotsAccountA[4]);
+		await snapshotStore.appendSnapshot(snapshotStreamCustomer, 1, customerSnapshot);
+		await snapshotStore.appendSnapshot(snapshotStreamCustomer, 10, customerSnapshot);
 
 		const entities = snapshotStore.collections.get('snapshots') || [];
 		const entitiesAccountA = entities.filter(
@@ -140,7 +141,19 @@ describe(InMemorySnapshotStore, () => {
 			expect(entity.aggregateId).toEqual(envelopesAccountA[index].metadata.aggregateId);
 			expect(entity.registeredOn).toBeInstanceOf(Date);
 			expect(entity.version).toEqual(envelopesAccountA[index].metadata.version);
+
+			if (index === entitiesAccountA.length - 1) {
+				expect(entity.latest).toEqual(`latest#${snapshotStreamAccountA.streamId}`);
+			} else {
+				expect(entity.latest).toBeNull();
+			}
 		}
+	});
+
+	it("should throw when a snapshot envelope can't be appended", async () => {
+		expect(() =>
+			snapshotStore.appendSnapshot(snapshotStreamAccountA, 1, snapshotsAccountA[0], 'not-a-pool'),
+		).rejects.toThrow(SnapshotStorePersistenceException);
 	});
 
 	it('should retrieve a single snapshot from a specified stream', () => {
