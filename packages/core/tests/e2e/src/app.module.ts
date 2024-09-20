@@ -1,28 +1,22 @@
 import { Module } from '@nestjs/common';
 import { EventSourcingModule } from '@ocoda/event-sourcing';
-import {
-	AggregateRepositories,
-	CommandHandlers,
-	EventHandlers,
-	EventPublishers,
-	Events,
-	QueryHandlers,
-	SnapshotHandlers,
-} from './app.providers';
+import { Events, testProviders } from '@ocoda/event-sourcing-testing/e2e';
+import { InMemoryEventStore, InMemorySnapshotStore } from '@ocoda/event-sourcing/integration';
 
 @Module({
 	imports: [
 		EventSourcingModule.forRoot({
 			events: [...Events],
+			eventStore: {
+				driver: InMemoryEventStore,
+				useDefaultPool: false,
+			},
+			snapshotStore: {
+				driver: InMemorySnapshotStore,
+				useDefaultPool: false,
+			},
 		}),
 	],
-	providers: [
-		...AggregateRepositories,
-		...CommandHandlers,
-		...QueryHandlers,
-		...SnapshotHandlers,
-		...EventHandlers,
-		...EventPublishers,
-	],
+	providers: testProviders,
 })
 export class AppModule {}

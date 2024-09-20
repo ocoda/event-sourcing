@@ -1,19 +1,29 @@
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { CommandBus, type ICommandBus, type IEventPublisher, type IQueryBus, QueryBus } from '@ocoda/event-sourcing';
-import { AppModule } from './src/app.module';
 import {
+	CommandBus,
+	EventStore,
+	type ICommandBus,
+	type IEventPublisher,
+	type IQueryBus,
+	QueryBus,
+	SnapshotStore,
+} from '@ocoda/event-sourcing';
+import {
+	AccountRepository,
 	AddAccountOwnerCommand,
 	CloseAccountCommand,
 	CreditAccountCommand,
+	CustomEventPublisher,
 	DebitAccountCommand,
+	GetAccountByIdQuery,
+	GetAccountsQuery,
 	OpenAccountCommand,
 	RemoveAccountOwnerCommand,
-} from './src/application/commands';
-import { CustomEventPublisher } from './src/application/publishers';
-import { GetAccountByIdQuery, GetAccountsQuery } from './src/application/queries';
-import { AccountRepository } from './src/application/repositories';
-import { type Account, type AccountId, AccountOwnerId } from './src/domain/models';
+} from '@ocoda/event-sourcing-testing/e2e/application';
+import { type Account, type AccountId, AccountOwnerId } from '@ocoda/event-sourcing-testing/e2e/domain';
+import type { InMemoryEventStore, InMemorySnapshotStore } from '@ocoda/event-sourcing/integration';
+import { AppModule } from './src/app.module';
 
 describe('EventSourcingModule - e2e', () => {
 	let app: INestApplication;
@@ -41,6 +51,10 @@ describe('EventSourcingModule - e2e', () => {
 		commandBus = app.get<CommandBus>(CommandBus);
 		queryBus = app.get<QueryBus>(QueryBus);
 		customEventPublisher = app.get<IEventPublisher>(CustomEventPublisher);
+
+		const eventStore = app.get<InMemoryEventStore>(EventStore);
+		const snapshotStore = app.get<InMemorySnapshotStore>(SnapshotStore);
+		await Promise.all([eventStore.ensureCollection('e2e'), snapshotStore.ensureCollection('e2e')]);
 
 		customEventPublisher.publish = jest.fn((_) => Promise.resolve());
 
