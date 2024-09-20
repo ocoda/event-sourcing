@@ -173,6 +173,12 @@ describe(PostgresSnapshotStore, () => {
 			expect(entity.aggregate_id).toEqual(envelopesAccountA[index].metadata.aggregateId);
 			expect(entity.registered_on).toBeInstanceOf(Date);
 			expect(entity.version).toEqual(envelopesAccountA[index].metadata.version);
+
+			if (index === entitiesAccountA.length - 1) {
+				expect(entity.latest).toEqual(`latest#${snapshotStreamAccountA.streamId}`);
+			} else {
+				expect(entity.latest).toBeNull();
+			}
 		}
 	});
 

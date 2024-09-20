@@ -112,7 +112,7 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 
 			for (const entity of snapshotCollection) {
 				if (entity.streamId === streamId) {
-					entity.latest = undefined;
+					entity.latest = null;
 				}
 			}
 

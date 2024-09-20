@@ -141,6 +141,12 @@ describe(InMemorySnapshotStore, () => {
 			expect(entity.aggregateId).toEqual(envelopesAccountA[index].metadata.aggregateId);
 			expect(entity.registeredOn).toBeInstanceOf(Date);
 			expect(entity.version).toEqual(envelopesAccountA[index].metadata.version);
+
+			if (index === entitiesAccountA.length - 1) {
+				expect(entity.latest).toEqual(`latest#${snapshotStreamAccountA.streamId}`);
+			} else {
+				expect(entity.latest).toBeNull();
+			}
 		}
 	});
 

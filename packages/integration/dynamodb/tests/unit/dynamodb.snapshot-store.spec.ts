@@ -194,6 +194,12 @@ describe(DynamoDBSnapshotStore, () => {
 			expect(entity.aggregateId).toEqual(envelopesAccountA[index].metadata.aggregateId);
 			expect(typeof entity.registeredOn).toBe('number');
 			expect(entity.version).toEqual(envelopesAccountA[index].metadata.version);
+
+			if (index === entitiesAccountA.length - 1) {
+				expect(entity.latest).toEqual(`latest#${snapshotStreamAccountA.streamId}`);
+			} else {
+				expect(entity.latest).toBeUndefined();
+			}
 		}
 	});
 
