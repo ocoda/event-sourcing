@@ -5,16 +5,16 @@ import {
 	EventNotFoundException,
 	EventStore,
 	EventStorePersistenceException,
-	EventStream,
-	IEvent,
-	IEventCollection,
-	IEventFilter,
-	IEventPool,
+	type EventStream,
+	type IEvent,
+	type IEventCollection,
+	type IEventFilter,
+	type IEventPool,
 	StreamReadingDirection,
 } from '@ocoda/event-sourcing';
-import { Pool, PoolClient } from 'pg';
+import { Pool, type PoolClient } from 'pg';
 import Cursor from 'pg-cursor';
-import { PostgresEventEntity, PostgresEventStoreConfig } from './interfaces';
+import type { PostgresEventEntity, PostgresEventStoreConfig } from './interfaces';
 
 export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 	private pool: Pool;

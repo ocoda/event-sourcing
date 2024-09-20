@@ -5,15 +5,15 @@ import {
 	EventNotFoundException,
 	EventStore,
 	EventStorePersistenceException,
-	EventStream,
-	IEvent,
-	IEventCollection,
-	IEventFilter,
-	IEventPool,
+	type EventStream,
+	type IEvent,
+	type IEventCollection,
+	type IEventFilter,
+	type IEventPool,
 	StreamReadingDirection,
 } from '@ocoda/event-sourcing';
-import { Db, MongoClient } from 'mongodb';
-import { MongoDBEventStoreConfig, MongoEventEntity } from './interfaces';
+import { type Db, MongoClient } from 'mongodb';
+import type { MongoDBEventStoreConfig, MongoEventEntity } from './interfaces';
 
 export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 	private client: MongoClient;

@@ -1,5 +1,5 @@
-import { StreamReadingDirection } from '../../constants';
-import { ISnapshotPool } from './snapshot-pool.type';
+import type { StreamReadingDirection } from '../../constants';
+import type { ISnapshotPool } from './snapshot-pool.type';
 
 export interface ISnapshotFilter {
 	/**

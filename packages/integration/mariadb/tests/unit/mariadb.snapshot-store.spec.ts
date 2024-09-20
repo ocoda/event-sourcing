@@ -1,9 +1,9 @@
-import { NestApplication, NestFactory } from '@nestjs/core';
+import { type NestApplication, NestFactory } from '@nestjs/core';
 import {
 	Aggregate,
 	AggregateRoot,
 	EventSourcingModule,
-	ISnapshot,
+	type ISnapshot,
 	SnapshotCollection,
 	SnapshotEnvelope,
 	SnapshotNotFoundException,
@@ -13,9 +13,13 @@ import {
 	UUID,
 } from '@ocoda/event-sourcing';
 import { SnapshotStore } from '@ocoda/event-sourcing';
-import { MariaDBSnapshotEntity, MariaDBSnapshotStore, MariaDBSnapshotStoreConfig } from '@ocoda/event-sourcing-mariadb';
-import { InMemoryEventStore, InMemoryEventStoreConfig } from '@ocoda/event-sourcing/integration/event-store';
-import { Pool } from 'mariadb';
+import {
+	type MariaDBSnapshotEntity,
+	MariaDBSnapshotStore,
+	type MariaDBSnapshotStoreConfig,
+} from '@ocoda/event-sourcing-mariadb';
+import { InMemoryEventStore, type InMemoryEventStoreConfig } from '@ocoda/event-sourcing/integration/event-store';
+import type { Pool } from 'mariadb';
 
 class AccountId extends UUID {}
 class CustomerId extends UUID {}

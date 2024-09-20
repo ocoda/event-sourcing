@@ -1,21 +1,21 @@
 import {
-	AggregateRoot,
+	type AggregateRoot,
 	DEFAULT_BATCH_SIZE,
-	ISnapshot,
-	ISnapshotCollection,
-	ISnapshotFilter,
-	ISnapshotPool,
-	ILatestSnapshotFilter,
+	type ILatestSnapshotFilter,
+	type ISnapshot,
+	type ISnapshotCollection,
+	type ISnapshotFilter,
+	type ISnapshotPool,
 	SnapshotCollection,
 	SnapshotEnvelope,
 	SnapshotNotFoundException,
 	SnapshotStore,
 	SnapshotStorePersistenceException,
-	SnapshotStream,
+	type SnapshotStream,
 	StreamReadingDirection,
 } from '@ocoda/event-sourcing';
-import { Db, MongoClient } from 'mongodb';
-import { MongoDBSnapshotStoreConfig, MongoSnapshotEntity } from './interfaces';
+import { type Db, MongoClient } from 'mongodb';
+import type { MongoDBSnapshotStoreConfig, MongoSnapshotEntity } from './interfaces';
 
 export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConfig> {
 	private client: MongoClient;

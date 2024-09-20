@@ -1,22 +1,22 @@
 import {
-	AggregateRoot,
+	type AggregateRoot,
 	DEFAULT_BATCH_SIZE,
-	ILatestSnapshotFilter,
-	ISnapshot,
-	ISnapshotCollection,
-	ISnapshotFilter,
-	ISnapshotPool,
+	type ILatestSnapshotFilter,
+	type ISnapshot,
+	type ISnapshotCollection,
+	type ISnapshotFilter,
+	type ISnapshotPool,
 	SnapshotCollection,
 	SnapshotEnvelope,
 	SnapshotNotFoundException,
 	SnapshotStore,
 	SnapshotStorePersistenceException,
-	SnapshotStream,
+	type SnapshotStream,
 	StreamReadingDirection,
 } from '@ocoda/event-sourcing';
-import { Pool, PoolClient } from 'pg';
+import { Pool, type PoolClient } from 'pg';
 import Cursor from 'pg-cursor';
-import { PostgresSnapshotEntity, PostgresSnapshotStoreConfig } from './interfaces';
+import type { PostgresSnapshotEntity, PostgresSnapshotStoreConfig } from './interfaces';
 
 export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreConfig> {
 	private pool: Pool;

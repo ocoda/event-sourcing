@@ -1,6 +1,6 @@
-import { DeleteTableCommand, DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb';
+import { DeleteTableCommand, type DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb';
 import { unmarshall } from '@aws-sdk/util-dynamodb';
-import { NestApplication, NestFactory } from '@nestjs/core';
+import { type NestApplication, NestFactory } from '@nestjs/core';
 import {
 	Aggregate,
 	AggregateRoot,
@@ -14,11 +14,11 @@ import {
 	EventStore,
 	EventStorePersistenceException,
 	EventStream,
-	IEvent,
+	type IEvent,
 	StreamReadingDirection,
 	UUID,
 } from '@ocoda/event-sourcing';
-import { DynamoDBEventStore, DynamoDBEventStoreConfig } from '@ocoda/event-sourcing-dynamodb';
+import { DynamoDBEventStore, type DynamoDBEventStoreConfig } from '@ocoda/event-sourcing-dynamodb';
 import { InMemorySnapshotStore } from '@ocoda/event-sourcing/integration/snapshot-store';
 
 class AccountId extends UUID {}

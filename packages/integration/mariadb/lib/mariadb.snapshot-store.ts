@@ -1,21 +1,21 @@
 import {
-	AggregateRoot,
+	type AggregateRoot,
 	DEFAULT_BATCH_SIZE,
-	ILatestSnapshotFilter,
-	ISnapshot,
-	ISnapshotCollection,
-	ISnapshotFilter,
-	ISnapshotPool,
+	type ILatestSnapshotFilter,
+	type ISnapshot,
+	type ISnapshotCollection,
+	type ISnapshotFilter,
+	type ISnapshotPool,
 	SnapshotCollection,
 	SnapshotEnvelope,
 	SnapshotNotFoundException,
 	SnapshotStore,
 	SnapshotStorePersistenceException,
-	SnapshotStream,
+	type SnapshotStream,
 	StreamReadingDirection,
 } from '@ocoda/event-sourcing';
-import { Connection, type Pool, createPool } from 'mariadb';
-import { MariaDBSnapshotEntity, MariaDBSnapshotStoreConfig } from './interfaces';
+import { type Connection, type Pool, createPool } from 'mariadb';
+import type { MariaDBSnapshotEntity, MariaDBSnapshotStoreConfig } from './interfaces';
 
 export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConfig> {
 	private pool: Pool;

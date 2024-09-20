@@ -1,10 +1,10 @@
 import {
-	AttributeValue,
+	type AttributeValue,
 	BatchWriteItemCommand,
-	BatchWriteItemInput,
+	type BatchWriteItemInput,
 	BillingMode,
 	CreateTableCommand,
-	CreateTableCommandInput,
+	type CreateTableCommandInput,
 	DescribeTableCommand,
 	DynamoDBClient,
 	GetItemCommand,
@@ -19,14 +19,14 @@ import {
 	EventNotFoundException,
 	EventStore,
 	EventStorePersistenceException,
-	EventStream,
-	IEvent,
-	IEventCollection,
-	IEventFilter,
-	IEventPool,
+	type EventStream,
+	type IEvent,
+	type IEventCollection,
+	type IEventFilter,
+	type IEventPool,
 	StreamReadingDirection,
 } from '@ocoda/event-sourcing';
-import { DynamoDBEventStoreConfig, DynamoEventEntity } from './interfaces';
+import type { DynamoDBEventStoreConfig, DynamoEventEntity } from './interfaces';
 
 export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 	private client: DynamoDBClient;

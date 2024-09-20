@@ -1,4 +1,4 @@
-import { AggregateRoot, ISnapshot } from '@ocoda/event-sourcing';
+import type { AggregateRoot, ISnapshot } from '@ocoda/event-sourcing';
 
 export interface DynamoSnapshotEntity<A extends AggregateRoot> {
 	streamId: string;

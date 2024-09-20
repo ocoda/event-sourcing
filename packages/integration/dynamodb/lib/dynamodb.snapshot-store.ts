@@ -1,8 +1,8 @@
 import {
-	AttributeValue,
+	type AttributeValue,
 	BillingMode,
 	CreateTableCommand,
-	CreateTableCommandInput,
+	type CreateTableCommandInput,
 	DescribeTableCommand,
 	DynamoDBClient,
 	GetItemCommand,
@@ -12,22 +12,22 @@ import {
 } from '@aws-sdk/client-dynamodb';
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
 import {
-	AggregateRoot,
+	type AggregateRoot,
 	DEFAULT_BATCH_SIZE,
-	ILatestSnapshotFilter,
-	ISnapshot,
-	ISnapshotCollection,
-	ISnapshotFilter,
-	ISnapshotPool,
+	type ILatestSnapshotFilter,
+	type ISnapshot,
+	type ISnapshotCollection,
+	type ISnapshotFilter,
+	type ISnapshotPool,
 	SnapshotCollection,
 	SnapshotEnvelope,
 	SnapshotNotFoundException,
 	SnapshotStore,
 	SnapshotStorePersistenceException,
-	SnapshotStream,
+	type SnapshotStream,
 	StreamReadingDirection,
 } from '@ocoda/event-sourcing';
-import { DynamoDBSnapshotStoreConfig, DynamoSnapshotEntity } from './interfaces';
+import type { DynamoDBSnapshotStoreConfig, DynamoSnapshotEntity } from './interfaces';
 
 export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreConfig> {
 	private client: DynamoDBClient;

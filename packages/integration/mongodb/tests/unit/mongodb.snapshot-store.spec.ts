@@ -1,9 +1,9 @@
-import { NestApplication, NestFactory } from '@nestjs/core';
+import { type NestApplication, NestFactory } from '@nestjs/core';
 import {
 	Aggregate,
 	AggregateRoot,
 	EventSourcingModule,
-	ISnapshot,
+	type ISnapshot,
 	SnapshotCollection,
 	SnapshotEnvelope,
 	SnapshotNotFoundException,
@@ -13,9 +13,13 @@ import {
 	StreamReadingDirection,
 	UUID,
 } from '@ocoda/event-sourcing';
-import { MongoDBSnapshotStore, MongoDBSnapshotStoreConfig, MongoSnapshotEntity } from '@ocoda/event-sourcing-mongodb';
-import { InMemoryEventStore, InMemoryEventStoreConfig } from '@ocoda/event-sourcing/integration/event-store';
-import { MongoClient } from 'mongodb';
+import {
+	MongoDBSnapshotStore,
+	type MongoDBSnapshotStoreConfig,
+	type MongoSnapshotEntity,
+} from '@ocoda/event-sourcing-mongodb';
+import { InMemoryEventStore, type InMemoryEventStoreConfig } from '@ocoda/event-sourcing/integration/event-store';
+import type { MongoClient } from 'mongodb';
 
 class AccountId extends UUID {}
 class CustomerId extends UUID {}

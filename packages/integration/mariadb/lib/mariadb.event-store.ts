@@ -5,15 +5,15 @@ import {
 	EventNotFoundException,
 	EventStore,
 	EventStorePersistenceException,
-	EventStream,
-	IEvent,
-	IEventCollection,
-	IEventFilter,
-	IEventPool,
+	type EventStream,
+	type IEvent,
+	type IEventCollection,
+	type IEventFilter,
+	type IEventPool,
 	StreamReadingDirection,
 } from '@ocoda/event-sourcing';
 import { type Pool, createPool } from 'mariadb';
-import { MariaDBEventEntity, MariaDBEventStoreConfig } from './interfaces';
+import type { MariaDBEventEntity, MariaDBEventStoreConfig } from './interfaces';
 
 export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 	private pool: Pool;

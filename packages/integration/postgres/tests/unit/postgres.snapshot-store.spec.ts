@@ -1,9 +1,9 @@
-import { NestApplication, NestFactory } from '@nestjs/core';
+import { type NestApplication, NestFactory } from '@nestjs/core';
 import {
 	Aggregate,
 	AggregateRoot,
 	EventSourcingModule,
-	ISnapshot,
+	type ISnapshot,
 	SnapshotCollection,
 	SnapshotEnvelope,
 	SnapshotNotFoundException,
@@ -14,12 +14,12 @@ import {
 } from '@ocoda/event-sourcing';
 import { SnapshotStore } from '@ocoda/event-sourcing';
 import {
-	PostgresSnapshotEntity,
+	type PostgresSnapshotEntity,
 	PostgresSnapshotStore,
-	PostgresSnapshotStoreConfig,
+	type PostgresSnapshotStoreConfig,
 } from '@ocoda/event-sourcing-postgres';
-import { InMemoryEventStore, InMemoryEventStoreConfig } from '@ocoda/event-sourcing/integration/event-store';
-import { PoolClient } from 'pg';
+import { InMemoryEventStore, type InMemoryEventStoreConfig } from '@ocoda/event-sourcing/integration/event-store';
+import type { PoolClient } from 'pg';
 
 class AccountId extends UUID {}
 class CustomerId extends UUID {}
