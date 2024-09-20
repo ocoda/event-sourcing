@@ -1,15 +1,17 @@
-import { Type } from '@nestjs/common';
+import type { Type } from '@nestjs/common';
 import { DEFAULT_BATCH_SIZE, StreamReadingDirection } from '../../constants';
 import { SnapshotNotFoundException, SnapshotStorePersistenceException } from '../../exceptions';
-import {
+import type {
+	ILatestSnapshotFilter,
 	ISnapshot,
 	ISnapshotCollection,
+	ISnapshotFilter,
 	ISnapshotPool,
 	SnapshotEnvelopeMetadata,
 	SnapshotStoreConfig,
 } from '../../interfaces';
-import { AggregateRoot, SnapshotCollection, SnapshotEnvelope, SnapshotStream } from '../../models';
-import { LatestSnapshotFilter, SnapshotFilter, SnapshotStore } from '../../snapshot-store';
+import { type AggregateRoot, SnapshotCollection, SnapshotEnvelope, type SnapshotStream } from '../../models';
+import { SnapshotStore } from '../../snapshot-store';
 
 export type InMemorySnapshotEntity<A extends AggregateRoot> = {
 	streamId: string;
@@ -43,7 +45,7 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 
 	async *getSnapshots<A extends AggregateRoot>(
 		{ streamId }: SnapshotStream,
-		filter?: SnapshotFilter,
+		filter?: ISnapshotFilter,
 	): AsyncGenerator<ISnapshot<A>[]> {
 		let entities: InMemorySnapshotEntity<any>[] = [];
 
@@ -159,7 +161,7 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 
 	async *getEnvelopes<A extends AggregateRoot>(
 		{ streamId }: SnapshotStream,
-		filter?: SnapshotFilter,
+		filter?: ISnapshotFilter,
 	): AsyncGenerator<SnapshotEnvelope<A>[]> {
 		let entities: InMemorySnapshotEntity<any>[] = [];
 
@@ -218,7 +220,7 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 
 	async *getLastEnvelopes<A extends AggregateRoot>(
 		aggregateName: string,
-		filter?: LatestSnapshotFilter,
+		filter?: ILatestSnapshotFilter,
 	): AsyncGenerator<SnapshotEnvelope<A>[]> {
 		let entities: InMemorySnapshotEntity<any>[] = [];
 

@@ -1,5 +1,6 @@
-import { Type } from '@nestjs/common';
-import { ICommandHandler, IEventHandler, IQueryHandler, SnapshotHandler } from '@ocoda/event-sourcing';
+import type { Type } from '@nestjs/common';
+// biome-ignore lint/style/useImportType: DI
+import { type ICommandHandler, type IEventHandler, type IQueryHandler, SnapshotHandler } from '@ocoda/event-sourcing';
 import {
 	AddAccountOwnerCommandHandler,
 	CloseAccountCommandHandler,

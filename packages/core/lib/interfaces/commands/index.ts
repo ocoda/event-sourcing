@@ -1,6 +1,6 @@
-export * from './command-bus.interface';
-export * from './command-handler-metadata.interface';
-export * from './command-handler.interface';
-export * from './command-metadata.interface';
-export * from './command-publisher.interface';
-export * from './command.interface';
+export type * from './command-bus.interface';
+export type * from './command-handler-metadata.interface';
+export type * from './command-handler.interface';
+export type * from './command-metadata.interface';
+export type * from './command-publisher.interface';
+export type * from './command.interface';

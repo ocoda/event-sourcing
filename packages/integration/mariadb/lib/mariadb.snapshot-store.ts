@@ -1,21 +1,21 @@
 import {
-	AggregateRoot,
+	type AggregateRoot,
 	DEFAULT_BATCH_SIZE,
-	ISnapshot,
-	ISnapshotCollection,
-	ISnapshotPool,
-	LatestSnapshotFilter,
+	type ILatestSnapshotFilter,
+	type ISnapshot,
+	type ISnapshotCollection,
+	type ISnapshotFilter,
+	type ISnapshotPool,
 	SnapshotCollection,
 	SnapshotEnvelope,
-	SnapshotFilter,
 	SnapshotNotFoundException,
 	SnapshotStore,
 	SnapshotStorePersistenceException,
-	SnapshotStream,
+	type SnapshotStream,
 	StreamReadingDirection,
 } from '@ocoda/event-sourcing';
-import { Connection, type Pool, createPool } from 'mariadb';
-import { MariaDBSnapshotEntity, MariaDBSnapshotStoreConfig } from './interfaces';
+import { type Connection, type Pool, createPool } from 'mariadb';
+import type { MariaDBSnapshotEntity, MariaDBSnapshotStoreConfig } from './interfaces';
 
 export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConfig> {
 	private pool: Pool;
@@ -58,7 +58,7 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 
 	async *getSnapshots<A extends AggregateRoot>(
 		{ streamId }: SnapshotStream,
-		filter?: SnapshotFilter,
+		filter?: ISnapshotFilter,
 	): AsyncGenerator<ISnapshot<A>[]> {
 		const connection = this.pool.getConnection();
 		const collection = SnapshotCollection.get(filter?.pool);
@@ -200,7 +200,7 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 
 	async *getEnvelopes<A extends AggregateRoot>(
 		{ streamId }: SnapshotStream,
-		filter?: SnapshotFilter,
+		filter?: ISnapshotFilter,
 	): AsyncGenerator<SnapshotEnvelope<A>[]> {
 		const connection = this.pool.getConnection();
 		const collection = SnapshotCollection.get(filter?.pool);
@@ -279,7 +279,7 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 
 	async *getLastEnvelopes<A extends AggregateRoot>(
 		aggregateName: string,
-		filter?: LatestSnapshotFilter,
+		filter?: ILatestSnapshotFilter,
 	): AsyncGenerator<SnapshotEnvelope<A>[]> {
 		const connection = this.pool.getConnection();
 		const collection = SnapshotCollection.get(filter?.pool);

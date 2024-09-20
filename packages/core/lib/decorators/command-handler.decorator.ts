@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import 'reflect-metadata';
-import { CommandMetadata, ICommand } from '../interfaces';
+import type { CommandMetadata, ICommand } from '../interfaces';
 import { COMMAND_HANDLER_METADATA, COMMAND_METADATA } from './constants';
 
 /**

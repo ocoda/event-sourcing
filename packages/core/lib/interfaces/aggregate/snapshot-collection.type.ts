@@ -1,3 +1,3 @@
-import { ISnapshotPool } from './snapshot-pool.type';
+import type { ISnapshotPool } from './snapshot-pool.type';
 
 export type ISnapshotCollection = 'snapshots' | `${ISnapshotPool}-snapshots`;

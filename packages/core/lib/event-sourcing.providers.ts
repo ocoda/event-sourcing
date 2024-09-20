@@ -1,10 +1,10 @@
-import { Provider } from '@nestjs/common';
+import type { Provider } from '@nestjs/common';
 import { EVENT_SOURCING_OPTIONS } from './constants';
 import { EventMap } from './event-map';
 import { EventStore } from './event-store';
 import { InMemoryEventStore } from './integration/event-store';
 import { InMemorySnapshotStore } from './integration/snapshot-store';
-import { EventSourcingModuleOptions } from './interfaces';
+import type { EventSourcingModuleOptions } from './interfaces';
 import { SnapshotStore } from './snapshot-store';
 
 export function createEventSourcingProviders<TOptions extends Record<string, any> = EventSourcingModuleOptions>(

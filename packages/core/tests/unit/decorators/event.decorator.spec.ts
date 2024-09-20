@@ -1,4 +1,4 @@
-import { Event, IEvent, InvalidEventStreamNameError } from '@ocoda/event-sourcing';
+import { Event, type IEvent, InvalidEventStreamNameError } from '@ocoda/event-sourcing';
 import { getEventMetadata } from '@ocoda/event-sourcing/helpers';
 
 describe('@Event', () => {

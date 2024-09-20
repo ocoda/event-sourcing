@@ -1,8 +1,8 @@
-import { Type } from '@nestjs/common';
-import { Observable } from 'rxjs';
+import type { Type } from '@nestjs/common';
+import type { Observable } from 'rxjs';
 import { filter } from 'rxjs/operators';
-import { IEvent } from '../../interfaces';
-import { EventEnvelope } from '../../models';
+import type { IEvent } from '../../interfaces';
+import type { EventEnvelope } from '../../models';
 import { getEventMetadata } from '../metadata';
 
 /**

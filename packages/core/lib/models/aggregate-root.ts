@@ -1,5 +1,5 @@
-import { Type } from '@nestjs/common';
-import { IEvent } from '../interfaces';
+import type { Type } from '@nestjs/common';
+import type { IEvent } from '../interfaces';
 
 const VERSION = Symbol();
 const EVENTS = Symbol();

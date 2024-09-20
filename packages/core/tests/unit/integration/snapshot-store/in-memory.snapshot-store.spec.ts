@@ -1,7 +1,7 @@
 import {
 	Aggregate,
 	AggregateRoot,
-	ISnapshot,
+	type ISnapshot,
 	SnapshotEnvelope,
 	SnapshotNotFoundException,
 	SnapshotStorePersistenceException,

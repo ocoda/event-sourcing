@@ -10,9 +10,10 @@ import {
 	Patch,
 	Post,
 } from '@nestjs/common';
+// biome-ignore lint/style/useImportType: DI
 import { CommandBus, QueryBus } from '@ocoda/event-sourcing';
-import { AccountId } from '../domain/models';
-import {
+import type { AccountId } from '../domain/models';
+import type {
 	AddAccountOwnerDto,
 	CreditAccountDto,
 	DebitAccountDto,

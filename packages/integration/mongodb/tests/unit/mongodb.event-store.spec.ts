@@ -1,4 +1,4 @@
-import { NestApplication, NestFactory } from '@nestjs/core';
+import { type NestApplication, NestFactory } from '@nestjs/core';
 import {
 	Aggregate,
 	AggregateRoot,
@@ -12,13 +12,13 @@ import {
 	EventStore,
 	EventStorePersistenceException,
 	EventStream,
-	IEvent,
+	type IEvent,
 	StreamReadingDirection,
 	UUID,
 } from '@ocoda/event-sourcing';
-import { MongoDBEventStore, MongoDBEventStoreConfig, MongoEventEntity } from '@ocoda/event-sourcing-mongodb';
+import { MongoDBEventStore, type MongoDBEventStoreConfig, type MongoEventEntity } from '@ocoda/event-sourcing-mongodb';
 import { InMemorySnapshotStore } from '@ocoda/event-sourcing/integration/snapshot-store';
-import { MongoClient } from 'mongodb';
+import type { MongoClient } from 'mongodb';
 
 class AccountId extends UUID {}
 

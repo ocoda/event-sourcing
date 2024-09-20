@@ -9,4 +9,5 @@ export * from './helpers';
 export * from './interfaces';
 export * from './models';
 export * from './query-bus';
+export * from './snapshot-handler';
 export * from './snapshot-store';

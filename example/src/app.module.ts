@@ -2,9 +2,9 @@ import { Module } from '@nestjs/common';
 import { EventSourcingModule } from '@ocoda/event-sourcing';
 import {
 	MongoDBEventStore,
-	MongoDBEventStoreConfig,
+	type MongoDBEventStoreConfig,
 	MongoDBSnapshotStore,
-	MongoDBSnapshotStoreConfig,
+	type MongoDBSnapshotStoreConfig,
 } from '@ocoda/event-sourcing-mongodb';
 import {
 	AggregateRepositories,

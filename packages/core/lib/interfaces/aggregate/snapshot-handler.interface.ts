@@ -1,5 +1,5 @@
-import { AggregateRoot } from '../../models';
-import { ISnapshot } from './snapshot.interface';
+import type { AggregateRoot } from '../../models';
+import type { ISnapshot } from './snapshot.interface';
 
 export interface ISnapshotHandler<A extends AggregateRoot> {
 	serialize(aggregate: A): ISnapshot<A>;

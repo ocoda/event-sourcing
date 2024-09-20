@@ -7,7 +7,7 @@
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
 	"scripts": {
-		"build": "rm -rf dist && tsc -p tsconfig.build.json",
+		"build": "rm -rf dist && tsup lib/index.ts --format cjs --dts",
 		"test": "jest --config jest.config.js",
 		"test:ci": "jest --config jest.config.js --runInBand --coverage",
 		"ci": "biome ci",
@@ -49,6 +49,7 @@
 		"jest-mock": "29.7.0",
 		"reflect-metadata": "0.2.2",
 		"rxjs": "7.8.1",
+		"tsup": "^8.3.0",
 		"typescript": "5.6.2"
 	},
 	"repository": {

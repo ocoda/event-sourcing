@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import 'reflect-metadata';
 import { InvalidEventStreamNameError } from '../exceptions';
-import { EventMetadata } from '../interfaces';
+import type { EventMetadata } from '../interfaces';
 import { EVENT_METADATA } from './constants';
 
 /**

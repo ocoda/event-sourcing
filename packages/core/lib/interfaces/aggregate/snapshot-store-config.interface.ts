@@ -1,5 +1,5 @@
-import { Type } from '@nestjs/common';
-import { SnapshotStoreDriver } from './snapshot-store.interface';
+import type { Type } from '@nestjs/common';
+import type { SnapshotStoreDriver } from './snapshot-store.interface';
 
 export interface SnapshotStoreConfig {
 	driver: Type<SnapshotStoreDriver>;

@@ -1,8 +1,8 @@
-import { Type } from '@nestjs/common';
+import type { Type } from '@nestjs/common';
 import 'reflect-metadata';
 import { InvalidAggregateStreamNameError } from '../exceptions';
-import { AggregateMetadata } from '../interfaces';
-import { AggregateRoot } from '../models';
+import type { AggregateMetadata } from '../interfaces';
+import type { AggregateRoot } from '../models';
 import { AGGREGATE_METADATA } from './constants';
 
 /**

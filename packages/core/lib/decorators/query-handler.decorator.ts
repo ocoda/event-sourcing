@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import 'reflect-metadata';
-import { IQuery } from '../interfaces';
+import type { IQuery } from '../interfaces';
 import { QUERY_HANDLER_METADATA, QUERY_METADATA } from './constants';
 
 /**

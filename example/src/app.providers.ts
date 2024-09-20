@@ -1,5 +1,5 @@
-import { Type } from '@nestjs/common';
-import { ICommandHandler, IEventHandler, IQueryHandler, SnapshotHandler } from '@ocoda/event-sourcing';
+import type { Type } from '@nestjs/common';
+import type { ICommandHandler, IEventHandler, IQueryHandler, SnapshotHandler } from '@ocoda/event-sourcing';
 import {
 	AddAccountOwnerCommandHandler,
 	CloseAccountCommandHandler,

@@ -1,21 +1,21 @@
 import {
-	AggregateRoot,
+	type AggregateRoot,
 	DEFAULT_BATCH_SIZE,
-	ISnapshot,
-	ISnapshotCollection,
-	ISnapshotPool,
-	LatestSnapshotFilter,
+	type ILatestSnapshotFilter,
+	type ISnapshot,
+	type ISnapshotCollection,
+	type ISnapshotFilter,
+	type ISnapshotPool,
 	SnapshotCollection,
 	SnapshotEnvelope,
-	SnapshotFilter,
 	SnapshotNotFoundException,
 	SnapshotStore,
 	SnapshotStorePersistenceException,
-	SnapshotStream,
+	type SnapshotStream,
 	StreamReadingDirection,
 } from '@ocoda/event-sourcing';
-import { Db, MongoClient } from 'mongodb';
-import { MongoDBSnapshotStoreConfig, MongoSnapshotEntity } from './interfaces';
+import { type Db, MongoClient } from 'mongodb';
+import type { MongoDBSnapshotStoreConfig, MongoSnapshotEntity } from './interfaces';
 
 export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConfig> {
 	private client: MongoClient;
@@ -57,7 +57,7 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 
 	async *getSnapshots<A extends AggregateRoot>(
 		{ streamId }: SnapshotStream,
-		filter?: SnapshotFilter,
+		filter?: ISnapshotFilter,
 	): AsyncGenerator<ISnapshot<A>[]> {
 		const collection = SnapshotCollection.get(filter?.pool);
 
@@ -190,7 +190,7 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 
 	async *getEnvelopes<A extends AggregateRoot>(
 		{ streamId }: SnapshotStream,
-		filter?: SnapshotFilter,
+		filter?: ISnapshotFilter,
 	): AsyncGenerator<SnapshotEnvelope<A>[]> {
 		const collection = SnapshotCollection.get(filter?.pool);
 
@@ -256,7 +256,7 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 
 	async *getLastEnvelopes<A extends AggregateRoot>(
 		aggregateName: string,
-		filter?: LatestSnapshotFilter,
+		filter?: ILatestSnapshotFilter,
 	): AsyncGenerator<SnapshotEnvelope<A>[]> {
 		const collection = SnapshotCollection.get(filter?.pool);
 

@@ -1,4 +1,4 @@
-import { IEvent, IEventPayload } from '@ocoda/event-sourcing';
+import type { IEvent, IEventPayload } from '@ocoda/event-sourcing';
 
 export type MariaDBEventEntity = {
 	stream_id: string;

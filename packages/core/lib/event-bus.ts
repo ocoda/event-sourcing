@@ -1,10 +1,10 @@
-import { Injectable, OnModuleDestroy } from '@nestjs/common';
-import { Observable, Subscription, from } from 'rxjs';
+import { Injectable, type OnModuleDestroy } from '@nestjs/common';
+import { type Observable, type Subscription, from } from 'rxjs';
 import { filter, mergeMap } from 'rxjs/operators';
 import { ObservableBus } from './helpers';
 import { DefaultEventPubSub } from './helpers/default-event-publisher';
-import { IEventBus, IEventHandler, IEventPublisher } from './interfaces';
-import { EventEnvelope } from './models';
+import type { IEventBus, IEventHandler, IEventPublisher } from './interfaces';
+import type { EventEnvelope } from './models';
 
 @Injectable()
 export class EventBus extends ObservableBus<EventEnvelope> implements IEventBus, OnModuleDestroy {

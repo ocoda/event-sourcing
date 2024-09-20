@@ -1,4 +1,4 @@
-import { AggregateRoot, ISnapshot } from '@ocoda/event-sourcing';
+import type { AggregateRoot, ISnapshot } from '@ocoda/event-sourcing';
 
 export type MariaDBSnapshotEntity<A extends AggregateRoot> = {
 	stream_id: string;

@@ -1,35 +1,15 @@
 import { Logger } from '@nestjs/common';
-import { StreamReadingDirection } from './constants';
+// biome-ignore lint/style/useImportType: DI
 import { EventMap } from './event-map';
-import { EventSourcingModuleOptions, EventStoreDriver, IEvent, IEventCollection, IEventPool } from './interfaces';
-import { EventEnvelope, EventStream } from './models';
-
-export interface EventFilter {
-	/**
-	 * The version from where the events should be read.
-	 */
-	fromVersion?: number;
-	/**
-	 * The event pool to search in.
-	 * @default events
-	 */
-	pool?: IEventPool;
-	/**
-	 * The direction in which events should be read.
-	 * @default StreamReadingDirection.FORWARD
-	 */
-	direction?: StreamReadingDirection;
-	/**
-	 * The number of events to read
-	 * @default Number.MAX_SAFE_INTEGER
-	 */
-	limit?: number;
-	/**
-	 * The amount of events to read at a time
-	 * @default 100
-	 */
-	batch?: number;
-}
+import type {
+	EventSourcingModuleOptions,
+	EventStoreDriver,
+	IEvent,
+	IEventCollection,
+	IEventFilter,
+	IEventPool,
+} from './interfaces';
+import type { EventEnvelope, EventStream } from './models';
 
 export abstract class EventStore<TOptions = Omit<EventSourcingModuleOptions['eventStore'], 'driver'>>
 	implements EventStoreDriver
@@ -67,7 +47,7 @@ export abstract class EventStore<TOptions = Omit<EventSourcingModuleOptions['eve
 
 	public abstract ensureCollection(pool?: string): IEventCollection | Promise<unknown>;
 
-	abstract getEvents(eventStream: EventStream, filter?: EventFilter): AsyncGenerator<IEvent[]>;
+	abstract getEvents(eventStream: EventStream, filter?: IEventFilter): AsyncGenerator<IEvent[]>;
 	abstract getEvent(eventStream: EventStream, version: number, pool?: IEventPool): IEvent | Promise<IEvent>;
 	abstract appendEvents(
 		eventStream: EventStream,
@@ -75,7 +55,7 @@ export abstract class EventStore<TOptions = Omit<EventSourcingModuleOptions['eve
 		events: IEvent[],
 		pool?: IEventPool,
 	): Promise<EventEnvelope[]>;
-	abstract getEnvelopes?(eventStream: EventStream, filter?: EventFilter): AsyncGenerator<EventEnvelope[]>;
+	abstract getEnvelopes?(eventStream: EventStream, filter?: IEventFilter): AsyncGenerator<EventEnvelope[]>;
 	abstract getEnvelope?(
 		eventStream: EventStream,
 		version: number,

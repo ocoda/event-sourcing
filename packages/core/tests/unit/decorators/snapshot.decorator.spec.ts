@@ -1,4 +1,10 @@
-import { AggregateRoot, ISnapshotHandler, SNAPSHOT_METADATA, Snapshot, SnapshotMetadata } from '@ocoda/event-sourcing';
+import {
+	AggregateRoot,
+	type ISnapshotHandler,
+	SNAPSHOT_METADATA,
+	Snapshot,
+	type SnapshotMetadata,
+} from '@ocoda/event-sourcing';
 import { getSnapshotMetadata } from '@ocoda/event-sourcing/helpers';
 
 describe('@Snapshot', () => {

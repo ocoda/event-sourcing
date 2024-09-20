@@ -1,4 +1,4 @@
-import { ISnapshotCollection } from '../interfaces';
+import type { ISnapshotCollection } from '../interfaces';
 
 export class SnapshotCollection {
 	static get(pool?: string): ISnapshotCollection {

@@ -2,7 +2,7 @@ import {
 	DefaultEventSerializer,
 	Event,
 	EventMap,
-	IEvent,
+	type IEvent,
 	MissingEventMetadataException,
 	UnregisteredEventException,
 	UnregisteredSerializerException,

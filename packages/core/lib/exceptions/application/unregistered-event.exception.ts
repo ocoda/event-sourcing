@@ -1,4 +1,4 @@
-import { IEventMapTarget } from '../../event-map';
+import type { IEventMapTarget } from '../../event-map';
 
 export class UnregisteredEventException extends Error {
 	constructor(target: IEventMapTarget) {

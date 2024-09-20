@@ -2,18 +2,18 @@ import {
 	DEFAULT_BATCH_SIZE,
 	EventCollection,
 	EventEnvelope,
-	EventFilter,
 	EventNotFoundException,
 	EventStore,
 	EventStorePersistenceException,
-	EventStream,
-	IEvent,
-	IEventCollection,
-	IEventPool,
+	type EventStream,
+	type IEvent,
+	type IEventCollection,
+	type IEventFilter,
+	type IEventPool,
 	StreamReadingDirection,
 } from '@ocoda/event-sourcing';
 import { type Pool, createPool } from 'mariadb';
-import { MariaDBEventEntity, MariaDBEventStoreConfig } from './interfaces';
+import type { MariaDBEventEntity, MariaDBEventStoreConfig } from './interfaces';
 
 export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 	private pool: Pool;
@@ -49,7 +49,7 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 		return collection;
 	}
 
-	async *getEvents({ streamId }: EventStream, filter?: EventFilter): AsyncGenerator<IEvent[]> {
+	async *getEvents({ streamId }: EventStream, filter?: IEventFilter): AsyncGenerator<IEvent[]> {
 		const connection = this.pool.getConnection();
 		const collection = EventCollection.get(filter?.pool);
 
@@ -152,7 +152,7 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 		}
 	}
 
-	async *getEnvelopes({ streamId }: EventStream, filter?: EventFilter): AsyncGenerator<EventEnvelope[]> {
+	async *getEnvelopes({ streamId }: EventStream, filter?: IEventFilter): AsyncGenerator<EventEnvelope[]> {
 		const connection = this.pool.getConnection();
 		const collection = EventCollection.get(filter?.pool);
 

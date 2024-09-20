@@ -1,7 +1,7 @@
 import {
 	AGGREGATE_METADATA,
 	Aggregate,
-	AggregateMetadata,
+	type AggregateMetadata,
 	AggregateRoot,
 	InvalidAggregateStreamNameError,
 } from '@ocoda/event-sourcing';

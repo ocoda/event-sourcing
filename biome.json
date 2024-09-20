@@ -17,7 +17,7 @@
 			"style": {
 				"useSingleCaseStatement": "off",
 				"useShorthandArrayType": "off",
-				"useImportType": "off"
+				"useImportType": "warn"
 			},
 			"suspicious": {
 				"noExplicitAny": "off",

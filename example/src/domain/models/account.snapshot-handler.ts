@@ -1,4 +1,4 @@
-import { ISnapshot, Snapshot, SnapshotHandler } from '@ocoda/event-sourcing';
+import { type ISnapshot, Snapshot, SnapshotHandler } from '@ocoda/event-sourcing';
 import { Account, AccountId, AccountOwnerId } from './account.aggregate';
 
 @Snapshot(Account, { name: 'account', interval: 5 })

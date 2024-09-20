@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
 import 'reflect-metadata';
-import { EventPublisherMetadata } from '../interfaces';
 import { EVENT_PUBLISHER_METADATA } from './constants';
 
 /**
@@ -11,6 +10,6 @@ import { EVENT_PUBLISHER_METADATA } from './constants';
  */
 export const EventPublisher = (): ClassDecorator => {
 	return (target: object) => {
-		Reflect.defineMetadata(EVENT_PUBLISHER_METADATA, { id: randomUUID() } as EventPublisherMetadata, target);
+		Reflect.defineMetadata(EVENT_PUBLISHER_METADATA, { id: randomUUID() }, target);
 	};
 };

@@ -1,7 +1,7 @@
-import { Type } from '@nestjs/common';
+import type { Type } from '@nestjs/common';
 import 'reflect-metadata';
-import { SnapshotMetadata } from '../interfaces';
-import { AggregateRoot } from '../models';
+import type { SnapshotMetadata } from '../interfaces';
+import type { AggregateRoot } from '../models';
 import { SNAPSHOT_METADATA } from './constants';
 
 /**

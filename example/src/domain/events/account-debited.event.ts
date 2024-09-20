@@ -1,4 +1,4 @@
-import { Event, IEvent } from '@ocoda/event-sourcing';
+import { Event, type IEvent } from '@ocoda/event-sourcing';
 
 @Event('account-debited')
 export class AccountDebitedEvent implements IEvent {

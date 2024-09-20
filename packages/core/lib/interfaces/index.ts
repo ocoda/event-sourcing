@@ -1,5 +1,5 @@
-export * from './aggregate';
-export * from './commands';
-export * from './event-sourcing-options.interface';
-export * from './events';
-export * from './queries';
+export type * from './aggregate';
+export type * from './commands';
+export type * from './events';
+export type * from './module';
+export type * from './queries';

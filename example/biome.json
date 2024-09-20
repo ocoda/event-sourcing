@@ -2,12 +2,5 @@
 	"extends": ["../biome.json"],
 	"files": {
 		"include": ["src/**/*.ts", "package.json"]
-	},
-	"overrides": [
-		{
-			"linter": {
-				"enabled": false
-			}
-		}
-	]
+	}
 }

@@ -1,4 +1,4 @@
-import { NestApplication, NestFactory } from '@nestjs/core';
+import { type NestApplication, NestFactory } from '@nestjs/core';
 import {
 	Aggregate,
 	AggregateRoot,
@@ -12,13 +12,17 @@ import {
 	EventStore,
 	EventStorePersistenceException,
 	EventStream,
-	IEvent,
+	type IEvent,
 	StreamReadingDirection,
 	UUID,
 } from '@ocoda/event-sourcing';
-import { MariaDBEventEntity, MariaDBEventStore, MariaDBEventStoreConfig } from '@ocoda/event-sourcing-mariadb';
+import {
+	type MariaDBEventEntity,
+	MariaDBEventStore,
+	type MariaDBEventStoreConfig,
+} from '@ocoda/event-sourcing-mariadb';
 import { InMemorySnapshotStore } from '@ocoda/event-sourcing/integration/snapshot-store';
-import { Pool } from 'mariadb';
+import type { Pool } from 'mariadb';
 
 class AccountId extends UUID {}
 

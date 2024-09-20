@@ -1,5 +1,6 @@
-import { CommandHandler, ICommand, ICommandHandler } from '@ocoda/event-sourcing';
+import { CommandHandler, type ICommand, type ICommandHandler } from '@ocoda/event-sourcing';
 import { AccountId, AccountOwnerId } from '../../domain/models';
+// biome-ignore lint/style/useImportType: DI
 import { AccountRepository } from '../repositories';
 
 export class AddAccountOwnerCommand implements ICommand {

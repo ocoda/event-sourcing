@@ -1,12 +1,12 @@
 import { randomInt } from 'node:crypto';
-import { DeleteTableCommand, DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb';
+import { DeleteTableCommand, type DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb';
 import { unmarshall } from '@aws-sdk/util-dynamodb';
-import { NestApplication, NestFactory } from '@nestjs/core';
+import { type NestApplication, NestFactory } from '@nestjs/core';
 import {
 	Aggregate,
 	AggregateRoot,
 	EventSourcingModule,
-	ISnapshot,
+	type ISnapshot,
 	SnapshotCollection,
 	SnapshotEnvelope,
 	SnapshotNotFoundException,
@@ -16,8 +16,8 @@ import {
 	StreamReadingDirection,
 	UUID,
 } from '@ocoda/event-sourcing';
-import { DynamoDBSnapshotStore, DynamoDBSnapshotStoreConfig } from '@ocoda/event-sourcing-dynamodb';
-import { InMemoryEventStore, InMemoryEventStoreConfig } from '@ocoda/event-sourcing/integration/event-store';
+import { DynamoDBSnapshotStore, type DynamoDBSnapshotStoreConfig } from '@ocoda/event-sourcing-dynamodb';
+import { InMemoryEventStore, type InMemoryEventStoreConfig } from '@ocoda/event-sourcing/integration/event-store';
 
 class AccountId extends UUID {}
 class CustomerId extends UUID {}

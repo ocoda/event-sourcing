@@ -1,4 +1,4 @@
-import { IEvent, IEventPayload } from './event.interface';
+import type { IEvent, IEventPayload } from './event.interface';
 
 export interface IEventSerializer<E extends IEvent = IEvent> {
 	serialize(event: E): IEventPayload<E>;

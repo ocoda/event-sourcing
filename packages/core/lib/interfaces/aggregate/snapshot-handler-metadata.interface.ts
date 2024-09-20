@@ -1,5 +1,5 @@
-import { Type } from '@nestjs/common';
-import { AggregateRoot } from '../../models';
+import type { Type } from '@nestjs/common';
+import type { AggregateRoot } from '../../models';
 
 /**
  * `@Snapshot` decorator metadata

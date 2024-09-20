@@ -2,19 +2,19 @@ import {
 	DEFAULT_BATCH_SIZE,
 	EventCollection,
 	EventEnvelope,
-	EventFilter,
 	EventNotFoundException,
 	EventStore,
 	EventStorePersistenceException,
-	EventStream,
-	IEvent,
-	IEventCollection,
-	IEventPool,
+	type EventStream,
+	type IEvent,
+	type IEventCollection,
+	type IEventFilter,
+	type IEventPool,
 	StreamReadingDirection,
 } from '@ocoda/event-sourcing';
-import { Pool, PoolClient } from 'pg';
+import { Pool, type PoolClient } from 'pg';
 import Cursor from 'pg-cursor';
-import { PostgresEventEntity, PostgresEventStoreConfig } from './interfaces';
+import type { PostgresEventEntity, PostgresEventStoreConfig } from './interfaces';
 
 export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 	private pool: Pool;
@@ -53,7 +53,7 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 		return collection;
 	}
 
-	async *getEvents({ streamId }: EventStream, filter?: EventFilter): AsyncGenerator<IEvent[]> {
+	async *getEvents({ streamId }: EventStream, filter?: IEventFilter): AsyncGenerator<IEvent[]> {
 		const collection = EventCollection.get(filter?.pool);
 
 		const fromVersion = filter?.fromVersion;
@@ -143,7 +143,7 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 		}
 	}
 
-	async *getEnvelopes({ streamId }: EventStream, filter?: EventFilter): AsyncGenerator<EventEnvelope[]> {
+	async *getEnvelopes({ streamId }: EventStream, filter?: IEventFilter): AsyncGenerator<EventEnvelope[]> {
 		const collection = EventCollection.get(filter?.pool);
 
 		const fromVersion = filter?.fromVersion;

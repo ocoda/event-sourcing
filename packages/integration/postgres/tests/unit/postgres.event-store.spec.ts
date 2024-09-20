@@ -1,4 +1,4 @@
-import { NestApplication, NestFactory } from '@nestjs/core';
+import { type NestApplication, NestFactory } from '@nestjs/core';
 import {
 	Aggregate,
 	AggregateRoot,
@@ -12,13 +12,17 @@ import {
 	EventStore,
 	EventStorePersistenceException,
 	EventStream,
-	IEvent,
+	type IEvent,
 	StreamReadingDirection,
 	UUID,
 } from '@ocoda/event-sourcing';
-import { PostgresEventEntity, PostgresEventStore, PostgresEventStoreConfig } from '@ocoda/event-sourcing-postgres';
+import {
+	type PostgresEventEntity,
+	PostgresEventStore,
+	type PostgresEventStoreConfig,
+} from '@ocoda/event-sourcing-postgres';
 import { InMemorySnapshotStore } from '@ocoda/event-sourcing/integration/snapshot-store';
-import { PoolClient } from 'pg';
+import type { PoolClient } from 'pg';
 
 class AccountId extends UUID {}
 
