@@ -1,132 +1,49 @@
 import { randomInt } from 'node:crypto';
 import { DeleteTableCommand, type DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb';
 import { unmarshall } from '@aws-sdk/util-dynamodb';
-import { type NestApplication, NestFactory } from '@nestjs/core';
 import {
 	Aggregate,
 	AggregateRoot,
-	EventSourcingModule,
 	type ISnapshot,
 	SnapshotCollection,
-	SnapshotEnvelope,
+	type SnapshotEnvelope,
 	SnapshotNotFoundException,
-	SnapshotStore,
 	SnapshotStorePersistenceException,
 	SnapshotStream,
 	StreamReadingDirection,
 	UUID,
 } from '@ocoda/event-sourcing';
-import { DynamoDBSnapshotStore, type DynamoDBSnapshotStoreConfig } from '@ocoda/event-sourcing-dynamodb';
-import { InMemoryEventStore, type InMemoryEventStoreConfig } from '@ocoda/event-sourcing/integration/event-store';
-
-class AccountId extends UUID {}
-class CustomerId extends UUID {}
-
-@Aggregate({ streamName: 'account' })
-class Account extends AggregateRoot {
-	constructor(
-		private readonly id: AccountId,
-		private readonly balance: number,
-	) {
-		super();
-	}
-}
-
-@Aggregate({ streamName: 'customer' })
-class Customer extends AggregateRoot {
-	constructor(
-		private readonly id: CustomerId,
-		private readonly name: string,
-	) {
-		super();
-	}
-}
+import { DynamoDBSnapshotStore } from '@ocoda/event-sourcing-dynamodb';
+import {
+	Account,
+	AccountId,
+	customerSnapshot,
+	snapshotEnvelopesAccountA,
+	snapshotEnvelopesAccountB,
+	snapshotStreamAccountA,
+	snapshotStreamAccountB,
+	snapshotStreamCustomer,
+	snapshotsAccountA,
+	snapshotsAccountB,
+} from '@ocoda/event-sourcing-testing/unit';
 
 describe(DynamoDBSnapshotStore, () => {
-	let app: NestApplication;
 	let snapshotStore: DynamoDBSnapshotStore;
+	const envelopesAccountA = snapshotEnvelopesAccountA;
+	const envelopesAccountB = snapshotEnvelopesAccountB;
+
 	let client: DynamoDBClient;
 
-	const idAccountA = AccountId.generate();
-	const snapshotStreamAccountA = SnapshotStream.for(Account, idAccountA);
-	const snapshotsAccountA: ISnapshot<Account>[] = [
-		{ balance: 0 },
-		{ balance: 50 },
-		{ balance: 20 },
-		{ balance: 60 },
-		{ balance: 50 },
-	];
-
-	const idAccountB = AccountId.generate();
-	const snapshotStreamAccountB = SnapshotStream.for(Account, idAccountB);
-	const snapshotsAccountB: ISnapshot<Account>[] = [{ balance: 0 }, { balance: 10 }, { balance: 20 }, { balance: 30 }];
-
-	const customerSnapshot: ISnapshot<Customer> = { name: 'Hubert Farnsworth' };
-
-	const customerId = CustomerId.generate();
-	const snapshotStreamCustomer = SnapshotStream.for(Customer, customerId);
-
-	const envelopesAccountA = [
-		SnapshotEnvelope.create<Account>(snapshotsAccountA[0], {
-			aggregateId: idAccountA.value,
-			version: 1,
-		}),
-		SnapshotEnvelope.create<Account>(snapshotsAccountA[1], {
-			aggregateId: idAccountA.value,
-			version: 10,
-		}),
-		SnapshotEnvelope.create<Account>(snapshotsAccountA[2], {
-			aggregateId: idAccountA.value,
-			version: 20,
-		}),
-		SnapshotEnvelope.create<Account>(snapshotsAccountA[3], {
-			aggregateId: idAccountA.value,
-			version: 30,
-		}),
-		SnapshotEnvelope.create<Account>(snapshotsAccountA[4], {
-			aggregateId: idAccountA.value,
-			version: 40,
-		}),
-	];
-	const envelopesAccountB = [
-		SnapshotEnvelope.create<Account>(snapshotsAccountB[0], {
-			aggregateId: idAccountB.value,
-			version: 1,
-		}),
-		SnapshotEnvelope.create<Account>(snapshotsAccountB[1], {
-			aggregateId: idAccountB.value,
-			version: 10,
-		}),
-		SnapshotEnvelope.create<Account>(snapshotsAccountB[2], {
-			aggregateId: idAccountB.value,
-			version: 20,
-		}),
-		SnapshotEnvelope.create<Account>(snapshotsAccountB[3], {
-			aggregateId: idAccountB.value,
-			version: 30,
-		}),
-	];
-
 	beforeAll(async () => {
-		app = await NestFactory.create(
-			EventSourcingModule.forRootAsync<InMemoryEventStoreConfig, DynamoDBSnapshotStoreConfig>({
-				useFactory: () => ({
-					events: [],
-					eventStore: {
-						driver: InMemoryEventStore,
-					},
-					snapshotStore: {
-						driver: DynamoDBSnapshotStore,
-						region: 'us-east-1',
-						endpoint: 'http://127.0.0.1:8000',
-						credentials: { accessKeyId: 'foo', secretAccessKey: 'bar' },
-					},
-				}),
-			}),
-		);
-		await app.init();
+		snapshotStore = new DynamoDBSnapshotStore({
+			driver: undefined,
+			region: 'us-east-1',
+			endpoint: 'http://127.0.0.1:8000',
+			credentials: { accessKeyId: 'foo', secretAccessKey: 'bar' },
+		});
 
-		snapshotStore = app.get<DynamoDBSnapshotStore>(SnapshotStore);
+		await snapshotStore.connect();
+		await snapshotStore.ensureCollection();
 
 		// biome-ignore lint/complexity/useLiteralKeys: Needed to check the internal workings of the event store
 		client = snapshotStore['client'];

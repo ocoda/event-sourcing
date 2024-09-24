@@ -1,134 +1,50 @@
-import { type NestApplication, NestFactory } from '@nestjs/core';
 import {
 	Aggregate,
 	AggregateRoot,
-	EventSourcingModule,
 	type ISnapshot,
 	SnapshotCollection,
-	SnapshotEnvelope,
+	type SnapshotEnvelope,
 	SnapshotNotFoundException,
 	SnapshotStorePersistenceException,
 	SnapshotStream,
 	StreamReadingDirection,
 	UUID,
 } from '@ocoda/event-sourcing';
-import { SnapshotStore } from '@ocoda/event-sourcing';
+import { type MariaDBSnapshotEntity, MariaDBSnapshotStore } from '@ocoda/event-sourcing-mariadb';
 import {
-	type MariaDBSnapshotEntity,
-	MariaDBSnapshotStore,
-	type MariaDBSnapshotStoreConfig,
-} from '@ocoda/event-sourcing-mariadb';
-import { InMemoryEventStore, type InMemoryEventStoreConfig } from '@ocoda/event-sourcing/integration/event-store';
+	Account,
+	AccountId,
+	customerSnapshot,
+	snapshotEnvelopesAccountA,
+	snapshotEnvelopesAccountB,
+	snapshotStreamAccountA,
+	snapshotStreamAccountB,
+	snapshotStreamCustomer,
+	snapshotsAccountA,
+	snapshotsAccountB,
+} from '@ocoda/event-sourcing-testing/unit';
+import {} from '@ocoda/event-sourcing/integration/event-store';
 import type { Pool } from 'mariadb';
 
-class AccountId extends UUID {}
-class CustomerId extends UUID {}
-
-@Aggregate({ streamName: 'account' })
-class Account extends AggregateRoot {
-	constructor(
-		private readonly id: AccountId,
-		private readonly balance: number,
-	) {
-		super();
-	}
-}
-
-@Aggregate({ streamName: 'customer' })
-class Customer extends AggregateRoot {
-	constructor(
-		private readonly id: CustomerId,
-		private readonly name: string,
-	) {
-		super();
-	}
-}
-
 describe(MariaDBSnapshotStore, () => {
-	let app: NestApplication;
 	let snapshotStore: MariaDBSnapshotStore;
+	const envelopesAccountA = snapshotEnvelopesAccountA;
+	const envelopesAccountB = snapshotEnvelopesAccountB;
 
 	let pool: Pool;
 
-	const idAccountA = AccountId.generate();
-	const snapshotStreamAccountA = SnapshotStream.for(Account, idAccountA);
-	const snapshotsAccountA: ISnapshot<Account>[] = [
-		{ balance: 0 },
-		{ balance: 50 },
-		{ balance: 20 },
-		{ balance: 60 },
-		{ balance: 50 },
-	];
-	const idAccountB = AccountId.generate();
-	const snapshotStreamAccountB = SnapshotStream.for(Account, idAccountB);
-	const snapshotsAccountB: ISnapshot<Account>[] = [{ balance: 0 }, { balance: 10 }, { balance: 20 }, { balance: 30 }];
-	const customerSnapshot: ISnapshot<Customer> = { name: 'Hubert Farnsworth' };
-	const customerId = CustomerId.generate();
-	const snapshotStreamCustomer = SnapshotStream.for(Customer, customerId);
-
-	const envelopesAccountA = [
-		SnapshotEnvelope.create<Account>(snapshotsAccountA[0], {
-			aggregateId: idAccountA.value,
-			version: 1,
-		}),
-		SnapshotEnvelope.create<Account>(snapshotsAccountA[1], {
-			aggregateId: idAccountA.value,
-			version: 10,
-		}),
-		SnapshotEnvelope.create<Account>(snapshotsAccountA[2], {
-			aggregateId: idAccountA.value,
-			version: 20,
-		}),
-		SnapshotEnvelope.create<Account>(snapshotsAccountA[3], {
-			aggregateId: idAccountA.value,
-			version: 30,
-		}),
-		SnapshotEnvelope.create<Account>(snapshotsAccountA[4], {
-			aggregateId: idAccountA.value,
-			version: 40,
-		}),
-	];
-	const envelopesAccountB = [
-		SnapshotEnvelope.create<Account>(snapshotsAccountB[0], {
-			aggregateId: idAccountB.value,
-			version: 1,
-		}),
-		SnapshotEnvelope.create<Account>(snapshotsAccountB[1], {
-			aggregateId: idAccountB.value,
-			version: 10,
-		}),
-		SnapshotEnvelope.create<Account>(snapshotsAccountB[2], {
-			aggregateId: idAccountB.value,
-			version: 20,
-		}),
-		SnapshotEnvelope.create<Account>(snapshotsAccountB[3], {
-			aggregateId: idAccountB.value,
-			version: 30,
-		}),
-	];
-
 	beforeAll(async () => {
-		app = await NestFactory.create(
-			EventSourcingModule.forRootAsync<InMemoryEventStoreConfig, MariaDBSnapshotStoreConfig>({
-				useFactory: () => ({
-					events: [],
-					eventStore: {
-						driver: InMemoryEventStore,
-					},
-					snapshotStore: {
-						driver: MariaDBSnapshotStore,
-						host: '127.0.0.1',
-						port: 3306,
-						user: 'mariadb',
-						password: 'mariadb',
-						database: 'mariadb',
-					},
-				}),
-			}),
-		);
-		await app.init();
+		snapshotStore = new MariaDBSnapshotStore({
+			driver: undefined,
+			host: '127.0.0.1',
+			port: 3306,
+			user: 'mariadb',
+			password: 'mariadb',
+			database: 'mariadb',
+		});
 
-		snapshotStore = app.get<MariaDBSnapshotStore>(SnapshotStore);
+		await snapshotStore.connect();
+		await snapshotStore.ensureCollection();
 
 		// biome-ignore lint/complexity/useLiteralKeys: Needed to check the internal workings of the event store
 		pool = snapshotStore['pool'];
@@ -136,7 +52,7 @@ describe(MariaDBSnapshotStore, () => {
 
 	afterAll(async () => {
 		await pool.query(`DROP TABLE IF EXISTS \`${SnapshotCollection.get()}\``);
-		await app.close();
+		await pool.end();
 	});
 
 	it('should append snapshot envelopes', async () => {

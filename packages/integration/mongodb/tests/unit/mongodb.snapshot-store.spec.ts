@@ -1,127 +1,43 @@
-import { type NestApplication, NestFactory } from '@nestjs/core';
 import {
 	Aggregate,
 	AggregateRoot,
-	EventSourcingModule,
 	type ISnapshot,
 	SnapshotCollection,
-	SnapshotEnvelope,
+	type SnapshotEnvelope,
 	SnapshotNotFoundException,
-	SnapshotStore,
 	SnapshotStorePersistenceException,
 	SnapshotStream,
 	StreamReadingDirection,
 	UUID,
 } from '@ocoda/event-sourcing';
+import { MongoDBSnapshotStore, type MongoSnapshotEntity } from '@ocoda/event-sourcing-mongodb';
 import {
-	MongoDBSnapshotStore,
-	type MongoDBSnapshotStoreConfig,
-	type MongoSnapshotEntity,
-} from '@ocoda/event-sourcing-mongodb';
-import { InMemoryEventStore, type InMemoryEventStoreConfig } from '@ocoda/event-sourcing/integration/event-store';
+	Account,
+	AccountId,
+	customerSnapshot,
+	snapshotEnvelopesAccountA,
+	snapshotEnvelopesAccountB,
+	snapshotStreamAccountA,
+	snapshotStreamAccountB,
+	snapshotStreamCustomer,
+	snapshotsAccountA,
+	snapshotsAccountB,
+} from '@ocoda/event-sourcing-testing/unit';
+import {} from '@ocoda/event-sourcing/integration/event-store';
 import type { MongoClient } from 'mongodb';
 
-class AccountId extends UUID {}
-class CustomerId extends UUID {}
-
-@Aggregate({ streamName: 'account' })
-class Account extends AggregateRoot {
-	constructor(
-		private readonly id: AccountId,
-		private readonly balance: number,
-	) {
-		super();
-	}
-}
-
-@Aggregate({ streamName: 'customer' })
-class Customer extends AggregateRoot {
-	constructor(
-		private readonly id: CustomerId,
-		private readonly name: string,
-	) {
-		super();
-	}
-}
-
 describe(MongoDBSnapshotStore, () => {
-	let app: NestApplication;
 	let snapshotStore: MongoDBSnapshotStore;
+	const envelopesAccountA = snapshotEnvelopesAccountA;
+	const envelopesAccountB = snapshotEnvelopesAccountB;
+
 	let client: MongoClient;
 
-	const idAccountA = AccountId.generate();
-	const snapshotStreamAccountA = SnapshotStream.for(Account, idAccountA);
-	const snapshotsAccountA: ISnapshot<Account>[] = [
-		{ balance: 0 },
-		{ balance: 50 },
-		{ balance: 20 },
-		{ balance: 60 },
-		{ balance: 50 },
-	];
-	const idAccountB = AccountId.generate();
-	const snapshotStreamAccountB = SnapshotStream.for(Account, idAccountB);
-	const snapshotsAccountB: ISnapshot<Account>[] = [{ balance: 0 }, { balance: 10 }, { balance: 20 }, { balance: 30 }];
-	const customerSnapshot: ISnapshot<Customer> = { name: 'Hubert Farnsworth' };
-	const customerId = CustomerId.generate();
-	const snapshotStreamCustomer = SnapshotStream.for(Customer, customerId);
-
-	const envelopesAccountA = [
-		SnapshotEnvelope.create<Account>(snapshotsAccountA[0], {
-			aggregateId: idAccountA.value,
-			version: 1,
-		}),
-		SnapshotEnvelope.create<Account>(snapshotsAccountA[1], {
-			aggregateId: idAccountA.value,
-			version: 10,
-		}),
-		SnapshotEnvelope.create<Account>(snapshotsAccountA[2], {
-			aggregateId: idAccountA.value,
-			version: 20,
-		}),
-		SnapshotEnvelope.create<Account>(snapshotsAccountA[3], {
-			aggregateId: idAccountA.value,
-			version: 30,
-		}),
-		SnapshotEnvelope.create<Account>(snapshotsAccountA[4], {
-			aggregateId: idAccountA.value,
-			version: 40,
-		}),
-	];
-	const envelopesAccountB = [
-		SnapshotEnvelope.create<Account>(snapshotsAccountB[0], {
-			aggregateId: idAccountB.value,
-			version: 1,
-		}),
-		SnapshotEnvelope.create<Account>(snapshotsAccountB[1], {
-			aggregateId: idAccountB.value,
-			version: 10,
-		}),
-		SnapshotEnvelope.create<Account>(snapshotsAccountB[2], {
-			aggregateId: idAccountB.value,
-			version: 20,
-		}),
-		SnapshotEnvelope.create<Account>(snapshotsAccountB[3], {
-			aggregateId: idAccountB.value,
-			version: 30,
-		}),
-	];
-
 	beforeAll(async () => {
-		app = await NestFactory.create(
-			EventSourcingModule.forRootAsync<InMemoryEventStoreConfig, MongoDBSnapshotStoreConfig>({
-				useFactory: () => ({
-					events: [],
-					eventStore: { driver: InMemoryEventStore },
-					snapshotStore: {
-						driver: MongoDBSnapshotStore,
-						url: 'mongodb://localhost:27017',
-					},
-				}),
-			}),
-		);
-		await app.init();
+		snapshotStore = new MongoDBSnapshotStore({ driver: undefined, url: 'mongodb://localhost:27017' });
 
-		snapshotStore = app.get<MongoDBSnapshotStore>(SnapshotStore);
+		await snapshotStore.connect();
+		await snapshotStore.ensureCollection();
 
 		// biome-ignore lint/complexity/useLiteralKeys: Needed to check the internal workings of the event store
 		client = snapshotStore['client'];
