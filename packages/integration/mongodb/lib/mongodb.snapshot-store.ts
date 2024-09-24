@@ -115,7 +115,7 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 	}
 
 	async appendSnapshot<A extends AggregateRoot>(
-		{ streamId, aggregateId, aggregate }: SnapshotStream,
+		stream: SnapshotStream,
 		aggregateVersion: number,
 		snapshot: ISnapshot<A>,
 		pool?: ISnapshotPool,
@@ -130,11 +130,11 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 			}
 
 			const envelope = SnapshotEnvelope.create<A>(snapshot, {
-				aggregateId,
+				aggregateId: stream.aggregateId,
 				version: aggregateVersion,
 			});
 
-			const lastStreamEntity = await this.getLastStreamEntity(collection, streamId);
+			const [lastStreamEntity] = await this.getLastStreamEntities(collection, [stream]);
 
 			if (lastStreamEntity) {
 				await this.database
@@ -144,10 +144,10 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 
 			await this.database.collection<MongoSnapshotEntity<A>>(collection).insertOne({
 				_id: envelope.metadata.snapshotId,
-				streamId,
+				streamId: stream.streamId,
 				payload: envelope.payload,
-				aggregateName: aggregate,
-				latest: `latest#${streamId}`,
+				aggregateName: stream.aggregate,
+				latest: `latest#${stream.streamId}`,
 				...envelope.metadata,
 			});
 
@@ -157,26 +157,39 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 		}
 	}
 
-	async getLastSnapshot<A extends AggregateRoot>(
-		{ streamId }: SnapshotStream,
-		pool?: ISnapshotPool,
-	): Promise<ISnapshot<A>> {
+	async getLastSnapshot<A extends AggregateRoot>(stream: SnapshotStream, pool?: ISnapshotPool): Promise<ISnapshot<A>> {
 		const collection = SnapshotCollection.get(pool);
 
-		const entity = await this.getLastStreamEntity<A>(collection, streamId);
+		const [entity] = await this.getLastStreamEntities<A>(collection, [stream]);
 
 		if (entity) {
 			return entity.payload;
 		}
 	}
 
+	async getManyLastSnapshots<A extends AggregateRoot>(
+		streams: SnapshotStream[],
+		pool?: ISnapshotPool,
+	): Promise<Map<SnapshotStream, ISnapshot<A>>> {
+		const collection = SnapshotCollection.get(pool);
+
+		const entities = await this.getLastStreamEntities<A>(collection, streams);
+
+		return new Map(
+			entities.map(({ streamId, payload }) => [
+				streams.find(({ streamId: currentStreamId }) => currentStreamId === streamId),
+				payload,
+			]),
+		);
+	}
+
 	async getLastEnvelope<A extends AggregateRoot>(
-		{ streamId }: SnapshotStream,
+		stream: SnapshotStream,
 		pool?: ISnapshotPool,
 	): Promise<SnapshotEnvelope<A>> {
 		const collection = SnapshotCollection.get(pool);
 
-		const entity = await this.getLastStreamEntity<A>(collection, streamId);
+		const [entity] = await this.getLastStreamEntities<A>(collection, [stream]);
 
 		if (entity) {
 			return SnapshotEnvelope.from<A>(entity.payload, {
@@ -295,17 +308,14 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 		} while (hasNext);
 	}
 
-	private async getLastStreamEntity<A extends AggregateRoot>(
+	private async getLastStreamEntities<A extends AggregateRoot>(
 		collection: string,
-		streamId: string,
-	): Promise<MongoSnapshotEntity<A>> {
-		const [entity] = await this.database
+		streams: SnapshotStream[],
+	): Promise<MongoSnapshotEntity<A>[]> {
+		const latestIds = streams.map(({ streamId }) => `latest#${streamId}`);
+		return this.database
 			.collection<MongoSnapshotEntity<A>>(collection)
-			.find({ streamId }, { sort: { version: -1 }, limit: 1 })
+			.find({ latest: { $in: latestIds } })
 			.toArray();
-
-		if (entity) {
-			return entity;
-		}
 	}
 }

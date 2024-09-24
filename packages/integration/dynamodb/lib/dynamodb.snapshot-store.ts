@@ -173,7 +173,7 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 	}
 
 	async appendSnapshot<A extends AggregateRoot>(
-		{ streamId, aggregateId, aggregate }: SnapshotStream,
+		stream: SnapshotStream,
 		aggregateVersion: number,
 		snapshot: ISnapshot<A>,
 		pool?: ISnapshotPool,
@@ -182,18 +182,21 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 
 		try {
 			const envelope = SnapshotEnvelope.create<A>(snapshot, {
-				aggregateId,
+				aggregateId: stream.aggregateId,
 				version: aggregateVersion,
 			});
 
 			const updateLastItem = [];
-			const lastStreamEntity = await this.getLastStreamEntity(collection, streamId, ['version']);
+			const [lastStreamEntity] = await this.getLastStreamEntities(collection, [stream], ['version']);
 
 			if (lastStreamEntity) {
 				updateLastItem.push({
 					Update: {
 						TableName: collection,
-						Key: marshall({ streamId, version: lastStreamEntity.version }, { removeUndefinedValues: true }),
+						Key: marshall(
+							{ streamId: stream.streamId, version: lastStreamEntity.version },
+							{ removeUndefinedValues: true },
+						),
 						UpdateExpression: 'REMOVE latest',
 					},
 				});
@@ -208,14 +211,14 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 								TableName: collection,
 								Item: marshall(
 									{
-										streamId,
+										streamId: stream.streamId,
 										payload: envelope.payload,
 										version: envelope.metadata.version,
-										aggregateName: aggregate,
+										aggregateName: stream.aggregate,
 										snapshotId: envelope.metadata.snapshotId,
 										aggregateId: envelope.metadata.aggregateId,
 										registeredOn: envelope.metadata.registeredOn.getTime(),
-										latest: `latest#${streamId}`,
+										latest: `latest#${stream.streamId}`,
 									},
 									{ removeUndefinedValues: true },
 								),
@@ -256,18 +259,35 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 		}
 	}
 
+	async getManyLastSnapshots<A extends AggregateRoot>(
+		streams: SnapshotStream[],
+		pool?: ISnapshotPool,
+	): Promise<Map<SnapshotStream, ISnapshot<A>>> {
+		const collection = SnapshotCollection.get(pool);
+
+		const entities = await this.getLastStreamEntities<A, ['streamId', 'payload']>(collection, streams, [
+			'streamId',
+			'payload',
+		]);
+
+		return new Map(
+			entities.map(({ streamId, payload }) => [
+				streams.find(({ streamId: currentStreamId }) => currentStreamId === streamId),
+				payload,
+			]),
+		);
+	}
+
 	async getLastEnvelope<A extends AggregateRoot>(
-		{ streamId }: SnapshotStream,
+		stream: SnapshotStream,
 		pool?: ISnapshotPool,
 	): Promise<SnapshotEnvelope<A>> {
 		const collection = SnapshotCollection.get(pool);
-		const lastSnapshotEntity = await this.getLastStreamEntity<A>(collection, streamId, [
-			'payload',
-			'snapshotId',
-			'aggregateId',
-			'registeredOn',
-			'version',
-		]);
+		const [lastSnapshotEntity] = await this.getLastStreamEntities<A>(
+			collection,
+			[stream],
+			['payload', 'snapshotId', 'aggregateId', 'registeredOn', 'version'],
+		);
 
 		if (lastSnapshotEntity) {
 			return SnapshotEnvelope.from<A>(lastSnapshotEntity.payload, {
@@ -432,23 +452,33 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 		return unmarshall(entity) as Pick<DynamoSnapshotEntity<A>, Fields[number]>;
 	}
 
-	private async getLastStreamEntity<
+	private async getLastStreamEntities<
 		A extends AggregateRoot,
 		Fields extends (keyof DynamoSnapshotEntity<A>)[] = (keyof DynamoSnapshotEntity<A>)[],
-	>(collection: string, streamId: string, fields: Fields): Promise<Pick<DynamoSnapshotEntity<A>, Fields[number]>> {
-		const { Items } = await this.client.send(
-			new QueryCommand({
-				TableName: collection,
-				KeyConditionExpression: 'streamId = :streamId',
-				ExpressionAttributeValues: {
-					':streamId': { S: streamId },
-				},
-				ProjectionExpression: fields.join(', '),
-				ScanIndexForward: false,
-				Limit: 1,
-			}),
-		);
+	>(
+		collection: string,
+		streams: SnapshotStream[],
+		fields: Fields,
+	): Promise<Pick<DynamoSnapshotEntity<A>, Fields[number]>[]> {
+		const items = streams.map(async ({ aggregate, streamId }) => {
+			const { Items } = await this.client.send(
+				new QueryCommand({
+					TableName: collection,
+					IndexName: 'aggregate_index', // Specify the GSI name
+					KeyConditionExpression: 'aggregateName = :aggregateName AND latest = :latest',
+					ExpressionAttributeValues: {
+						':aggregateName': { S: aggregate },
+						':latest': { S: `latest#${streamId}` },
+					},
+					ProjectionExpression: fields.join(', '),
+					ScanIndexForward: false, // Get the latest item by sorting descending on the RANGE key
+					Limit: 1, // Limit to the latest snapshot
+				}),
+			);
 
-		return Items[0] && this.hydrate<A, Fields>(Items[0]);
+			return Items[0] ? this.hydrate<A, Fields>(Items[0]) : null;
+		});
+
+		return Promise.all(items);
 	}
 }
