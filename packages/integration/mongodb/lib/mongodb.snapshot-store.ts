@@ -23,7 +23,7 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 
 	public async connect(): Promise<void> {
 		this.logger.log('Starting store');
-		const { url, ...params } = this.options;
+		const { url, useDefaultPool: _, ...params } = this.options;
 		this.client = await new MongoClient(url, params).connect();
 		this.database = this.client.db();
 	}

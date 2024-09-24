@@ -2,107 +2,37 @@ import {
 	Aggregate,
 	AggregateRoot,
 	type ISnapshot,
-	SnapshotEnvelope,
+	type SnapshotEnvelope,
 	SnapshotNotFoundException,
 	SnapshotStorePersistenceException,
 	SnapshotStream,
 	StreamReadingDirection,
 	UUID,
 } from '@ocoda/event-sourcing';
+import {
+	Account,
+	AccountId,
+	customerSnapshot,
+	snapshotEnvelopesAccountA,
+	snapshotEnvelopesAccountB,
+	snapshotStreamAccountA,
+	snapshotStreamAccountB,
+	snapshotStreamCustomer,
+	snapshotsAccountA,
+	snapshotsAccountB,
+} from '@ocoda/event-sourcing-testing/unit';
 import { InMemorySnapshotStore } from '@ocoda/event-sourcing/integration/snapshot-store';
-
-class AccountId extends UUID {}
-class CustomerId extends UUID {}
-
-@Aggregate({ streamName: 'account' })
-class Account extends AggregateRoot {
-	constructor(
-		private readonly id: AccountId,
-		private readonly balance: number,
-	) {
-		super();
-	}
-}
-
-@Aggregate({ streamName: 'customer' })
-class Customer extends AggregateRoot {
-	constructor(
-		private readonly id: CustomerId,
-		private readonly name: string,
-	) {
-		super();
-	}
-}
 
 describe(InMemorySnapshotStore, () => {
 	let snapshotStore: InMemorySnapshotStore;
-	let envelopesAccountA: SnapshotEnvelope[];
-	let envelopesAccountB: SnapshotEnvelope[];
-
-	const idAccountA = AccountId.generate();
-	const snapshotStreamAccountA = SnapshotStream.for(Account, idAccountA);
-	const snapshotsAccountA: ISnapshot<Account>[] = [
-		{ balance: 0 },
-		{ balance: 50 },
-		{ balance: 20 },
-		{ balance: 60 },
-		{ balance: 50 },
-	];
-
-	const idAccountB = AccountId.generate();
-	const snapshotStreamAccountB = SnapshotStream.for(Account, idAccountB);
-	const snapshotsAccountB: ISnapshot<Account>[] = [{ balance: 0 }, { balance: 10 }, { balance: 20 }, { balance: 30 }];
-
-	const customerSnapshot: ISnapshot<Customer> = { name: 'Hubert Farnsworth' };
-
-	const customerId = CustomerId.generate();
-	const snapshotStreamCustomer = SnapshotStream.for(Customer, customerId);
+	const envelopesAccountA = snapshotEnvelopesAccountA;
+	const envelopesAccountB = snapshotEnvelopesAccountB;
 
 	beforeAll(() => {
-		snapshotStore = new InMemorySnapshotStore({ driver: InMemorySnapshotStore });
+		snapshotStore = new InMemorySnapshotStore({ driver: undefined });
+
 		snapshotStore.connect();
 		snapshotStore.ensureCollection();
-
-		envelopesAccountA = [
-			SnapshotEnvelope.create<Account>(snapshotsAccountA[0], {
-				aggregateId: idAccountA.value,
-				version: 1,
-			}),
-			SnapshotEnvelope.create<Account>(snapshotsAccountA[1], {
-				aggregateId: idAccountA.value,
-				version: 10,
-			}),
-			SnapshotEnvelope.create<Account>(snapshotsAccountA[2], {
-				aggregateId: idAccountA.value,
-				version: 20,
-			}),
-			SnapshotEnvelope.create<Account>(snapshotsAccountA[3], {
-				aggregateId: idAccountA.value,
-				version: 30,
-			}),
-			SnapshotEnvelope.create<Account>(snapshotsAccountA[4], {
-				aggregateId: idAccountA.value,
-				version: 40,
-			}),
-		];
-		envelopesAccountB = [
-			SnapshotEnvelope.create<Account>(snapshotsAccountB[0], {
-				aggregateId: idAccountB.value,
-				version: 1,
-			}),
-			SnapshotEnvelope.create<Account>(snapshotsAccountB[1], {
-				aggregateId: idAccountB.value,
-				version: 10,
-			}),
-			SnapshotEnvelope.create<Account>(snapshotsAccountB[2], {
-				aggregateId: idAccountB.value,
-				version: 20,
-			}),
-			SnapshotEnvelope.create<Account>(snapshotsAccountB[3], {
-				aggregateId: idAccountB.value,
-				version: 30,
-			}),
-		];
 	});
 
 	afterAll(() => snapshotStore.disconnect());

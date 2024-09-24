@@ -1,28 +1,28 @@
 import type { Type } from '@nestjs/common';
-// biome-ignore lint/style/useImportType: DI
-import { type ICommandHandler, type IEventHandler, type IQueryHandler, SnapshotHandler } from '@ocoda/event-sourcing';
+import type { ICommandHandler, IEventHandler, IQueryHandler, SnapshotHandler } from '@ocoda/event-sourcing';
 import {
+	AccountRepository,
 	AddAccountOwnerCommandHandler,
 	CloseAccountCommandHandler,
 	CreditAccountCommandHandler,
+	CustomEventPublisher,
 	DebitAccountCommandHandler,
+	GetAccountByIdQueryHandler,
+	GetAccountsQueryHandler,
 	OpenAccountCommandHandler,
 	RemoveAccountOwnerCommandHandler,
-} from './application/commands';
-import { CustomEventPublisher } from './application/publishers';
-import { GetAccountByIdQueryHandler, GetAccountsQueryHandler } from './application/queries';
-import { AccountRepository } from './application/repositories';
+} from './application';
 import {
 	AccountClosedEvent,
+	AccountClosedEventHandler,
 	AccountCreditedEvent,
 	AccountDebitedEvent,
 	AccountOpenedEvent,
+	AccountOpenedEventHandler,
 	AccountOwnerAddedEvent,
 	AccountOwnerRemovedEvent,
-} from './domain/events';
-import { AccountClosedEventHandler } from './domain/events/account-closed.event-handler';
-import { AccountOpenedEventHandler } from './domain/events/account-opened.event-handler';
-import { AccountSnapshotHandler } from './domain/models';
+	AccountSnapshotHandler,
+} from './domain';
 
 export const CommandHandlers: Type<ICommandHandler>[] = [
 	AddAccountOwnerCommandHandler,
@@ -52,3 +52,12 @@ export const Events = [
 ];
 
 export const AggregateRepositories = [AccountRepository];
+
+export const testProviders = [
+	...AggregateRepositories,
+	...CommandHandlers,
+	...QueryHandlers,
+	...SnapshotHandlers,
+	...EventHandlers,
+	...EventPublishers,
+];

@@ -2,13 +2,16 @@ import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import {
 	CommandBus,
+	EventCollection,
 	EventStore,
 	type ICommandBus,
 	type IEventPublisher,
 	type IQueryBus,
 	QueryBus,
+	SnapshotCollection,
 	SnapshotStore,
 } from '@ocoda/event-sourcing';
+import type { MongoDBEventStore, MongoDBSnapshotStore } from '@ocoda/event-sourcing-mongodb';
 import {
 	AccountRepository,
 	AddAccountOwnerCommand,
@@ -22,7 +25,7 @@ import {
 	RemoveAccountOwnerCommand,
 } from '@ocoda/event-sourcing-testing/e2e/application';
 import { type Account, type AccountId, AccountOwnerId } from '@ocoda/event-sourcing-testing/e2e/domain';
-import type { InMemoryEventStore, InMemorySnapshotStore } from '@ocoda/event-sourcing/integration';
+import type { MongoClient } from 'mongodb';
 import { AppModule } from './src/app.module';
 
 describe('EventSourcingModule - e2e', () => {
@@ -30,6 +33,8 @@ describe('EventSourcingModule - e2e', () => {
 	let commandBus: ICommandBus;
 	let queryBus: IQueryBus;
 	let customEventPublisher: IEventPublisher;
+	let eventStoreClient: MongoClient;
+	let snapshotStoreClient: MongoClient;
 
 	let accountId: AccountId;
 	let accountOwnerIds: AccountOwnerId[];
@@ -47,20 +52,30 @@ describe('EventSourcingModule - e2e', () => {
 		app = moduleRef.createNestApplication();
 		await app.init();
 
+		const eventStore = app.get<MongoDBEventStore>(EventStore);
+		const snapshotStore = app.get<MongoDBSnapshotStore>(SnapshotStore);
+		await Promise.all([eventStore.ensureCollection('e2e'), snapshotStore.ensureCollection('e2e')]);
+		// biome-ignore lint/complexity/useLiteralKeys: Needed to clear the event collection
+		eventStoreClient = eventStore['client'];
+		// biome-ignore lint/complexity/useLiteralKeys: Needed to clear the snapshot collection
+		snapshotStoreClient = snapshotStore['client'];
+
 		commandBus = app.get<CommandBus>(CommandBus);
 		queryBus = app.get<QueryBus>(QueryBus);
 		customEventPublisher = app.get<IEventPublisher>(CustomEventPublisher);
-
-		const eventStore = app.get<InMemoryEventStore>(EventStore);
-		const snapshotStore = app.get<InMemorySnapshotStore>(SnapshotStore);
-		await Promise.all([eventStore.ensureCollection('e2e'), snapshotStore.ensureCollection('e2e')]);
 
 		customEventPublisher.publish = jest.fn((_) => Promise.resolve());
 
 		accountRepository = app.get<AccountRepository>(AccountRepository);
 	});
 
-	afterAll(async () => await app.close());
+	afterAll(async () => {
+		await Promise.all([
+			eventStoreClient.db().dropCollection(EventCollection.get('e2e')),
+			snapshotStoreClient.db().dropCollection(SnapshotCollection.get('e2e')),
+		]);
+		await app.close();
+	});
 
 	it('should open an account', async () => {
 		const command = new OpenAccountCommand();
@@ -78,7 +93,7 @@ describe('EventSourcingModule - e2e', () => {
 		expect(account.ownerIds).toEqual([]);
 		expect(account.balance).toBe(0);
 		expect(account.openedOn).toBeInstanceOf(Date);
-		expect(account.closedOn).toBeUndefined();
+		expect(account.closedOn).toBeNull();
 	});
 
 	it('should add owners to an account', async () => {
@@ -102,7 +117,7 @@ describe('EventSourcingModule - e2e', () => {
 			expect(account.ownerIds).toEqual(accountOwnerIds.slice(0, accountOwnerIds.indexOf(ownerId) + 1));
 			expect(account.balance).toBe(0);
 			expect(account.openedOn).toEqual(openedOn);
-			expect(account.closedOn).toBeUndefined();
+			expect(account.closedOn).toBeNull();
 		}
 
 		expect(customEventPublisher.publish).toHaveBeenCalledTimes(5);
@@ -124,7 +139,7 @@ describe('EventSourcingModule - e2e', () => {
 			expect(account.ownerIds).not.toContain(ownerId);
 			expect(account.balance).toBe(0);
 			expect(account.openedOn).toEqual(openedOn);
-			expect(account.closedOn).toBeUndefined();
+			expect(account.closedOn).toBeNull();
 		}
 
 		expect(customEventPublisher.publish).toHaveBeenCalledTimes(7);
@@ -148,7 +163,7 @@ describe('EventSourcingModule - e2e', () => {
 			expect(account.ownerIds).toEqual(accountOwnerIds);
 			expect(account.balance).toBe(balance);
 			expect(account.openedOn).toEqual(openedOn);
-			expect(account.closedOn).toBeUndefined();
+			expect(account.closedOn).toBeNull();
 		}
 
 		expect(customEventPublisher.publish).toHaveBeenCalledTimes(12);
@@ -172,7 +187,7 @@ describe('EventSourcingModule - e2e', () => {
 			expect(account.ownerIds).toEqual(accountOwnerIds);
 			expect(account.balance).toBe(balance);
 			expect(account.openedOn).toEqual(openedOn);
-			expect(account.closedOn).toBeUndefined();
+			expect(account.closedOn).toBeNull();
 		}
 
 		expect(customEventPublisher.publish).toHaveBeenCalledTimes(17);

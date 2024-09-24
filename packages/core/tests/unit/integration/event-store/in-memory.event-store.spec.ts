@@ -1,46 +1,22 @@
 import {
-	Aggregate,
-	AggregateRoot,
-	Event,
-	EventEnvelope,
-	EventMap,
+	type EventEnvelope,
 	EventNotFoundException,
 	EventStorePersistenceException,
 	EventStream,
 	type IEvent,
 	StreamReadingDirection,
-	UUID,
 } from '@ocoda/event-sourcing';
-import { DefaultEventSerializer } from '@ocoda/event-sourcing/helpers';
+import {
+	Account,
+	AccountId,
+	eventStreamAccountA,
+	eventStreamAccountB,
+	getAccountAEventEnvelopes,
+	getAccountBEventEnvelopes,
+	getEventMap,
+	getEvents,
+} from '@ocoda/event-sourcing-testing/unit';
 import { type InMemoryEventEntity, InMemoryEventStore } from '@ocoda/event-sourcing/integration/event-store';
-
-class AccountId extends UUID {}
-
-@Aggregate({ streamName: 'account' })
-class Account extends AggregateRoot {
-	constructor(
-		private readonly id: AccountId,
-		private readonly balance: number,
-	) {
-		super();
-	}
-}
-
-@Event('account-opened')
-class AccountOpenedEvent implements IEvent {}
-
-@Event('account-credited')
-class AccountCreditedEvent implements IEvent {
-	constructor(public readonly amount: number) {}
-}
-
-@Event('account-debited')
-class AccountDebitedEvent implements IEvent {
-	constructor(public readonly amount: number) {}
-}
-
-@Event('account-closed')
-class AccountClosedEvent implements IEvent {}
 
 describe(InMemoryEventStore, () => {
 	let eventStore: InMemoryEventStore;
@@ -48,85 +24,18 @@ describe(InMemoryEventStore, () => {
 	let envelopesAccountB: EventEnvelope[];
 	const publish = jest.fn(async () => Promise.resolve());
 
-	const eventMap = new EventMap();
-	eventMap.register(AccountOpenedEvent, DefaultEventSerializer.for(AccountOpenedEvent));
-	eventMap.register(AccountCreditedEvent, DefaultEventSerializer.for(AccountCreditedEvent));
-	eventMap.register(AccountDebitedEvent, DefaultEventSerializer.for(AccountDebitedEvent));
-	eventMap.register(AccountClosedEvent, DefaultEventSerializer.for(AccountClosedEvent));
-
-	const events = [
-		new AccountOpenedEvent(),
-		new AccountCreditedEvent(50),
-		new AccountDebitedEvent(20),
-		new AccountCreditedEvent(5),
-		new AccountDebitedEvent(35),
-		new AccountClosedEvent(),
-	];
-
-	const idAccountA = AccountId.generate();
-	const eventStreamAccountA = EventStream.for(Account, idAccountA);
-
-	const idAccountB = AccountId.generate();
-	const eventStreamAccountB = EventStream.for(Account, idAccountB);
+	const eventMap = getEventMap();
+	const events = getEvents();
 
 	beforeAll(() => {
-		eventStore = new InMemoryEventStore(eventMap, { driver: InMemoryEventStore });
+		eventStore = new InMemoryEventStore(eventMap, { driver: undefined });
 		eventStore.publish = publish;
+
 		eventStore.connect();
 		eventStore.ensureCollection();
 
-		envelopesAccountA = [
-			EventEnvelope.create('account-opened', eventMap.serializeEvent(events[0]), {
-				aggregateId: idAccountA.value,
-				version: 1,
-			}),
-			EventEnvelope.create('account-credited', eventMap.serializeEvent(events[1]), {
-				aggregateId: idAccountA.value,
-				version: 2,
-			}),
-			EventEnvelope.create('account-debited', eventMap.serializeEvent(events[2]), {
-				aggregateId: idAccountA.value,
-				version: 3,
-			}),
-			EventEnvelope.create('account-credited', eventMap.serializeEvent(events[3]), {
-				aggregateId: idAccountA.value,
-				version: 4,
-			}),
-			EventEnvelope.create('account-debited', eventMap.serializeEvent(events[4]), {
-				aggregateId: idAccountA.value,
-				version: 5,
-			}),
-			EventEnvelope.create('account-closed', eventMap.serializeEvent(events[5]), {
-				aggregateId: idAccountA.value,
-				version: 6,
-			}),
-		];
-		envelopesAccountB = [
-			EventEnvelope.create('account-opened', eventMap.serializeEvent(events[0]), {
-				aggregateId: idAccountB.value,
-				version: 1,
-			}),
-			EventEnvelope.create('account-credited', eventMap.serializeEvent(events[1]), {
-				aggregateId: idAccountB.value,
-				version: 2,
-			}),
-			EventEnvelope.create('account-debited', eventMap.serializeEvent(events[2]), {
-				aggregateId: idAccountB.value,
-				version: 3,
-			}),
-			EventEnvelope.create('account-credited', eventMap.serializeEvent(events[3]), {
-				aggregateId: idAccountB.value,
-				version: 4,
-			}),
-			EventEnvelope.create('account-debited', eventMap.serializeEvent(events[4]), {
-				aggregateId: idAccountB.value,
-				version: 5,
-			}),
-			EventEnvelope.create('account-closed', eventMap.serializeEvent(events[5]), {
-				aggregateId: idAccountB.value,
-				version: 6,
-			}),
-		];
+		envelopesAccountA = getAccountAEventEnvelopes(eventMap, events);
+		envelopesAccountB = getAccountBEventEnvelopes(eventMap, events);
 	});
 
 	afterAll(() => eventStore.disconnect());

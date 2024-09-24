@@ -158,7 +158,7 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 		const { Item } = await this.client.send(
 			new GetItemCommand({
 				TableName: collection,
-				Key: marshall({ streamId, version }),
+				Key: marshall({ streamId, version }, { removeUndefinedValues: true }),
 				ProjectionExpression: 'payload',
 			}),
 		);
@@ -193,7 +193,7 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 				updateLastItem.push({
 					Update: {
 						TableName: collection,
-						Key: marshall({ streamId, version: lastStreamEntity.version }),
+						Key: marshall({ streamId, version: lastStreamEntity.version }, { removeUndefinedValues: true }),
 						UpdateExpression: 'REMOVE latest',
 					},
 				});
@@ -206,16 +206,19 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 						{
 							Put: {
 								TableName: collection,
-								Item: marshall({
-									streamId,
-									payload: envelope.payload,
-									version: envelope.metadata.version,
-									aggregateName: aggregate,
-									snapshotId: envelope.metadata.snapshotId,
-									aggregateId: envelope.metadata.aggregateId,
-									registeredOn: envelope.metadata.registeredOn.getTime(),
-									latest: `latest#${streamId}`,
-								}),
+								Item: marshall(
+									{
+										streamId,
+										payload: envelope.payload,
+										version: envelope.metadata.version,
+										aggregateName: aggregate,
+										snapshotId: envelope.metadata.snapshotId,
+										aggregateId: envelope.metadata.aggregateId,
+										registeredOn: envelope.metadata.registeredOn.getTime(),
+										latest: `latest#${streamId}`,
+									},
+									{ removeUndefinedValues: true },
+								),
 							},
 						},
 					],
@@ -345,7 +348,7 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 		const { Item } = await this.client.send(
 			new GetItemCommand({
 				TableName: collection,
-				Key: marshall({ streamId, version }),
+				Key: marshall({ streamId, version }, { removeUndefinedValues: true }),
 				ProjectionExpression: 'payload, snapshotId, aggregateId, registeredOn, version',
 			}),
 		);

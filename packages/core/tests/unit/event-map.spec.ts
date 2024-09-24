@@ -9,8 +9,6 @@ import {
 } from '@ocoda/event-sourcing';
 
 describe(EventMap, () => {
-	const now = new Date();
-
 	@Event('account-opened')
 	class AccountOpenedEvent implements IEvent {
 		constructor(public readonly opened: Date) {}
@@ -18,7 +16,7 @@ describe(EventMap, () => {
 
 	class UnregisteredEvent implements IEvent {}
 
-	beforeAll(() => jest.useFakeTimers({ now }));
+	beforeAll(() => jest.useFakeTimers({ now: new Date() }));
 
 	afterAll(() => jest.useRealTimers());
 

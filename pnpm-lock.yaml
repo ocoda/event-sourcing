@@ -101,6 +101,9 @@ importers:
       '@ocoda/event-sourcing-config':
         specifier: workspace:*
         version: link:../config
+      '@ocoda/event-sourcing-testing':
+        specifier: workspace:*
+        version: link:../testing
       '@swc-node/register':
         specifier: ^1.5.2
         version: 1.10.9(@swc/core@1.7.26)(@swc/types@0.1.12)(typescript@5.6.2)
@@ -168,6 +171,9 @@ importers:
       '@ocoda/event-sourcing-config':
         specifier: workspace:*
         version: link:../../config
+      '@ocoda/event-sourcing-testing':
+        specifier: workspace:*
+        version: link:../../testing
       '@swc-node/register':
         specifier: ^1.5.2
         version: 1.10.9(@swc/core@1.7.26)(@swc/types@0.1.12)(typescript@5.6.2)
@@ -232,6 +238,9 @@ importers:
       '@ocoda/event-sourcing-config':
         specifier: workspace:*
         version: link:../../config
+      '@ocoda/event-sourcing-testing':
+        specifier: workspace:*
+        version: link:../../testing
       '@swc-node/register':
         specifier: ^1.5.2
         version: 1.10.9(@swc/core@1.7.26)(@swc/types@0.1.12)(typescript@5.6.2)
@@ -296,6 +305,9 @@ importers:
       '@ocoda/event-sourcing-config':
         specifier: workspace:*
         version: link:../../config
+      '@ocoda/event-sourcing-testing':
+        specifier: workspace:*
+        version: link:../../testing
       '@swc-node/register':
         specifier: ^1.5.2
         version: 1.10.9(@swc/core@1.7.26)(@swc/types@0.1.12)(typescript@5.6.2)
@@ -363,6 +375,9 @@ importers:
       '@ocoda/event-sourcing-config':
         specifier: workspace:*
         version: link:../../config
+      '@ocoda/event-sourcing-testing':
+        specifier: workspace:*
+        version: link:../../testing
       '@swc-node/register':
         specifier: ^1.5.2
         version: 1.10.9(@swc/core@1.7.26)(@swc/types@0.1.12)(typescript@5.6.2)
@@ -402,6 +417,16 @@ importers:
       typescript:
         specifier: 5.6.2
         version: 5.6.2
+
+  packages/testing:
+    dependencies:
+      '@ocoda/event-sourcing':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      '@ocoda/event-sourcing-config':
+        specifier: workspace:*
+        version: link:../config
 
 packages:
 

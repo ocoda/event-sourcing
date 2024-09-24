@@ -1,151 +1,48 @@
-import { type NestApplication, NestFactory } from '@nestjs/core';
+import { EventStorePersistenceException } from '@ocoda/event-sourcing';
 import {
-	Aggregate,
-	AggregateRoot,
-	DefaultEventSerializer,
-	Event,
 	EventCollection,
-	EventEnvelope,
-	EventMap,
+	type EventEnvelope,
 	EventNotFoundException,
-	EventSourcingModule,
-	EventStore,
-	EventStorePersistenceException,
 	EventStream,
 	type IEvent,
 	StreamReadingDirection,
-	UUID,
 } from '@ocoda/event-sourcing';
-import { MongoDBEventStore, type MongoDBEventStoreConfig, type MongoEventEntity } from '@ocoda/event-sourcing-mongodb';
-import { InMemorySnapshotStore } from '@ocoda/event-sourcing/integration/snapshot-store';
+import { MongoDBEventStore, type MongoEventEntity } from '@ocoda/event-sourcing-mongodb';
+import {
+	Account,
+	AccountId,
+	eventStreamAccountA,
+	eventStreamAccountB,
+	getAccountAEventEnvelopes,
+	getAccountBEventEnvelopes,
+	getEventMap,
+	getEvents,
+} from '@ocoda/event-sourcing-testing/unit';
 import type { MongoClient } from 'mongodb';
 
-class AccountId extends UUID {}
-
-@Aggregate({ streamName: 'account' })
-class Account extends AggregateRoot {
-	constructor(
-		private readonly id: AccountId,
-		private readonly balance: number,
-	) {
-		super();
-	}
-}
-
-@Event('account-opened')
-class AccountOpenedEvent implements IEvent {}
-
-@Event('account-credited')
-class AccountCreditedEvent implements IEvent {
-	constructor(public readonly amount: number) {}
-}
-
-@Event('account-debited')
-class AccountDebitedEvent implements IEvent {
-	constructor(public readonly amount: number) {}
-}
-
-@Event('account-closed')
-class AccountClosedEvent implements IEvent {}
-
 describe(MongoDBEventStore, () => {
-	let app: NestApplication;
 	let eventStore: MongoDBEventStore;
-
-	let client: MongoClient;
+	let envelopesAccountA: EventEnvelope[];
+	let envelopesAccountB: EventEnvelope[];
 	const publish = jest.fn(async () => Promise.resolve());
 
-	const eventMap = new EventMap();
-	eventMap.register(AccountOpenedEvent, DefaultEventSerializer.for(AccountOpenedEvent));
-	eventMap.register(AccountCreditedEvent, DefaultEventSerializer.for(AccountCreditedEvent));
-	eventMap.register(AccountDebitedEvent, DefaultEventSerializer.for(AccountDebitedEvent));
-	eventMap.register(AccountClosedEvent, DefaultEventSerializer.for(AccountClosedEvent));
+	let client: MongoClient;
 
-	const events = [
-		new AccountOpenedEvent(),
-		new AccountCreditedEvent(50),
-		new AccountDebitedEvent(20),
-		new AccountCreditedEvent(5),
-		new AccountDebitedEvent(35),
-		new AccountClosedEvent(),
-	];
-
-	const idAccountA = AccountId.generate();
-	const eventStreamAccountA = EventStream.for(Account, idAccountA);
-
-	const idAccountB = AccountId.generate();
-	const eventStreamAccountB = EventStream.for(Account, idAccountB);
-
-	const envelopesAccountA = [
-		EventEnvelope.create('account-opened', eventMap.serializeEvent(events[0]), {
-			aggregateId: idAccountA.value,
-			version: 1,
-		}),
-		EventEnvelope.create('account-credited', eventMap.serializeEvent(events[1]), {
-			aggregateId: idAccountA.value,
-			version: 2,
-		}),
-		EventEnvelope.create('account-debited', eventMap.serializeEvent(events[2]), {
-			aggregateId: idAccountA.value,
-			version: 3,
-		}),
-		EventEnvelope.create('account-credited', eventMap.serializeEvent(events[3]), {
-			aggregateId: idAccountA.value,
-			version: 4,
-		}),
-		EventEnvelope.create('account-debited', eventMap.serializeEvent(events[4]), {
-			aggregateId: idAccountA.value,
-			version: 5,
-		}),
-		EventEnvelope.create('account-closed', eventMap.serializeEvent(events[5]), {
-			aggregateId: idAccountA.value,
-			version: 6,
-		}),
-	];
-	const envelopesAccountB = [
-		EventEnvelope.create('account-opened', eventMap.serializeEvent(events[0]), {
-			aggregateId: idAccountB.value,
-			version: 1,
-		}),
-		EventEnvelope.create('account-credited', eventMap.serializeEvent(events[1]), {
-			aggregateId: idAccountB.value,
-			version: 2,
-		}),
-		EventEnvelope.create('account-debited', eventMap.serializeEvent(events[2]), {
-			aggregateId: idAccountB.value,
-			version: 3,
-		}),
-		EventEnvelope.create('account-credited', eventMap.serializeEvent(events[3]), {
-			aggregateId: idAccountB.value,
-			version: 4,
-		}),
-		EventEnvelope.create('account-debited', eventMap.serializeEvent(events[4]), {
-			aggregateId: idAccountB.value,
-			version: 5,
-		}),
-		EventEnvelope.create('account-closed', eventMap.serializeEvent(events[5]), {
-			aggregateId: idAccountB.value,
-			version: 6,
-		}),
-	];
+	const eventMap = getEventMap();
+	const events = getEvents();
 
 	beforeAll(async () => {
-		app = await NestFactory.create(
-			EventSourcingModule.forRootAsync<MongoDBEventStoreConfig>({
-				useFactory: () => ({
-					events: [AccountOpenedEvent, AccountCreditedEvent, AccountDebitedEvent, AccountClosedEvent],
-					eventStore: {
-						driver: MongoDBEventStore,
-						url: 'mongodb://localhost:27017',
-					},
-					snapshotStore: { driver: InMemorySnapshotStore },
-				}),
-			}),
-		);
-		await app.init();
-
-		eventStore = app.get<MongoDBEventStore>(EventStore);
+		eventStore = new MongoDBEventStore(eventMap, {
+			driver: undefined,
+			url: 'mongodb://localhost:27017',
+		});
 		eventStore.publish = publish;
+
+		await eventStore.connect();
+		await eventStore.ensureCollection();
+
+		envelopesAccountA = getAccountAEventEnvelopes(eventMap, events);
+		envelopesAccountB = getAccountBEventEnvelopes(eventMap, events);
 
 		// biome-ignore lint/complexity/useLiteralKeys: Needed to check the internal workings of the event store
 		client = eventStore['client'];
@@ -153,7 +50,7 @@ describe(MongoDBEventStore, () => {
 
 	afterAll(async () => {
 		await client.db().dropCollection(EventCollection.get());
-		await app.close();
+		await client.close();
 	});
 
 	it('should append event envelopes', async () => {

@@ -1,0 +1,15 @@
+{
+	"name": "@ocoda/event-sourcing-testing",
+	"version": "0.0.0",
+	"private": true,
+	"license": "MIT",
+	"publishConfig": {
+		"access": "public"
+	},
+    "devDependencies": {
+        "@ocoda/event-sourcing-config": "workspace:*"
+    },
+	"peerDependencies": {
+		"@ocoda/event-sourcing": "workspace:*"
+	}
+}
