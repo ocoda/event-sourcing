@@ -135,7 +135,7 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 	}
 
 	async appendSnapshot<A extends AggregateRoot>(
-		{ streamId, aggregateId, aggregate }: SnapshotStream,
+		stream: SnapshotStream,
 		aggregateVersion: number,
 		snapshot: ISnapshot<A>,
 		pool?: ISnapshotPool,
@@ -145,11 +145,11 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 
 		try {
 			const envelope = SnapshotEnvelope.create<A>(snapshot, {
-				aggregateId,
+				aggregateId: stream.aggregateId,
 				version: aggregateVersion,
 			});
 
-			const lastStreamEntity = await this.getLastStreamEntity(collection, streamId, connection);
+			const [lastStreamEntity] = await this.getLastStreamEntities(collection, [stream], connection);
 
 			await connection.query('BEGIN');
 			if (lastStreamEntity) {
@@ -165,14 +165,14 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		`,
 				[
-					streamId,
+					stream.streamId,
 					envelope.metadata.version,
 					JSON.stringify(envelope.payload),
 					envelope.metadata.snapshotId,
 					envelope.metadata.aggregateId,
 					envelope.metadata.registeredOn,
-					aggregate,
-					`latest#${streamId}`,
+					stream.aggregate,
+					`latest#${stream.streamId}`,
 				],
 			);
 			await connection.query('COMMIT');
@@ -186,26 +186,39 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 		}
 	}
 
-	async getLastSnapshot<A extends AggregateRoot>(
-		{ streamId }: SnapshotStream,
-		pool?: ISnapshotPool,
-	): Promise<ISnapshot<A>> {
+	async getLastSnapshot<A extends AggregateRoot>(stream: SnapshotStream, pool?: ISnapshotPool): Promise<ISnapshot<A>> {
 		const collection = SnapshotCollection.get(pool);
 
-		const entity = await this.getLastStreamEntity<A>(collection, streamId);
+		const [entity] = await this.getLastStreamEntities<A>(collection, [stream]);
 
 		if (entity) {
 			return entity.payload;
 		}
 	}
 
+	async getManyLastSnapshots<A extends AggregateRoot>(
+		streams: SnapshotStream[],
+		pool?: ISnapshotPool,
+	): Promise<Map<SnapshotStream, ISnapshot<A>>> {
+		const collection = SnapshotCollection.get(pool);
+
+		const entities = await this.getLastStreamEntities<A>(collection, streams);
+
+		return new Map(
+			entities.map(({ stream_id, payload }) => [
+				streams.find(({ streamId: currentStreamId }) => currentStreamId === stream_id),
+				payload,
+			]),
+		);
+	}
+
 	async getLastEnvelope<A extends AggregateRoot>(
-		{ streamId }: SnapshotStream,
+		stream: SnapshotStream,
 		pool?: ISnapshotPool,
 	): Promise<SnapshotEnvelope<A>> {
 		const collection = SnapshotCollection.get(pool);
 
-		const entity = await this.getLastStreamEntity<A>(collection, streamId);
+		const [entity] = await this.getLastStreamEntities<A>(collection, [stream]);
 
 		if (entity) {
 			return SnapshotEnvelope.from<A>(entity.payload, {
@@ -342,22 +355,22 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 		cursor.close(() => {});
 	}
 
-	private async getLastStreamEntity<A extends AggregateRoot>(
+	private async getLastStreamEntities<A extends AggregateRoot>(
 		collection: string,
-		streamId: string,
+		streams: SnapshotStream[],
 		connection?: PoolClient,
-	): Promise<Omit<PostgresSnapshotEntity<A>, 'aggregate_name' | 'latest'>> {
+	): Promise<Omit<PostgresSnapshotEntity<A>, 'aggregate_name' | 'latest'>[]> {
+		const latestIds = streams.map(({ streamId }) => `latest#${streamId}`);
 		const { rows: entities } = await (connection || this.client).query<
 			Omit<PostgresSnapshotEntity<A>, 'aggregate_name' | 'latest'>
 		>(
 			`SELECT stream_id, payload, aggregate_id, registered_on, snapshot_id, version
-             FROM "${collection}" WHERE latest = $1 LIMIT 1`,
-			[`latest#${streamId}`],
+                FROM "${collection}" 
+                WHERE latest = ANY ($1)
+             `,
+			[latestIds],
 		);
-		const entity = entities[0];
 
-		if (entity) {
-			return entity;
-		}
+		return entities;
 	}
 }

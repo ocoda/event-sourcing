@@ -132,22 +132,39 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 		}
 	}
 
-	getLastSnapshot<A extends AggregateRoot>({ streamId }: SnapshotStream, pool?: ISnapshotPool): ISnapshot<A> {
+	getLastSnapshot<A extends AggregateRoot>(stream: SnapshotStream, pool?: ISnapshotPool): ISnapshot<A> {
 		const collection = SnapshotCollection.get(pool);
 		const snapshotCollection = this.collections.get(collection) || [];
 
-		const entity = this.getLastStreamEntity<A>(snapshotCollection, streamId);
+		const [entity] = this.getLastStreamEntities<A>(snapshotCollection, [stream]);
 
 		if (entity) {
 			return entity.payload;
 		}
 	}
 
-	getLastEnvelope<A extends AggregateRoot>({ streamId }: SnapshotStream, pool?: ISnapshotPool): SnapshotEnvelope<A> {
+	getManyLastSnapshots<A extends AggregateRoot>(
+		streams: SnapshotStream[],
+		pool?: ISnapshotPool,
+	): Map<SnapshotStream, ISnapshot<A>> {
 		const collection = SnapshotCollection.get(pool);
 		const snapshotCollection = this.collections.get(collection) || [];
 
-		const entity = this.getLastStreamEntity<A>(snapshotCollection, streamId);
+		const entities = this.getLastStreamEntities<A>(snapshotCollection, streams);
+
+		return new Map(
+			entities.map(({ streamId, payload }) => [
+				streams.find(({ streamId: currentStreamId }) => currentStreamId === streamId),
+				payload,
+			]),
+		);
+	}
+
+	getLastEnvelope<A extends AggregateRoot>(stream: SnapshotStream, pool?: ISnapshotPool): SnapshotEnvelope<A> {
+		const collection = SnapshotCollection.get(pool);
+		const snapshotCollection = this.collections.get(collection) || [];
+
+		const [entity] = this.getLastStreamEntities<A>(snapshotCollection, [stream]);
 
 		if (entity) {
 			return SnapshotEnvelope.from(entity.payload, {
@@ -255,16 +272,11 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 		}
 	}
 
-	private getLastStreamEntity<A extends AggregateRoot>(
+	private getLastStreamEntities<A extends AggregateRoot>(
 		collection: InMemorySnapshotEntity<any>[],
-		streamId: string,
-	): InMemorySnapshotEntity<A> {
-		const [entity] = collection
-			.filter(({ streamId: entityStreamId }) => entityStreamId === streamId)
-			.sort(({ version: currentVersion }, { version: previousVersion }) => (previousVersion < currentVersion ? -1 : 1));
-
-		if (entity) {
-			return entity;
-		}
+		streams: SnapshotStream[],
+	): InMemorySnapshotEntity<A>[] {
+		const latestIds = streams.map(({ streamId }) => `latest#${streamId}`);
+		return collection.filter(({ latest }) => latestIds.includes(latest));
 	}
 }

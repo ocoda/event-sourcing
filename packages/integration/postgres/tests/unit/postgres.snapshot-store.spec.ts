@@ -193,6 +193,17 @@ describe(PostgresSnapshotStore, () => {
 		expect(resolvedSnapshot).toBeUndefined();
 	});
 
+	it('should retrieve multiple last snapshots', async () => {
+		const resolvedSnapshots = await snapshotStore.getManyLastSnapshots([
+			snapshotStreamAccountA,
+			snapshotStreamAccountB,
+		]);
+
+		expect(resolvedSnapshots.size).toBe(2);
+		expect(resolvedSnapshots.get(snapshotStreamAccountA)).toEqual(snapshotsAccountA[snapshotsAccountA.length - 1]);
+		expect(resolvedSnapshots.get(snapshotStreamAccountB)).toEqual(snapshotsAccountB[snapshotsAccountB.length - 1]);
+	});
+
 	it('should retrieve snapshot-envelopes', async () => {
 		const resolvedEnvelopes: SnapshotEnvelope<Account>[] = [];
 		for await (const envelopes of snapshotStore.getEnvelopes(snapshotStreamAccountA)) {
