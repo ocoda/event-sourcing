@@ -25,7 +25,7 @@ export class AccountRepository {
 
 	async getAll(fromAccountId?: AccountId, limit?: number): Promise<Account[]> {
 		const accounts = [];
-		for await (const envelopes of this.accountSnapshotHandler.loadMany({
+		for await (const envelopes of this.accountSnapshotHandler.loadAll({
 			fromId: fromAccountId,
 			limit,
 			pool: 'e2e',
