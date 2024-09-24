@@ -8,6 +8,7 @@ import {
 	CustomEventPublisher,
 	DebitAccountCommandHandler,
 	GetAccountByIdQueryHandler,
+	GetAccountsByIdsQueryHandler,
 	GetAccountsQueryHandler,
 	OpenAccountCommandHandler,
 	RemoveAccountOwnerCommandHandler,
@@ -34,7 +35,11 @@ export const CommandHandlers: Type<ICommandHandler>[] = [
 	RemoveAccountOwnerCommandHandler,
 ];
 
-export const QueryHandlers: Type<IQueryHandler>[] = [GetAccountByIdQueryHandler, GetAccountsQueryHandler];
+export const QueryHandlers: Type<IQueryHandler>[] = [
+	GetAccountByIdQueryHandler,
+	GetAccountsByIdsQueryHandler,
+	GetAccountsQueryHandler,
+];
 
 export const SnapshotHandlers: Type<SnapshotHandler>[] = [AccountSnapshotHandler];
 
