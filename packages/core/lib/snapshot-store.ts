@@ -131,13 +131,24 @@ export abstract class SnapshotStore<TOptions = Omit<EventSourcingModuleOptions['
 	): SnapshotEnvelope<A> | Promise<SnapshotEnvelope<A>>;
 
 	/**
-	 * Get the last snapshot envelopes from the snapshot stream.
+	 * Get the last snapshot envelopes for a specified aggregate.
 	 * @param aggregateName The aggregate name.
 	 * @param filter The snapshot filter.
 	 * @returns The snapshot envelopes.
 	 */
-	abstract getLastEnvelopes?<A extends AggregateRoot>(
+	abstract getLastAggregateEnvelopes?<A extends AggregateRoot>(
 		aggregateName: string,
 		filter?: ILatestSnapshotFilter,
 	): AsyncGenerator<SnapshotEnvelope<A>[]>;
+
+	/**
+	 * Get the last snapshot envelopes from multiple snapshot streams.
+	 * @param snapshotStreams The snapshot streams
+	 * @param pool The snapshot pool
+	 * @returns The snapshot envelopes
+	 */
+	abstract getManyLastSnapshotEnvelopes?<A extends AggregateRoot>(
+		snapshotStreams: SnapshotStream[],
+		pool?: ISnapshotPool,
+	): Map<SnapshotStream, SnapshotEnvelope<A>> | Promise<Map<SnapshotStream, SnapshotEnvelope<A>>>;
 }

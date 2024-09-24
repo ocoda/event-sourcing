@@ -235,7 +235,7 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 		});
 	}
 
-	async *getLastEnvelopes<A extends AggregateRoot>(
+	async *getLastAggregateEnvelopes<A extends AggregateRoot>(
 		aggregateName: string,
 		filter?: ILatestSnapshotFilter,
 	): AsyncGenerator<SnapshotEnvelope<A>[]> {
@@ -270,6 +270,23 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 				SnapshotEnvelope.from<A>(payload, { aggregateId, registeredOn, snapshotId, version }),
 			);
 		}
+	}
+
+	getManyLastSnapshotEnvelopes<A extends AggregateRoot>(
+		streams: SnapshotStream[],
+		pool?: ISnapshotPool,
+	): Map<SnapshotStream, SnapshotEnvelope<A>> {
+		const collection = SnapshotCollection.get(pool);
+		const snapshotCollection = this.collections.get(collection) || [];
+
+		const entities = this.getLastStreamEntities<A>(snapshotCollection, streams);
+
+		return new Map(
+			entities.map(({ streamId, payload, aggregateId, registeredOn, snapshotId, version }) => [
+				streams.find(({ streamId: currentStreamId }) => currentStreamId === streamId),
+				SnapshotEnvelope.from<A>(payload, { aggregateId, registeredOn, snapshotId, version }),
+			]),
+		);
 	}
 
 	private getLastStreamEntities<A extends AggregateRoot>(

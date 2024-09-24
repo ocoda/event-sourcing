@@ -306,7 +306,7 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 		});
 	}
 
-	async *getLastEnvelopes<A extends AggregateRoot>(
+	async *getLastAggregateEnvelopes<A extends AggregateRoot>(
 		aggregateName: string,
 		filter?: ILatestSnapshotFilter,
 	): AsyncGenerator<SnapshotEnvelope<A>[]> {
@@ -353,6 +353,27 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 		}
 
 		cursor.close(() => {});
+	}
+
+	async getManyLastSnapshotEnvelopes<A extends AggregateRoot>(
+		streams: SnapshotStream[],
+		pool?: ISnapshotPool,
+	): Promise<Map<SnapshotStream, SnapshotEnvelope<A>>> {
+		const collection = SnapshotCollection.get(pool);
+
+		const entities = await this.getLastStreamEntities<A>(collection, streams);
+
+		return new Map(
+			entities.map(({ stream_id, payload, aggregate_id, registered_on, snapshot_id, version }) => [
+				streams.find(({ streamId: currentStreamId }) => currentStreamId === stream_id),
+				SnapshotEnvelope.from<A>(payload, {
+					aggregateId: aggregate_id,
+					registeredOn: new Date(registered_on),
+					snapshotId: snapshot_id,
+					version,
+				}),
+			]),
+		);
 	}
 
 	private async getLastStreamEntities<A extends AggregateRoot>(

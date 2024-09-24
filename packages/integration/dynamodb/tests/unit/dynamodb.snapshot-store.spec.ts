@@ -266,9 +266,9 @@ describe(DynamoDBSnapshotStore, () => {
 		expect(metadata.version).toEqual(lastEnvelope.metadata.version);
 	});
 
-	it('should retrieve the last snapshot-envelopes', async () => {
+	it('should retrieve the last snapshot-envelopes for an aggregate', async () => {
 		let resolvedEnvelopes: SnapshotEnvelope<Account>[] = [];
-		for await (const envelopes of snapshotStore.getLastEnvelopes('account')) {
+		for await (const envelopes of snapshotStore.getLastAggregateEnvelopes('account')) {
 			resolvedEnvelopes.push(...envelopes);
 		}
 
@@ -309,7 +309,7 @@ describe(DynamoDBSnapshotStore, () => {
 
 		const fetchedAccountIds: Set<string> = new Set();
 		const firstPageEnvelopes: SnapshotEnvelope<Account>[] = [];
-		for await (const envelopes of snapshotStore.getLastEnvelopes('foo', { limit: 15 })) {
+		for await (const envelopes of snapshotStore.getLastAggregateEnvelopes('foo', { limit: 15 })) {
 			firstPageEnvelopes.push(...envelopes);
 		}
 
@@ -319,7 +319,7 @@ describe(DynamoDBSnapshotStore, () => {
 		}
 
 		const lastPageEnvelopes: SnapshotEnvelope<Account>[] = [];
-		for await (const envelopes of snapshotStore.getLastEnvelopes('foo', {
+		for await (const envelopes of snapshotStore.getLastAggregateEnvelopes('foo', {
 			limit: 5,
 			fromId: firstPageEnvelopes[14].metadata.aggregateId,
 		})) {
@@ -332,5 +332,32 @@ describe(DynamoDBSnapshotStore, () => {
 		}
 
 		expect(fooIds).toHaveLength(20);
+	});
+
+	it('should retrieve multiple last snapshot-envelopes for given streams', async () => {
+		const resolvedSnapshots = await snapshotStore.getManyLastSnapshotEnvelopes([
+			snapshotStreamAccountA,
+			snapshotStreamAccountB,
+		]);
+
+		expect(resolvedSnapshots.size).toBe(2);
+
+		const [envelopeAccountA, envelopeAccountB] = [
+			envelopesAccountA[envelopesAccountA.length - 1],
+			envelopesAccountB[envelopesAccountB.length - 1],
+		];
+
+		const resolvedAccountAEnvelope = resolvedSnapshots.get(snapshotStreamAccountA);
+		const resolvedAccountBEnvelope = resolvedSnapshots.get(snapshotStreamAccountB);
+
+		expect(resolvedAccountAEnvelope.payload).toEqual(envelopeAccountA.payload);
+		expect(resolvedAccountAEnvelope.metadata.aggregateId).toEqual(envelopeAccountA.metadata.aggregateId);
+		expect(resolvedAccountAEnvelope.metadata.registeredOn).toBeInstanceOf(Date);
+		expect(resolvedAccountAEnvelope.metadata.version).toEqual(envelopeAccountA.metadata.version);
+
+		expect(resolvedAccountBEnvelope.payload).toEqual(envelopeAccountB.payload);
+		expect(resolvedAccountBEnvelope.metadata.aggregateId).toEqual(envelopeAccountB.metadata.aggregateId);
+		expect(resolvedAccountBEnvelope.metadata.registeredOn).toBeInstanceOf(Date);
+		expect(resolvedAccountBEnvelope.metadata.version).toEqual(envelopeAccountB.metadata.version);
 	});
 });

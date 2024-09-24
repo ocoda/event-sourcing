@@ -267,7 +267,7 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 		});
 	}
 
-	async *getLastEnvelopes<A extends AggregateRoot>(
+	async *getLastAggregateEnvelopes<A extends AggregateRoot>(
 		aggregateName: string,
 		filter?: ILatestSnapshotFilter,
 	): AsyncGenerator<SnapshotEnvelope<A>[]> {
@@ -306,6 +306,22 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 				entities.length = 0;
 			}
 		} while (hasNext);
+	}
+
+	async getManyLastSnapshotEnvelopes<A extends AggregateRoot>(
+		streams: SnapshotStream[],
+		pool?: ISnapshotPool,
+	): Promise<Map<SnapshotStream, SnapshotEnvelope<A>>> {
+		const collection = SnapshotCollection.get(pool);
+
+		const entities = await this.getLastStreamEntities<A>(collection, streams);
+
+		return new Map(
+			entities.map(({ streamId, payload, aggregateId, registeredOn, snapshotId, version }) => [
+				streams.find(({ streamId: currentStreamId }) => currentStreamId === streamId),
+				SnapshotEnvelope.from<A>(payload, { aggregateId, registeredOn: new Date(registeredOn), snapshotId, version }),
+			]),
+		);
 	}
 
 	private async getLastStreamEntities<A extends AggregateRoot>(
