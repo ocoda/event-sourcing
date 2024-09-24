@@ -77,7 +77,10 @@ describe(SnapshotHandler, () => {
 			logger: new Logger(),
 			appendSnapshot: jest.fn(),
 			getLastEnvelope: <any>(
-				jest.fn((snapshotStream: SnapshotStream, pool?: ISnapshotPool) => Promise.resolve(snapshotEnvelope))
+				jest.fn((_snapshotStream: SnapshotStream, _pool?: ISnapshotPool) => Promise.resolve(snapshotEnvelope))
+			),
+			getManyLastSnapshotEnvelopes: jest.fn((snapshotStream: SnapshotStream, _pool?: ISnapshotPool) =>
+				Promise.resolve(new Map([[snapshotStream, snapshotEnvelope]])),
 			),
 			getLastSnapshot: jest.fn(),
 			getSnapshot: jest.fn(),
@@ -120,5 +123,19 @@ describe(SnapshotHandler, () => {
 		expect(snapshotStore.getLastEnvelope).toHaveBeenCalledWith(snapshotStream, undefined);
 
 		expect(loadedAccount).toEqual(account);
+	});
+
+	it('retrieves multiple snapshots as a snapshot-envelope', async () => {
+		account.version = snapshotInterval;
+		snapshotEnvelope = SnapshotEnvelope.create<Account>(snapshot, {
+			aggregateId: snapshotStream.aggregateId,
+			version: snapshotInterval,
+		});
+
+		const loadedAccounts = await snapshotHandler.loadMany([account.id]);
+
+		expect(snapshotStore.getManyLastSnapshotEnvelopes).toHaveBeenCalledWith([snapshotStream], undefined);
+
+		expect(loadedAccounts).toEqual([account]);
 	});
 });

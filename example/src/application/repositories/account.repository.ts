@@ -30,9 +30,21 @@ export class AccountRepository {
 		return account;
 	}
 
+	async getByIds(accountIds: AccountId[]) {
+		const accounts = await this.accountSnapshotHandler.loadMany(accountIds, 'e2e');
+
+		for (const account of accounts) {
+			const eventStream = EventStream.for<Account>(Account, account.id);
+			const eventCursor = this.eventStore.getEvents(eventStream, { pool: 'e2e', fromVersion: account.version + 1 });
+			await account.loadFromHistory(eventCursor);
+		}
+
+		return accounts;
+	}
+
 	async getAll(fromAccountId?: AccountId, limit?: number): Promise<Account[]> {
 		const accounts = [];
-		for await (const envelopes of this.accountSnapshotHandler.loadMany({
+		for await (const envelopes of this.accountSnapshotHandler.loadAll({
 			fromId: fromAccountId,
 			limit,
 		})) {

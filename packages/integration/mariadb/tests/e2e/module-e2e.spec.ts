@@ -20,6 +20,7 @@ import {
 	CustomEventPublisher,
 	DebitAccountCommand,
 	GetAccountByIdQuery,
+	GetAccountsByIdsQuery,
 	GetAccountsQuery,
 	OpenAccountCommand,
 	RemoveAccountOwnerCommand,
@@ -41,6 +42,8 @@ describe('EventSourcingModule - e2e', () => {
 	let balance = 0;
 	let expectedVersion = 0;
 	let openedOn: Date;
+
+	let account2Id: AccountId;
 
 	let accountRepository: AccountRepository;
 
@@ -202,6 +205,18 @@ describe('EventSourcingModule - e2e', () => {
 		expect(account.closedOn).toBeUndefined();
 	});
 
+	it("should get accounts by id's", async () => {
+		account2Id = await commandBus.execute<OpenAccountCommand, AccountId>(new OpenAccountCommand());
+
+		const query = new GetAccountsByIdsQuery([accountId.value, account2Id.value]);
+		const accounts = await queryBus.execute<GetAccountsQuery, Account[]>(query);
+
+		expect(accounts).toHaveLength(2);
+		expect(accounts.map(({ id }) => id).sort()).toEqual([accountId.value, account2Id.value].sort());
+
+		expect(customEventPublisher.publish).toHaveBeenCalledTimes(18);
+	});
+
 	it('should close an account', async () => {
 		const command = new CloseAccountCommand(accountId.value);
 		await commandBus.execute(command);
@@ -217,11 +232,10 @@ describe('EventSourcingModule - e2e', () => {
 		expect(account.openedOn).toEqual(openedOn);
 		expect(account.closedOn).toBeInstanceOf(Date);
 
-		expect(customEventPublisher.publish).toHaveBeenCalledTimes(18);
+		expect(customEventPublisher.publish).toHaveBeenCalledTimes(19);
 	});
 
 	it('should get all open accounts', async () => {
-		const account2Id = await commandBus.execute<OpenAccountCommand, AccountId>(new OpenAccountCommand());
 		const account3Id = await commandBus.execute<OpenAccountCommand, AccountId>(new OpenAccountCommand());
 
 		const query = new GetAccountsQuery();
