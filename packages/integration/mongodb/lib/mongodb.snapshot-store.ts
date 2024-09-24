@@ -267,7 +267,7 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 		});
 	}
 
-	async *getLastEnvelopes<A extends AggregateRoot>(
+	async *getLastAggregateEnvelopes<A extends AggregateRoot>(
 		aggregateName: string,
 		filter?: ILatestSnapshotFilter,
 	): AsyncGenerator<SnapshotEnvelope<A>[]> {
