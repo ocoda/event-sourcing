@@ -35,6 +35,10 @@ export abstract class SnapshotStore<TOptions = Omit<EventSourcingModuleOptions['
 		snapshotStream: SnapshotStream,
 		pool?: ISnapshotPool,
 	): ISnapshot<A> | Promise<ISnapshot<A>>;
+	abstract getManyLastSnapshots<A extends AggregateRoot>(
+		snapshotStreams: SnapshotStream[],
+		pool?: ISnapshotPool,
+	): Map<SnapshotStream, ISnapshot<A>> | Promise<Map<SnapshotStream, ISnapshot<A>>>;
 	abstract appendSnapshot<A extends AggregateRoot>(
 		snapshotStream: SnapshotStream,
 		version: number,
