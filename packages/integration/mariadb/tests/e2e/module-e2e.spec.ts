@@ -2,13 +2,16 @@ import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import {
 	CommandBus,
+	EventCollection,
 	EventStore,
 	type ICommandBus,
 	type IEventPublisher,
 	type IQueryBus,
 	QueryBus,
+	SnapshotCollection,
 	SnapshotStore,
 } from '@ocoda/event-sourcing';
+import type { MariaDBEventStore, MariaDBSnapshotStore } from '@ocoda/event-sourcing-mariadb';
 import {
 	AccountRepository,
 	AddAccountOwnerCommand,
@@ -22,7 +25,7 @@ import {
 	RemoveAccountOwnerCommand,
 } from '@ocoda/event-sourcing-testing/e2e/application';
 import { type Account, type AccountId, AccountOwnerId } from '@ocoda/event-sourcing-testing/e2e/domain';
-import type { InMemoryEventStore, InMemorySnapshotStore } from '@ocoda/event-sourcing/integration';
+import type { Pool } from 'mariadb';
 import { AppModule } from './src/app.module';
 
 describe('EventSourcingModule - e2e', () => {
@@ -30,6 +33,8 @@ describe('EventSourcingModule - e2e', () => {
 	let commandBus: ICommandBus;
 	let queryBus: IQueryBus;
 	let customEventPublisher: IEventPublisher;
+	let eventStoreClient: Pool;
+	let snapshotStoreClient: Pool;
 
 	let accountId: AccountId;
 	let accountOwnerIds: AccountOwnerId[];
@@ -47,20 +52,28 @@ describe('EventSourcingModule - e2e', () => {
 		app = moduleRef.createNestApplication();
 		await app.init();
 
+		const eventStore = app.get<MariaDBEventStore>(EventStore);
+		const snapshotStore = app.get<MariaDBSnapshotStore>(SnapshotStore);
+		await Promise.all([eventStore.ensureCollection('e2e'), snapshotStore.ensureCollection('e2e')]);
+		// biome-ignore lint/complexity/useLiteralKeys: Needed to clear the event collection
+		eventStoreClient = eventStore['pool'];
+		// biome-ignore lint/complexity/useLiteralKeys: Needed to clear the snapshot collection
+		snapshotStoreClient = snapshotStore['pool'];
+
 		commandBus = app.get<CommandBus>(CommandBus);
 		queryBus = app.get<QueryBus>(QueryBus);
 		customEventPublisher = app.get<IEventPublisher>(CustomEventPublisher);
-
-		const eventStore = app.get<InMemoryEventStore>(EventStore);
-		const snapshotStore = app.get<InMemorySnapshotStore>(SnapshotStore);
-		await Promise.all([eventStore.ensureCollection('e2e'), snapshotStore.ensureCollection('e2e')]);
 
 		customEventPublisher.publish = jest.fn((_) => Promise.resolve());
 
 		accountRepository = app.get<AccountRepository>(AccountRepository);
 	});
 
-	afterAll(async () => await app.close());
+	afterAll(async () => {
+		await eventStoreClient.query(`DROP TABLE IF EXISTS \`${EventCollection.get('e2e')}\``);
+		await snapshotStoreClient.query(`DROP TABLE IF EXISTS \`${SnapshotCollection.get('e2e')}\``);
+		await app.close();
+	});
 
 	it('should open an account', async () => {
 		const command = new OpenAccountCommand();
