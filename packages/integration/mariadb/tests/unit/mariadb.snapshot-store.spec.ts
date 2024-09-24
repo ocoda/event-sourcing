@@ -188,8 +188,11 @@ describe(MariaDBSnapshotStore, () => {
 		expect(resolvedSnapshot).toBeUndefined();
 	});
 
-    it('should retrieve multiple last snapshots', async () => {
-		const resolvedSnapshots = await snapshotStore.getManyLastSnapshots([snapshotStreamAccountA, snapshotStreamAccountB]);
+	it('should retrieve multiple last snapshots', async () => {
+		const resolvedSnapshots = await snapshotStore.getManyLastSnapshots([
+			snapshotStreamAccountA,
+			snapshotStreamAccountB,
+		]);
 
 		expect(resolvedSnapshots.size).toBe(2);
 		expect(resolvedSnapshots.get(snapshotStreamAccountA)).toEqual(snapshotsAccountA[snapshotsAccountA.length - 1]);
