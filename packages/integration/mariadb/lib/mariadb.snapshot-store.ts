@@ -290,7 +290,7 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 		});
 	}
 
-	async *getLastEnvelopes<A extends AggregateRoot>(
+	async *getLastAggregateEnvelopes<A extends AggregateRoot>(
 		aggregateName: string,
 		filter?: ILatestSnapshotFilter,
 	): AsyncGenerator<SnapshotEnvelope<A>[]> {

@@ -240,7 +240,7 @@ describe(PostgresSnapshotStore, () => {
 
 	it('should retrieve the last snapshot-envelopes', async () => {
 		let resolvedEnvelopes: SnapshotEnvelope<Account>[] = [];
-		for await (const envelopes of snapshotStore.getLastEnvelopes('account')) {
+		for await (const envelopes of snapshotStore.getLastAggregateEnvelopes('account')) {
 			resolvedEnvelopes.push(...envelopes);
 		}
 		expect(resolvedEnvelopes).toHaveLength(2);
