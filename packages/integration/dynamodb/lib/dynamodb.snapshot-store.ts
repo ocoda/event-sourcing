@@ -446,6 +446,25 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 		} while (ExclusiveStartKey && leftToFetch > 0);
 	}
 
+	async getManyLastSnapshotEnvelopes<A extends AggregateRoot>(
+		streams: SnapshotStream[],
+		pool?: ISnapshotPool,
+	): Promise<Map<SnapshotStream, SnapshotEnvelope<A>>> {
+		const collection = SnapshotCollection.get(pool);
+
+		const entities = await this.getLastStreamEntities<
+			A,
+			['streamId', 'payload', 'snapshotId', 'aggregateId', 'registeredOn', 'version']
+		>(collection, streams, ['streamId', 'payload', 'snapshotId', 'aggregateId', 'registeredOn', 'version']);
+
+		return new Map(
+			entities.map(({ streamId, payload, aggregateId, registeredOn, snapshotId, version }) => [
+				streams.find(({ streamId: currentStreamId }) => currentStreamId === streamId),
+				SnapshotEnvelope.from<A>(payload, { aggregateId, registeredOn: new Date(registeredOn), snapshotId, version }),
+			]),
+		);
+	}
+
 	hydrate<A extends AggregateRoot, Fields extends (keyof DynamoSnapshotEntity<A>)[]>(
 		entity: Record<string, AttributeValue>,
 	): Pick<DynamoSnapshotEntity<A>, Fields[number]> {

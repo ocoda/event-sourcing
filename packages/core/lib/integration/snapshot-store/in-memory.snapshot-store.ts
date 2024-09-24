@@ -272,6 +272,23 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 		}
 	}
 
+	getManyLastSnapshotEnvelopes<A extends AggregateRoot>(
+		streams: SnapshotStream[],
+		pool?: ISnapshotPool,
+	): Map<SnapshotStream, SnapshotEnvelope<A>> {
+		const collection = SnapshotCollection.get(pool);
+		const snapshotCollection = this.collections.get(collection) || [];
+
+		const entities = this.getLastStreamEntities<A>(snapshotCollection, streams);
+
+		return new Map(
+			entities.map(({ streamId, payload, aggregateId, registeredOn, snapshotId, version }) => [
+				streams.find(({ streamId: currentStreamId }) => currentStreamId === streamId),
+				SnapshotEnvelope.from<A>(payload, { aggregateId, registeredOn, snapshotId, version }),
+			]),
+		);
+	}
+
 	private getLastStreamEntities<A extends AggregateRoot>(
 		collection: InMemorySnapshotEntity<any>[],
 		streams: SnapshotStream[],
