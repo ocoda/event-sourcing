@@ -52,6 +52,20 @@ export abstract class SnapshotHandler<A extends AggregateRoot = AggregateRoot> i
 		return aggregate;
 	}
 
+	async loadMany(ids: Id[], pool?: ISnapshotPool): Promise<A[]> {
+		const snapshotStreams = ids.map((id) => SnapshotStream.for<A>(this.aggregate, id));
+		const envelopes = await this.snapshotStore.getManyLastSnapshotEnvelopes<A>(snapshotStreams, pool);
+
+		const aggregates = [];
+		for (const { payload, metadata } of envelopes.values()) {
+			const aggregate = this.deserialize(payload);
+			aggregate.version = metadata.version;
+			aggregates.push(aggregate);
+		}
+
+		return aggregates;
+	}
+
 	async *loadAll(filter?: { fromId?: Id; limit?: number; pool?: string }): AsyncGenerator<SnapshotEnvelope<A>[]> {
 		const id = filter?.fromId?.value;
 		for await (const envelopes of this.snapshotStore.getLastAggregateEnvelopes<A>(this.streamName, {
