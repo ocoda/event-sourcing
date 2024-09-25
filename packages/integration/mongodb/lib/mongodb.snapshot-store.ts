@@ -15,7 +15,7 @@ import {
 	StreamReadingDirection,
 } from '@ocoda/event-sourcing';
 import { type Db, MongoClient } from 'mongodb';
-import type { MongoDBSnapshotStoreConfig, MongoSnapshotEntity } from './interfaces';
+import type { MongoDBSnapshotEntity, MongoDBSnapshotStoreConfig } from './interfaces';
 
 export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConfig> {
 	private client: MongoClient;
@@ -67,7 +67,7 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
 		const cursor = this.database
-			.collection<MongoSnapshotEntity<A>>(collection)
+			.collection<Pick<MongoDBSnapshotEntity<A>, 'payload'>>(collection)
 			.find(
 				{
 					streamId,
@@ -76,6 +76,7 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 				{
 					sort: { version: direction === StreamReadingDirection.FORWARD ? 1 : -1 },
 					limit,
+					projection: { _id: 0, payload: 1 },
 				},
 			)
 			.map(({ payload }) => payload);
@@ -102,10 +103,13 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 	): Promise<ISnapshot<A>> {
 		const collection = SnapshotCollection.get(pool);
 
-		const entity = await this.database.collection<MongoSnapshotEntity<A>>(collection).findOne({
-			streamId,
-			version,
-		});
+		const entity = await this.database.collection<Pick<MongoDBSnapshotEntity<A>, 'payload'>>(collection).findOne(
+			{
+				streamId,
+				version,
+			},
+			{ projection: { _id: 0, payload: 1 } },
+		);
 
 		if (!entity) {
 			throw new SnapshotNotFoundException(streamId, version);
@@ -134,15 +138,15 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 				version: aggregateVersion,
 			});
 
-			const [lastStreamEntity] = await this.getLastStreamEntities(collection, [stream]);
+			const [lastStreamEntity] = await this.getLastStreamEntities<A, ['_id']>(collection, [stream], ['_id']);
 
 			if (lastStreamEntity) {
 				await this.database
-					.collection<MongoSnapshotEntity<A>>(collection)
+					.collection<MongoDBSnapshotEntity<A>>(collection)
 					.updateOne({ _id: lastStreamEntity._id }, { $set: { latest: null } });
 			}
 
-			await this.database.collection<MongoSnapshotEntity<A>>(collection).insertOne({
+			await this.database.collection<MongoDBSnapshotEntity<A>>(collection).insertOne({
 				_id: envelope.metadata.snapshotId,
 				streamId: stream.streamId,
 				payload: envelope.payload,
@@ -160,7 +164,7 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 	async getLastSnapshot<A extends AggregateRoot>(stream: SnapshotStream, pool?: ISnapshotPool): Promise<ISnapshot<A>> {
 		const collection = SnapshotCollection.get(pool);
 
-		const [entity] = await this.getLastStreamEntities<A>(collection, [stream]);
+		const [entity] = await this.getLastStreamEntities<A, ['payload']>(collection, [stream], ['payload']);
 
 		if (entity) {
 			return entity.payload;
@@ -173,7 +177,10 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 	): Promise<Map<SnapshotStream, ISnapshot<A>>> {
 		const collection = SnapshotCollection.get(pool);
 
-		const entities = await this.getLastStreamEntities<A>(collection, streams);
+		const entities = await this.getLastStreamEntities<A, ['streamId', 'payload']>(collection, streams, [
+			'streamId',
+			'payload',
+		]);
 
 		return new Map(
 			entities.map(({ streamId, payload }) => [
@@ -189,7 +196,10 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 	): Promise<SnapshotEnvelope<A>> {
 		const collection = SnapshotCollection.get(pool);
 
-		const [entity] = await this.getLastStreamEntities<A>(collection, [stream]);
+		const [entity] = await this.getLastStreamEntities<
+			A,
+			['payload', 'snapshotId', 'aggregateId', 'registeredOn', 'version']
+		>(collection, [stream], ['payload', 'snapshotId', 'aggregateId', 'registeredOn', 'version']);
 
 		if (entity) {
 			return SnapshotEnvelope.from<A>(entity.payload, {
@@ -213,7 +223,9 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
 		const cursor = this.database
-			.collection<MongoSnapshotEntity<A>>(collection)
+			.collection<
+				Pick<MongoDBSnapshotEntity<A>, 'payload' | 'aggregateId' | 'registeredOn' | 'snapshotId' | 'version'>
+			>(collection)
 			.find(
 				{
 					streamId,
@@ -222,6 +234,7 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 				{
 					sort: { version: direction === StreamReadingDirection.FORWARD ? 1 : -1 },
 					limit,
+					projection: { _id: 0, payload: 1, aggregateId: 1, registeredOn: 1, snapshotId: 1, version: 1 },
 				},
 			)
 			.map(({ payload, aggregateId, registeredOn, snapshotId, version }) =>
@@ -250,10 +263,14 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 	): Promise<SnapshotEnvelope<A>> {
 		const collection = SnapshotCollection.get(pool);
 
-		const entity = await this.database.collection<MongoSnapshotEntity<A>>(collection).findOne({
-			streamId,
-			version,
-		});
+		const entity = await this.database
+			.collection<
+				Pick<MongoDBSnapshotEntity<A>, 'payload' | 'aggregateId' | 'registeredOn' | 'snapshotId' | 'version'>
+			>(collection)
+			.findOne(
+				{ streamId, version },
+				{ projection: { _id: 0, payload: 1, aggregateId: 1, registeredOn: 1, snapshotId: 1, version: 1 } },
+			);
 
 		if (!entity) {
 			throw new SnapshotNotFoundException(streamId, version);
@@ -278,7 +295,9 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
 		const cursor = this.database
-			.collection<MongoSnapshotEntity<A>>(collection)
+			.collection<
+				Pick<MongoDBSnapshotEntity<A>, 'payload' | 'aggregateId' | 'registeredOn' | 'snapshotId' | 'version'>
+			>(collection)
 			.find(
 				{
 					aggregateName,
@@ -287,6 +306,7 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 				{
 					sort: { latest: -1 },
 					limit,
+					projection: { _id: 0, payload: 1, aggregateId: 1, registeredOn: 1, snapshotId: 1, version: 1 },
 				},
 			)
 			.map(({ payload, aggregateId, registeredOn, snapshotId, version }) =>
@@ -314,7 +334,10 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 	): Promise<Map<SnapshotStream, SnapshotEnvelope<A>>> {
 		const collection = SnapshotCollection.get(pool);
 
-		const entities = await this.getLastStreamEntities<A>(collection, streams);
+		const entities = await this.getLastStreamEntities<
+			A,
+			['streamId', 'payload', 'snapshotId', 'aggregateId', 'registeredOn', 'version']
+		>(collection, streams, ['streamId', 'payload', 'snapshotId', 'aggregateId', 'registeredOn', 'version']);
 
 		return new Map(
 			entities.map(({ streamId, payload, aggregateId, registeredOn, snapshotId, version }) => [
@@ -324,14 +347,25 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 		);
 	}
 
-	private async getLastStreamEntities<A extends AggregateRoot>(
-		collection: string,
-		streams: SnapshotStream[],
-	): Promise<MongoSnapshotEntity<A>[]> {
+	private async getLastStreamEntities<
+		A extends AggregateRoot,
+		Fields extends (keyof MongoDBSnapshotEntity<A>)[] = (keyof MongoDBSnapshotEntity<A>)[],
+	>(collection: string, streams: SnapshotStream[], fields: Fields): Promise<MongoDBSnapshotEntity<A>[]> {
 		const latestIds = streams.map(({ streamId }) => `latest#${streamId}`);
 		return this.database
-			.collection<MongoSnapshotEntity<A>>(collection)
-			.find({ latest: { $in: latestIds } })
+			.collection<MongoDBSnapshotEntity<A>>(collection)
+			.find(
+				{ latest: { $in: latestIds } },
+				{
+					projection: {
+						_id: 0,
+						...fields.reduce((acc, v) => {
+							acc[v] = 1;
+							return acc;
+						}, {}),
+					},
+				},
+			)
 			.toArray();
 	}
 }

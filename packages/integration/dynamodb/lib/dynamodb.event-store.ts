@@ -264,6 +264,7 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 			new GetItemCommand({
 				TableName: collection,
 				Key: marshall({ streamId, version }, { removeUndefinedValues: true }),
+				ProjectionExpression: 'event, payload, aggregateId, eventId, occurredOn, version, correlationId, causationId',
 			}),
 		);
 

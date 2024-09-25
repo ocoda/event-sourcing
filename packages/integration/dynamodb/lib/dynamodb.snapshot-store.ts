@@ -187,7 +187,7 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 			});
 
 			const updateLastItem = [];
-			const [lastStreamEntity] = await this.getLastStreamEntities(collection, [stream], ['version']);
+			const [lastStreamEntity] = await this.getLastStreamEntities<A, ['version']>(collection, [stream], ['version']);
 
 			if (lastStreamEntity) {
 				updateLastItem.push({
@@ -283,11 +283,10 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 		pool?: ISnapshotPool,
 	): Promise<SnapshotEnvelope<A>> {
 		const collection = SnapshotCollection.get(pool);
-		const [lastSnapshotEntity] = await this.getLastStreamEntities<A>(
-			collection,
-			[stream],
-			['payload', 'snapshotId', 'aggregateId', 'registeredOn', 'version'],
-		);
+		const [lastSnapshotEntity] = await this.getLastStreamEntities<
+			A,
+			['payload', 'snapshotId', 'aggregateId', 'registeredOn', 'version']
+		>(collection, [stream], ['payload', 'snapshotId', 'aggregateId', 'registeredOn', 'version']);
 
 		if (lastSnapshotEntity) {
 			return SnapshotEnvelope.from<A>(lastSnapshotEntity.payload, {
