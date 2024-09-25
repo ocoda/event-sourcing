@@ -23,6 +23,7 @@ import {
 	SnapshotEnvelope,
 	SnapshotNotFoundException,
 	SnapshotStore,
+	SnapshotStoreCollectionCreationException,
 	SnapshotStorePersistenceException,
 	type SnapshotStream,
 	StreamReadingDirection,
@@ -89,7 +90,7 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 					);
 					break;
 				default:
-					throw err;
+					throw new SnapshotStoreCollectionCreationException(collection, err);
 			}
 		}
 	}

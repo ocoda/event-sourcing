@@ -18,6 +18,7 @@ import {
 	EventEnvelope,
 	EventNotFoundException,
 	EventStore,
+	EventStoreCollectionCreationException,
 	EventStorePersistenceException,
 	type EventStream,
 	type IEvent,
@@ -74,7 +75,7 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 					);
 					break;
 				default:
-					throw err;
+					throw new EventStoreCollectionCreationException(collection, err);
 			}
 		}
 	}
