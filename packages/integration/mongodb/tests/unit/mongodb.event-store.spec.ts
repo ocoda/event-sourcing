@@ -7,7 +7,7 @@ import {
 	type IEvent,
 	StreamReadingDirection,
 } from '@ocoda/event-sourcing';
-import { MongoDBEventStore, type MongoEventEntity } from '@ocoda/event-sourcing-mongodb';
+import { type MongoDBEventEntity, MongoDBEventStore } from '@ocoda/event-sourcing-mongodb';
 import {
 	Account,
 	AccountId,
@@ -61,7 +61,7 @@ describe(MongoDBEventStore, () => {
 
 		const entities = await client
 			.db()
-			.collection<MongoEventEntity>(EventCollection.get())
+			.collection<MongoDBEventEntity>(EventCollection.get())
 			.find()
 			.sort({ version: 1 })
 			.toArray();

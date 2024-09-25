@@ -149,7 +149,12 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 				version: aggregateVersion,
 			});
 
-			const [lastStreamEntity] = await this.getLastStreamEntities(collection, [stream], connection);
+			const [lastStreamEntity] = await this.getLastStreamEntities<A, ['stream_id', 'version']>(
+				collection,
+				[stream],
+				['stream_id', 'version'],
+				connection,
+			);
 
 			await connection.query('BEGIN');
 			if (lastStreamEntity) {
@@ -189,7 +194,7 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 	async getLastSnapshot<A extends AggregateRoot>(stream: SnapshotStream, pool?: ISnapshotPool): Promise<ISnapshot<A>> {
 		const collection = SnapshotCollection.get(pool);
 
-		const [entity] = await this.getLastStreamEntities<A>(collection, [stream]);
+		const [entity] = await this.getLastStreamEntities<A, ['payload']>(collection, [stream], ['payload']);
 
 		if (entity) {
 			return entity.payload;
@@ -202,7 +207,10 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 	): Promise<Map<SnapshotStream, ISnapshot<A>>> {
 		const collection = SnapshotCollection.get(pool);
 
-		const entities = await this.getLastStreamEntities<A>(collection, streams);
+		const entities = await this.getLastStreamEntities<A, ['stream_id', 'payload']>(collection, streams, [
+			'stream_id',
+			'payload',
+		]);
 
 		return new Map(
 			entities.map(({ stream_id, payload }) => [
@@ -218,7 +226,10 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 	): Promise<SnapshotEnvelope<A>> {
 		const collection = SnapshotCollection.get(pool);
 
-		const [entity] = await this.getLastStreamEntities<A>(collection, [stream]);
+		const [entity] = await this.getLastStreamEntities<
+			A,
+			['payload', 'snapshot_id', 'aggregate_id', 'registered_on', 'version']
+		>(collection, [stream], ['payload', 'snapshot_id', 'aggregate_id', 'registered_on', 'version']);
 
 		if (entity) {
 			return SnapshotEnvelope.from<A>(entity.payload, {
@@ -252,12 +263,18 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 
 		const params = fromVersion ? [streamId, fromVersion, limit] : [streamId, limit];
 
-		const cursor = this.client.query(new Cursor<Omit<PostgresSnapshotEntity<A>, 'stream_id'>>(query, params));
+		const cursor = this.client.query(
+			new Cursor<
+				Pick<PostgresSnapshotEntity<A>, 'payload' | 'aggregate_id' | 'registered_on' | 'snapshot_id' | 'version'>
+			>(query, params),
+		);
 
 		let done = false;
 
 		while (!done) {
-			const rows: Array<Omit<PostgresSnapshotEntity<A>, 'stream_id'>> = await new Promise((resolve, reject) =>
+			const rows: Array<
+				Pick<PostgresSnapshotEntity<A>, 'payload' | 'aggregate_id' | 'registered_on' | 'snapshot_id' | 'version'>
+			> = await new Promise((resolve, reject) =>
 				cursor.read(batch, (err, result) => (err ? reject(err) : resolve(result))),
 			);
 
@@ -286,7 +303,7 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 		const collection = SnapshotCollection.get(pool);
 
 		const { rows: entities } = await this.client.query<
-			Omit<PostgresSnapshotEntity<A>, 'stream_id' | 'aggregate_name' | 'latest'>
+			Pick<PostgresSnapshotEntity<A>, 'payload' | 'aggregate_id' | 'registered_on' | 'snapshot_id' | 'version'>
 		>(
 			`SELECT payload, aggregate_id, registered_on, snapshot_id, version
             FROM "${collection}" WHERE stream_id = $1 AND version = $2`,
@@ -328,14 +345,18 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 		const params = fromId ? [aggregateName, fromId, limit] : [aggregateName, limit];
 
 		const cursor = this.client.query(
-			new Cursor<Omit<PostgresSnapshotEntity<A>, 'stream_id' | 'aggregate_name' | 'latest'>>(query, params),
+			new Cursor<
+				Pick<PostgresSnapshotEntity<A>, 'payload' | 'aggregate_id' | 'registered_on' | 'snapshot_id' | 'version'>
+			>(query, params),
 		);
 
 		let done = false;
 
 		while (!done) {
-			const rows: Array<Omit<PostgresSnapshotEntity<A>, 'stream_id' | 'aggregate_name' | 'latest'>> = await new Promise(
-				(resolve, reject) => cursor.read(batch, (err, result) => (err ? reject(err) : resolve(result))),
+			const rows: Array<
+				Pick<PostgresSnapshotEntity<A>, 'payload' | 'aggregate_id' | 'registered_on' | 'snapshot_id' | 'version'>
+			> = await new Promise((resolve, reject) =>
+				cursor.read(batch, (err, result) => (err ? reject(err) : resolve(result))),
 			);
 
 			if (rows.length === 0) {
@@ -361,7 +382,10 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 	): Promise<Map<SnapshotStream, SnapshotEnvelope<A>>> {
 		const collection = SnapshotCollection.get(pool);
 
-		const entities = await this.getLastStreamEntities<A>(collection, streams);
+		const entities = await this.getLastStreamEntities<
+			A,
+			['stream_id', 'payload', 'aggregate_id', 'registered_on', 'snapshot_id', 'version']
+		>(collection, streams, ['stream_id', 'payload', 'aggregate_id', 'registered_on', 'snapshot_id', 'version']);
 
 		return new Map(
 			entities.map(({ stream_id, payload, aggregate_id, registered_on, snapshot_id, version }) => [
@@ -376,16 +400,18 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 		);
 	}
 
-	private async getLastStreamEntities<A extends AggregateRoot>(
+	private async getLastStreamEntities<
+		A extends AggregateRoot,
+		Fields extends (keyof PostgresSnapshotEntity<A>)[] = (keyof PostgresSnapshotEntity<A>)[],
+	>(
 		collection: string,
 		streams: SnapshotStream[],
+		fields: Fields,
 		connection?: PoolClient,
-	): Promise<Omit<PostgresSnapshotEntity<A>, 'aggregate_name' | 'latest'>[]> {
+	): Promise<Pick<PostgresSnapshotEntity<A>, Fields[number]>[]> {
 		const latestIds = streams.map(({ streamId }) => `latest#${streamId}`);
-		const { rows: entities } = await (connection || this.client).query<
-			Omit<PostgresSnapshotEntity<A>, 'aggregate_name' | 'latest'>
-		>(
-			`SELECT stream_id, payload, aggregate_id, registered_on, snapshot_id, version
+		const { rows: entities } = await (connection || this.client).query<Pick<PostgresSnapshotEntity<A>, Fields[number]>>(
+			`SELECT ${fields.join(', ')}
                 FROM "${collection}" 
                 WHERE latest = ANY ($1)
              `,

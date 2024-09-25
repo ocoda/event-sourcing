@@ -13,7 +13,7 @@ import {
 	StreamReadingDirection,
 } from '@ocoda/event-sourcing';
 import { type Db, MongoClient } from 'mongodb';
-import type { MongoDBEventStoreConfig, MongoEventEntity } from './interfaces';
+import type { MongoDBEventEntity, MongoDBEventStoreConfig } from './interfaces';
 
 export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 	private client: MongoClient;
@@ -36,7 +36,7 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 
 		const [existingCollection] = await this.database.listCollections({ name: collection }).toArray();
 		if (!existingCollection) {
-			const eventCollection = await this.database.createCollection<MongoEventEntity>(collection);
+			const eventCollection = await this.database.createCollection<MongoDBEventEntity>(collection);
 			await eventCollection.createIndex({ streamId: 1, version: 1 }, { unique: true });
 		}
 
@@ -52,7 +52,7 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
 		const cursor = this.database
-			.collection<MongoEventEntity>(collection)
+			.collection<Pick<MongoDBEventEntity, 'event' | 'payload'>>(collection)
 			.find(
 				{
 					streamId,
@@ -61,6 +61,7 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 				{
 					sort: { version: direction === StreamReadingDirection.FORWARD ? 1 : -1 },
 					limit,
+					projection: { _id: 0, event: 1, payload: 1 },
 				},
 			)
 			.map(({ event, payload }) => this.eventMap.deserializeEvent(event, payload));
@@ -82,10 +83,13 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 
 	async getEvent({ streamId }: EventStream, version: number, pool?: IEventPool): Promise<IEvent> {
 		const collection = EventCollection.get(pool);
-		const entity = await this.database.collection<MongoEventEntity>(collection).findOne({
-			streamId,
-			version,
-		});
+		const entity = await this.database.collection<Pick<MongoDBEventEntity, 'event' | 'payload'>>(collection).findOne(
+			{
+				streamId,
+				version,
+			},
+			{ projection: { _id: 0, event: 1, payload: 1 } },
+		);
 
 		if (!entity) {
 			throw new EventNotFoundException(streamId, version);
@@ -119,7 +123,7 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 				envelopes.push(envelope);
 			}
 
-			const entities = envelopes.map<MongoEventEntity>(({ event, payload, metadata }) => ({
+			const entities = envelopes.map<MongoDBEventEntity>(({ event, payload, metadata }) => ({
 				_id: metadata.eventId,
 				streamId,
 				event,
@@ -127,7 +131,7 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 				...metadata,
 			}));
 
-			await this.database.collection<MongoEventEntity>(collection, {}).insertMany(entities);
+			await this.database.collection<MongoDBEventEntity>(collection).insertMany(entities);
 
 			return envelopes;
 		} catch (error) {
@@ -144,7 +148,12 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
 		const cursor = this.database
-			.collection<MongoEventEntity>(collection)
+			.collection<
+				Pick<
+					MongoDBEventEntity,
+					'event' | 'payload' | 'eventId' | 'aggregateId' | 'version' | 'occurredOn' | 'correlationId' | 'causationId'
+				>
+			>(collection)
 			.find(
 				{
 					streamId,
@@ -153,6 +162,17 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 				{
 					sort: { version: direction === StreamReadingDirection.FORWARD ? 1 : -1 },
 					limit,
+					projection: {
+						_id: 0,
+						event: 1,
+						payload: 1,
+						eventId: 1,
+						aggregateId: 1,
+						version: 1,
+						occurredOn: 1,
+						correlationId: 1,
+						causationId: 1,
+					},
 				},
 			)
 			.map(({ event, payload, eventId, aggregateId, version, occurredOn, correlationId, causationId }) =>
@@ -184,10 +204,32 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 	async getEnvelope({ streamId }: EventStream, version: number, pool?: IEventPool): Promise<EventEnvelope> {
 		const collection = EventCollection.get(pool);
 
-		const entity = await this.database.collection<MongoEventEntity>(collection).findOne({
-			streamId,
-			version,
-		});
+		const entity = await this.database
+			.collection<
+				Pick<
+					MongoDBEventEntity,
+					'event' | 'payload' | 'eventId' | 'aggregateId' | 'version' | 'occurredOn' | 'correlationId' | 'causationId'
+				>
+			>(collection)
+			.findOne(
+				{
+					streamId,
+					version,
+				},
+				{
+					projection: {
+						_id: 0,
+						event: 1,
+						payload: 1,
+						eventId: 1,
+						aggregateId: 1,
+						version: 1,
+						occurredOn: 1,
+						correlationId: 1,
+						causationId: 1,
+					},
+				},
+			);
 
 		if (!entity) {
 			throw new EventNotFoundException(streamId, version);

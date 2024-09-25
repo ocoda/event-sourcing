@@ -135,7 +135,12 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 				version: aggregateVersion,
 			});
 
-			const [lastStreamEntity] = await this.getLastStreamEntities(collection, [stream], connection);
+			const [lastStreamEntity] = await this.getLastStreamEntities<A, ['stream_id', 'version']>(
+				collection,
+				[stream],
+				['stream_id', 'version'],
+				connection,
+			);
 			await connection.beginTransaction();
 
 			if (lastStreamEntity) {
@@ -170,7 +175,7 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 	async getLastSnapshot<A extends AggregateRoot>(stream: SnapshotStream, pool?: ISnapshotPool): Promise<ISnapshot<A>> {
 		const collection = SnapshotCollection.get(pool);
 
-		const [entity] = await this.getLastStreamEntities<A>(collection, [stream]);
+		const [entity] = await this.getLastStreamEntities<A, ['payload']>(collection, [stream], ['payload']);
 
 		if (entity) {
 			return entity.payload;
@@ -183,7 +188,10 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 	): Promise<Map<SnapshotStream, ISnapshot<A>>> {
 		const collection = SnapshotCollection.get(pool);
 
-		const entities = await this.getLastStreamEntities<A>(collection, streams);
+		const entities = await this.getLastStreamEntities<A, ['stream_id', 'payload']>(collection, streams, [
+			'stream_id',
+			'payload',
+		]);
 
 		return new Map(
 			entities.map(({ stream_id, payload }) => [
@@ -199,7 +207,10 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 	): Promise<SnapshotEnvelope<A>> {
 		const collection = SnapshotCollection.get(pool);
 
-		const [entity] = await this.getLastStreamEntities<A>(collection, [stream]);
+		const [entity] = await this.getLastStreamEntities<
+			A,
+			['payload', 'snapshot_id', 'aggregate_id', 'registered_on', 'version']
+		>(collection, [stream], ['payload', 'snapshot_id', 'aggregate_id', 'registered_on', 'version']);
 
 		if (entity) {
 			return SnapshotEnvelope.from<A>(entity.payload, {
@@ -239,9 +250,9 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 
 		try {
 			let batchedSnapshots: SnapshotEnvelope<A>[] = [];
-			for await (const { payload, aggregate_id, registered_on, snapshot_id, version } of stream as unknown as Omit<
+			for await (const { payload, aggregate_id, registered_on, snapshot_id, version } of stream as unknown as Pick<
 				MariaDBSnapshotEntity<A>,
-				'stream_id'
+				'payload' | 'aggregate_id' | 'registered_on' | 'snapshot_id' | 'version'
 			>[]) {
 				batchedSnapshots.push(
 					SnapshotEnvelope.from<A>(payload, {
@@ -273,7 +284,9 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 	): Promise<SnapshotEnvelope<A>> {
 		const collection = SnapshotCollection.get(pool);
 
-		const [entity] = await this.pool.query<MariaDBSnapshotEntity<A>[]>(
+		const [entity] = await this.pool.query<
+			Pick<MariaDBSnapshotEntity<A>, 'payload' | 'aggregate_id' | 'registered_on' | 'snapshot_id' | 'version'>[]
+		>(
 			`SELECT payload, aggregate_id, registered_on, snapshot_id, version FROM \`${collection}\` WHERE stream_id = ? AND version = ?`,
 			[streamId, version],
 		);
@@ -316,9 +329,9 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 
 		try {
 			let batchedSnapshots: SnapshotEnvelope<A>[] = [];
-			for await (const { payload, aggregate_id, registered_on, snapshot_id, version } of stream as unknown as Omit<
+			for await (const { payload, aggregate_id, registered_on, snapshot_id, version } of stream as unknown as Pick<
 				MariaDBSnapshotEntity<A>,
-				'stream_id'
+				'payload' | 'aggregate_id' | 'registered_on' | 'snapshot_id' | 'version'
 			>[]) {
 				batchedSnapshots.push(
 					SnapshotEnvelope.from<A>(payload, {
@@ -349,7 +362,10 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 	): Promise<Map<SnapshotStream, SnapshotEnvelope<A>>> {
 		const collection = SnapshotCollection.get(pool);
 
-		const entities = await this.getLastStreamEntities<A>(collection, streams);
+		const entities = await this.getLastStreamEntities<
+			A,
+			['stream_id', 'payload', 'aggregate_id', 'registered_on', 'snapshot_id', 'version']
+		>(collection, streams, ['stream_id', 'payload', 'aggregate_id', 'registered_on', 'snapshot_id', 'version']);
 
 		return new Map(
 			entities.map(({ stream_id, payload, aggregate_id, registered_on, snapshot_id, version }) => [
@@ -364,14 +380,18 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 		);
 	}
 
-	private async getLastStreamEntities<A extends AggregateRoot>(
+	private async getLastStreamEntities<
+		A extends AggregateRoot,
+		Fields extends (keyof MariaDBSnapshotEntity<A>)[] = (keyof MariaDBSnapshotEntity<A>)[],
+	>(
 		collection: string,
 		streams: SnapshotStream[],
+		fields: Fields,
 		connection?: Connection,
-	): Promise<Omit<MariaDBSnapshotEntity<A>, 'aggregate_name' | 'latest'>[]> {
+	): Promise<Pick<MariaDBSnapshotEntity<A>, Fields[number]>[]> {
 		const latestIds = streams.map(({ streamId }) => `latest#${streamId}`);
-		return (connection || this.pool).query<Omit<MariaDBSnapshotEntity<A>, 'aggregate_name' | 'latest'>[]>(
-			`SELECT stream_id, payload, aggregate_id, registered_on, snapshot_id, version 
+		return (connection || this.pool).query<Pick<MariaDBSnapshotEntity<A>, Fields[number]>[]>(
+			`SELECT ${fields.join(', ')} 
                 FROM \`${collection}\` 
                 WHERE latest IN (?)
             `,

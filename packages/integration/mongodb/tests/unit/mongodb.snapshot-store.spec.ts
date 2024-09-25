@@ -11,7 +11,7 @@ import {
 	StreamReadingDirection,
 	UUID,
 } from '@ocoda/event-sourcing';
-import { MongoDBSnapshotStore, type MongoSnapshotEntity } from '@ocoda/event-sourcing-mongodb';
+import { type MongoDBSnapshotEntity, MongoDBSnapshotStore } from '@ocoda/event-sourcing-mongodb';
 import {
 	Account,
 	AccountId,
@@ -63,7 +63,7 @@ describe(MongoDBSnapshotStore, () => {
 		await snapshotStore.appendSnapshot(snapshotStreamCustomer, 10, customerSnapshot);
 		const entities = await client
 			.db()
-			.collection<MongoSnapshotEntity<Account>>(SnapshotCollection.get())
+			.collection<MongoDBSnapshotEntity<Account>>(SnapshotCollection.get())
 			.find()
 			.sort({ version: 1 })
 			.toArray();
