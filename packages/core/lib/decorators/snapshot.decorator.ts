@@ -5,15 +5,14 @@ import type { AggregateRoot } from '../models';
 import { SNAPSHOT_METADATA } from './constants';
 
 /**
- * Decorator that marks a class as a snapshot handler. A snapshot handler
- * is responsible for:
- * - serializing an aggregate's state into to a plain object snapshot and vice versa.
+ * Decorator that marks a class as a snapshot handler. A snapshot handler is responsible for:
+ * - converting an aggregate's state into to a serialized format and vice versa.
  * - saving and loading snapshots from the snapshot store.
- *
- * The decorated class must implement the `ISnapshotHandler` interface.
- *
- * @param aggregate aggregate *type* to be handled by this handler.
- * @param options snapshot metadata.
+ * @description The decorated class must implement the `ISnapshotHandler` interface.
+ * @param {Type<A extends AggregateRoot>} aggregate The aggregate constructor for which the instances need to be handled by this handler. Needs to extend the AggregateRoot class.
+ * @param { Omit<SnapshotMetadata<A>, 'aggregate'>} options The metadata for the snapshot handler.
+ * @returns {ClassDecorator}
+ * @example `@Snapshot(Account, { name: 'account', interval: 5 })`
  */
 export const Snapshot = <A extends AggregateRoot = AggregateRoot>(
 	aggregate: Type<A>,

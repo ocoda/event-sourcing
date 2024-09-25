@@ -7,8 +7,10 @@ import { AGGREGATE_METADATA } from './constants';
 
 /**
  * Decorator that provides an aggregate with metadata.
- *
- * The decorated class must extend the `AggregateRoot` class.
+ * @description The decorated class must extend the `AggregateRoot` class.
+ * @param {AggregateMetadata} options The metadata for the aggregate.
+ * @returns {ClassDecorator}
+ * @example `@Aggregate('account')` or `@Aggregate({ streamName: 'account' })`
  */
 export const Aggregate = (options?: AggregateMetadata): ClassDecorator => {
 	return (target: object) => {
