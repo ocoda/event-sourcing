@@ -18,9 +18,8 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-
     name: Build the documentation
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
@@ -44,6 +43,11 @@ jobs:
           node-version: 22.x
           cache: "pnpm"
 
+      - name: Setup GH Pages
+        uses: actions/configure-pages@v4
+        with:
+          static_site_generator: next
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -56,6 +60,7 @@ jobs:
           path: ./docs/dist
 
   deploy:
+    name: Deploy to Github Pages
     runs-on: ubuntu-latest
     needs: build
     environment:
