@@ -1,0 +1,10 @@
+{
+	"install": "Installation",
+	"aggregates": "Aggregates",
+	"value_objects": "Value Objects",
+	"repositories": "Repositories",
+	"commands": "Commands",
+	"events": "Events",
+	"snapshots": "Snapshots",
+	"queries": "Queries"
+}

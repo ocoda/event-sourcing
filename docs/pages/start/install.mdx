@@ -1,0 +1,84 @@
+# Installation
+
+This library consists of a core module `@ocoda/event-sourcing` that provides the building blocks and can be complemented with an integration library for setting up a persistence layer for your events using a specific database provider.
+
+By default the core library will use an in-memory event- and snapshot-store, which is useful for testing and prototyping, but not recommended for production use.
+
+```bash
+# Install the core module
+npm install @ocoda/event-sourcing
+
+# Install one of the integration libraries
+npm install @ocoda/event-sourcing-dynamodb
+npm install @ocoda/event-sourcing-mariadb
+npm install @ocoda/event-sourcing-mongodb
+npm install @ocoda/event-sourcing-postgres
+```
+
+## Setting up the module
+
+### Basic setup [#basic-setup]
+For setting up the module you need to import the `EventSourcingModule` and configure it.
+
+For the basic setup you only need to provide the `events` array, an array of event classes that are used to define the events.
+While this great for testing and prototyping, you won't be able to persist the events and snapshots. If you require persistence skip to the [advanced setup](/start/module#advanced-setup).
+
+```typescript {14-19}
+import { Module } from '@nestjs/common';
+import { EventSourcingModule } from '@ocoda/event-sourcing';
+
+import {
+    AccountOpenedEvent,
+    AccountCreditedEvent,
+    AccountDebitedEvent,
+    AccountClosedEvent,
+} from './app.providers';
+
+@Module({
+	imports: [
+		EventSourcingModule.forRoot({
+            events: [
+                AccountOpenedEvent,
+                AccountCreditedEvent,
+                AccountDebitedEvent,
+                AccountClosedEvent,
+            ],
+		}),
+	],
+})
+export class AppModule {}
+```
+
+### Advanced setup [#advanced-setup]
+
+If you want to use a specific database provider for event- and snapshot-persistence you need to provide the `eventStore` and `snapshotStore` configuration.
+Each integration library comes with a driver and interface to indicate which parameters are required for connecting to the specified store.
+
+```typescript {7,10-21}
+import { Events } from './app.providers';
+import { PostgresEventStore, type PostgresEventStoreConfig } from '@ocoda/event-sourcing-postgres';
+import { MongoDBSnapshotStore, type MongoDBSnapshotStoreConfig } from '@ocoda/event-sourcing-mongodb';
+
+@Module({
+	imports: [
+		EventSourcingModule.forRootAsync<PostgresEventStoreConfig, MongoDBSnapshotStoreConfig>({
+			useFactory: () => ({
+				events: Events,
+				eventStore: {
+					driver: PostgresEventStore,
+					host: '<URL>',
+					port: 5432,
+					user: '<username>',
+					password: '<password>',
+					database: '<database>',
+				},
+				snapshotStore: {
+					driver: MongoDBSnapshotStore,
+					url: '<URL>',
+				},
+			}),
+		}),
+	],
+})
+export class AppModule {}
+```

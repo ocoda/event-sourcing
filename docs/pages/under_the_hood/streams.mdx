@@ -1,0 +1,27 @@
+# Streams
+
+Streams represent a **sequence of events or snapshots** to store that belong to a **specific aggregate**. 
+Each stream is identified by a unique name and can contain multiple events or snapshots.
+
+For events a helper method `EventStream.for` is provided to create a stream for a specific aggregate type and id.
+The prefix of the stream name is derived from the @Aggregate decorator. 
+
+```typescript
+import { EventStream } from '@ocoda/event-sourcing';
+
+const stream = EventStream.for<Account>(Account, accountId);
+console.log(eventStream.aggregateId); // d46fb0f9-02dc-4d11-a282-ab00f7fffeff
+console.log(eventStream.streamId); // account-d46fb0f9-02dc-4d11-a282-ab00f7fffeff
+```
+
+The same applies for snapshots, where the `SnapshotStream.for` method is used to create a stream for a specific aggregate type and id.
+Additionally it also keeps a reference to the name of the aggregate to store in the snapshot-store.
+
+```typescript
+import { SnapshotStream } from '@ocoda/event-sourcing';
+
+const stream = SnapshotStream.for<Account>(Account, accountId);
+console.log(snapshotStream.aggregate); // account
+console.log(snapshotStream.aggregateId); // d46fb0f9-02dc-4d11-a282-ab00f7fffeff
+console.log(snapshotStream.streamId); // account-d46fb0f9-02dc-4d11-a282-ab00f7fffeff
+```

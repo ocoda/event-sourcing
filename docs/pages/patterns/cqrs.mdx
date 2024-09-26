@@ -1,0 +1,19 @@
+# Command Query Responsibility Segregation (CQRS)
+
+Command Query Responsibility Segregation (CQRS) is a design pattern that separates the responsibility for reading data (queries) from modifying data (commands). The main goal of CQRS is to optimize the handling of commands and queries by decoupling them, allowing each side to evolve independently for better scalability, performance, and maintainability.
+
+#### Key Concepts of CQRS:
+1. **Commands**: These represent actions or changes in the system (e.g., creating an order, updating a profile). Commands modify the state of the system but do not return data.
+2. **Queries**: These are used to retrieve data without modifying the system's state (e.g., fetching a list of products or retrieving user details). Queries are focused solely on returning the data.
+3. **Segregated Models**:
+   - **Write Model**: Handles commands and focuses on ensuring that the business rules are enforced when data is modified.
+   - **Read Model**: Optimized for queries, typically providing fast and efficient data retrieval, often in a denormalized form.
+4. **Eventual Consistency**: In many CQRS implementations, the read and write models are updated separately, which can lead to eventual consistency, meaning there might be a short delay between the time the data is written and when it's available for reading.
+5. **Event Sourcing (Optional)**: CQRS is often combined with **Event Sourcing**, where every state change is stored as a series of events. This allows rebuilding the system's state from these events.
+
+#### Benefits of CQRS:
+- **Scalability**: You can scale read and write operations independently.
+- **Separation of Concerns**: Command and query logic are separated, making the system easier to maintain and extend.
+- **Optimized Read Performance**: By designing dedicated read models, you can improve query performance, often through denormalized or cached data structures.
+
+CQRS is especially useful in complex systems where different parts of the application have different performance, consistency, or scalability requirements.

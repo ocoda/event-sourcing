@@ -1,0 +1,73 @@
+# Value Objects
+ 
+A **Value Object** represents a domain concept that is **immutable** and has **no conceptual identity**. Unlike entities, value objects are defined purely by their attributes. They are used to describe characteristics of an entity and often encapsulate logic related to validation or domain-specific constraints.
+
+For example, an Account Name can be modeled as a Value Object since it is defined by its value and doesn't need a unique identity.
+
+### Creating a Value Object
+
+In this library, you can create a Value Object by extending the ValueObject class. Value Objects are expected to be immutable and should encapsulate any validation or business rules required for their creation.
+
+```typescript
+import { ValueObject } from '@ocoda/event-sourcing';
+
+export class AccountName extends ValueObject {
+  public static fromString(name: string) {
+    if(name.length < 3) {
+      throw new Error('Account name should contain at least 3 characters');
+    }
+    return new Accountname({ value: name });
+  }
+
+  get value(): string {
+    return this.props.value;
+  }
+}
+```
+
+#### Guidelines for working with Value Objects
+
+**1. Immutability**
+
+Value Objects are immutable, meaning once they are created, they cannot be modified. This ensures consistency and prevents unintended side effects. If a change is needed, you should create a new instance of the Value Object rather than modifying an existing one. For example, if an account name changes, a new AccountName object should be created rather than mutating the existing one.
+That's why we provide a ValueObject class to extend, in the background this will freeze the object to prevent any changes.
+
+**2. Validation in creation**
+
+Value Objects should encapsulate any necessary validation logic at the time of creation. This guarantees that invalid states are not possible. In the example above, we validate that the account name must have at least three characters before creating the AccountName object:
+
+```typescript {2-4}
+public static fromString(name: string) {
+    if(name.length < 3) {
+      throw new Error('Account name should contain at least 3 characters');
+    }
+    return new AccountName({ value: name });
+}
+```
+
+By placing validation logic inside the factory method (fromString in this case), we ensure that any AccountName object created is always valid.
+
+**3. Equality and comparisons**
+
+Since Value Objects don't have an identity, they are compared based on the values of their properties. Two Value Objects are considered equal if all their properties are the same. For example, two AccountName objects with the same name would be equal. The ValueObject class implements this equality check for you, ensuring that value comparisons are based on the object's properties.
+
+```typescript
+const name1 = AccountName.fromString('John Doe');
+const name2 = AccountName.fromString('John Doe');
+
+name1.equals(name2); // true
+```
+
+**4. Domain Logic Encapsulation**
+Although Value Objects are often simple, they can encapsulate domain-specific logic related to their properties. For instance, you might add formatting logic or rules for special cases. However, keep in mind that Value Objects should remain focused and not include complex domain behaviors, which are usually the responsibility of entities or aggregates.
+
+For example, you could add a method for formatting the account name:
+```typescript
+public formatName() {
+    return this.props.value.toUpperCase();
+}
+```
+
+**5. Keeping Value Objects Lightweight**
+A Value Object should focus only on encapsulating simple domain attributes and logic. Don't overload it with responsibilities outside of representing and validating its value.
+
