@@ -43,7 +43,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: pnpm build
+        run: pnpm build --filter="./packages/**"
 
   test-core-lib:
     runs-on: ubuntu-latest

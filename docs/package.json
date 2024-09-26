@@ -1,0 +1,26 @@
+{
+	"name": "@ocoda/event-sourcing-docs",
+	"version": "1.0.0",
+	"description": "NestJS Event Sourcing Library",
+	"author": "Dries Hooghe <dries@drieshooghe.com>",
+	"license": "MIT",
+	"private": true,
+	"keywords": [],
+	"scripts": {
+		"dev": "next",
+		"build": "next build",
+		"start": "next start"
+	},
+	"dependencies": {
+		"next": "^14.2.13",
+		"nextra": "^2.13.4",
+		"nextra-theme-docs": "^2.13.4",
+		"react": "^18.3.1",
+		"react-dom": "^18.3.1"
+	},
+	"devDependencies": {
+		"@ocoda/event-sourcing-config": "workspace:*",
+		"@types/node": "20.16.5",
+		"typescript": "5.6.2"
+	}
+}

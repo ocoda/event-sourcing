@@ -1,0 +1,4 @@
+{
+	"extends": "@ocoda/event-sourcing-config/typescript/docs.json",
+	"include": ["next-env.d.ts", "**/*.ts", "**/*.tsx"]
+}
