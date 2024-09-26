@@ -52,7 +52,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: pnpm build --filter='./docs/**' && touch ${{ github.workspace }}/docs/dist/.nojekyll
+        run: pnpm build --filter='./docs/**'
 
       - name: Upload build
         uses: actions/upload-pages-artifact@v3
