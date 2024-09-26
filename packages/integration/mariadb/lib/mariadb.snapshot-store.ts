@@ -10,6 +10,7 @@ import {
 	SnapshotEnvelope,
 	SnapshotNotFoundException,
 	SnapshotStore,
+	SnapshotStoreCollectionCreationException,
 	SnapshotStorePersistenceException,
 	type SnapshotStream,
 	StreamReadingDirection,
@@ -33,22 +34,26 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 	public async ensureCollection(pool?: ISnapshotPool): Promise<ISnapshotCollection> {
 		const collection = SnapshotCollection.get(pool);
 
-		await this.pool.query(
-			`CREATE TABLE IF NOT EXISTS \`${collection}\` (
-                stream_id VARCHAR(90) NOT NULL,
-                version INT NOT NULL,
-                payload JSON NOT NULL,
-                snapshot_id VARCHAR(40) NOT NULL,
-                aggregate_id VARCHAR(40) NOT NULL,
-                registered_on TIMESTAMP NOT NULL,
-                aggregate_name VARCHAR(50) NOT NULL,
-                latest VARCHAR(100),
-                PRIMARY KEY (stream_id, version),
-                INDEX idx_aggregate_name_latest (aggregate_name, latest)
-            )`,
-		);
+		try {
+			await this.pool.query(
+				`CREATE TABLE IF NOT EXISTS \`${collection}\` (
+                    stream_id VARCHAR(90) NOT NULL,
+                    version INT NOT NULL,
+                    payload JSON NOT NULL,
+                    snapshot_id VARCHAR(40) NOT NULL,
+                    aggregate_id VARCHAR(40) NOT NULL,
+                    registered_on TIMESTAMP NOT NULL,
+                    aggregate_name VARCHAR(50) NOT NULL,
+                    latest VARCHAR(100),
+                    PRIMARY KEY (stream_id, version),
+                    INDEX idx_aggregate_name_latest (aggregate_name, latest)
+                )`,
+			);
 
-		return collection;
+			return collection;
+		} catch (error) {
+			throw new SnapshotStoreCollectionCreationException(collection, error);
+		}
 	}
 
 	async stop(): Promise<void> {

@@ -1,5 +1,9 @@
-import type { ISnapshotCollection } from '../../interfaces/aggregate/snapshot-collection.type';
+import type { ISnapshotCollection } from '../../interfaces';
 
+/**
+ * Represents an exception that occurs while persisting snapshots to the snapshot store.
+ * @extends {Error}
+ */
 export class SnapshotStorePersistenceException extends Error {
 	constructor(collection: ISnapshotCollection, { stack }: Error) {
 		super(`An error occurred while appending snapshot to the ${collection} collection.`);

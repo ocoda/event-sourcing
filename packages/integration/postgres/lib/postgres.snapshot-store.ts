@@ -10,6 +10,7 @@ import {
 	SnapshotEnvelope,
 	SnapshotNotFoundException,
 	SnapshotStore,
+	SnapshotStoreCollectionCreationException,
 	SnapshotStorePersistenceException,
 	type SnapshotStream,
 	StreamReadingDirection,
@@ -61,7 +62,7 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 			return collection;
 		} catch (err) {
 			await connection.query('ROLLBACK');
-			throw new SnapshotStorePersistenceException(collection, err);
+			throw new SnapshotStoreCollectionCreationException(collection, err);
 		} finally {
 			connection.release();
 		}

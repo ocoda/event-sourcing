@@ -10,6 +10,7 @@ import {
 	SnapshotEnvelope,
 	SnapshotNotFoundException,
 	SnapshotStore,
+	SnapshotStoreCollectionCreationException,
 	SnapshotStorePersistenceException,
 	type SnapshotStream,
 	StreamReadingDirection,
@@ -36,18 +37,22 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 	public async ensureCollection(pool?: ISnapshotPool): Promise<ISnapshotCollection> {
 		const collection = SnapshotCollection.get(pool);
 
-		const [existingCollection] = await this.database.listCollections({ name: collection }).toArray();
-		if (existingCollection) {
+		try {
+			const [existingCollection] = await this.database.listCollections({ name: collection }).toArray();
+			if (existingCollection) {
+				return collection;
+			}
+
+			const snapshotCollection = await this.database.createCollection(collection);
+			await snapshotCollection.createIndexes([
+				{ key: { streamId: 1, version: 1 }, unique: true },
+				{ key: { aggregateName: 1, latest: 1 }, unique: false },
+			]);
+
 			return collection;
+		} catch (error) {
+			throw new SnapshotStoreCollectionCreationException(collection, error);
 		}
-
-		const snapshotCollection = await this.database.createCollection(collection);
-		await snapshotCollection.createIndexes([
-			{ key: { streamId: 1, version: 1 }, unique: true },
-			{ key: { aggregateName: 1, latest: 1 }, unique: false },
-		]);
-
-		return collection;
 	}
 
 	async stop(): Promise<void> {

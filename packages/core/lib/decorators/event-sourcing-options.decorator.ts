@@ -2,8 +2,8 @@ import { Inject } from '@nestjs/common';
 import { getOptionsToken } from '../event-sourcing.providers';
 
 /**
- * Sets the proper injection token for the `EVENT_SOURCING_OPTIONS`
- * @usage @InjectEventSourcingOptions()
- * @publicApi
+ * Decorator that injects the options used to configure the EventSourcingModule.
+ * @returns {EventSourcingModuleOptions}
+ * @example `@InjectEventSourcingOptions() options: EventSourcingModuleOptions`
  */
 export const InjectEventSourcingOptions = () => Inject(getOptionsToken());

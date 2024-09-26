@@ -1,6 +1,10 @@
 import type { Type } from '@nestjs/common';
 import { DEFAULT_BATCH_SIZE, StreamReadingDirection } from '../../constants';
-import { SnapshotNotFoundException, SnapshotStorePersistenceException } from '../../exceptions';
+import {
+	SnapshotNotFoundException,
+	SnapshotStoreCollectionCreationException,
+	SnapshotStorePersistenceException,
+} from '../../exceptions';
 import type {
 	ILatestSnapshotFilter,
 	ISnapshot,
@@ -39,8 +43,12 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 
 	public async ensureCollection(pool?: ISnapshotPool): Promise<ISnapshotCollection> {
 		const collection = SnapshotCollection.get(pool);
-		this.collections.set(collection, []);
-		return collection;
+		try {
+			this.collections.set(collection, []);
+			return collection;
+		} catch (error) {
+			throw new SnapshotStoreCollectionCreationException(collection, error);
+		}
 	}
 
 	async *getSnapshots<A extends AggregateRoot>(

@@ -4,6 +4,7 @@ import {
 	EventEnvelope,
 	EventNotFoundException,
 	EventStore,
+	EventStoreCollectionCreationException,
 	EventStorePersistenceException,
 	type EventStream,
 	type IEvent,
@@ -35,22 +36,26 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 	public async ensureCollection(pool?: IEventPool): Promise<IEventCollection> {
 		const collection = EventCollection.get(pool);
 
-		await this.client.query(
-			`CREATE TABLE IF NOT EXISTS "${collection}" (
-                stream_id VARCHAR(120) NOT NULL,
-                version INT NOT NULL,
-                event VARCHAR(80) NOT NULL,
-                payload JSONB NOT NULL,
-                event_id VARCHAR(40) NOT NULL,
-                aggregate_id VARCHAR(40) NOT NULL,
-                occurred_on TIMESTAMP NOT NULL,
-                correlation_id VARCHAR(255),
-                causation_id VARCHAR(255),
-                PRIMARY KEY (stream_id, version)
-            )`,
-		);
+		try {
+			await this.client.query(
+				`CREATE TABLE IF NOT EXISTS "${collection}" (
+                    stream_id VARCHAR(120) NOT NULL,
+                    version INT NOT NULL,
+                    event VARCHAR(80) NOT NULL,
+                    payload JSONB NOT NULL,
+                    event_id VARCHAR(40) NOT NULL,
+                    aggregate_id VARCHAR(40) NOT NULL,
+                    occurred_on TIMESTAMP NOT NULL,
+                    correlation_id VARCHAR(255),
+                    causation_id VARCHAR(255),
+                    PRIMARY KEY (stream_id, version)
+                )`,
+			);
 
-		return collection;
+			return collection;
+		} catch (error) {
+			throw new EventStoreCollectionCreationException(collection, error);
+		}
 	}
 
 	async *getEvents({ streamId }: EventStream, filter?: IEventFilter): AsyncGenerator<IEvent[]> {

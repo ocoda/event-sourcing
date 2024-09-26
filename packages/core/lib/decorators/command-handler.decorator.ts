@@ -4,14 +4,11 @@ import type { CommandMetadata, ICommand } from '../interfaces';
 import { COMMAND_HANDLER_METADATA, COMMAND_METADATA } from './constants';
 
 /**
- * Decorator that marks a class as a command handler. A command handler
- * handles commands (actions) executed by your application code.
- *
- * The decorated class must implement the `ICommandHandler` interface.
- *
- * The handler automatically assigns an id to the command metadata.
- *
- * @param command command *type* to be handled by this handler.
+ * Decorator that marks a class as a command handler. A command handler handles commands (actions) executed by your application code.
+ * @description The decorated class must extend the `ICommandHandler` class. The handler automatically assigns an id to the command metadata.
+ * @param {ICommand} command The command constructor for the commands to be handled by this handler.
+ * @returns {ClassDecorator}
+ * @example `@CommandHandler(OpenAccountCommand)`
  */
 export const CommandHandler = (command: ICommand): ClassDecorator => {
 	return (target: object) => {

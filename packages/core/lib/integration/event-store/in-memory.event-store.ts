@@ -1,7 +1,11 @@
 import type { Type } from '@nestjs/common';
 import { DEFAULT_BATCH_SIZE, StreamReadingDirection } from '../../constants';
 import { EventStore } from '../../event-store';
-import { EventNotFoundException, EventStorePersistenceException } from '../../exceptions';
+import {
+	EventNotFoundException,
+	EventStoreCollectionCreationException,
+	EventStorePersistenceException,
+} from '../../exceptions';
 import type {
 	EventEnvelopeMetadata,
 	EventStoreConfig,
@@ -38,8 +42,12 @@ export class InMemoryEventStore extends EventStore<InMemoryEventStoreConfig> {
 
 	public async ensureCollection(pool?: IEventPool): Promise<IEventCollection> {
 		const collection = EventCollection.get(pool);
-		this.collections.set(collection, []);
-		return collection;
+		try {
+			this.collections.set(collection, []);
+			return collection;
+		} catch (error) {
+			throw new EventStoreCollectionCreationException(collection, error);
+		}
 	}
 
 	async *getEvents({ streamId }: EventStream, filter?: IEventFilter): AsyncGenerator<IEvent[]> {

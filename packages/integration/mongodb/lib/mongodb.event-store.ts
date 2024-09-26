@@ -4,6 +4,7 @@ import {
 	EventEnvelope,
 	EventNotFoundException,
 	EventStore,
+	EventStoreCollectionCreationException,
 	EventStorePersistenceException,
 	type EventStream,
 	type IEvent,
@@ -34,13 +35,17 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 	public async ensureCollection(pool?: IEventPool): Promise<IEventCollection> {
 		const collection = EventCollection.get(pool);
 
-		const [existingCollection] = await this.database.listCollections({ name: collection }).toArray();
-		if (!existingCollection) {
-			const eventCollection = await this.database.createCollection<MongoDBEventEntity>(collection);
-			await eventCollection.createIndex({ streamId: 1, version: 1 }, { unique: true });
-		}
+		try {
+			const [existingCollection] = await this.database.listCollections({ name: collection }).toArray();
+			if (!existingCollection) {
+				const eventCollection = await this.database.createCollection<MongoDBEventEntity>(collection);
+				await eventCollection.createIndex({ streamId: 1, version: 1 }, { unique: true });
+			}
 
-		return collection;
+			return collection;
+		} catch (error) {
+			throw new EventStoreCollectionCreationException(collection, error);
+		}
 	}
 
 	async *getEvents({ streamId }: EventStream, filter?: IEventFilter): AsyncGenerator<IEvent[]> {

@@ -9,6 +9,13 @@ import { EVENT_METADATA } from './constants';
  *
  * @param name name of the event.
  */
+/**
+ * Decorator that provides a name to an event constructor.
+ * @description The decorated class must extend the `AggregateRoot` class.
+ * @param {string=} name Optional name of the event, defaults to the class name.
+ * @returns {ClassDecorator}
+ * @example `@Event()` or `@Event('account-opened')`
+ */
 export const Event = (name?: string): ClassDecorator => {
 	return (target: any) => {
 		const metadata: EventMetadata = { id: randomUUID(), name: name || target.name };
