@@ -1,6 +1,6 @@
 {
 	"extends": ["../biome.json"],
 	"files": {
-		"include": ["src/**/*.ts", "package.json"]
+		"include": ["./**/*.json", "./**/*.mdx", "./**/*.ts"]
 	}
 }

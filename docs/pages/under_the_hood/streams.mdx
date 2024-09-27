@@ -21,7 +21,7 @@ console.log(eventStream.streamId); // account-d46fb0f9-02dc-4d11-a282-ab00f7fffe
 The same applies for snapshots, where the `SnapshotStream.for` method is used to create a stream for a specific aggregate type and id.
 Additionally it also keeps a reference to the name of the aggregate to store in the snapshot-store.
 
-```typescript
+```typescript copy
 import { SnapshotStream } from '@ocoda/event-sourcing';
 
 const stream = SnapshotStream.for<Account>(Account, accountId);

@@ -15,7 +15,7 @@ Commands should clearly indicate the **intent** and ideally refer to the aggrega
 
 Commands are simple objects that typically carry the data required to perform an action. They are implemented by extending the ICommand interface from the library:
 
-```typescript
+```typescript copy
 import { ICommand } from '@ocoda/event-sourcing';
 
 export class CreditAccountCommand implements ICommand {
@@ -32,7 +32,7 @@ In this example, the CreditAccountCommand represents the intent to credit an acc
 
 A **CommandHandler** is responsible for executing the logic associated with a specific command. In a typical flow, a CommandHandler interacts with aggregates, invokes business logic, and persists the results.
 
-```typescript {3,9,11,13}
+```typescript {3,9,11,13} copy
 import { CommandHandler, type ICommandHandler } from '@ocoda/event-sourcing';
 
 @CommandHandler(CreditAccountCommand)
@@ -56,7 +56,7 @@ In this example, the CreditAccountCommandHandler handles the execution of the Cr
 
 CommandHandlers must be registered as providers in your NestJS application’s module, so that the framework can discover and execute them. For example, in a NestJS module:
 
-```typescript
+```typescript copy
 import { Module } from '@nestjs/common';
 
 @Module({
@@ -88,7 +88,7 @@ For instance, in the OpenAccountCommandHandler, the logic for opening an account
 ### Ensure Command Handlers are idempotent
 CommandHandlers should be idempotent where possible, meaning that executing the same command multiple times should have the same effect. This ensures robustness in distributed systems or event-driven architectures where retries may happen. For example, you may check if an account already exists before attempting to create a new one.
 
-```typescript
+```typescript copy
 async execute(command: OpenAccountCommand): Promise<string> {
   if (await this.accountRepository.exists(command.accountOwner)) {
     throw new Error('Account already exists');
