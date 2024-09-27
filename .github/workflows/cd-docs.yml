@@ -37,9 +37,6 @@ jobs:
         with:
           static_site_generator: next
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
       - name: Build
         run: pnpm build --filter='./docs/**'
 
