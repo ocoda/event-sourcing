@@ -1,0 +1,15 @@
+docs:
+  - changed-files:
+      - any-glob-to-any-file: ["docs/*", "example/*", "**/*.md"]
+
+packages:
+  - changed-files:
+      - any-glob-to-any-file: "packages/*"
+
+dependencies:
+  - changed-files:
+      - any-glob-to-any-file: ["**/package.json", "pnpm-lock.yaml"]
+
+workflows:
+  - changed-files:
+      - any-glob-to-any-file: ".github/**"
