@@ -1,4 +1,4 @@
-const { base } = require('@faker-js/faker');
+const basePath = process.env.ASSET_PREFIX || '';
 
 const withNextra = require('nextra')({
     theme: 'nextra-theme-docs',
@@ -8,7 +8,7 @@ const withNextra = require('nextra')({
 module.exports = { 
     ...withNextra(),
     distDir: 'dist',
-    basePath: "/nextjs-github-pages",
+    basePath,
     images: { unoptimized: true }, 
     output: 'export',
     eslint: {

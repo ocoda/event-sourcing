@@ -18,14 +18,16 @@ concurrency:
 
 jobs:
   build:
-    name: Build the documentation
+    name: Build docs
     runs-on: ubuntu-latest
+    env:
+        ASSET_PREFIX: /event-sourcing
 
     steps:
       - name: Checkout the repository
         uses: actions/checkout@v4
 
-      - name: Setup job
+      - name: Setup job environment
         id: setup-job
         uses: ./.github/actions/setup-job-env
         with:

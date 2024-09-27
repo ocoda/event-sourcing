@@ -10,9 +10,10 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-
     name: Build docs
+    runs-on: ubuntu-latest
+    env:
+      ASSET_PREFIX: /event-sourcing
 
     steps:
       - name: Checkout the repository
@@ -29,10 +30,9 @@ jobs:
         run: pnpm build --filter="./docs/**"
 
   test:
+    name: Test docs
     needs: [build]
     runs-on: ubuntu-latest
-
-    name: Test docs
 
     steps:
       - name: Checkout the repository
