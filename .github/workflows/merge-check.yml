@@ -18,7 +18,8 @@ jobs:
     if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
-      - run: |
+      - name: Report merge check
+        run: |
           if [[ ${{ inputs.conditions }} ]]; then
             exit 0
           else
