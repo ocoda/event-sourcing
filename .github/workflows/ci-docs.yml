@@ -9,7 +9,47 @@ on:
         - docs/**
 
 jobs:
+  build:
+    name: Build docs
+    runs-on: ubuntu-latest
+    env:
+      ASSET_PREFIX: /event-sourcing
+
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v4
+
+      - name: Setup job environment
+        id: setup-job
+        uses: ./.github/actions/setup-job-env
+        with:
+          cache-key: docs
+          node-version: 22.x
+
+      - name: Build
+        run: pnpm build --filter="./docs/**"
+
+  test:
+    name: Test docs
+    needs: [build]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v4
+
+      - name: Setup job environment
+        id: setup-job
+        uses: ./.github/actions/setup-job-env
+        with:
+          cache-key: docs
+          node-version: 22.x
+
+      - name: Test linting, formatting and import sorting
+        run: pnpm run ci --filter=@ocoda/event-sourcing-docs
+
   merge-check:
+    needs: [build, test]
     uses: ./.github/workflows/merge-check.yml
     with:
-      conditions: true
+        conditions: ${{ needs.test.result == 'success' }}

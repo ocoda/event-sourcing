@@ -13,13 +13,12 @@ on:
 
 jobs:
   build:
+    name: Validate build [Node.js ${{ matrix.node-version }}]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: true
       matrix:
         node-version: [18.x, 20.x, 22.x]
-
-    name: Validate build [Node.js ${{ matrix.node-version }}]
 
     steps:
       - name: Checkout the repository
@@ -36,12 +35,11 @@ jobs:
         run: pnpm build --filter="./packages/**"
 
   test-core-lib:
+    name: Test core lib [Node.js ${{ matrix.node-version }}]
     runs-on: ubuntu-latest
     strategy:
       matrix:
         node-version: [18.x, 20.x, 22.x]
-
-    name: Test core lib [Node.js ${{ matrix.node-version }}]
 
     steps:
       - name: Checkout the repository
@@ -61,14 +59,13 @@ jobs:
         run: pnpm test --filter=@ocoda/event-sourcing
 
   test-integration-libs:
+    name: Test ${{ matrix.database }} lib [Node.js ${{ matrix.node-version }}]
     runs-on: ubuntu-latest
     needs: [test-core-lib]
     strategy:
       matrix:
         node-version: [18.x, 20.x, 22.x]
         database: [mongodb, dynamodb, postgres, mariadb]
-
-    name: Test ${{ matrix.database }} lib [Node.js ${{ matrix.node-version }}]
 
     steps:
       - name: Checkout the repository

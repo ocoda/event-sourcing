@@ -1,3 +1,5 @@
+const basePath = process.env.ASSET_PREFIX || '';
+
 const withNextra = require('nextra')({
     theme: 'nextra-theme-docs',
     themeConfig: './theme.config.tsx',
@@ -6,7 +8,11 @@ const withNextra = require('nextra')({
 module.exports = { 
     ...withNextra(),
     distDir: 'dist',
+    basePath,
     images: { unoptimized: true }, 
-    output: 'export' 
+    output: 'export',
+    eslint: {
+        ignoreDuringBuilds: true,
+    }
 }
    
