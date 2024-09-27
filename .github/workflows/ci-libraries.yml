@@ -27,7 +27,7 @@ jobs:
 
       - name: Setup job environment
         id: setup-job
-        uses: ./.github/setup-job-env
+        uses: ./.github/actions/setup-job-env
         with:
           cache-key: node-${{ matrix.node-version }}
           node-version: ${{ matrix.node-version }}
@@ -49,7 +49,7 @@ jobs:
 
       - name: Setup job environment
         id: setup-job
-        uses: ./.github/setup-job-env
+        uses: ./.github/actions/setup-job-env
         with:
           cache-key: node-${{ matrix.node-version }}
           node-version: ${{ matrix.node-version }}
@@ -79,7 +79,7 @@ jobs:
 
       - name: Setup job environment
         id: setup-job
-        uses: ./.github/setup-job-env
+        uses: ./.github/actions/setup-job-env
         with:
           cache-key: node-${{ matrix.node-version }}
           node-version: ${{ matrix.node-version }}

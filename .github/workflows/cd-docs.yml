@@ -27,7 +27,7 @@ jobs:
 
       - name: Setup job
         id: setup-job
-        uses: ./.github/setup-job-env
+        uses: ./.github/actions/setup-job-env
         with:
           cache-key: docs
           node-version: 22.x
