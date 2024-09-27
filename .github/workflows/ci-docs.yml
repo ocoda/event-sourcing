@@ -47,6 +47,7 @@ jobs:
         run: pnpm run ci --filter=@ocoda/event-sourcing-docs
 
   merge-check:
+    name: Merge check
     needs: [build, test]
     uses: ./.github/workflows/merge-check.yml
     with:

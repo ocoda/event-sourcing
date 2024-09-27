@@ -17,6 +17,7 @@ on:
 
 jobs:
   merge-check:
+    name: Merge check
     uses: ./.github/workflows/merge-check.yml
     with:
       conditions: true
