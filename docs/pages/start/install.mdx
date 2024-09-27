@@ -41,7 +41,7 @@ By default the core library will use an in-memory event- and snapshot-store, whi
     <Steps>
         ### Install the core module:
         ```bash copy
-        npm install add @ocoda/event-sourcing
+        npm install @ocoda/event-sourcing
         ```
 
         ### Install one of the integration libraries:
@@ -97,7 +97,7 @@ By default the core library will use an in-memory event- and snapshot-store, whi
 For setting up the module you need to import the `EventSourcingModule` and configure it.
 
 For the basic setup you only need to provide the `events` array, an array of event classes that are used to define the events.
-While this great for testing and prototyping, you won't be able to persist the events and snapshots. If you require persistence skip to the [advanced setup](/start/module#advanced-setup).
+While this great for testing and prototyping, you won't be able to persist the events and snapshots. If you require persistence skip to the [advanced setup](/start/install#advanced-setup).
 
 ```typescript {14-19} copy
 import { Module } from '@nestjs/common';
