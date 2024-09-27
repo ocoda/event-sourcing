@@ -1,4 +1,4 @@
-docs:
+documentation:
   - changed-files:
       - any-glob-to-any-file: ["docs/*", "example/*", "**/*.md"]
 
