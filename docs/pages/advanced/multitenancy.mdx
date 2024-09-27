@@ -12,7 +12,7 @@ By default the event- and snapshot-store create a shared collection of streams f
 <Steps>
 ### Disable the creation of a default pool in the store configuration
 
-  ```typescript {7,11}
+  ```typescript {7,11} copy
     @Module({
         imports: [
             EventSourcingModule.forRoot({
@@ -32,14 +32,14 @@ By default the event- and snapshot-store create a shared collection of streams f
   ```
 ### Create a pool for each tenant
 
-  ```typescript
+  ```typescript copy
     await eventStore.ensureCollection('tenant-1');
     await snapshotStore.ensureCollection('tenant-1');
   ```
 
 ### Provide a pool when interacting with the event-store or snapshot-handler
 
-  ```typescript
+  ```typescript copy
     await this.eventStore.appendEvents(stream, account.version, events, 'tenant-1');
     await this.accountSnapshotHandler.load(accountId, 'tenant-1');
   ```

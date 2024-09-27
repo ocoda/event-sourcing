@@ -13,7 +13,7 @@ To create an aggregate using this library you will need to make your aggregate c
 - inherit the `AggregateRoot` class
 - apply the `@Aggregate()` decorator
 
-```typescript {3-4}
+```typescript {3-4} copy
 import { Aggregate, AggregateRoot } from '@ocoda/event-sourcing';
 
 @Aggregate('account')
@@ -44,7 +44,7 @@ In the example below, we define an Account aggregate with logic for adding and r
 
 Instead of directly modifying properties inside your aggregate, encapsulate state changes in events. This ensures that all state changes are tracked and can be replayed if necessary.
 
-```typescript {2}
+```typescript {2} copy
 public credit(amount: number) {
     this.applyEvent(new AccountCreditedEvent(amount));
 }
@@ -56,7 +56,7 @@ This ensures that the event is both applied to the current state and persisted t
 
 Aggregates are responsible for enforcing business rules (also known as invariants) within the boundaries of their consistency. For instance, you might enforce that an account cannot be overdrawn:
 
-```typescript {2-4}
+```typescript {2-4} copy
 public debit(amount: number) {
     if (this.balance - amount < 0) {
         throw new Error('Insufficient funds');
@@ -75,7 +75,7 @@ Each event should capture a meaningful change in the domain. Events are used to 
 
 Each event should have a counterpart that mutates the aggregate's state based on the event that was applied to aggregate (methods prefixed with `on`). This pattern decouples the business logic from how the state is updated.
 
-```typescript
+```typescript copy
 onAccountCreditedEvent(event: AccountCreditedEvent) {
     this.balance += event.amount;
 }
@@ -92,7 +92,7 @@ Aggregates should encapsulate domain logic and business rules. Avoid adding infr
 Make sure that event handlers can safely be replayed without causing inconsistencies. Since aggregates are rehydrated by replaying events from an event store, you need to ensure that handling an event multiple times results in the same state.
 
 For instance:
-```typescript
+```typescript copy
 onAccountOwnerAddedEvent(event: AccountOwnerAddedEvent) {
     if (!this.ownerIds.find(({ value }) => value === event.accountOwnerId)) {
         this.ownerIds.push(AccountOwnerId.from(event.accountOwnerId));

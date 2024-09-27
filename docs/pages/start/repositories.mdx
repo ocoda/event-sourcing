@@ -16,7 +16,7 @@ An aggregate repository typically involves two operations:
 
 Here is an example of an `AccountRepository` that handles the `Account` aggregate:
 
-```typescript {7,14,16,22,25}
+```typescript {7,14,16,22,25} copy
 import { Injectable } from '@nestjs/common';
 import { EventStore, EventStream } from '@ocoda/event-sourcing';
 import { Account, AccountId } from '../../domain/models';
@@ -60,7 +60,7 @@ export class AccountRepository {
 
 To use the `AccountRepository` in your application, you need to register it as a provider in your NestJS module:
 
-```typescript
+```typescript copy
 import { Module } from '@nestjs/common';
 
 @Module({ providers: [AccountRepository] })

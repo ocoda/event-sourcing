@@ -2,7 +2,7 @@
 title: Installation
 ---
 
-import { Tabs } from 'nextra/components';
+import { Tabs, Steps } from 'nextra/components';
 
 # Installation
 
@@ -12,40 +12,82 @@ By default the core library will use an in-memory event- and snapshot-store, whi
 
 <Tabs items={['pnpm', 'npm', 'yarn']}>
   <Tabs.Tab>
-    ```bash
-    # Install the core module
-    pnpm add @ocoda/event-sourcing
+    <Steps>
+        ### Install the core module:
+        ```bash copy
+        pnpm add @ocoda/event-sourcing
+        ```
 
-    # Install one of the integration libraries
-    pnpm add @ocoda/event-sourcing-dynamodb
-    pnpm add @ocoda/event-sourcing-mariadb
-    pnpm add @ocoda/event-sourcing-mongodb
-    pnpm add @ocoda/event-sourcing-postgres
-    ```
+        ### Install one of the integration libraries:
+        **DynamoDB**
+        ```bash copy
+        pnpm add @ocoda/event-sourcing-dynamodb
+        ```
+        **MariaDB**
+        ```bash copy
+        pnpm add @ocoda/event-sourcing-mariadb
+        ```
+        **MongoDB**
+        ```bash copy
+        pnpm add @ocoda/event-sourcing-mongodb
+        ```
+        **PostgreSQL**
+        ```bash copy
+        pnpm add @ocoda/event-sourcing-postgres
+        ```
+    </Steps>
   </Tabs.Tab>
   <Tabs.Tab>
-    ```bash
-    # Install the core module
-    npm install @ocoda/event-sourcing
+    <Steps>
+        ### Install the core module:
+        ```bash copy
+        npm install add @ocoda/event-sourcing
+        ```
 
-    # Install one of the integration libraries
-    npm install @ocoda/event-sourcing-dynamodb
-    npm install @ocoda/event-sourcing-mariadb
-    npm install @ocoda/event-sourcing-mongodb
-    npm install @ocoda/event-sourcing-postgres
-    ```
+        ### Install one of the integration libraries:
+        **DynamoDB**
+        ```bash copy
+        npm install @ocoda/event-sourcing-dynamodb
+        ```
+        **MariaDB**
+        ```bash copy
+        npm install @ocoda/event-sourcing-mariadb
+        ```
+        **MongoDB**
+        ```bash copy
+        npm install @ocoda/event-sourcing-mongodb
+        ```
+        **PostgreSQL**
+        ```bash copy
+        npm install @ocoda/event-sourcing-postgres
+        ```
+    </Steps>
   </Tabs.Tab>
   <Tabs.Tab>
-    ```bash
-    # Install the core module
-    yarn add @ocoda/event-sourcing
+    <Steps>
+        ### Install the core module:
+        ```bash copy
+        yarn add @ocoda/event-sourcing
+        ```
 
-    # Install one of the integration libraries
-    yarn add @ocoda/event-sourcing-dynamodb
-    yarn add @ocoda/event-sourcing-mariadb
-    yarn add @ocoda/event-sourcing-mongodb
-    yarn add @ocoda/event-sourcing-postgres
-    ```
+        ### Install one of the integration libraries:
+        **DynamoDB**
+        ```bash copy
+        yarn add @ocoda/event-sourcing-dynamodb
+        ```
+        **MariaDB**
+        ```bash copy
+        yarn add @ocoda/event-sourcing-mariadb
+        ```
+        **MongoDB**
+        ```bash copy
+        yarn add @ocoda/event-sourcing-mongodb
+        ```
+        **PostgreSQL**
+        ```bash copy
+        yarn add @ocoda/event-sourcing-postgres
+        ```
+    </Steps>
   </Tabs.Tab>
 </Tabs>
 
@@ -57,7 +99,7 @@ For setting up the module you need to import the `EventSourcingModule` and confi
 For the basic setup you only need to provide the `events` array, an array of event classes that are used to define the events.
 While this great for testing and prototyping, you won't be able to persist the events and snapshots. If you require persistence skip to the [advanced setup](/start/module#advanced-setup).
 
-```typescript {14-19}
+```typescript {14-19} copy
 import { Module } from '@nestjs/common';
 import { EventSourcingModule } from '@ocoda/event-sourcing';
 
@@ -88,7 +130,7 @@ export class AppModule {}
 If you want to use a specific database provider for event- and snapshot-persistence you need to provide the `eventStore` and `snapshotStore` configuration.
 Each integration library comes with a driver and interface to indicate which parameters are required for connecting to the specified store.
 
-```typescript {7,10-21}
+```typescript {7,10-21} copy
 import { Events } from './app.providers';
 import { PostgresEventStore, type PostgresEventStoreConfig } from '@ocoda/event-sourcing-postgres';
 import { MongoDBSnapshotStore, type MongoDBSnapshotStoreConfig } from '@ocoda/event-sourcing-mongodb';
