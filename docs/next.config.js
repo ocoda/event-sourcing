@@ -1,4 +1,4 @@
-const forGithubPages = process.env.GITHUB_PAGES || false
+const forGithubPages = process.env.GITHUB_PAGES === 'true' || false
 
 let assetPrefix = '';
 let basePath = '';
