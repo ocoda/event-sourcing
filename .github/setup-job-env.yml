@@ -1,0 +1,36 @@
+name: Setup job environment
+description: "Retrieve the turbo cache, install pnpm, setup Node.js, and install dependencies"
+
+inputs:
+  cache-key:
+    description: "Input to the reusable workflow"
+    required: true
+    type: string
+  node-version:
+    required: true
+    type: string
+
+runs:
+  using: "composite"
+  steps:
+    - name: Cache turbo build setup
+      uses: actions/cache@v4
+      with:
+        path: .turbo
+        key: ${{ inputs.cache-key }}-turbo-${{ github.sha }}
+        restore-keys: |
+          ${{ inputs.cache-key }}-turbo-
+
+    - name: Install pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        version: 9.10.0
+
+    - name: Use Node.js ${{ inputs.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: "pnpm"
+
+    - name: Install dependencies
+      run: pnpm install --frozen-lockfile
