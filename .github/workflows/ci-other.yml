@@ -1,0 +1,22 @@
+name: CI Other
+
+on:
+    workflow_dispatch:
+    pull_request:
+      branches: ['master']
+      paths:
+        # Covered by CI Docs
+        - '!.github/ci-docs.yml'
+        - '!docs/**'
+        # Covered by CI Libraries
+        - '!.github/ci-libraries.yml'
+        - '!packages/**'
+        - '!package.json'
+        - '!pnpm-*.yaml'
+        - '!turbo.json'
+
+jobs:
+  merge-check:
+    uses: ./.github/workflows/merge-check.yml
+    with:
+      conditions: true

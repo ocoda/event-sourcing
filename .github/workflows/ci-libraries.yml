@@ -2,10 +2,14 @@ name: CI Libraries
 
 on:
   workflow_dispatch:
-  push:
-    branches: ['master']
   pull_request:
     branches: ['master']
+    paths:
+      - .github/ci-libraries.yml
+      - packages/**
+      - package.json
+      - pnpm-*.yaml
+      - turbo.json
 
 jobs:
   build:
@@ -18,29 +22,15 @@ jobs:
     name: Validate build [Node.js ${{ matrix.node-version }}]
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout the repository
+        uses: actions/checkout@v4
 
-      - name: Cache turbo build setup
-        uses: actions/cache@v4
+      - name: Setup job environment
+        id: setup-job
+        uses: ./.github/actions/setup-job-env
         with:
-          path: .turbo
-          key: node-${{ matrix.node-version }}-turbo-${{ github.sha }}
-          restore-keys: |
-            node-${{ matrix.node-version }}-turbo-
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9.10.0
-
-      - name: Use Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
-        with:
+          cache-key: node-${{ matrix.node-version }}
           node-version: ${{ matrix.node-version }}
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
 
       - name: Build
         run: pnpm build --filter="./packages/**"
@@ -54,29 +44,15 @@ jobs:
     name: Test core lib [Node.js ${{ matrix.node-version }}]
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout the repository
+        uses: actions/checkout@v4
 
-      - name: Cache turbo test setup
-        uses: actions/cache@v4
+      - name: Setup job environment
+        id: setup-job
+        uses: ./.github/actions/setup-job-env
         with:
-          path: .turbo
-          key: node-${{ matrix.node-version }}-turbo-${{ github.sha }}
-          restore-keys: |
-            node-${{ matrix.node-version }}-turbo-
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9.10.0
-
-      - name: Use Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
-        with:
+          cache-key: node-${{ matrix.node-version }}
           node-version: ${{ matrix.node-version }}
-          cache: "pnpm"
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
 
       - name: Test linting, formatting and import sorting
         run: pnpm run ci --filter=@ocoda/event-sourcing
@@ -95,35 +71,29 @@ jobs:
     name: Test ${{ matrix.database }} lib [Node.js ${{ matrix.node-version }}]
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout the repository
+        uses: actions/checkout@v4
 
       - name: Start database
         run: docker compose up -d ${{ matrix.database }}
 
-      - name: Cache turbo test setup
-        uses: actions/cache@v4
+      - name: Setup job environment
+        id: setup-job
+        uses: ./.github/actions/setup-job-env
         with:
-          path: .turbo
-          key: node-${{ matrix.node-version }}-turbo-${{ github.sha }}
-          restore-keys: |
-            node-${{ matrix.node-version }}-turbo-
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9.10.0
-
-      - name: Use Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
-        with:
+          cache-key: node-${{ matrix.node-version }}
           node-version: ${{ matrix.node-version }}
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
 
       - name: Test linting, formatting and import sorting
         run: pnpm run ci --filter=@ocoda/event-sourcing-${{ matrix.database }}
 
       - name: Test
         run: pnpm test --filter=@ocoda/event-sourcing-${{ matrix.database }}
+
+  merge-check:
+    needs: [build, test-core-lib, test-integration-libs]
+    uses: ./.github/workflows/merge-check.yml
+    with:
+        conditions: ${{ needs.build.result == 'success' && 
+            needs.test-core-lib.result == 'success' &&
+            needs.test-integration-libs.result == 'success' }}
