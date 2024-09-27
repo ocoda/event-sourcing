@@ -12,8 +12,6 @@ jobs:
   build:
     name: Build docs
     runs-on: ubuntu-latest
-    env:
-      ASSET_PREFIX: /event-sourcing
 
     steps:
       - name: Checkout the repository
@@ -49,6 +47,7 @@ jobs:
         run: pnpm run ci --filter=@ocoda/event-sourcing-docs
 
   merge-check:
+    name: Merge check
     needs: [build, test]
     uses: ./.github/workflows/merge-check.yml
     with:
