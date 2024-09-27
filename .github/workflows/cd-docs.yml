@@ -32,13 +32,10 @@ jobs:
           cache-key: docs
           node-version: 22.x
 
-      - name: Setup GH Pages
-        uses: actions/configure-pages@v4
-        with:
-          static_site_generator: next
-
       - name: Build
         run: pnpm build --filter='./docs/**'
+        env:
+          GITHUB_PAGES: true
 
       - name: Upload build
         uses: actions/upload-pages-artifact@v3
