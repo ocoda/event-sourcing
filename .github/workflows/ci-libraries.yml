@@ -89,3 +89,9 @@ jobs:
 
       - name: Test
         run: pnpm test --filter=@ocoda/event-sourcing-${{ matrix.database }}
+
+  merge-check:
+    needs: [build, test-core-lib, test-integration-libs]
+    uses: ./.github/workflows/merge-check.yml
+    with:
+        conditions: ${{ needs.build.result }} && ${{ needs.test-core-lib.result }} && ${{ needs.test-integration-libs.result }}

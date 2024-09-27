@@ -1,0 +1,26 @@
+name: PR merge check
+
+on:
+  workflow_call:
+    inputs:
+      conditions:
+        description: "Conditions to merge the PR"
+        required: true
+        type: boolean
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  results:
+    name: Merge check
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          if [[ ${{ inputs.conditions }} ]]; then
+            exit 0
+          else
+            exit 1
+          fi

@@ -1,0 +1,15 @@
+name: CI Docs
+
+on:
+    workflow_dispatch:
+    pull_request:
+      branches: ['master']
+      paths:
+        - .github/ci-docs.yml
+        - docs/**
+
+jobs:
+  merge-check:
+    uses: ./.github/workflows/merge-check.yml
+    with:
+      conditions: true
