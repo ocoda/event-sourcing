@@ -8,7 +8,7 @@ packages:
 
 dependencies:
   - changed-files:
-      - any-glob-to-any-file: ["**/package.json", "pnpm-lock.yaml"]
+      - any-glob-to-all-files: ["**/package.json", "pnpm-lock.yaml"]
 
 workflows:
   - changed-files:
