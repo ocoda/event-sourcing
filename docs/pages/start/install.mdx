@@ -2,22 +2,52 @@
 title: Installation
 ---
 
+import { Tabs } from 'nextra/components';
+
 # Installation
 
 This library consists of a core module `@ocoda/event-sourcing` that provides the building blocks and can be complemented with an integration library for setting up a persistence layer for your events using a specific database provider.
 
 By default the core library will use an in-memory event- and snapshot-store, which is useful for testing and prototyping, but not recommended for production use.
 
-```bash
-# Install the core module
-npm install @ocoda/event-sourcing
+<Tabs items={['pnpm', 'npm', 'yarn']}>
+  <Tabs.Tab>
+    ```bash
+    # Install the core module
+    pnpm add @ocoda/event-sourcing
 
-# Install one of the integration libraries
-npm install @ocoda/event-sourcing-dynamodb
-npm install @ocoda/event-sourcing-mariadb
-npm install @ocoda/event-sourcing-mongodb
-npm install @ocoda/event-sourcing-postgres
-```
+    # Install one of the integration libraries
+    pnpm add @ocoda/event-sourcing-dynamodb
+    pnpm add @ocoda/event-sourcing-mariadb
+    pnpm add @ocoda/event-sourcing-mongodb
+    pnpm add @ocoda/event-sourcing-postgres
+    ```
+  </Tabs.Tab>
+  <Tabs.Tab>
+    ```bash
+    # Install the core module
+    npm install @ocoda/event-sourcing
+
+    # Install one of the integration libraries
+    npm install @ocoda/event-sourcing-dynamodb
+    npm install @ocoda/event-sourcing-mariadb
+    npm install @ocoda/event-sourcing-mongodb
+    npm install @ocoda/event-sourcing-postgres
+    ```
+  </Tabs.Tab>
+  <Tabs.Tab>
+    ```bash
+    # Install the core module
+    yarn add @ocoda/event-sourcing
+
+    # Install one of the integration libraries
+    yarn add @ocoda/event-sourcing-dynamodb
+    yarn add @ocoda/event-sourcing-mariadb
+    yarn add @ocoda/event-sourcing-mongodb
+    yarn add @ocoda/event-sourcing-postgres
+    ```
+  </Tabs.Tab>
+</Tabs>
 
 ## Setting up the module
 
