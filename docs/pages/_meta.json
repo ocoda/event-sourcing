@@ -1,5 +1,10 @@
 {
-	"index": "Introduction",
+	"index": {
+		"title": "Introduction",
+		"theme": {
+			"breadcrumb": false
+		}
+	},
 	"patterns": "Patterns",
 	"start": "Getting started",
 	"advanced": "Advanced",

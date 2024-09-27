@@ -1,3 +1,4 @@
+
 import type { DocsThemeConfig } from 'nextra-theme-docs'
 // biome-ignore lint/correctness/noUnusedImports: <explanation>
 import React from 'react';
@@ -15,6 +16,12 @@ const config: DocsThemeConfig = {
   docsRepositoryBase: 'https://github.com/ocoda/event-sourcing',
   footer: {
     text: 'Ocoda Event Sourcing Docs',
+  },
+  useNextSeoProps(...rest) {
+    console.log(rest)
+    return {
+        titleTemplate: '%s | Ocoda Event Sourcing',
+      }
   },
 }
 

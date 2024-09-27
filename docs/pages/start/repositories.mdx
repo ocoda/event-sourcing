@@ -1,3 +1,7 @@
+---
+title: Repositories
+---
+
 # Repositories
 
 Aggregate repositories serve as a bridge between your aggregates and the event store. Their responsibility is to retrieve aggregates from the event store by rehydrating them from a stream of events and persisting new events that represent changes in the aggregate's state. The repository provides an interface for interacting with the underlying event store without exposing the complexity of event sourcing to the rest of your application.
