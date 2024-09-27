@@ -1,8 +1,14 @@
+---
+title: Aggregates
+---
+
+import { Steps } from 'nextra/components';
+
 # Aggregates
  
 An aggregate models an individual concept that has a unique identity in your application, e.g. an account.
 
-### Creating an Aggregate [#creating-an-aggregate]
+## Creating an Aggregate [#creating-an-aggregate]
 To create an aggregate using this library you will need to make your aggregate class:
 - inherit the `AggregateRoot` class
 - apply the `@Aggregate()` decorator
@@ -25,15 +31,16 @@ account-<aggregateId> // e.g. account-d46fb0f9-02dc-4d11-a282-ab00f7fffeff
 ```
 If the stream name isn't provided in the decorator, the name of the class will automatically be used (lowercase).
 
-### Adding logic to the Aggregate [#adding-logic-to-the-aggregate]
+## Adding logic to the Aggregate [#adding-logic-to-the-aggregate]
 
 When working with aggregates in a Domain-Driven Design (DDD) context, the aggregate serves as the central point for **enforcing business rules** and **managing consistency boundaries**. Aggregates should encapsulate business logic and ensure that any changes to the aggregate are made **through domain events**.
 
 In the example below, we define an Account aggregate with logic for adding and removing owners, crediting and debiting the balance, and opening or closing an account. Each method that changes the state of the aggregate raises an event which captures the change.
 
-#### Guidelines for adding logic to your Aggregate
+## Guidelines for adding logic to your Aggregate
 
-**1. Mutate state through events**
+<Steps>
+### Mutate state through events
 
 Instead of directly modifying properties inside your aggregate, encapsulate state changes in events. This ensures that all state changes are tracked and can be replayed if necessary.
 
@@ -45,7 +52,7 @@ public credit(amount: number) {
 
 This ensures that the event is both applied to the current state and persisted to the event store.
 
-**2. Ensure business invariants**
+### Ensure business invariants
 
 Aggregates are responsible for enforcing business rules (also known as invariants) within the boundaries of their consistency. For instance, you might enforce that an account cannot be overdrawn:
 
@@ -60,11 +67,11 @@ public debit(amount: number) {
 
 Here, the business rule (no overdrafts) is enforced at the aggregate level before applying the event.
 
-**3. Use Events to Communicate Changes**
+### Use Events to Communicate Changes
 
 Each event should capture a meaningful change in the domain. Events are used to communicate what happened, not why it happened or how the change was made. For example, instead of naming an event BalanceChangedEvent, use AccountCreditedEvent or AccountDebitedEvent to make the event more expressive and tied to the business logic.
 
-**4. Handle Events to Update State**
+### Handle Events to Update State
 
 Each event should have a counterpart that mutates the aggregate's state based on the event that was applied to aggregate (methods prefixed with `on`). This pattern decouples the business logic from how the state is updated.
 
@@ -76,11 +83,11 @@ onAccountCreditedEvent(event: AccountCreditedEvent) {
 
 This method updates the balance when an AccountCreditedEvent is applied. Notice how the state mutation is handled separately from the business logic that applies the event.
 
-**5. Keep aggregates focused on domain logic**
+### Keep aggregates focused on domain logic
 
 Aggregates should encapsulate domain logic and business rules. Avoid adding infrastructure concerns (e.g., database access, HTTP calls) to your aggregates. Keep your aggregates focused on the domain and delegate infrastructure concerns to application services and [repositories](/start/repositories).
 
-**6. Event handling should be idempotent**
+### Event handling should be idempotent
 
 Make sure that event handlers can safely be replayed without causing inconsistencies. Since aggregates are rehydrated by replaying events from an event store, you need to ensure that handling an event multiple times results in the same state.
 
@@ -94,3 +101,4 @@ onAccountOwnerAddedEvent(event: AccountOwnerAddedEvent) {
 ```
 
 Here, we check if the owner is already added before mutating the state, ensuring that replaying the event doesn't cause duplicate owners.
+</Steps>
