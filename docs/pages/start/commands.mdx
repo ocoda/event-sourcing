@@ -2,6 +2,8 @@
 title: Commands
 ---
 
+import { Steps } from 'nextra/components';
+
 # Commands & Command Handlers
 
 
@@ -9,7 +11,7 @@ title: Commands
 
 Commands should clearly indicate the **intent** and ideally refer to the aggregate they operate on. The name of a command should use imperative language to describe the action, such as `OpenAccountCommand` or `CreditAccountCommand`.
 
-### Creating a Command [#creating-a-command]
+## Creating a Command [#creating-a-command]
 
 Commands are simple objects that typically carry the data required to perform an action. They are implemented by extending the ICommand interface from the library:
 
@@ -26,7 +28,7 @@ export class CreditAccountCommand implements ICommand {
 
 In this example, the CreditAccountCommand represents the intent to credit an account with a specific amount.
 
-### Creating a Command Handler [#creating-a-command-handler]
+## Creating a Command Handler [#creating-a-command-handler]
 
 A **CommandHandler** is responsible for executing the logic associated with a specific command. In a typical flow, a CommandHandler interacts with aggregates, invokes business logic, and persists the results.
 
@@ -50,7 +52,7 @@ export class CreditAccountCommandHandler implements ICommandHandler {
 
 In this example, the CreditAccountCommandHandler handles the execution of the CreditAccountCommand. It retrieves the Account aggregate from the repository, applies the necessary business logic, and saves the updated account to the repository.
 
-### Registering a Command Handler [#registering-a-command-handler]
+## Registering the Command Handler [#registering-a-command-handler]
 
 CommandHandlers must be registered as providers in your NestJS application’s module, so that the framework can discover and execute them. For example, in a NestJS module:
 
@@ -63,17 +65,18 @@ import { Module } from '@nestjs/common';
 export class AccountModule {}
 ```
 
-#### Guidelines for adding Commands & Command Handlers
+## Guidelines for adding Commands & Command Handlers
 
-**1. Commands represent actions, not queries**
+<Steps>
+### Commands represent actions, not queries
 
 Commands should focus solely on actions that change the state of the system. Avoid putting query logic inside commands, queries are handled separately in the CQRS pattern. Commands should be named imperatively, like `OpenAccountCommand` or `CreditAccountCommand`, to reflect the change they trigger.
 
-**2. Keep Commands simple**
+### Keep Commands simple
 
 Commands are simply data carriers. They should contain only the properties needed to perform the action, without any additional logic or behavior. For instance, the `OpenAccountCommand` contains only the information required to open an account.
 
-**3. Isolate business logic in the Command Handler**
+### Isolate business logic in the Command Handler
 
 The command handler is where the domain logic is executed, not the command itself. `CommandHandlers` should:
 - Interact with the appropriate aggregate(s).
@@ -82,7 +85,7 @@ The command handler is where the domain logic is executed, not the command itsel
 - Persist the changes to the repository.
 For instance, in the OpenAccountCommandHandler, the logic for opening an account is encapsulated in the Account.open() method, and the repository is used to save the resulting aggregate.
 
-**4. Ensure Command Handlers are idempotent**
+### Ensure Command Handlers are idempotent
 CommandHandlers should be idempotent where possible, meaning that executing the same command multiple times should have the same effect. This ensures robustness in distributed systems or event-driven architectures where retries may happen. For example, you may check if an account already exists before attempting to create a new one.
 
 ```typescript
@@ -100,10 +103,11 @@ async execute(command: OpenAccountCommand): Promise<string> {
 }
 ```
 
-**5. Command Handlers Should Focus on One Aggregate**
+### Command Handlers Should Focus on One Aggregate
 
 Each CommandHandler should typically interact with a single aggregate. If your command handler needs to interact with multiple aggregates, consider splitting the command into multiple commands or revisiting your design to ensure each aggregate is responsible for its own behavior.
 
-**6. Commands don't return data beyond identifiers**
+### Commands don't return data beyond identifiers
 
 The goal of a command is to make a change, not to return detailed information. Commands usually return the identifier of the entity they modified or created. In the example above, the OpenAccountCommandHandler returns the accountId as confirmation of the action.
+</Steps>

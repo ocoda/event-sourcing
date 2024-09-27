@@ -2,12 +2,15 @@
 title: Multitenancy
 ---
 
+import { Steps } from 'nextra/components';
+
 # Multitenancy
 
 Ocoda Event Sourcing provides built-in support for multitenancy. This allows you to separate the event- and snapshot-streams of different tenants. This can be achieved by using pools. A **pool** is a **collection of streams** that belong to the same tenant.
 By default the event- and snapshot-store create a shared collection of streams for all tenants. To enable multitenancy you need to:
 
-1. **disable** the creation of a **default pool** in the store configuration
+<Steps>
+### Disable the creation of a default pool in the store configuration
 
   ```typescript {7,11}
     @Module({
@@ -27,16 +30,18 @@ By default the event- and snapshot-store create a shared collection of streams f
     })
     export class AppModule {}
   ```
-- **create a pool** for each tenant
+### Create a pool for each tenant
 
   ```typescript
     await eventStore.ensureCollection('tenant-1');
     await snapshotStore.ensureCollection('tenant-1');
   ```
 
-- **provide a pool** when interacting with the **event-store** or **snapshot-handler**
+### Provide a pool when interacting with the event-store or snapshot-handler
 
   ```typescript
     await this.eventStore.appendEvents(stream, account.version, events, 'tenant-1');
     await this.accountSnapshotHandler.load(accountId, 'tenant-1');
   ```
+
+</Steps>
