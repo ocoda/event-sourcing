@@ -6,14 +6,14 @@ title: Event Sourcing
 
 Event Sourcing is a design pattern where the state of a system is derived from a sequence of events, rather than being stored directly. Each state-changing operation is captured as an immutable event, and the system's current state is reconstructed by replaying these events in the order they occurred. Instead of storing the current state of the system, the entire history of changes is retained as a series of events.
 
-#### Key Concepts of Event Sourcing:
+#### Key Concepts of Event Sourcing
 1. **Events**: An event represents a fact or an action that has occurred in the system (e.g., `OrderCreated`, `ProductAddedToCart`). Events are immutable and describe what has already happened.
 2. **Event Store**: A persistent storage for events. Unlike traditional databases, where the state is stored directly, an event store records each event as an append-only log.
 3. **Replaying Events**: The system's state is rebuilt by replaying all events from the beginning. By applying each event in sequence, the current state is derived without directly storing the state itself.
 4. **Snapshots (Optimization)**: For efficiency, periodic snapshots of the current state can be taken. This way, the system doesn't have to replay all events from the start every time. It replays from the last snapshot onwards.
 5. **Event Handlers**: Components that listen for events and react to them. These handlers may update read models or trigger side effects in the system.
 
-#### Benefits of Event Sourcing:
+#### Benefits of Event Sourcing
 - **Auditability**: Since all events are recorded, you can track the entire history of changes to the system.
 - **Flexibility**: You can "replay" events to reconstruct past states or debug historical issues.
 - **Event Replay**: You can adjust business logic or correct errors by replaying historical events under new logic without losing any historical data.
