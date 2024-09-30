@@ -6,9 +6,9 @@ import type { InstanceWrapper } from '@nestjs/core/injector/instance-wrapper';
 import { CommandBus } from './command-bus';
 import {
 	COMMAND_HANDLER_METADATA,
-	EVENT_HANDLER_METADATA,
 	EVENT_PUBLISHER_METADATA,
 	EVENT_SERIALIZER_METADATA,
+	EVENT_SUBSCRIBER_METADATA,
 	InjectEventSourcingOptions,
 	QUERY_HANDLER_METADATA,
 } from './decorators';
@@ -21,8 +21,8 @@ import { EventStore } from './event-store';
 import {
 	MissingCommandHandlerMetadataException,
 	MissingCommandMetadataException,
-	MissingEventHandlerMetadataException,
 	MissingEventMetadataException,
+	MissingEventSubscriberMetadataException,
 	MissingQueryHandlerMetadataException,
 	MissingQueryMetadataException,
 } from './exceptions';
@@ -35,13 +35,13 @@ import {
 	getQueryHandlerMetadata,
 	getQueryMetadata,
 } from './helpers';
-import { getEventHandlerMetadata } from './helpers/metadata/get-event-handler-metadata';
+import { getEventSubscriberMetadata } from './helpers/metadata/get-event-subscriber-metadata';
 import type {
 	EventSourcingModuleOptions,
 	ICommandHandler,
-	IEventHandler,
 	IEventPublisher,
 	IEventSerializer,
+	IEventSubscriber,
 	IQueryHandler,
 } from './interfaces';
 // biome-ignore lint/style/useImportType: DI
@@ -59,7 +59,9 @@ enum HandlerType {
 export class HandlersLoader implements OnApplicationBootstrap {
 	private handlers: Map<
 		HandlerType,
-		InstanceWrapper<ICommandHandler | IQueryHandler | IEventSerializer | IEventHandler | IEventPublisher | EventStore>[]
+		InstanceWrapper<
+			ICommandHandler | IQueryHandler | IEventSerializer | IEventSubscriber | IEventPublisher | EventStore
+		>[]
 	> = new Map(Object.values(HandlerType).map((key) => [HandlerType[key], []]));
 
 	constructor(
@@ -78,7 +80,7 @@ export class HandlersLoader implements OnApplicationBootstrap {
 		this.registerCommandHandlers();
 		this.registerQueryHandlers();
 		this.registerEventSerializers();
-		this.registerEventHandlers();
+		this.registerEventSubscribers();
 		this.registerEventPublishers();
 		this.registerEventStore();
 	}
@@ -94,7 +96,7 @@ export class HandlersLoader implements OnApplicationBootstrap {
 				if (Reflect.hasMetadata(QUERY_HANDLER_METADATA, wrapper.metatype)) {
 					this.handlers.get(HandlerType.QUERY).push(wrapper);
 				}
-				if (Reflect.hasMetadata(EVENT_HANDLER_METADATA, wrapper.metatype)) {
+				if (Reflect.hasMetadata(EVENT_SUBSCRIBER_METADATA, wrapper.metatype)) {
 					this.handlers.get(HandlerType.EVENT).push(wrapper);
 				}
 				if (Reflect.hasMetadata(EVENT_SERIALIZER_METADATA, wrapper.metatype)) {
@@ -157,12 +159,18 @@ export class HandlersLoader implements OnApplicationBootstrap {
 		}
 	}
 
-	private registerEventHandlers() {
+	private registerEventPublishers() {
+		for (const { instance } of this.handlers.get(HandlerType.PUBLISHING) || []) {
+			this.eventBus.addPublisher(instance as IEventPublisher);
+		}
+	}
+
+	private registerEventSubscribers() {
 		for (const { metatype, instance } of this.handlers.get(HandlerType.EVENT) || []) {
-			const { events } = getEventHandlerMetadata(metatype as Type<IEventHandler>);
+			const { events } = getEventSubscriberMetadata(metatype as Type<IEventSubscriber>);
 
 			if (!events) {
-				throw new MissingEventHandlerMetadataException(metatype);
+				throw new MissingEventSubscriberMetadataException(metatype);
 			}
 
 			for (const event of events) {
@@ -172,14 +180,8 @@ export class HandlersLoader implements OnApplicationBootstrap {
 					throw new MissingEventMetadataException(event);
 				}
 
-				this.eventBus.bind(instance as IEventHandler, name);
+				this.eventBus.bind(instance as IEventSubscriber, name);
 			}
-		}
-	}
-
-	private registerEventPublishers() {
-		for (const { instance } of this.handlers.get(HandlerType.PUBLISHING) || []) {
-			this.eventBus.addPublisher(instance as IEventPublisher);
 		}
 	}
 
