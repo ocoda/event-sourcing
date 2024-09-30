@@ -4,7 +4,7 @@ import type { AggregateRoot } from '../../models';
 /**
  * `@Snapshot` decorator metadata
  */
-export interface SnapshotMetadata<A extends AggregateRoot> {
+export interface SnapshotRepositoryMetadata<A extends AggregateRoot> {
 	/**
 	 * The aggregate type of the snapshot.
 	 */

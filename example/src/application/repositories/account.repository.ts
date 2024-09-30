@@ -2,20 +2,20 @@ import { Injectable } from '@nestjs/common';
 // biome-ignore lint/style/useImportType: DI
 import { EventStore, EventStream } from '@ocoda/event-sourcing';
 // biome-ignore lint/style/useImportType: DI
-import { Account, AccountId, AccountSnapshotHandler } from '../../domain/models';
+import { Account, AccountId, AccountSnapshotRepository } from '../../domain/models';
 import { AccountNotFoundException } from './exceptions/account-not-found.exception';
 
 @Injectable()
 export class AccountRepository {
 	constructor(
 		private readonly eventStore: EventStore,
-		private readonly accountSnapshotHandler: AccountSnapshotHandler,
+		private readonly accountSnapshotRepository: AccountSnapshotRepository,
 	) {}
 
 	async getById(accountId: AccountId): Promise<Account> {
 		const eventStream = EventStream.for<Account>(Account, accountId);
 
-		const account = await this.accountSnapshotHandler.load(accountId);
+		const account = await this.accountSnapshotRepository.load(accountId);
 
 		const eventCursor = this.eventStore.getEvents(eventStream, {
 			fromVersion: account.version + 1,
@@ -31,7 +31,7 @@ export class AccountRepository {
 	}
 
 	async getByIds(accountIds: AccountId[]) {
-		const accounts = await this.accountSnapshotHandler.loadMany(accountIds, 'e2e');
+		const accounts = await this.accountSnapshotRepository.loadMany(accountIds, 'e2e');
 
 		for (const account of accounts) {
 			const eventStream = EventStream.for<Account>(Account, account.id);
@@ -44,14 +44,14 @@ export class AccountRepository {
 
 	async getAll(fromAccountId?: AccountId, limit?: number): Promise<Account[]> {
 		const accounts = [];
-		for await (const envelopes of this.accountSnapshotHandler.loadAll({
+		for await (const envelopes of this.accountSnapshotRepository.loadAll({
 			fromId: fromAccountId,
 			limit,
 		})) {
 			for (const { metadata, payload } of envelopes) {
 				const id = AccountId.from(metadata.aggregateId);
 				const eventStream = EventStream.for<Account>(Account, id);
-				const account = this.accountSnapshotHandler.deserialize(payload);
+				const account = this.accountSnapshotRepository.deserialize(payload);
 
 				const eventCursor = this.eventStore.getEvents(eventStream, { fromVersion: metadata.version + 1 });
 				await account.loadFromHistory(eventCursor);
@@ -68,7 +68,7 @@ export class AccountRepository {
 		const stream = EventStream.for<Account>(Account, account.id);
 
 		await Promise.all([
-			this.accountSnapshotHandler.save(account.id, account),
+			this.accountSnapshotRepository.save(account.id, account),
 			this.eventStore.appendEvents(stream, account.version, events),
 		]);
 	}

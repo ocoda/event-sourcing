@@ -6,13 +6,13 @@ import {
 	type ISnapshotPool,
 	Snapshot,
 	SnapshotEnvelope,
-	SnapshotHandler,
+	SnapshotRepository,
 	type SnapshotStore,
 	SnapshotStream,
 	UUID,
 } from '@ocoda/event-sourcing';
 
-describe(SnapshotHandler, () => {
+describe(SnapshotRepository, () => {
 	@Aggregate()
 	class Account extends AggregateRoot {
 		public id: AccountId;
@@ -29,7 +29,7 @@ describe(SnapshotHandler, () => {
 		name: 'account',
 		interval: snapshotInterval,
 	})
-	class AccountSnapshotHandler extends SnapshotHandler<Account> {
+	class AccountSnapshotRepository extends SnapshotRepository<Account> {
 		serialize({ id, name, balance, openedOn }: Account) {
 			return {
 				id: id.value,
@@ -49,7 +49,7 @@ describe(SnapshotHandler, () => {
 		}
 	}
 
-	let snapshotHandler: SnapshotHandler<Account>;
+	let snapshotRepository: SnapshotRepository<Account>;
 	let account: Account;
 	let snapshot: ISnapshot<Account>;
 	let snapshotStream: SnapshotStream;
@@ -89,16 +89,16 @@ describe(SnapshotHandler, () => {
 			stop: jest.fn(),
 		} as unknown as jest.Mocked<SnapshotStore>;
 
-		snapshotHandler = new AccountSnapshotHandler(snapshotStore);
+		snapshotRepository = new AccountSnapshotRepository(snapshotStore);
 	});
 
 	it('only stores snapshots in the snapshot-store at specified intervals', () => {
 		account.version = 3;
-		snapshotHandler.save(account.id, account);
+		snapshotRepository.save(account.id, account);
 		expect(snapshotStore.appendSnapshot).not.toHaveBeenCalled();
 
 		account.version = snapshotInterval;
-		snapshotHandler.save(account.id, account);
+		snapshotRepository.save(account.id, account);
 		expect(snapshotStore.appendSnapshot).toHaveBeenCalledWith(
 			snapshotStream,
 			snapshotInterval,
@@ -118,7 +118,7 @@ describe(SnapshotHandler, () => {
 			version: snapshotInterval,
 		});
 
-		const loadedAccount = await snapshotHandler.load(account.id);
+		const loadedAccount = await snapshotRepository.load(account.id);
 
 		expect(snapshotStore.getLastEnvelope).toHaveBeenCalledWith(snapshotStream, undefined);
 
@@ -132,7 +132,7 @@ describe(SnapshotHandler, () => {
 			version: snapshotInterval,
 		});
 
-		const loadedAccounts = await snapshotHandler.loadMany([account.id]);
+		const loadedAccounts = await snapshotRepository.loadMany([account.id]);
 
 		expect(snapshotStore.getManyLastSnapshotEnvelopes).toHaveBeenCalledWith([snapshotStream], undefined);
 

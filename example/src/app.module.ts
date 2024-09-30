@@ -13,7 +13,7 @@ import {
 	EventSubscribers,
 	Events,
 	QueryHandlers,
-	SnapshotHandlers,
+	SnapshotRepositories,
 } from './app.providers';
 import { AccountController } from './application/account.controller';
 
@@ -37,7 +37,7 @@ import { AccountController } from './application/account.controller';
 		...AggregateRepositories,
 		...CommandHandlers,
 		...QueryHandlers,
-		...SnapshotHandlers,
+		...SnapshotRepositories,
 		...EventSubscribers,
 		...EventPublishers,
 	],

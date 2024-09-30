@@ -1,9 +1,9 @@
 import {
 	AggregateRoot,
-	type ISnapshotHandler,
+	type ISnapshotRepository,
 	SNAPSHOT_METADATA,
 	Snapshot,
-	type SnapshotMetadata,
+	type SnapshotRepositoryMetadata,
 } from '@ocoda/event-sourcing';
 import { getSnapshotMetadata } from '@ocoda/event-sourcing/helpers';
 
@@ -12,7 +12,7 @@ describe('@Snapshot', () => {
 
 	it('should add snapshot metadata to the handler', () => {
 		@Snapshot(Account, { name: 'foo', interval: 20 })
-		class AccountSnapshotHandler implements ISnapshotHandler<Account> {
+		class AccountSnapshotRepository implements ISnapshotRepository<Account> {
 			serialize() {
 				return {};
 			}
@@ -21,7 +21,8 @@ describe('@Snapshot', () => {
 			}
 		}
 
-		const { aggregate, name, interval }: SnapshotMetadata<Account> = getSnapshotMetadata(AccountSnapshotHandler);
+		const { aggregate, name, interval }: SnapshotRepositoryMetadata<Account> =
+			getSnapshotMetadata(AccountSnapshotRepository);
 		expect(aggregate).toEqual(Account);
 		expect(name).toEqual('foo');
 		expect(interval).toEqual(20);
@@ -29,11 +30,11 @@ describe('@Snapshot', () => {
 
 	it('should add default snapshot metadata to the handler', () => {
 		@Snapshot(Account)
-		class AccountSnapshotHandler {}
+		class AccountSnapshotRepository {}
 
-		const { aggregate, name, interval }: SnapshotMetadata<Account> = Reflect.getMetadata(
+		const { aggregate, name, interval }: SnapshotRepositoryMetadata<Account> = Reflect.getMetadata(
 			SNAPSHOT_METADATA,
-			AccountSnapshotHandler,
+			AccountSnapshotRepository,
 		);
 		expect(aggregate).toEqual(Account);
 		expect(name).toEqual('account');
