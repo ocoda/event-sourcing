@@ -9,8 +9,8 @@ import {
 import {
 	AggregateRepositories,
 	CommandHandlers,
-	EventHandlers,
 	EventPublishers,
+	EventSubscribers,
 	Events,
 	QueryHandlers,
 	SnapshotHandlers,
@@ -38,7 +38,7 @@ import { AccountController } from './application/account.controller';
 		...CommandHandlers,
 		...QueryHandlers,
 		...SnapshotHandlers,
-		...EventHandlers,
+		...EventSubscribers,
 		...EventPublishers,
 	],
 	controllers: [AccountController],

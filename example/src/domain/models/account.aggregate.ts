@@ -1,4 +1,4 @@
-import { Aggregate, AggregateRoot, UUID } from '@ocoda/event-sourcing';
+import { Aggregate, AggregateRoot, EventHandler, UUID } from '@ocoda/event-sourcing';
 import {
 	AccountClosedEvent,
 	AccountCreditedEvent,
@@ -49,6 +49,7 @@ export class Account extends AggregateRoot {
 		this.applyEvent(new AccountClosedEvent());
 	}
 
+	@EventHandler(AccountOpenedEvent)
 	onAccountOpenedEvent(event: AccountOpenedEvent) {
 		this.id = AccountId.from(event.accountId);
 		this.balance = event.balance;
@@ -56,22 +57,27 @@ export class Account extends AggregateRoot {
 		this.ownerIds = event.accountOwnerIds?.map(AccountOwnerId.from);
 	}
 
+	@EventHandler(AccountOwnerAddedEvent)
 	onAccountOwnerAddedEvent(event: AccountOwnerAddedEvent) {
 		this.ownerIds.push(AccountOwnerId.from(event.accountOwnerId));
 	}
 
+	@EventHandler(AccountOwnerRemovedEvent)
 	onAccountOwnerRemovedEvent(event: AccountOwnerAddedEvent) {
 		this.ownerIds = this.ownerIds.filter(({ value }) => value !== event.accountOwnerId);
 	}
 
+	@EventHandler(AccountCreditedEvent)
 	onAccountCreditedEvent(event: AccountCreditedEvent) {
 		this.balance += event.amount;
 	}
 
+	@EventHandler(AccountDebitedEvent)
 	onAccountDebitedEvent(event: AccountDebitedEvent) {
 		this.balance -= event.amount;
 	}
 
+	@EventHandler(AccountClosedEvent)
 	onAccountClosedEvent() {
 		this.closedOn = new Date();
 	}

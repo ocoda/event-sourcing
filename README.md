@@ -249,11 +249,11 @@ class AppModule implements OnModuleInit {
 Events that get stored to a stream are always wrapped in an EventEnvelope. This envelope contains the name of the event as specified with the `@Event()` decorator, the serialized version of the event and additional metadata. (eventId, aggregateId, version, etc.)
 
 ### Event publishers
-Whenever the EventStore appends events, the produced EventEnvelopes get published by the EventPublishers that are registered in the EventBus. A default EventPublisher takes care of publishing events internally, which allows us to create and register EventHandlers that automatically respond to these events.
+Whenever the EventStore appends events, the produced EventEnvelopes get published by the EventPublishers that are registered in the EventBus. A default EventPublisher takes care of publishing events internally, which allows us to create and register EventSubscribers that automatically listen for these events.
 
 ```typescript
-@EventHandler(AccountOpenedEvent)
-export class AccountOpenedEventHandler implements IEventHandler {
+@EventSubscriber(AccountOpenedEvent)
+export class AccountOpenedEventSubscriber implements IEventSubscriber {
 	handle(envelope: EventEnvelope<AccountOpenedEvent>) {
 		...
 	}
@@ -409,7 +409,7 @@ export class GetAccountQueryHandler implements IQueryHandler {
 Event sourcing articles often suggest to listen to published events to create or update a database view that is optimized for reading. While this offers some advantages, there is a lot of overhead to consider when doing so. An alternative is to simply read out your write models. A very interesting read about the benefits and trade-offs can be found [here](https://www.eventstore.com/blog/live-projections-for-read-models-with-event-sourcing-and-cqrs).
 
 - **What about sagas?**
-At this point, I haven't created Sagas because in basic use cases EventHandlers can take care of triggering side-effects.
+At this point, I haven't created Sagas because in basic use cases EventSubscribers can take care of triggering side-effects.
 If the need arises, I'll look into this.
 &nbsp;
 

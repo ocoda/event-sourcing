@@ -1,4 +1,5 @@
 export type * from './aggregate-metadata.interface';
+export type * from './event-handler-method.type';
 export type * from './latest-snapshot-filter.interface';
 export type * from './snapshot-collection.type';
 export type * from './snapshot-envelope-metadata.interface';
