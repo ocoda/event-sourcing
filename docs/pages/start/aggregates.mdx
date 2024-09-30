@@ -3,6 +3,7 @@ title: Aggregates
 ---
 
 import { Steps } from 'nextra/components';
+import { Callout } from 'nextra/components'
 
 # Aggregates
  
@@ -29,7 +30,11 @@ e.g. `@Aggregate({ streamName: 'account' })` would create the following streamId
 ```shell
 account-<aggregateId> // e.g. account-d46fb0f9-02dc-4d11-a282-ab00f7fffeff
 ```
-If the stream name isn't provided in the decorator, the name of the class will automatically be used (lowercase).
+If the stream name isn't provided in the decorator, the name of the class will automatically be used in lowercase.
+ 
+<Callout type="warning" emoji="⚠️">
+  Whether the stream name is provided or if it's derived from the class-name, the maximum length shouldn't exceed 50 characters.
+</Callout>
 
 ## Adding logic to the Aggregate [#adding-logic-to-the-aggregate]
 
@@ -73,15 +78,17 @@ Each event should capture a meaningful change in the domain. Events are used to 
 
 ### Handle Events to Update State
 
-Each event should have a counterpart that mutates the aggregate's state based on the event that was applied to aggregate (methods prefixed with `on`). This pattern decouples the business logic from how the state is updated.
+Each event should have a counterpart that mutates the aggregate's state based on the event that needs to be applied to the aggregate (methods decorated with `@EventHandler(...)`). This pattern decouples the business logic from how the state is updated.
 
 ```typescript copy
-onAccountCreditedEvent(event: AccountCreditedEvent) {
+@EventHandler(AccountCreditedEvent)
+applyAccountCreditedEvent(event: AccountCreditedEvent) {
     this.balance += event.amount;
 }
 ```
 
 This method updates the balance when an AccountCreditedEvent is applied. Notice how the state mutation is handled separately from the business logic that applies the event.
+See [Event Handling](/start/events#creating-an-event-handler) for more information.
 
 ### Keep aggregates focused on domain logic
 
