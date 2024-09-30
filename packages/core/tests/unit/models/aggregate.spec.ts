@@ -1,13 +1,28 @@
-import { Aggregate, AggregateRoot, type IEvent } from '@ocoda/event-sourcing';
+import {
+	Aggregate,
+	AggregateRoot,
+	Event,
+	EventHandler,
+	type IEvent,
+	MissingEventHandlerException,
+} from '@ocoda/event-sourcing';
 
 describe(Aggregate, () => {
+	@Event()
 	class AccountOpenedEvent implements IEvent {}
+
+	@Event()
 	class AccountCreditedEvent implements IEvent {
 		constructor(public readonly amount: number) {}
 	}
+
+	@Event()
 	class AccountDebitedEvent implements IEvent {
 		constructor(public readonly amount: number) {}
 	}
+
+	@Event()
+	class AccountClosedEvent implements IEvent {}
 
 	class Account extends AggregateRoot {
 		public balance: number;
@@ -26,15 +41,22 @@ describe(Aggregate, () => {
 			this.applyEvent(new AccountDebitedEvent(amount));
 		}
 
-		onAccountOpenedEvent() {
+		public close() {
+			this.applyEvent(new AccountClosedEvent());
+		}
+
+		@EventHandler(AccountOpenedEvent)
+		applyAccountOpenedEvent() {
 			this.balance = 0;
 		}
 
-		onAccountCreditedEvent(event: AccountCreditedEvent) {
+		@EventHandler(AccountCreditedEvent)
+		applyAccountCreditedEvent(event: AccountCreditedEvent) {
 			this.balance += event.amount;
 		}
 
-		onAccountDebitedEvent(event: AccountDebitedEvent) {
+		@EventHandler(AccountDebitedEvent)
+		applyAccountDebitedEvent(event: AccountDebitedEvent) {
 			this.balance -= event.amount;
 		}
 	}
@@ -63,5 +85,10 @@ describe(Aggregate, () => {
 			new AccountCreditedEvent(50),
 			new AccountDebitedEvent(20),
 		]);
+	});
+
+	it('should throw when applying an event that has no handler', () => {
+		const account = Account.open();
+		expect(() => account.close()).toThrow(new MissingEventHandlerException(Account, AccountClosedEvent));
 	});
 });

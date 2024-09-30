@@ -1,5 +1,7 @@
 import type { Type } from '@nestjs/common';
-import type { IEvent } from '../interfaces';
+import { MissingEventHandlerException } from '../exceptions';
+import { getEventHandlerMetadata } from '../helpers';
+import type { IEvent, IEventHandlerMethod } from '../interfaces';
 
 const VERSION = Symbol();
 const EVENTS = Symbol();
@@ -25,18 +27,18 @@ export abstract class AggregateRoot {
 			this[EVENTS].push(event);
 		}
 
-		const handler = this.getEventHandler(event);
+		const handler = this.getEventHandler(event.constructor as Type<T>);
 		handler?.call(this, event);
 	}
 
-	private getEventHandler<T extends IEvent = IEvent>(event: T): Type<typeof AggregateRoot> | undefined {
-		const handler = `on${this.getEventName(event)}`;
-		return this[handler];
-	}
+	private getEventHandler<T extends IEvent = IEvent>(eventClass: Type<T>): IEventHandlerMethod<IEvent> | undefined {
+		const { method } = getEventHandlerMetadata(this, eventClass);
 
-	private getEventName(event: IEvent): string {
-		const prototype = Object.getPrototypeOf(event);
-		return prototype.constructor.name;
+		if (!method) {
+			throw new MissingEventHandlerException(this.constructor as Type<AggregateRoot>, eventClass);
+		}
+
+		return this[method];
 	}
 
 	commit(): IEvent[] {

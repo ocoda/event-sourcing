@@ -1,6 +1,7 @@
 export * from './get-aggregate-metadata';
 export * from './get-command-handler-metadata';
 export * from './get-command-metadata';
+export * from './get-event-handler-metadata';
 export * from './get-event-metadata';
 export * from './get-event-publisher-metadata';
 export * from './get-event-serializer-metadata';
