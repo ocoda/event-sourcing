@@ -2,16 +2,93 @@
 title: Events
 ---
 
-# Events & Event handlers
- 
+import { Steps } from 'nextra/components';
 import { Callout } from 'nextra/components'
 
-{/*
-    TODO:
-        - describe events
-        - describe event handlers
-*/}
+# Events & Event handlers
  
-<Callout type="warning" emoji="🚧">
-    This page is under construction.
+Events are classes that describe **facts** that have occurred within your domain. In an event-sourced system, events represent immutable pieces of historical data that record what has happened. These events are the primary means by which aggregates communicate changes in state.
+ 
+## Creating an Event [#creating-an-event]
+
+Events are simple objects that represent a fact that has occurred. They are implemented by decorating the class with the `@Event()` decorator and by implementing the `IEvent` interface from the library.
+The decorator can take an optional name argument, which is used internally to identify the event and map it within your application.
+
+To create an event using this library you will need to make your event class:
+- implement the `IEvent` interface
+- apply the `@Event()` decorator
+
+```typescript {3-4} copy
+import { IEvent } from '@ocoda/event-sourcing';
+
+@Event('account-opened')
+export class AccountOpenedEvent implements IEvent {
+  constructor(
+    public readonly accountId: string,
+    public readonly openedOn: string,
+    public readonly accountOwnerIds?: string[],
+  ) {}
+}
+```
+
+The IEvent interface is primarily for typing purposes, while the @Event() decorator marks the class as an event and optionally specifies what the name of that event should look like in the event store. For example, @Event('account-opened') would create the following event-name:
+```shell
+account-opened
+```
+
+If the event name isn't provided in the decorator, the name of the class will automatically be used in lowercase.
+ 
+<Callout type="warning" emoji="⚠️">
+  Whether the event name is provided or if it's derived from the class-name, the maximum length shouldn't exceed 80 characters.
 </Callout>
+
+## Creating an Event Handler [#creating-an-event-handler]
+
+An **EventHandler** is responsible for applying the event on the aggregate. When an event is applied to an aggregate, the aggregate looks for a method that matches the provided event. To register a method as being responsible for handling a specific event, you need to decorate the method with the `@EventHandler()` decorator.
+
+```typescript {12} copy
+import { EventHandler } from '@ocoda/event-sourcing';
+
+export class Account {
+  constructor() {
+    this.balance = 0;
+  }
+
+  public credit(amount: number) {
+    this.applyEvent(new AccountCreditedEvent(amount));
+  }
+
+  @EventHandler(AccountCreditedEvent)
+  applyAccountCreditedEvent(event: AccountCreditedEvent) {
+    this.balance += event.amount;
+  }
+}
+```
+
+Bear in mind this is not the same as an [`Event Subscriber`](/advanced/event_pubsub), which is a separate concept that listens for events and reacts to them.
+
+<Callout type="info" emoji="ℹ️">
+The difference between event handlers and event subscribers is crucial. Event handlers directly modify an aggregate's state by processing events, while event subscribers are used for side effects such as notifications, logging, or integration with external systems. 
+</Callout>
+
+## Event Serialization
+
+By default events are serialized and deserialized using the [class-transformer](https://www.npmjs.com/package/class-transformer) library. This works well for simple events that only contain primitive types.
+If you need more advanced events, for example containing Value Objects, it's possible to provide your own serialization logic by creating an EventSerializer.
+For more information on how to create an Event Serializer, please refer to the [Event Serialization](/advanced/event_serialization) documentation.
+
+## Guidelines for creating events
+
+<Steps>
+### Events should describe domain facts
+
+An event should express a fact that occurred within the domain. Instead of naming events like `BalanceChangedEvent`, consider using domain-specific names such as `AccountCreditedEvent` or `AccountDebitedEvent`.
+
+### Events are immutable
+
+ Once an event has been created and persisted, it cannot be changed. This immutability ensures that the system can replay events to rebuild the aggregate's state exactly as it was.
+
+### Avoid logic in events
+
+Events should be simple data structures that describe what happened. Avoid adding logic to events, as this can lead to unexpected behavior when replaying events.
+</Steps>

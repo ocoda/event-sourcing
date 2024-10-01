@@ -2,16 +2,34 @@
 title: Event Pub/Sub
 ---
 
-# Event Publishers and Listeners
+# Event Publishers and Subscribers
 
 import { Callout } from 'nextra/components'
  
-{/*
-    TODO:
-        - describe event publishers
-        - describe event listeners
-*/}
-
 <Callout type="warning" emoji="🚧">
     This page is under construction.
 </Callout>
+
+## Event publishers
+Whenever the EventStore appends events, the produced EventEnvelopes get published by the EventPublishers that are registered in the EventBus. A default EventPublisher takes care of publishing events internally, which allows us to create and register EventSubscribers that automatically listen for these events.
+
+```typescript
+@EventSubscriber(AccountOpenedEvent)
+export class AccountOpenedEventSubscriber implements IEventSubscriber {
+	handle(envelope: EventEnvelope<AccountOpenedEvent>) {
+		...
+	}
+}
+```
+
+To register an additional EventPublisher to push your EventEnvelopes to Redis, SNS, Kafka, etc. simply create one and register it as a provider.
+This doesn't replace the default EventPublisher, but adds an additional one to the EventBus.
+
+```typescript
+@EventPublisher()
+export class CustomEventPublisher implements IEventPublisher {
+	async publish(envelope: EventEnvelope<IEvent>): Promise<void> {
+		...
+	}
+}
+```

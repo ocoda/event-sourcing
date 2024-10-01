@@ -6,16 +6,23 @@ title: Domain-Driven Design
 
 Domain-Driven Design (DDD) is an approach to software development that emphasizes the alignment of the software model with the core business domain. In DDD, the primary goal is to build a deep understanding of the business and then create a model that reflects its rules, processes, and vocabulary. The key idea is that the software should evolve around the domain and the real-world problems it is meant to solve.
 
-#### Key Concepts:
-1. **Domain**: The business problem you're trying to solve. This is where your focus should be.
-2. **Domain Model**: A representation of the business, often in code, that encapsulates business logic, rules, and constraints. The model should evolve with the understanding of the domain.
-3. **Ubiquitous Language**: A shared language between developers and domain experts, ensuring that everyone uses the same terms to describe domain concepts. This helps prevent miscommunication and keeps the software aligned with the business needs.
-4. **Bounded Context**: A clear boundary within which a particular model is defined and applicable. It helps manage complexity by separating different parts of the system that may have different meanings for the same terms or concepts.
-5. **Entities and Value Objects**:
-   - **Entities**: Objects with a distinct identity that persists over time (e.g., a user or an order).
-   - **Value Objects**: Immutable objects without identity that are defined only by their attributes (e.g., a money amount or a date range).
-6. **Aggregates**: A cluster of related entities and value objects treated as a single unit for data consistency. An aggregate is a consistency boundary.
-7. **Repositories**: Mechanisms for accessing aggregate roots, allowing for retrieval and persistence of domain objects.
-8. **Services**: Domain services encapsulate domain logic that doesn't naturally fit within a specific entity or value object.
+#### Key Concepts
+- **Domain**: The business problem you're trying to solve. This is where your focus should be.
+
+- **Domain Model**: A representation of the business, often in code, that encapsulates business logic, rules, and constraints. The model should evolve with the understanding of the domain.
+
+- **Ubiquitous Language**: A shared language between developers and domain experts, ensuring that everyone uses the same terms to describe domain concepts. This helps prevent miscommunication and keeps the software aligned with the business needs.
+
+- **Bounded Context**: A clear boundary within which a particular model is defined and applicable. It helps manage complexity by separating different parts of the system that may have different meanings for the same terms or concepts.
+
+- **Entities and Value Objects**:
+    - **Entities**: Objects with a distinct identity that persists over time (e.g., a user or an order).
+    - **Value Objects**: Immutable objects without identity that are defined only by their attributes (e.g., a money amount or a date range).
+
+- **Aggregates**: A cluster of related entities and value objects treated as a single unit for data consistency. An aggregate is a consistency boundary.
+
+- **Repositories**: Mechanisms for accessing aggregate roots, allowing for retrieval and persistence of domain objects.
+
+- **Services**: Domain services encapsulate domain logic that doesn't naturally fit within a specific entity or value object.
 
 DDD aims to close the gap between business stakeholders and developers by ensuring the system's structure mirrors real-world business concerns.

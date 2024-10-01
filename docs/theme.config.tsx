@@ -13,9 +13,17 @@ const config: DocsThemeConfig = {
   project: {
     link: 'https://github.com/ocoda/event-sourcing',
   },
-  docsRepositoryBase: 'https://github.com/ocoda/event-sourcing',
+  docsRepositoryBase: 'https://github.com/ocoda/event-sourcing/tree/master/docs',
   footer: {
-    text: 'Ocoda Event Sourcing Docs',
+    text: (
+        <span>
+          MIT {new Date().getFullYear()} ©{' '}
+          <a href="https://nextra.site" target="_blank" rel="noreferrer">
+            Ocoda
+          </a>
+          .
+        </span>
+      )
   },
   useNextSeoProps(...rest) {
     console.log(rest)

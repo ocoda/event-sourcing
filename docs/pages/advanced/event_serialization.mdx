@@ -9,3 +9,33 @@ import { Callout } from 'nextra/components'
 <Callout type="warning" emoji="🚧">
     This page is under construction.
 </Callout>
+
+```typescript
+@Event('account-opened')
+export class AccountOpenedEvent implements IEvent {
+  constructor(
+    public readonly accountId: AccountId,
+    public readonly openedOn: Date,
+    public readonly accountOwnerIds?: AccountOwnerId[]
+  ) {}
+}
+
+@EventSerializer(AccountOpenedEvent)
+export class AccountOpenedEventSerializer implements IEventSerializer {
+  serialize({ accountId, openedOn, accountOwnerIds }: AccountOpenedEvent): IEventPayload<AccountOpenedEvent> {
+    return {
+      accountId: accountId.value,
+      openedOn: openedOn.toISOString(),
+      accountOwnerIds: accountOwnerIds?.map((id) => id.value)
+    };
+  }
+
+  deserialize({ id, openedOn, accountOwnerIds }: IEventPayload<AccountOpenedEvent>): AccountOpenedEvent {
+    const accountId = AccountId.from(id);
+    const openedOnDate = openedOn && new Date(openedOn);
+    const ownerIds = accountOwnerIds?.map((id) => AccountOwnerId.from(id));
+
+    return new AccountOpenedEvent(accountId, openedOnDate, ownerIds);
+  }
+}
+```
