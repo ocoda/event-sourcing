@@ -2,6 +2,7 @@ import {
 	type EventEnvelope,
 	EventNotFoundException,
 	EventStorePersistenceException,
+	EventStoreVersionConflictException,
 	EventStream,
 	type IEvent,
 	StreamReadingDirection,
@@ -77,6 +78,13 @@ describe(InMemoryEventStore, () => {
 		}
 
 		expect(publish).toHaveBeenCalledTimes(events.length * 2);
+	});
+
+    it('should throw when trying to append an event to a stream that already has an event for that version', async () => {
+		const lastEvent = events[events.length - 1];
+		expect(eventStore.appendEvents(eventStreamAccountA, 3, [lastEvent])).rejects.toThrow(
+			new EventStoreVersionConflictException(eventStreamAccountA, 3, 6),
+		);
 	});
 
 	it("should throw when event envelopes can't be appended", async () => {
