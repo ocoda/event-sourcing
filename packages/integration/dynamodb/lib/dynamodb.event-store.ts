@@ -203,7 +203,7 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 									correlationId: metadata.correlationId,
 									causationId: metadata.causationId,
 								},
-								{ removeUndefinedValues: true },
+								{ removeUndefinedValues: true, convertClassInstanceToMap: true },
 							),
 						},
 					})),

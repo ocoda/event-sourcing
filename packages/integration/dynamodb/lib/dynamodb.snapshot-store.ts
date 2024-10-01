@@ -226,7 +226,7 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 										registeredOn: envelope.metadata.registeredOn.getTime(),
 										latest: `latest#${stream.streamId}`,
 									},
-									{ removeUndefinedValues: true },
+									{ removeUndefinedValues: true, convertClassInstanceToMap: true },
 								),
 							},
 						},
