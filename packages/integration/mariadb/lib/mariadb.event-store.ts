@@ -6,6 +6,7 @@ import {
 	EventStore,
 	EventStoreCollectionCreationException,
 	EventStorePersistenceException,
+	EventStoreVersionConflictException,
 	type EventStream,
 	type IEvent,
 	type IEventCollection,
@@ -112,7 +113,7 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 	}
 
 	async appendEvents(
-		{ streamId, aggregateId }: EventStream,
+		stream: EventStream,
 		aggregateVersion: number,
 		events: IEvent[],
 		pool?: IEventPool,
@@ -121,13 +122,27 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 		const collection = EventCollection.get(pool);
 
 		try {
+			// Step 1: Get the current version of the stream from the database
+			const [currentVersionResult] = await connection.query(
+				`SELECT MAX(version) as version FROM \`${collection}\` WHERE stream_id = ?`,
+				[stream.streamId],
+			);
+
+			const currentVersion = currentVersionResult?.version || 0;
+
+			// Step 2: Check if the aggregateVersion is greater than the current version
+			if (aggregateVersion <= currentVersion) {
+				throw new EventStoreVersionConflictException(stream, aggregateVersion, currentVersion);
+			}
+
+			// Step 3: Prepare the events for insertion
 			let version = aggregateVersion - events.length + 1;
 
 			const envelopes: EventEnvelope[] = [];
 			for (const event of events) {
 				const name = this.eventMap.getName(event);
 				const payload = this.eventMap.serializeEvent(event);
-				const envelope = EventEnvelope.create(name, payload, { aggregateId, version: version++ });
+				const envelope = EventEnvelope.create(name, payload, { aggregateId: stream.aggregateId, version: version++ });
 				envelopes.push(envelope);
 			}
 
@@ -135,7 +150,7 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 			await connection.batch(
 				`INSERT INTO \`${collection}\` VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 				envelopes.map(({ event, payload, metadata }) => [
-					streamId,
+					stream.streamId,
 					metadata.version,
 					event,
 					JSON.stringify(payload),
@@ -151,7 +166,12 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 			return envelopes;
 		} catch (error) {
 			await connection.rollback();
-			throw new EventStorePersistenceException(collection, error);
+			switch (error.constructor) {
+				case EventStoreVersionConflictException:
+					throw error;
+				default:
+					throw new EventStorePersistenceException(collection, error);
+			}
 		} finally {
 			connection.release();
 		}

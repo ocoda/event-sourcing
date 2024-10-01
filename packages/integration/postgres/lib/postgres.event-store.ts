@@ -6,6 +6,7 @@ import {
 	EventStore,
 	EventStoreCollectionCreationException,
 	EventStorePersistenceException,
+	EventStoreVersionConflictException,
 	type EventStream,
 	type IEvent,
 	type IEventCollection,
@@ -114,7 +115,7 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 	}
 
 	async appendEvents(
-		{ streamId, aggregateId }: EventStream,
+		stream: EventStream,
 		aggregateVersion: number,
 		events: IEvent[],
 		pool?: IEventPool,
@@ -122,19 +123,30 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 		const collection = EventCollection.get(pool);
 
 		try {
+			const { rows: currentVersionRows } = await this.client.query<{ version: number }>(
+				`SELECT MAX(version) as version FROM "${collection}" WHERE stream_id = $1`,
+				[stream.streamId],
+			);
+
+			const currentVersion = currentVersionRows[0]?.version || 0;
+
+			if (aggregateVersion <= currentVersion) {
+				throw new EventStoreVersionConflictException(stream, aggregateVersion, currentVersion);
+			}
+
 			let version = aggregateVersion - events.length + 1;
 
 			const envelopes: EventEnvelope[] = [];
 			for (const event of events) {
 				const name = this.eventMap.getName(event);
 				const payload = this.eventMap.serializeEvent(event);
-				const envelope = EventEnvelope.create(name, payload, { aggregateId, version: version++ });
+				const envelope = EventEnvelope.create(name, payload, { aggregateId: stream.aggregateId, version: version++ });
 				envelopes.push(envelope);
 			}
 
 			const entities = envelopes.map(
 				({ event, payload, metadata }) =>
-					`('${streamId}', ${metadata.version}, '${event}', '${JSON.stringify(payload)}', '${metadata.eventId}', '${metadata.aggregateId}', '${metadata.occurredOn.toISOString()}', ${metadata.correlationId ?? null}, ${metadata.causationId ?? null})`,
+					`('${stream.streamId}', ${metadata.version}, '${event}', '${JSON.stringify(payload)}', '${metadata.eventId}', '${metadata.aggregateId}', '${metadata.occurredOn.toISOString()}', ${metadata.correlationId ?? null}, ${metadata.causationId ?? null})`,
 			);
 
 			await this.client.query(`
@@ -144,7 +156,12 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 
 			return envelopes;
 		} catch (error) {
-			throw new EventStorePersistenceException(collection, error);
+			switch (error.constructor) {
+				case EventStoreVersionConflictException:
+					throw error;
+				default:
+					throw new EventStorePersistenceException(collection, error);
+			}
 		}
 	}
 
