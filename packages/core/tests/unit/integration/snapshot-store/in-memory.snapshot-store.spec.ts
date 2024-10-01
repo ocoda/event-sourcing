@@ -6,6 +6,7 @@ import {
 	type SnapshotEnvelope,
 	SnapshotNotFoundException,
 	SnapshotStorePersistenceException,
+	SnapshotStoreVersionConflictException,
 	SnapshotStream,
 	StreamReadingDirection,
 	UUID,
@@ -79,6 +80,18 @@ describe(InMemorySnapshotStore, () => {
 				expect(entity.latest).toBeNull();
 			}
 		}
+	});
+
+	it('should throw when trying to append a snapshot to a stream that has a version lower or equal to the latest snapshot for that stream', async () => {
+		const lastSnapshot = snapshotEnvelopesAccountA[snapshotEnvelopesAccountA.length - 1];
+		const lastSnapshotVersion = snapshotEnvelopesAccountA.length;
+		const beforeLastSnapshotVersion = lastSnapshotVersion - 1;
+		expect(
+			snapshotStore.appendSnapshot(snapshotStreamAccountA, beforeLastSnapshotVersion, [lastSnapshot]),
+		).rejects.toThrow(new SnapshotStoreVersionConflictException(snapshotStreamAccountA, beforeLastSnapshotVersion, 6));
+		expect(snapshotStore.appendSnapshot(snapshotStreamAccountA, lastSnapshotVersion, [lastSnapshot])).rejects.toThrow(
+			new SnapshotStoreVersionConflictException(snapshotStreamAccountA, lastSnapshotVersion, 6),
+		);
 	});
 
 	it("should throw when a snapshot envelope can't be appended", async () => {
