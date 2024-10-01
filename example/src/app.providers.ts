@@ -1,5 +1,6 @@
 import type { Type } from '@nestjs/common';
 import type { ICommandHandler, IEventSubscriber, IQueryHandler, SnapshotRepository } from '@ocoda/event-sourcing';
+import { AccountController } from './application/account.controller';
 import {
 	AddAccountOwnerCommandHandler,
 	CloseAccountCommandHandler,
@@ -52,3 +53,5 @@ export const Events = [
 ];
 
 export const AggregateRepositories = [AccountRepository];
+
+export const Controllers = [AccountController];

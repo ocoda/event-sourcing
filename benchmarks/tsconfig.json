@@ -1,0 +1,18 @@
+{
+	"extends": "@ocoda/event-sourcing-config/typescript/module.json",
+	"include": ["**/*.ts", "benchmark.js"],
+	"compilerOptions": {
+		"paths": {
+			"@ocoda/event-sourcing": ["../packages/core/lib"],
+			"@ocoda/event-sourcing/*": ["../packages/core/lib/*"],
+			"@ocoda/event-sourcing-dynamodb": ["../packages/integration/dynamodb/lib"],
+			"@ocoda/event-sourcing-dynamodb/*": ["../packages/integration/dynamodb/lib/*"],
+			"@ocoda/event-sourcing-mariadb": ["../packages/integration/mariadb/lib"],
+			"@ocoda/event-sourcing-mariadb/*": ["../packages/integration/mariadb/lib/*"],
+			"@ocoda/event-sourcing-mongodb": ["../packages/integration/mongodb/lib"],
+			"@ocoda/event-sourcing-mongodb/*": ["../packages/integration/mongodb/lib/*"],
+			"@ocoda/event-sourcing-postgres": ["../packages/integration/postgres/lib"],
+			"@ocoda/event-sourcing-postgres/*": ["../packages/integration/postgres/lib/*"]
+		}
+	}
+}

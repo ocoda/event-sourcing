@@ -4,13 +4,14 @@
 	"description": "NestJS Event Sourcing Library",
 	"author": "Dries Hooghe <dries@drieshooghe.com>",
 	"license": "MIT",
-    "private": true,
+	"private": true,
 	"scripts": {
 		"build": "turbo build",
 		"test": "turbo test",
 		"ci": "turbo ci",
 		"lint": "turbo lint",
-		"format": "turbo format"
+		"format": "turbo format",
+		"benchmark": "turbo benchmark --"
 	},
 	"engines": {
 		"node": ">= 18.0.0"

@@ -1,18 +1,26 @@
 import { Module } from '@nestjs/common';
+import { NestFactory } from '@nestjs/core';
 import { EventSourcingModule } from '@ocoda/event-sourcing';
+import {
+	AggregateRepositories,
+	CommandHandlers,
+	Controllers,
+	Events,
+	QueryHandlers,
+	SnapshotRepositories,
+} from '@ocoda/event-sourcing-example/src/app.providers';
 import {
 	PostgresEventStore,
 	type PostgresEventStoreConfig,
 	PostgresSnapshotStore,
 	type PostgresSnapshotStoreConfig,
 } from '@ocoda/event-sourcing-postgres';
-import { Events, testProviders } from '@ocoda/event-sourcing-testing/e2e';
 
 @Module({
 	imports: [
 		EventSourcingModule.forRootAsync<PostgresEventStoreConfig, PostgresSnapshotStoreConfig>({
 			useFactory: () => ({
-				events: Events,
+				events: [...Events],
 				eventStore: {
 					driver: PostgresEventStore,
 					host: '127.0.0.1',
@@ -20,7 +28,6 @@ import { Events, testProviders } from '@ocoda/event-sourcing-testing/e2e';
 					user: 'postgres',
 					password: 'postgres',
 					database: 'postgres',
-                    useDefaultPool: false,
 				},
 				snapshotStore: {
 					driver: PostgresSnapshotStore,
@@ -29,11 +36,17 @@ import { Events, testProviders } from '@ocoda/event-sourcing-testing/e2e';
 					user: 'postgres',
 					password: 'postgres',
 					database: 'postgres',
-                    useDefaultPool: false,
 				},
 			}),
 		}),
 	],
-	providers: testProviders,
+	providers: [...AggregateRepositories, ...CommandHandlers, ...QueryHandlers, ...SnapshotRepositories],
+	controllers: [...Controllers],
 })
-export class AppModule {}
+class AppModule {}
+
+async function bootstrap() {
+	const app = await NestFactory.create(AppModule, { logger: false });
+	await app.listen(3000);
+}
+bootstrap();

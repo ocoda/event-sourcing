@@ -1,16 +1,13 @@
 {
 	"$schema": "https://turbo.build/schema.json",
+	"extends": ["//"],
 	"tasks": {
-		"build": {
+		"benchmark:build": {
 			"dependsOn": ["^build"]
 		},
-		"test": {},
-		"test:ci": {},
-		"ci": {},
-		"lint": {},
-		"format": {},
 		"benchmark": {
-			"env": ["INTEGRATION"]
+			"dependsOn": ["benchmark:build"],
+			"cache": false
 		}
 	}
 }
