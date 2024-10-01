@@ -82,13 +82,13 @@ describe(InMemoryEventStore, () => {
 
 	it('should throw when trying to append an event to a stream that has a version lower or equal to the latest event for that stream', async () => {
 		const lastEvent = events[events.length - 1];
-		const lastEventVersion = events.length;
-		const beforeLastEventVersion = lastEventVersion - 1;
-		expect(eventStore.appendEvents(eventStreamAccountA, beforeLastEventVersion, [lastEvent])).rejects.toThrow(
-			new EventStoreVersionConflictException(eventStreamAccountA, beforeLastEventVersion, 6),
+		const lastVersion = events.length;
+		const beforeLastVersion = lastVersion - 1;
+		expect(eventStore.appendEvents(eventStreamAccountA, beforeLastVersion, [lastEvent])).rejects.toThrow(
+			new EventStoreVersionConflictException(eventStreamAccountA, beforeLastVersion, lastVersion),
 		);
-		expect(eventStore.appendEvents(eventStreamAccountA, lastEventVersion, [lastEvent])).rejects.toThrow(
-			new EventStoreVersionConflictException(eventStreamAccountA, lastEventVersion, 6),
+		expect(eventStore.appendEvents(eventStreamAccountA, lastVersion, [lastEvent])).rejects.toThrow(
+			new EventStoreVersionConflictException(eventStreamAccountA, lastVersion, lastVersion),
 		);
 	});
 
