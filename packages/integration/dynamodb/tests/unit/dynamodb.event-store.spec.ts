@@ -107,10 +107,15 @@ describe(DynamoDBEventStore, () => {
 		expect(publish).toHaveBeenCalledTimes(events.length * 2);
 	});
 
-	it('should throw when trying to append an event to a stream with a version that is lower than the latest event', async () => {
+	it('should throw when trying to append an event to a stream that has a version lower or equal to the latest event for that stream', async () => {
 		const lastEvent = events[events.length - 1];
-		expect(eventStore.appendEvents(eventStreamAccountA, 3, [lastEvent])).rejects.toThrow(
-			new EventStoreVersionConflictException(eventStreamAccountA, 3, 6),
+		const lastEventVersion = events.length;
+		const beforeLastEventVersion = lastEventVersion - 1;
+		expect(eventStore.appendEvents(eventStreamAccountA, beforeLastEventVersion, [lastEvent])).rejects.toThrow(
+			new EventStoreVersionConflictException(eventStreamAccountA, beforeLastEventVersion, 6),
+		);
+		expect(eventStore.appendEvents(eventStreamAccountA, lastEventVersion, [lastEvent])).rejects.toThrow(
+			new EventStoreVersionConflictException(eventStreamAccountA, lastEventVersion, 6),
 		);
 	});
 
