@@ -12,6 +12,7 @@ import {
 	SnapshotStore,
 	SnapshotStoreCollectionCreationException,
 	SnapshotStorePersistenceException,
+	SnapshotStoreVersionConflictException,
 	type SnapshotStream,
 	StreamReadingDirection,
 } from '@ocoda/event-sourcing';
@@ -143,7 +144,15 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 				version: aggregateVersion,
 			});
 
-			const [lastStreamEntity] = await this.getLastStreamEntities<A, ['_id']>(collection, [stream], ['_id']);
+			const [lastStreamEntity] = await this.getLastStreamEntities<A, ['_id', 'version']>(
+				collection,
+				[stream],
+				['_id', 'version'],
+			);
+
+			if (aggregateVersion <= lastStreamEntity?.version) {
+				throw new SnapshotStoreVersionConflictException(stream, aggregateVersion, lastStreamEntity.version);
+			}
 
 			if (lastStreamEntity) {
 				await this.database
@@ -162,7 +171,12 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 
 			return envelope;
 		} catch (error) {
-			throw new SnapshotStorePersistenceException(collection, error);
+			switch (error.constructor) {
+				case SnapshotStoreVersionConflictException:
+					throw error;
+				default:
+					throw new SnapshotStorePersistenceException(collection, error);
+			}
 		}
 	}
 

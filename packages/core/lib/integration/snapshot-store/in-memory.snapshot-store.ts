@@ -4,6 +4,7 @@ import {
 	SnapshotNotFoundException,
 	SnapshotStoreCollectionCreationException,
 	SnapshotStorePersistenceException,
+	SnapshotStoreVersionConflictException,
 } from '../../exceptions';
 import type {
 	ILatestSnapshotFilter,
@@ -104,7 +105,7 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 	}
 
 	async appendSnapshot<A extends AggregateRoot>(
-		{ streamId, aggregateId, aggregate }: SnapshotStream,
+		stream: SnapshotStream,
 		aggregateVersion: number,
 		snapshot: ISnapshot<A>,
 		pool?: ISnapshotPool,
@@ -118,25 +119,40 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 				throw new Error('Snapshot collection not found');
 			}
 
-			const envelope = SnapshotEnvelope.create<A>(snapshot, { aggregateId, version: aggregateVersion });
+			const currentVersion =
+				snapshotCollection.find(({ latest }) => latest === `latest#${stream.streamId}`)?.version || 0;
+
+			if (aggregateVersion <= currentVersion) {
+				throw new SnapshotStoreVersionConflictException(stream, aggregateVersion, currentVersion);
+			}
+
+			const envelope = SnapshotEnvelope.create<A>(snapshot, {
+				aggregateId: stream.aggregateId,
+				version: aggregateVersion,
+			});
 
 			for (const entity of snapshotCollection) {
-				if (entity.streamId === streamId) {
+				if (entity.streamId === stream.streamId) {
 					entity.latest = null;
 				}
 			}
 
 			snapshotCollection.push({
-				streamId,
+				streamId: stream.streamId,
 				payload: envelope.payload,
-				aggregateName: aggregate,
-				latest: `latest#${streamId}`,
+				aggregateName: stream.aggregate,
+				latest: `latest#${stream.streamId}`,
 				...envelope.metadata,
 			});
 
 			return Promise.resolve(envelope);
 		} catch (error) {
-			throw new SnapshotStorePersistenceException(collection, error);
+			switch (error.constructor) {
+				case SnapshotStoreVersionConflictException:
+					throw error;
+				default:
+					throw new SnapshotStorePersistenceException(collection, error);
+			}
 		}
 	}
 

@@ -25,6 +25,7 @@ import {
 	SnapshotStore,
 	SnapshotStoreCollectionCreationException,
 	SnapshotStorePersistenceException,
+	SnapshotStoreVersionConflictException,
 	type SnapshotStream,
 	StreamReadingDirection,
 } from '@ocoda/event-sourcing';
@@ -190,6 +191,10 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 			const updateLastItem = [];
 			const [lastStreamEntity] = await this.getLastStreamEntities<A, ['version']>(collection, [stream], ['version']);
 
+			if (aggregateVersion <= lastStreamEntity?.version) {
+				throw new SnapshotStoreVersionConflictException(stream, aggregateVersion, lastStreamEntity.version);
+			}
+
 			if (lastStreamEntity) {
 				updateLastItem.push({
 					Update: {
@@ -231,7 +236,12 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 
 			return envelope;
 		} catch (error) {
-			throw new SnapshotStorePersistenceException(collection, error);
+			switch (error.constructor) {
+				case SnapshotStoreVersionConflictException:
+					throw error;
+				default:
+					throw new SnapshotStorePersistenceException(collection, error);
+			}
 		}
 	}
 
