@@ -122,14 +122,16 @@ describe(DynamoDBSnapshotStore, () => {
 	});
 
 	it('should throw when trying to append a snapshot to a stream that has a version lower or equal to the latest snapshot for that stream', async () => {
-		const lastSnapshot = snapshotEnvelopesAccountA[snapshotEnvelopesAccountA.length - 1];
-		const lastSnapshotVersion = snapshotEnvelopesAccountA.length;
-		const beforeLastSnapshotVersion = lastSnapshotVersion - 1;
+		const lastSnapshotEnvelope = snapshotEnvelopesAccountA[snapshotEnvelopesAccountA.length - 1];
+		const lastVersion = lastSnapshotEnvelope.metadata.version;
+		const beforeLastVersion = lastVersion - 10;
 		expect(
-			snapshotStore.appendSnapshot(snapshotStreamAccountA, beforeLastSnapshotVersion, [lastSnapshot]),
-		).rejects.toThrow(new SnapshotStoreVersionConflictException(snapshotStreamAccountA, beforeLastSnapshotVersion, 6));
-		expect(snapshotStore.appendSnapshot(snapshotStreamAccountA, lastSnapshotVersion, [lastSnapshot])).rejects.toThrow(
-			new SnapshotStoreVersionConflictException(snapshotStreamAccountA, lastSnapshotVersion, 6),
+			snapshotStore.appendSnapshot(snapshotStreamAccountA, beforeLastVersion, lastSnapshotEnvelope),
+		).rejects.toThrow(
+			new SnapshotStoreVersionConflictException(snapshotStreamAccountA, beforeLastVersion, lastVersion),
+		);
+		expect(snapshotStore.appendSnapshot(snapshotStreamAccountA, lastVersion, lastSnapshotEnvelope)).rejects.toThrow(
+			new SnapshotStoreVersionConflictException(snapshotStreamAccountA, lastVersion, lastVersion),
 		);
 	});
 
