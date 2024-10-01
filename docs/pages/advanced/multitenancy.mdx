@@ -41,6 +41,7 @@ By default the event- and snapshot-store create a shared collection of streams f
 
   ```typescript copy
     await this.eventStore.appendEvents(stream, account.version, events, 'tenant-1');
+    await this.accountSnapshotRepository.save(accountId, account, 'tenant-1');
     await this.accountSnapshotRepository.load(accountId, 'tenant-1');
   ```
 

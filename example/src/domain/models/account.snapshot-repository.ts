@@ -3,7 +3,7 @@ import { Account, AccountId, AccountOwnerId } from './account.aggregate';
 
 @Snapshot(Account, { name: 'account', interval: 5 })
 export class AccountSnapshotRepository extends SnapshotRepository<Account> {
-	serialize({ id, ownerIds, balance, openedOn, closedOn }: Account) {
+	serialize({ id, ownerIds, balance, openedOn, closedOn }: Account): ISnapshot<Account> {
 		return {
 			id: id.value,
 			ownerIds: ownerIds.map(({ value }) => value),

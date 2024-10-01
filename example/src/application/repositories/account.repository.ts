@@ -67,9 +67,7 @@ export class AccountRepository {
 		const events = account.commit();
 		const stream = EventStream.for<Account>(Account, account.id);
 
-		await Promise.all([
-			this.accountSnapshotRepository.save(account.id, account),
-			this.eventStore.appendEvents(stream, account.version, events),
-		]);
+		await this.eventStore.appendEvents(stream, account.version, events);
+		await this.accountSnapshotRepository.save(account.id, account);
 	}
 }
