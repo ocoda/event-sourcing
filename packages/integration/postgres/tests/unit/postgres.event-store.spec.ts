@@ -1,4 +1,4 @@
-import { EventCollection } from '@ocoda/event-sourcing';
+import { EventCollection, EventStoreVersionConflictException } from '@ocoda/event-sourcing';
 import { EventStorePersistenceException } from '@ocoda/event-sourcing';
 import { EventStream } from '@ocoda/event-sourcing';
 import { StreamReadingDirection } from '@ocoda/event-sourcing';
@@ -99,6 +99,13 @@ describe(PostgresEventStore, () => {
 		}
 
 		expect(publish).toHaveBeenCalledTimes(events.length * 2);
+	});
+
+	it('should throw when trying to append an event to a stream with a version that is lower than the latest event', async () => {
+		const lastEvent = events[events.length - 1];
+		expect(eventStore.appendEvents(eventStreamAccountA, 3, [lastEvent])).rejects.toThrow(
+			new EventStoreVersionConflictException(eventStreamAccountA, 3, 6),
+		);
 	});
 
 	it("should throw when event envelopes can't be appended", async () => {

@@ -1,6 +1,6 @@
 import { DeleteTableCommand, type DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb';
 import { unmarshall } from '@aws-sdk/util-dynamodb';
-import { EventCollection, type IEvent } from '@ocoda/event-sourcing';
+import { EventCollection, EventStoreVersionConflictException, type IEvent } from '@ocoda/event-sourcing';
 import {
 	type EventEnvelope,
 	EventNotFoundException,
@@ -105,6 +105,13 @@ describe(DynamoDBEventStore, () => {
 		}
 
 		expect(publish).toHaveBeenCalledTimes(events.length * 2);
+	});
+
+	it('should throw when trying to append an event to a stream with a version that is lower than the latest event', async () => {
+		const lastEvent = events[events.length - 1];
+		expect(eventStore.appendEvents(eventStreamAccountA, 3, [lastEvent])).rejects.toThrow(
+			new EventStoreVersionConflictException(eventStreamAccountA, 3, 6),
+		);
 	});
 
 	it("should throw when event envelopes can't be appended", async () => {
