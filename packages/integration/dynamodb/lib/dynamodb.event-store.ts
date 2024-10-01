@@ -20,6 +20,7 @@ import {
 	EventStore,
 	EventStoreCollectionCreationException,
 	EventStorePersistenceException,
+	EventStoreVersionConflictException,
 	type EventStream,
 	type IEvent,
 	type IEventCollection,
@@ -150,7 +151,7 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 	}
 
 	async appendEvents(
-		{ streamId, aggregateId }: EventStream,
+		stream: EventStream,
 		aggregateVersion: number,
 		events: IEvent[],
 		pool?: IEventPool,
@@ -158,13 +159,31 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 		const collection = EventCollection.get(pool);
 
 		try {
+			if (aggregateVersion > 1) {
+				const { Items } = await this.client.send(
+					new QueryCommand({
+						TableName: collection,
+						KeyConditionExpression: 'streamId = :streamId',
+						ExpressionAttributeValues: {
+							':streamId': { S: stream.streamId },
+						},
+						ScanIndexForward: false, // Sort by RANGE key in descending order (highest value first)
+						Limit: 1, // Limit to 1 item (the highest version)
+					}),
+				);
+
+				if (Items.length > 0 && unmarshall(Items[0]).version >= aggregateVersion) {
+					throw new EventStoreVersionConflictException(stream, aggregateVersion, unmarshall(Items[0]).version);
+				}
+			}
+
 			let version = aggregateVersion - events.length + 1;
 
 			const envelopes: EventEnvelope[] = [];
 			for (const event of events) {
 				const name = this.eventMap.getName(event);
 				const payload = this.eventMap.serializeEvent(event);
-				const envelope = EventEnvelope.create(name, payload, { aggregateId, version: version++ });
+				const envelope = EventEnvelope.create(name, payload, { aggregateId: stream.aggregateId, version: version++ });
 				envelopes.push(envelope);
 			}
 
@@ -174,7 +193,7 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 						PutRequest: {
 							Item: marshall(
 								{
-									streamId,
+									streamId: stream.streamId,
 									event,
 									payload,
 									version: metadata.version,
@@ -195,7 +214,12 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 
 			return envelopes;
 		} catch (error) {
-			throw new EventStorePersistenceException(collection, error);
+			switch (error.constructor) {
+				case EventStoreVersionConflictException:
+					throw error;
+				default:
+					throw new EventStorePersistenceException(collection, error);
+			}
 		}
 	}
 

@@ -1,8 +1,8 @@
-import { type ISnapshot, Snapshot, SnapshotHandler } from '@ocoda/event-sourcing';
+import { type ISnapshot, Snapshot, SnapshotRepository } from '@ocoda/event-sourcing';
 import { Account, AccountId, AccountOwnerId } from './account.aggregate';
 
 @Snapshot(Account, { name: 'account', interval: 5 })
-export class AccountSnapshotHandler extends SnapshotHandler<Account> {
+export class AccountSnapshotRepository extends SnapshotRepository<Account> {
 	serialize({ id, ownerIds, balance, openedOn, closedOn }: Account) {
 		return {
 			id: id.value,

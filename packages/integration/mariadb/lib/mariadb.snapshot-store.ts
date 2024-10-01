@@ -12,6 +12,7 @@ import {
 	SnapshotStore,
 	SnapshotStoreCollectionCreationException,
 	SnapshotStorePersistenceException,
+	SnapshotStoreVersionConflictException,
 	type SnapshotStream,
 	StreamReadingDirection,
 } from '@ocoda/event-sourcing';
@@ -146,6 +147,11 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 				['stream_id', 'version'],
 				connection,
 			);
+
+			if (aggregateVersion <= lastStreamEntity?.version) {
+				throw new SnapshotStoreVersionConflictException(stream, aggregateVersion, lastStreamEntity.version);
+			}
+
 			await connection.beginTransaction();
 
 			if (lastStreamEntity) {
@@ -171,7 +177,12 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 			return envelope;
 		} catch (error) {
 			await connection.rollback();
-			throw new SnapshotStorePersistenceException(collection, error);
+			switch (error.constructor) {
+				case SnapshotStoreVersionConflictException:
+					throw error;
+				default:
+					throw new SnapshotStorePersistenceException(collection, error);
+			}
 		} finally {
 			connection.release();
 		}

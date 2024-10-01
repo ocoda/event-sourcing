@@ -1,19 +1,18 @@
 import { Inject, type Type } from '@nestjs/common';
 import { MissingAggregateMetadataException, MissingSnapshotMetadataException } from './exceptions';
 import { getAggregateMetadata, getSnapshotMetadata } from './helpers';
-import type { ISnapshotHandler } from './interfaces/aggregate/snapshot-handler.interface';
-import type { ISnapshotPool } from './interfaces/aggregate/snapshot-pool.type';
+import type { ISnapshotPool, ISnapshotRepository } from './interfaces';
 import type { ISnapshot } from './interfaces/aggregate/snapshot.interface';
 import { type AggregateRoot, type Id, type SnapshotEnvelope, SnapshotStream } from './models';
 import { SnapshotStore } from './snapshot-store';
 
-export abstract class SnapshotHandler<A extends AggregateRoot = AggregateRoot> implements ISnapshotHandler<A> {
+export abstract class SnapshotRepository<A extends AggregateRoot = AggregateRoot> implements ISnapshotRepository<A> {
 	private readonly aggregate: Type<A>;
 	private readonly streamName: string;
 	private readonly interval: number;
 
 	constructor(@Inject(SnapshotStore) readonly snapshotStore: SnapshotStore) {
-		const { aggregate, interval } = getSnapshotMetadata<A>(this.constructor as Type<ISnapshotHandler<A>>);
+		const { aggregate, interval } = getSnapshotMetadata<A>(this.constructor as Type<ISnapshotRepository<A>>);
 
 		if (!(aggregate && interval)) {
 			throw new MissingSnapshotMetadataException(this.constructor);

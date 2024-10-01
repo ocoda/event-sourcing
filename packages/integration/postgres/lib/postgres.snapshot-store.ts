@@ -12,6 +12,7 @@ import {
 	SnapshotStore,
 	SnapshotStoreCollectionCreationException,
 	SnapshotStorePersistenceException,
+	SnapshotStoreVersionConflictException,
 	type SnapshotStream,
 	StreamReadingDirection,
 } from '@ocoda/event-sourcing';
@@ -157,6 +158,10 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 				connection,
 			);
 
+			if (aggregateVersion <= lastStreamEntity?.version) {
+				throw new SnapshotStoreVersionConflictException(stream, aggregateVersion, lastStreamEntity.version);
+			}
+
 			await connection.query('BEGIN');
 			if (lastStreamEntity) {
 				await this.client.query(`UPDATE "${collection}" SET latest = null WHERE stream_id = $1 AND version = $2`, [
@@ -186,7 +191,12 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 			return envelope;
 		} catch (error) {
 			await connection.query('ROLLBACK');
-			throw new SnapshotStorePersistenceException(collection, error);
+			switch (error.constructor) {
+				case SnapshotStoreVersionConflictException:
+					throw error;
+				default:
+					throw new SnapshotStorePersistenceException(collection, error);
+			}
 		} finally {
 			connection.release();
 		}

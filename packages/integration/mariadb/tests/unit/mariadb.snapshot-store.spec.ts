@@ -7,6 +7,7 @@ import {
 	type SnapshotEnvelope,
 	SnapshotNotFoundException,
 	SnapshotStorePersistenceException,
+	SnapshotStoreVersionConflictException,
 	SnapshotStream,
 	StreamReadingDirection,
 	UUID,
@@ -98,6 +99,20 @@ describe(MariaDBSnapshotStore, () => {
 				expect(entity.latest).toBeNull();
 			}
 		}
+	});
+
+	it('should throw when trying to append a snapshot to a stream that has a version lower or equal to the latest snapshot for that stream', async () => {
+		const lastSnapshotEnvelope = snapshotEnvelopesAccountA[snapshotEnvelopesAccountA.length - 1];
+		const lastVersion = lastSnapshotEnvelope.metadata.version;
+		const beforeLastVersion = lastVersion - 10;
+		expect(
+			snapshotStore.appendSnapshot(snapshotStreamAccountA, beforeLastVersion, lastSnapshotEnvelope),
+		).rejects.toThrow(
+			new SnapshotStoreVersionConflictException(snapshotStreamAccountA, beforeLastVersion, lastVersion),
+		);
+		expect(snapshotStore.appendSnapshot(snapshotStreamAccountA, lastVersion, lastSnapshotEnvelope)).rejects.toThrow(
+			new SnapshotStoreVersionConflictException(snapshotStreamAccountA, lastVersion, lastVersion),
+		);
 	});
 
 	it("should throw when a snapshot envelope can't be appended", async () => {

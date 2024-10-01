@@ -305,18 +305,18 @@ class AppModule implements OnModuleInit {
 &nbsp;
 
 ### Snapshot handlers
-The store is used behind the scenes of the SnapshotHandler base class, which is responsible for saving and loading snapshots behind the scenes.
+The store is used behind the scenes of the SnapshotRepository base class, which is responsible for saving and loading snapshots behind the scenes.
 
-How an aggregate snapshot is (de)serialized is the responsibility of a SnapshotHandler which extends the base and is decorated with the `@Snapshot()` decorator, which specifies:
+How an aggregate snapshot is (de)serialized is the responsibility of a SnapshotRepository which extends the base and is decorated with the `@Snapshot()` decorator, which specifies:
 - which aggregate it's responsible for
 - the stream name (defaults to the name of the aggregate's class)
 - at which interval a snapshot should be taken
 
 ```typescript
-import { SnapshotHandler } from '@ocoda/event-sourcing';
+import { SnapshotRepository } from '@ocoda/event-sourcing';
 
 @Snapshot(Account, { name: 'account', interval: 5 })
-export class AccountSnapshotHandler extends SnapshotHandler<Account> {
+export class AccountSnapshotRepository extends SnapshotRepository<Account> {
   serialize({ id, ownerIds, balance, openedOn, closedOn }: Account) {
     return {
       id: id.value,
@@ -348,13 +348,13 @@ export class AccountRepository {
 
   constructor(
     private readonly eventStore: EventStore,
-    private readonly accountSnapshotHandler: AccountSnapshotHandler,
+    private readonly accountSnapshotRepository: AccountSnapshotRepository,
   ) {}
 
   async getById(accountId: AccountId) {
     const eventStream = EventStream.for<Account>(Account, accountId);
 
-    const account = await this.accountSnapshotHandler.load(accountId);
+    const account = await this.accountSnapshotRepository.load(accountId);
 
     const events = this.eventStore.getEvents(eventStream, { fromVersion: account.version + 1 });
 
@@ -372,7 +372,7 @@ export class AccountRepository {
     const stream = EventStream.for<Account>(Account, account.id);
 
     await Promise.all([
-      this.accountSnapshotHandler.save(account.id, account),
+      this.accountSnapshotRepository.save(account.id, account),
       this.eventStore.appendEvents(stream, account.version, events),
     ]);
   }

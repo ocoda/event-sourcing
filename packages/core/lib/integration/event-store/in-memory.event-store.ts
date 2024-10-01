@@ -5,6 +5,7 @@ import {
 	EventNotFoundException,
 	EventStoreCollectionCreationException,
 	EventStorePersistenceException,
+	EventStoreVersionConflictException,
 } from '../../exceptions';
 import type {
 	EventEnvelopeMetadata,
@@ -96,7 +97,7 @@ export class InMemoryEventStore extends EventStore<InMemoryEventStoreConfig> {
 	}
 
 	async appendEvents(
-		{ streamId, aggregateId }: EventStream,
+		stream: EventStream,
 		aggregateVersion: number,
 		events: IEvent[],
 		pool?: IEventPool,
@@ -110,23 +111,42 @@ export class InMemoryEventStore extends EventStore<InMemoryEventStoreConfig> {
 				throw new Error('Event collection not found');
 			}
 
+			const currentVersion = eventCollection
+				.filter(({ streamId: eventStreamId }) => eventStreamId === stream.streamId)
+				.reduce((max, { version }) => Math.max(max, version), 0);
+
+			// Ensure the current version matches the aggregateVersion for optimistic locking
+			if (aggregateVersion <= currentVersion) {
+				throw new EventStoreVersionConflictException(stream, aggregateVersion, currentVersion);
+			}
+
 			let version = aggregateVersion - events.length + 1;
 
 			const envelopes: EventEnvelope[] = [];
 			for (const event of events) {
 				const name = this.eventMap.getName(event);
 				const payload = this.eventMap.serializeEvent(event);
-				const envelope = EventEnvelope.create(name, payload, { aggregateId, version: version++ });
+				const envelope = EventEnvelope.create(name, payload, { aggregateId: stream.aggregateId, version: version++ });
 				envelopes.push(envelope);
 			}
 
 			eventCollection.push(
-				...envelopes.map(({ event, payload, metadata }) => ({ streamId, event, payload, ...metadata })),
+				...envelopes.map(({ event, payload, metadata }) => ({
+					streamId: stream.streamId,
+					event,
+					payload,
+					...metadata,
+				})),
 			);
 
 			return Promise.resolve(envelopes);
 		} catch (error) {
-			throw new EventStorePersistenceException(collection, error);
+			switch (error.constructor) {
+				case EventStoreVersionConflictException:
+					throw error;
+				default:
+					throw new EventStorePersistenceException(collection, error);
+			}
 		}
 	}
 

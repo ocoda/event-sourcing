@@ -6,6 +6,7 @@ import {
 	EventStore,
 	EventStoreCollectionCreationException,
 	EventStorePersistenceException,
+	EventStoreVersionConflictException,
 	type EventStream,
 	type IEvent,
 	type IEventCollection,
@@ -104,7 +105,7 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 	}
 
 	async appendEvents(
-		{ streamId, aggregateId }: EventStream,
+		stream: EventStream,
 		aggregateVersion: number,
 		events: IEvent[],
 		pool?: IEventPool,
@@ -112,6 +113,21 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 		const collection = EventCollection.get(pool);
 
 		try {
+			const currentVersionResult = await this.database
+				.collection<MongoDBEventEntity>(collection)
+				.find({ streamId: stream.streamId })
+				.sort({ version: -1 }) // Sort by version in descending order to get the latest
+				.limit(1) // Only retrieve the most recent event
+				.project({ version: 1 }) // Only select the version field
+				.toArray();
+
+			const currentVersion = currentVersionResult.length > 0 ? currentVersionResult[0].version : 0;
+
+			// Step 2: Check if the aggregateVersion is valid
+			if (aggregateVersion <= currentVersion) {
+				throw new EventStoreVersionConflictException(stream, aggregateVersion, currentVersion);
+			}
+
 			let version = aggregateVersion - events.length + 1;
 
 			const collections = await this.database.listCollections({ name: collection }).toArray();
@@ -124,13 +140,13 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 			for (const event of events) {
 				const name = this.eventMap.getName(event);
 				const payload = this.eventMap.serializeEvent(event);
-				const envelope = EventEnvelope.create(name, payload, { aggregateId, version: version++ });
+				const envelope = EventEnvelope.create(name, payload, { aggregateId: stream.aggregateId, version: version++ });
 				envelopes.push(envelope);
 			}
 
 			const entities = envelopes.map<MongoDBEventEntity>(({ event, payload, metadata }) => ({
 				_id: metadata.eventId,
-				streamId,
+				streamId: stream.streamId,
 				event,
 				payload,
 				...metadata,
@@ -140,7 +156,12 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 
 			return envelopes;
 		} catch (error) {
-			throw new EventStorePersistenceException(collection, error);
+			switch (error.constructor) {
+				case EventStoreVersionConflictException:
+					throw error;
+				default:
+					throw new EventStorePersistenceException(collection, error);
+			}
 		}
 	}
 
