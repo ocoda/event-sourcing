@@ -1,0 +1,39 @@
+config:
+  target: http://localhost:3000
+  phases:
+    - duration: 20
+      arrivalRate: 1
+      rampTo: 5
+      name: Startup phase
+    - duration: 5
+      arrivalRate: 5
+      rampTo: 10
+      name: Peak phase
+    - duration: 10
+      arrivalRate: 10
+      rampTo: 1
+      name: Slow-down phase
+  plugins:
+    ensure: {}
+    expect: {}
+  ensure:
+    thresholds:
+      http.response_time.p99: 100
+      http.response_time.p95: 75
+
+scenarios:
+  - flow:
+      - loop:
+          - post:
+              url: "/account/open"
+              capture:
+                - regexp: ".*"
+                  as: accountId
+              expect:
+                - statusCode: 201
+          - get:
+              url: "/account/{{ accountId }}"
+              expect:
+                - statusCode: 200
+                - hasProperty: "id"
+        count: 5

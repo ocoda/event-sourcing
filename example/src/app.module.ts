@@ -9,13 +9,13 @@ import {
 import {
 	AggregateRepositories,
 	CommandHandlers,
+	Controllers,
 	EventPublishers,
 	EventSubscribers,
 	Events,
 	QueryHandlers,
 	SnapshotRepositories,
 } from './app.providers';
-import { AccountController } from './application/account.controller';
 
 @Module({
 	imports: [
@@ -41,6 +41,6 @@ import { AccountController } from './application/account.controller';
 		...EventSubscribers,
 		...EventPublishers,
 	],
-	controllers: [AccountController],
+	controllers: [...Controllers],
 })
 export class AppModule {}
