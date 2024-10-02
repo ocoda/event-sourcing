@@ -17,18 +17,31 @@ if (!matchingFile) {
 try {
     // Spawn the Node.js process to run the script
     const server = spawn('node', [`${__dirname}/dist/${matchingFile}`], {
-        stdio: ['inherit', 'inherit', 'inherit']
-    });
-    server.on('exit', (code) => {
-        console.log(`Stopped ${integration} server with code ${code}`);
+        stdio: ['pipe', 'pipe', 'inherit']
     });
 
-    const bench = spawn('artillery', ['run', '--quiet', '--output', `${__dirname}/report/${integration}.json`, 'artillery.yml'], {
-        stdio: ['inherit', 'inherit', 'inherit']
+    server.stdout.on('data', (data) => {
+        if(data.includes('Server is listening')) {
+            const bench = spawn('artillery', ['run', '--quiet', '--output', `${__dirname}/.report/${integration}.json`, 'artillery.yml'], {
+                stdio: ['inherit', 'inherit', 'inherit']
+            });
+            bench.on('exit', (code) => {
+                console.log(`Finished ${integration} benchmark with code ${code}`);
+                server.kill();
+            });
+        }
     });
-    bench.on('exit', (code) => {
-        console.log(`Finished ${integration} benchmark with code ${code}`);
-        server.kill();
+
+    server.on('exit', (code) => {
+        console.log(`Stopped ${integration} server with code ${code}`);
+
+        const createReportPage = spawn('artillery', ['report', `${__dirname}/.report/${integration}.json`], {
+            stdio: ['inherit', 'inherit', 'inherit']
+        });
+
+        createReportPage.on('exit', (code) => {
+            console.log(`Created ${integration} report page with code ${code}`);
+        });
     });
 
     // Optionally listen for the child's exit event
