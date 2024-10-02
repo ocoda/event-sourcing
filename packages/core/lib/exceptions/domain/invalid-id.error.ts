@@ -18,4 +18,12 @@ export class InvalidIdError extends DomainError {
 	public static becauseEmpty(): InvalidIdError {
 		return new InvalidIdError('Id from-method required a valid v4 uuid');
 	}
+	/**
+	 * Creates a generic instance of InvalidIdError.
+	 *
+	 * @returns {InvalidIdError} An instance of InvalidIdError.
+	 */
+	public static because(cause: string): DomainError {
+		return new InvalidIdError(cause);
+	}
 }

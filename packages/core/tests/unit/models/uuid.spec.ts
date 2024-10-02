@@ -24,6 +24,6 @@ describe(UUID, () => {
 		expect(generatedAccountId.value).toBeDefined();
 
 		const uuid = '123-abc';
-		expect(() => AccountId.from(uuid)).toThrow(InvalidIdError.because(`${uuid} is not a valid v4 uuid`));
+		expect(() => AccountId.from(uuid)).toThrow(InvalidIdError.becauseInvalid(uuid));
 	});
 });
