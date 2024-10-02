@@ -10,6 +10,6 @@ export default defineConfig({
 		'@ocoda/event-sourcing-mariadb',
 		'@ocoda/event-sourcing-mongodb',
 		'@ocoda/event-sourcing-postgres',
-		'@ocoda/event-sourcing-example/src/app.providers',
+		'@ocoda/event-sourcing-example',
 	],
 });
