@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { NestFactory } from '@nestjs/core';
+import {} from '@nestjs/core';
 import { EventSourcingModule } from '@ocoda/event-sourcing';
 import {
 	AggregateRepositories,
@@ -8,13 +8,14 @@ import {
 	Events,
 	QueryHandlers,
 	SnapshotRepositories,
-} from '@ocoda/event-sourcing-example/src/app.providers';
+} from '@ocoda/event-sourcing-example';
 import {
 	MongoDBEventStore,
 	type MongoDBEventStoreConfig,
 	MongoDBSnapshotStore,
 	type MongoDBSnapshotStoreConfig,
 } from '@ocoda/event-sourcing-mongodb';
+import { bootstrap } from './bootstrap';
 
 @Module({
 	imports: [
@@ -37,8 +38,4 @@ import {
 })
 class AppModule {}
 
-async function bootstrap() {
-	const app = await NestFactory.create(AppModule, { logger: false });
-	await app.listen(3000);
-}
-bootstrap();
+bootstrap(AppModule);
