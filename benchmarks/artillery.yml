@@ -24,16 +24,133 @@ config:
 scenarios:
   - flow:
       - loop:
+          # open an account
           - post:
               url: "/account/open"
               capture:
                 - regexp: ".*"
-                  as: accountId
+                  as: accountId1
               expect:
                 - statusCode: 201
+          # retrieve the account
           - get:
-              url: "/account/{{ accountId }}"
+              url: "/account/{{ accountId1 }}"
               expect:
                 - statusCode: 200
                 - hasProperty: "id"
+          # retrieve an account that doesn't exist
+          - get:
+              url: "/account/c17d12eb-afd0-44c8-a815-c4452f41997b"
+              expect:
+                - statusCode: 404
+          # add an owner to the account
+          - patch:
+              url: "/account/{{ accountId1 }}/add-owner"
+              json:
+                ownerId: 91f7e234-b6e3-4cc6-8faa-07640f2c65fb
+              expect:
+                - statusCode: 200
+          # add another owner to the account
+          - patch:
+              url: "/account/{{ accountId1 }}/add-owner"
+              json:
+                ownerId: 7e8ba535-ef95-4e5e-80b8-291649676824
+              expect:
+                - statusCode: 200
+          # remove the first owner from the account
+          - patch:
+              url: "/account/{{ accountId1 }}/remove-owner"
+              json:
+                ownerId: 91f7e234-b6e3-4cc6-8faa-07640f2c65fb
+              expect:
+                - statusCode: 200
+          # try to debit the account
+          - patch:
+              url: "/account/{{ accountId1 }}/debit"
+              json:
+                amount: 50
+              expect:
+                - statusCode: 400
+          # credit the account
+          - patch:
+              url: "/account/{{ accountId1 }}/credit"
+              json:
+                amount: 100
+              expect:
+                - statusCode: 200
+          # credit the account again
+          - patch:
+              url: "/account/{{ accountId1 }}/credit"
+              json:
+                amount: 50
+              expect:
+                - statusCode: 200
+          # open a 2nd account
+          - post:
+              url: "/account/open"
+              capture:
+                - regexp: ".*"
+                  as: accountId2
+              expect:
+                - statusCode: 201
+          # add another owner to the account
+          - patch:
+              url: "/account/{{ accountId2 }}/add-owner"
+              json:
+                ownerId: fcd1ff86-25ba-4a31-b9de-6454009c57bb
+              expect:
+                - statusCode: 200
+          # try to transfer more money than available from account 1 to account 2
+          - patch:
+              url: "/account/{{ accountId1 }}/transfer-to/{{ accountId2 }}"
+              json:
+                amount: 300
+              expect:
+                - statusCode: 400
+          # transfer money from account 1 to account 2
+          - patch:
+              url: "/account/{{ accountId1 }}/transfer-to/{{ accountId2 }}"
+              json:
+                amount: 150
+              expect:
+                - statusCode: 200
+          # retrieve account 1 and see it has a balance of 0
+          - get:
+              url: "/account/{{ accountId1 }}"
+              capture:
+                - json: "$.balance"
+                  as: balance
+              expect:
+                - statusCode: 200
+                - contentType: json
+                - equals:
+                    - "{{balance}}"
+                    - "0"
+          # close account 1
+          - delete:
+              url: "/account/{{ accountId1 }}"
+              expect:
+                - statusCode: 200
+          # try to get account 1
+          - get:
+              url: "/account/{{ accountId1 }}"
+              expect:
+                - statusCode: 404
+          # try to close account 2
+          - delete:
+              url: "/account/{{ accountId2 }}"
+              expect:
+                - statusCode: 400
+          # debit acount 2
+          - patch:
+              url: "/account/{{ accountId2 }}/debit"
+              json:
+                amount: 150
+              expect:
+                - statusCode: 200
+          # close account 2
+          - delete:
+              url: "/account/{{ accountId2 }}"
+              expect:
+                - statusCode: 200
         count: 5
