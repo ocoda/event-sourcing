@@ -1,4 +1,5 @@
 import { CommandHandler, type ICommand, type ICommandHandler } from '@ocoda/event-sourcing';
+import { AccountNotFoundException } from '../../domain/exceptions';
 import { AccountId } from '../../domain/models';
 // biome-ignore lint/style/useImportType: DI
 import { AccountRepository } from '../repositories';
@@ -17,6 +18,10 @@ export class CreditAccountCommandHandler implements ICommandHandler {
 	async execute(command: CreditAccountCommand): Promise<boolean> {
 		const accountId = AccountId.from(command.accountId);
 		const account = await this.accountRepository.getById(accountId);
+
+		if (!account) {
+			throw AccountNotFoundException.withId(accountId);
+		}
 
 		account.credit(command.amount);
 

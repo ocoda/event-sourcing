@@ -7,6 +7,7 @@ import {
 	AccountOwnerAddedEvent,
 	AccountOwnerRemovedEvent,
 } from '../events';
+import { CannotCloseAccountException, InsufficientFundsException } from '../exceptions';
 
 export class AccountId extends UUID {}
 export class AccountOwnerId extends UUID {}
@@ -42,10 +43,19 @@ export class Account extends AggregateRoot {
 	}
 
 	public debit(amount: number) {
+		if (this.balance - amount < 0) {
+			throw InsufficientFundsException.because("Can't debit more than the account balance", this.id);
+		}
 		this.applyEvent(new AccountDebitedEvent(amount));
 	}
 
 	public close() {
+		if (this.balance > 0) {
+			throw CannotCloseAccountException.because('Account balance must be zero to close account', this.id);
+		}
+		if (this.closedOn) {
+			throw CannotCloseAccountException.because('Account is already closed', this.id);
+		}
 		this.applyEvent(new AccountClosedEvent());
 	}
 
