@@ -3,6 +3,7 @@
 **/dist
 **/node_modules
 **/.next
+**/.report
 
 # Logs
 logs
