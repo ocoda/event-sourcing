@@ -3,7 +3,6 @@ import { Injectable } from '@nestjs/common';
 import { EventStore, EventStream } from '@ocoda/event-sourcing';
 // biome-ignore lint/style/useImportType: DI
 import { Account, AccountId, AccountSnapshotRepository } from '../../domain/models';
-import { AccountNotFoundException } from './exceptions/account-not-found.exception';
 
 @Injectable()
 export class AccountRepository {
@@ -24,7 +23,7 @@ export class AccountRepository {
 		await account.loadFromHistory(eventCursor);
 
 		if (account.version < 1) {
-			throw new AccountNotFoundException(accountId.value);
+			return;
 		}
 
 		return account;

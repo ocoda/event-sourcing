@@ -11,6 +11,13 @@
 		"format": "biome format --write",
 		"lint": "biome check --write"
 	},
+	"dependencies": {
+		"@ocoda/event-sourcing": "workspace:*",
+		"@nestjs/common": "^10.0.0",
+		"@nestjs/core": "^10.0.0",
+		"reflect-metadata": "^0.2.0",
+		"rxjs": "^7.2.0"
+	},
 	"devDependencies": {
 		"@ocoda/event-sourcing-config": "workspace:*",
 		"typescript": "5.6.2"

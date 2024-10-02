@@ -1,4 +1,5 @@
 import { type IQuery, type IQueryHandler, QueryHandler } from '@ocoda/event-sourcing';
+import { AccountNotFoundException } from '../../domain/exceptions';
 import { AccountId } from '../../domain/models';
 import { AccountDto } from '../account.dtos';
 // biome-ignore lint/style/useImportType: DI
@@ -17,8 +18,8 @@ export class GetAccountByIdQueryHandler implements IQueryHandler<GetAccountByIdQ
 
 		const account = await this.accountRepository.getById(accountId);
 
-		if (account.closedOn) {
-			return;
+		if (!account || account.closedOn) {
+			throw AccountNotFoundException.withId(accountId);
 		}
 
 		return AccountDto.from(account);
