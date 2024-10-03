@@ -38,4 +38,4 @@ jobs:
 
       - name: Report results
         working-directory: ./benchmarks
-        run: cat ./.reports/${{ matrix.database }}.html >> $GITHUB_STEP_SUMMARY
+        run: cat ./reports/${{ matrix.database }}.html >> $GITHUB_STEP_SUMMARY

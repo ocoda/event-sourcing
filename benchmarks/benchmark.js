@@ -22,14 +22,14 @@ try {
 
     server.stdout.on('data', (data) => {
         if(data.includes('Server is listening')) {
-            const bench = spawn('artillery', ['run', '--quiet', '--output', `${__dirname}/.report/${integration}.json`, 'artillery.yml'], {
+            const bench = spawn('artillery', ['run', '--quiet', '--output', `${__dirname}/report/${integration}.json`, 'artillery.yml'], {
                 stdio: ['inherit', 'inherit', 'inherit']
             });
             bench.on('exit', (code) => {
                 console.log(`Finished ${integration} benchmark with code ${code}`);
                 server.kill();
 
-                const createReportPage = spawn('artillery', ['report', `${__dirname}/.report/${integration}.json`], {
+                const createReportPage = spawn('artillery', ['report', `${__dirname}/report/${integration}.json`], {
                     stdio: ['inherit', 'inherit', 'inherit']
                 });
 
