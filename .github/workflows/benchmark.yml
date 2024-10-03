@@ -1,0 +1,38 @@
+name: Benchmark
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["master"]
+    paths:
+      - benchmarks/**
+      - packages/**
+      - package.json
+      - pnpm-*.yaml
+
+jobs:
+  artillery:
+    runs-on: ubuntu-latest
+    strategy:
+        matrix:
+            database: [mongodb, dynamodb, postgres, mariadb]
+        fail-fast: true
+        max-parallel: 1
+
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v4
+
+      - name: Setup job environment
+        id: setup-job
+        uses: ./.github/actions/setup-job-env
+        with:
+          cache-key: node-${{ matrix.node-version }}
+          node-version: ${{ matrix.node-version }}
+
+      - name: Execute load tests
+        run: pnpm run benchmark ${{ matrix.database }} --skip-report
+
+      - name: Adding markdown
+        working-directory: ./benchmarks
+        run: cat ./.reports/${{ matrix.database }}.html >> $GITHUB_STEP_SUMMARY
