@@ -28,21 +28,19 @@ try {
             bench.on('exit', (code) => {
                 console.log(`Finished ${integration} benchmark with code ${code}`);
                 server.kill();
+
+                const createReportPage = spawn('artillery', ['report', `${__dirname}/.report/${integration}.json`], {
+                    stdio: ['inherit', 'inherit', 'inherit']
+                });
+
+                createReportPage.on('exit', (code) => {
+                    console.log(`Created ${integration} report page with code ${code}`);
+                });
             });
         }
     });
 
-    server.on('exit', (code) => {
-        console.log(`Stopped ${integration} server with code ${code}`);
-
-        const createReportPage = spawn('artillery', ['report', `${__dirname}/.report/${integration}.json`], {
-            stdio: ['inherit', 'inherit', 'inherit']
-        });
-
-        createReportPage.on('exit', (code) => {
-            console.log(`Created ${integration} report page with code ${code}`);
-        });
-    });
+    server.on('exit', (code) => console.log(`Stopped ${integration} server with code ${code}`));
 
     // Optionally listen for the child's exit event
 } catch (error) {
