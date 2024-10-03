@@ -3,7 +3,8 @@
 	"extends": ["//"],
 	"tasks": {
 		"benchmark:build": {
-			"dependsOn": ["^build"]
+			"dependsOn": ["^build"],
+			"outputs": ["dist/*"]
 		},
 		"benchmark": {
 			"dependsOn": ["benchmark:build"],
