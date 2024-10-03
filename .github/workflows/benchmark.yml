@@ -40,10 +40,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.database }}-report-json
-          path: ./report/${{ matrix.database }}.json
+          path: ./benchmarks/report/${{ matrix.database }}.json
 
       - name: Upload report (HTML)
         uses: actions/upload-artifact@v4
         with:
          name: ${{ matrix.database }}-report-html
-         path: ./report/${{ matrix.database }}.json.html
+         path: ./benchmarks/report/${{ matrix.database }}.json.html
