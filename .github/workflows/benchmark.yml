@@ -23,6 +23,9 @@ jobs:
       - name: Checkout the repository
         uses: actions/checkout@v4
 
+      - name: Start database
+        run: docker compose up -d ${{ matrix.database }}
+
       - name: Setup job environment
         id: setup-job
         uses: ./.github/actions/setup-job-env
@@ -31,8 +34,8 @@ jobs:
           node-version: ${{ matrix.node-version }}
 
       - name: Execute load tests
-        run: pnpm run benchmark ${{ matrix.database }} --skip-report
+        run: pnpm run benchmark ${{ matrix.database }}
 
-      - name: Adding markdown
+      - name: Report results
         working-directory: ./benchmarks
         run: cat ./.reports/${{ matrix.database }}.html >> $GITHUB_STEP_SUMMARY
