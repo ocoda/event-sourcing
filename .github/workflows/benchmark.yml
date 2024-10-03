@@ -36,6 +36,14 @@ jobs:
       - name: Execute load tests
         run: pnpm run benchmark ${{ matrix.database }}
 
-      - name: Report results
-        working-directory: ./benchmarks
-        run: cat ./report/${{ matrix.database }}.json.html >> $GITHUB_STEP_SUMMARY
+      - name: Upload report (JSON)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.database }}-report-json
+          path: ./report/${{ matrix.database }}.json
+
+      - name: Upload report (HTML)
+        uses: actions/upload-artifact@v4
+        with:
+         name: ${{ matrix.database }}-report-html
+         path: ./report/${{ matrix.database }}.json.html
