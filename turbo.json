@@ -9,8 +9,6 @@
 		"ci": {},
 		"lint": {},
 		"format": {},
-		"benchmark": {
-			"env": ["INTEGRATION"]
-		}
+		"benchmark": {}
 	}
 }
