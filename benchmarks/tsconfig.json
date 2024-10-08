@@ -1,6 +1,6 @@
 {
 	"extends": "@ocoda/event-sourcing-config/typescript/module.json",
-	"include": ["**/*.ts", "benchmark.js"],
+	"include": ["**/*.ts", "benchmark.js", "report-benchmark.js"],
 	"compilerOptions": {
 		"paths": {
 			"@ocoda/event-sourcing": ["../packages/core/lib"],

@@ -9,6 +9,7 @@
 		"ci": {},
 		"lint": {},
 		"format": {},
-		"benchmark": {}
+		"benchmark": {},
+        "benchmark:report": {}
 	}
 }

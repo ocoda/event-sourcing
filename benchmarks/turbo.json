@@ -9,6 +9,9 @@
 		"benchmark": {
 			"dependsOn": ["benchmark:build"],
 			"cache": false
+		},
+		"benchmark:report": {
+			"outputs": ["report/report.md"]
 		}
 	}
 }
