@@ -24,7 +24,7 @@
 		"rxjs": "^7.2.0"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "1.9.2",
+		"@biomejs/biome": "1.9.3",
 		"@codechecks/client": "^0.1.12",
 		"@ocoda/event-sourcing-config": "workspace:*",
 		"@types/node": "20.16.10",
