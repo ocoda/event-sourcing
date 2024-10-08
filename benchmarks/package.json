@@ -8,7 +8,8 @@
 	"keywords": [],
 	"scripts": {
 		"benchmark:build": "tsup",
-		"benchmark": "node benchmark.js"
+		"benchmark": "node benchmark.js",
+		"benchmark:report": "node report-benchmark.js"
 	},
 	"dependencies": {
 		"@nestjs/common": "^10.0.0",

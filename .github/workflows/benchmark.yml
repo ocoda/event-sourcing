@@ -11,27 +11,29 @@ on:
       - pnpm-*.yaml
 
 jobs:
-  artillery:
+  generate-benchmark:
+    name: Generate benchmark
     runs-on: ubuntu-latest
     strategy:
-        matrix:
-            database: [mongodb, dynamodb, postgres, mariadb]
-        fail-fast: true
-        max-parallel: 1
+      matrix:
+        database: [in-memory, mongodb, dynamodb, postgres, mariadb]
+      fail-fast: true
+      max-parallel: 1
 
     steps:
       - name: Checkout the repository
         uses: actions/checkout@v4
 
       - name: Start database
+        if: ${{ matrix.database }} != 'in-memory'
         run: docker compose up -d ${{ matrix.database }}
 
       - name: Setup job environment
         id: setup-job
         uses: ./.github/actions/setup-job-env
         with:
-          cache-key: node-${{ matrix.node-version }}
-          node-version: ${{ matrix.node-version }}
+          cache-key: node-22.x
+          node-version: 22.x
 
       - name: Execute load tests
         run: pnpm run benchmark ${{ matrix.database }}
@@ -39,11 +41,27 @@ jobs:
       - name: Upload report (JSON)
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.database }}-report-json
+          name: report-json-${{ matrix.database }}
           path: ./benchmarks/report/${{ matrix.database }}.json
 
-      - name: Upload report (HTML)
-        uses: actions/upload-artifact@v4
+  report-benchmark:
+    name: Report benchmark
+    needs: [generate-benchmark]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v4
+
+      - name: Download reports (JSON)
+        uses: actions/download-artifact@v4
         with:
-         name: ${{ matrix.database }}-report-html
-         path: ./benchmarks/report/${{ matrix.database }}.json.html
+          path: ./benchmarks/report/
+          pattern: report-json-*
+          merge-multiple: true
+
+      - name: Generate report (MD)
+        run: pnpm run benchmark:report
+
+      - name: Upload report (MD)
+        run: cat ./benchmarks/report/report.md >> $GITHUB_STEP_SUMMARY

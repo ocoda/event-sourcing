@@ -1,7 +1,7 @@
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
-	entry: ['lib/dynamodb.ts', 'lib/mariadb.ts', 'lib/mongodb.ts', 'lib/postgres.ts'],
+	entry: ['lib/in-memory.ts', 'lib/dynamodb.ts', 'lib/mariadb.ts', 'lib/mongodb.ts', 'lib/postgres.ts'],
 	format: ['cjs'],
 	target: 'es2023',
 	noExternal: [
