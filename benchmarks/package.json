@@ -1,6 +1,5 @@
 {
 	"name": "@ocoda/event-sourcing-benchmarks",
-	"version": "1.0.0",
 	"description": "NestJS Event Sourcing Benchmarks",
 	"author": "Dries Hooghe <dries@drieshooghe.com>",
 	"license": "MIT",
