@@ -1,29 +1,29 @@
-import { DomainError } from './domain-error';
+import { DomainException } from './domain-error';
 
-export class InvalidIdError extends DomainError {
+export class InvalidIdException extends DomainException {
 	/**
-	 * Creates an instance of InvalidIdError with the given UUID.
+	 * Creates an instance of InvalidIdException with the given UUID.
 	 *
 	 * @param {string} uuid - The UUID that is considered invalid.
-	 * @returns {InvalidIdError} An instance of InvalidIdError with a descriptive error message.
+	 * @returns {InvalidIdException} An instance of InvalidIdException with a descriptive error message.
 	 */
-	public static becauseInvalid(uuid: string): InvalidIdError {
-		return new InvalidIdError(`${uuid} is not a valid v4 uuid`);
+	public static becauseInvalid(uuid: string): InvalidIdException {
+		return new InvalidIdException(`${uuid} is not a valid v4 uuid`);
 	}
 	/**
-	 * Creates an instance of InvalidIdError for when no UUID is provided to create an Id instance from.
+	 * Creates an instance of InvalidIdException for when no UUID is provided to create an Id instance from.
 	 *
-	 * @returns {InvalidIdError} An instance of InvalidIdError.
+	 * @returns {InvalidIdException} An instance of InvalidIdException.
 	 */
-	public static becauseEmpty(): InvalidIdError {
-		return new InvalidIdError('Id from-method required a valid v4 uuid');
+	public static becauseEmpty(): InvalidIdException {
+		return new InvalidIdException('Id from-method required a valid v4 uuid');
 	}
 	/**
-	 * Creates a generic instance of InvalidIdError.
+	 * Creates a generic instance of InvalidIdException.
 	 *
-	 * @returns {InvalidIdError} An instance of InvalidIdError.
+	 * @returns {InvalidIdException} An instance of InvalidIdException.
 	 */
-	public static because(cause: string): DomainError {
-		return new InvalidIdError(cause);
+	public static because(cause: string): DomainException {
+		return new InvalidIdException(cause);
 	}
 }

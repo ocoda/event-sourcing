@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto';
-import { InvalidIdError } from '../exceptions';
+import { InvalidIdException } from '../exceptions';
 import { Id } from './id';
 
 export class UUID extends Id {
 	protected constructor(id: string = randomUUID()) {
 		const format = /^[0-9a-fA-F]{8}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{12}$/gi;
 		if (!format.test(id)) {
-			throw InvalidIdError.becauseInvalid(id);
+			throw InvalidIdException.becauseInvalid(id);
 		}
 		super(id);
 	}
@@ -17,7 +17,7 @@ export class UUID extends Id {
 
 	public static from(id: string): UUID {
 		if (!id) {
-			throw InvalidIdError.becauseEmpty();
+			throw InvalidIdException.becauseEmpty();
 		}
 		return new UUID(id);
 	}

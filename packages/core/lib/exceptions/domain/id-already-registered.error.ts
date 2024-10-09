@@ -1,13 +1,13 @@
 import type { Id } from '../../models';
 
-export class IdAlreadyRegisteredError extends Error {
+export class IdAlreadyRegisteredException extends Error {
 	/**
-	 * Creates an instance of the IdAlreadyRegisteredError with the provided id.
+	 * Creates an instance of the IdAlreadyRegisteredException with the provided id.
 	 *
 	 * @param {Id} id - The id that is already registered.
-	 * @returns {IdAlreadyRegisteredError} An instance of the IdAlreadyRegisteredError.
+	 * @returns {IdAlreadyRegisteredException} An instance of the IdAlreadyRegisteredException.
 	 */
-	public static withId(id: Id): IdAlreadyRegisteredError {
-		return new IdAlreadyRegisteredError(`Id ${id.value} already taken.`);
+	public static withId(id: Id): IdAlreadyRegisteredException {
+		return new IdAlreadyRegisteredException(`Id ${id.value} already taken.`);
 	}
 }

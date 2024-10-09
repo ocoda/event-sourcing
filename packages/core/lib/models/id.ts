@@ -1,4 +1,4 @@
-import { InvalidIdError } from '../exceptions';
+import { InvalidIdException } from '../exceptions';
 import { ValueObject } from './value-object';
 
 interface Props {
@@ -12,7 +12,7 @@ export class Id extends ValueObject<Props> {
 
 	public static from(id: string): Id {
 		if (!id) {
-			throw InvalidIdError.becauseEmpty();
+			throw InvalidIdException.becauseEmpty();
 		}
 		return new Id(id);
 	}

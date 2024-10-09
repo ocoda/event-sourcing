@@ -1,6 +1,6 @@
 import type { Type } from '@nestjs/common';
 import 'reflect-metadata';
-import { InvalidAggregateStreamNameError } from '../exceptions';
+import { InvalidAggregateStreamNameException } from '../exceptions';
 import type { AggregateMetadata } from '../interfaces';
 import type { AggregateRoot } from '../models';
 import { AGGREGATE_METADATA } from './constants';
@@ -18,7 +18,7 @@ export const Aggregate = (options?: AggregateMetadata): ClassDecorator => {
 		const metadata: AggregateMetadata = { streamName: name.toLowerCase(), ...options };
 
 		if (metadata.streamName.length > 50) {
-			throw InvalidAggregateStreamNameError.becauseExceedsMaxLength(name, 50);
+			throw InvalidAggregateStreamNameException.becauseExceedsMaxLength(name, 50);
 		}
 
 		Reflect.defineMetadata(AGGREGATE_METADATA, metadata, target);

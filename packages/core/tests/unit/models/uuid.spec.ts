@@ -1,4 +1,4 @@
-import { InvalidIdError, UUID } from '@ocoda/event-sourcing';
+import { InvalidIdException, UUID } from '@ocoda/event-sourcing';
 
 describe(UUID, () => {
 	class AccountId extends UUID {}
@@ -16,7 +16,7 @@ describe(UUID, () => {
 
 	it('should throw when trying to create an id from an undefined variable', () => {
 		let uuid: string;
-		expect(() => AccountId.from(uuid)).toThrow(InvalidIdError.becauseEmpty());
+		expect(() => AccountId.from(uuid)).toThrow(InvalidIdException.becauseEmpty());
 	});
 
 	it('should throw when creating an Id from an invalid uuid', () => {
@@ -24,6 +24,6 @@ describe(UUID, () => {
 		expect(generatedAccountId.value).toBeDefined();
 
 		const uuid = '123-abc';
-		expect(() => AccountId.from(uuid)).toThrow(InvalidIdError.becauseInvalid(uuid));
+		expect(() => AccountId.from(uuid)).toThrow(InvalidIdException.becauseInvalid(uuid));
 	});
 });

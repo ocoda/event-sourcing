@@ -1,13 +1,13 @@
 import type { Id } from '../../models';
 
-export class IdNotFoundError extends Error {
+export class IdNotFoundException extends Error {
 	/**
-	 * Creates an instance of IdNotFoundError with the provided id.
+	 * Creates an instance of IdNotFoundException with the provided id.
 	 *
 	 * @param {Id} id - The id that was not found.
-	 * @returns {IdNotFoundError} An instance of IdNotFoundError.
+	 * @returns {IdNotFoundException} An instance of IdNotFoundException.
 	 */
-	public static withId(id: Id): IdNotFoundError {
-		return new IdNotFoundError(`Id ${id.value} not found.`);
+	public static withId(id: Id): IdNotFoundException {
+		return new IdNotFoundException(`Id ${id.value} not found.`);
 	}
 }

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import 'reflect-metadata';
-import { InvalidEventStreamNameError } from '../exceptions';
+import { InvalidEventStreamNameException } from '../exceptions';
 import type { EventMetadata } from '../interfaces';
 import { EVENT_METADATA } from './constants';
 
@@ -21,7 +21,7 @@ export const Event = (name?: string): ClassDecorator => {
 		const metadata: EventMetadata = { id: randomUUID(), name: name || target.name };
 
 		if (metadata.name.length > 80) {
-			throw InvalidEventStreamNameError.becauseExceedsMaxLength(target.name, 80);
+			throw InvalidEventStreamNameException.becauseExceedsMaxLength(target.name, 80);
 		}
 
 		Reflect.defineMetadata(EVENT_METADATA, metadata, target);

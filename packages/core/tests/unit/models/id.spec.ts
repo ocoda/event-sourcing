@@ -1,4 +1,4 @@
-import { Id, InvalidIdError } from '@ocoda/event-sourcing';
+import { Id, InvalidIdException } from '@ocoda/event-sourcing';
 
 describe(Id, () => {
 	class DeviceId extends Id {
@@ -20,6 +20,6 @@ describe(Id, () => {
 
 	it('should throw when trying to create an id from an undefined variable', () => {
 		let id: string;
-		expect(() => DeviceId.from(id)).toThrow(InvalidIdError.becauseEmpty());
+		expect(() => DeviceId.from(id)).toThrow(InvalidIdException.becauseEmpty());
 	});
 });

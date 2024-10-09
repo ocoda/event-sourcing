@@ -1,4 +1,4 @@
-import { Event, type IEvent, InvalidEventStreamNameError } from '@ocoda/event-sourcing';
+import { Event, type IEvent, InvalidEventStreamNameException } from '@ocoda/event-sourcing';
 import { getEventMetadata } from '@ocoda/event-sourcing/helpers';
 
 describe('@Event', () => {
@@ -23,6 +23,6 @@ describe('@Event', () => {
 		};
 
 		expect(() => decorate(80)).not.toThrow();
-		expect(() => decorate(81)).toThrow(InvalidEventStreamNameError.becauseExceedsMaxLength('InvalidEvent', 80));
+		expect(() => decorate(81)).toThrow(InvalidEventStreamNameException.becauseExceedsMaxLength('InvalidEvent', 80));
 	});
 });
