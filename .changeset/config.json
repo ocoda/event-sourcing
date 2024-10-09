@@ -11,5 +11,6 @@
     ]],
 	"access": "restricted",
 	"baseBranch": "master",
-	"updateInternalDependencies": "patch"
+	"updateInternalDependencies": "patch",
+    "privatePackages": false
 }
