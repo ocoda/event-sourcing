@@ -1,5 +1,6 @@
 {
 	"name": "@ocoda/event-sourcing-testing",
+	"version": "1.0.0",
 	"private": true,
 	"license": "MIT",
 	"devDependencies": {
