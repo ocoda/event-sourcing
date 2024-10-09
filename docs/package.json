@@ -6,9 +6,9 @@
 	"private": true,
 	"keywords": [],
 	"scripts": {
-		"dev": "next",
-		"build": "next build",
-		"start": "next start",
+		"docs:dev": "next",
+		"docs:build": "next build",
+		"docs:start": "next start",
 		"ci": "biome ci",
 		"format": "biome format --write",
 		"lint": "biome check --write"

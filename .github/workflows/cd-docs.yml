@@ -33,7 +33,7 @@ jobs:
           node-version: 22.x
 
       - name: Build
-        run: pnpm build --filter='./docs/**'
+        run: pnpm docs:build --filter='./docs/**'
         env:
           GITHUB_PAGES: true
 
