@@ -6,6 +6,7 @@
 	"private": true,
 	"scripts": {
 		"build": "turbo build",
+		"docs:build": "turbo docs:build",
 		"test": "turbo test",
 		"ci": "turbo ci",
 		"lint": "turbo lint",
