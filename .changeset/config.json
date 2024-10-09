@@ -1,0 +1,15 @@
+{
+	"$schema": "https://unpkg.com/@changesets/config@3.0.3/schema.json",
+	"changelog": "@changesets/cli/changelog",
+	"commit": false,
+	"fixed": [[
+        "@ocoda/event-sourcing",
+        "@ocoda/event-sourcing-dynamodb",
+        "@ocoda/event-sourcing-mariadb",
+        "@ocoda/event-sourcing-mongodb",
+        "@ocoda/event-sourcing-postgres"
+    ]],
+	"access": "restricted",
+	"baseBranch": "master",
+	"updateInternalDependencies": "patch"
+}
