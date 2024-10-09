@@ -1,7 +1,7 @@
-import { DomainError, type Id } from '@ocoda/event-sourcing';
+import { DomainException, type Id } from '@ocoda/event-sourcing';
 
-export class InsufficientFundsException extends DomainError {
-	static because(cause: string, id?: Id): DomainError {
+export class InsufficientFundsException extends DomainException {
+	static because(cause: string, id?: Id): DomainException {
 		return new InsufficientFundsException(cause, id);
 	}
 }

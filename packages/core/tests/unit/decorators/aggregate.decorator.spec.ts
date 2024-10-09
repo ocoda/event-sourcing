@@ -3,7 +3,7 @@ import {
 	Aggregate,
 	type AggregateMetadata,
 	AggregateRoot,
-	InvalidAggregateStreamNameError,
+	InvalidAggregateStreamNameException,
 } from '@ocoda/event-sourcing';
 
 describe('@Aggregate', () => {
@@ -31,6 +31,6 @@ describe('@Aggregate', () => {
 		};
 
 		expect(() => decorate(50)).not.toThrow();
-		expect(() => decorate(51)).toThrow(InvalidAggregateStreamNameError.becauseExceedsMaxLength('Account', 50));
+		expect(() => decorate(51)).toThrow(InvalidAggregateStreamNameException.becauseExceedsMaxLength('Account', 50));
 	});
 });

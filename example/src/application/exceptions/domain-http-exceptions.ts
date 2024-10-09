@@ -1,5 +1,5 @@
 import { HttpException as BaseHttpException, HttpException, HttpStatus } from '@nestjs/common';
-import type { DomainError } from '@ocoda/event-sourcing';
+import type { DomainException } from '@ocoda/event-sourcing';
 import {
 	AccountNotFoundException,
 	CannotCloseAccountException,
@@ -7,7 +7,7 @@ import {
 } from '../../domain/exceptions';
 
 export class DomainHttpException extends BaseHttpException {
-	static fromDomainException(error: DomainError): DomainHttpException {
+	static fromDomainException(error: DomainException): DomainHttpException {
 		switch (error.constructor) {
 			case AccountNotFoundException:
 				return new HttpException({ id: error.id, message: error.message }, HttpStatus.NOT_FOUND);
