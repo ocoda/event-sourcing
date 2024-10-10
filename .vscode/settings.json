@@ -23,5 +23,8 @@
 	},
 	"[yaml]": {
 		"editor.defaultFormatter": "redhat.vscode-yaml"
+	},
+	"[yml]": {
+		"editor.defaultFormatter": "redhat.vscode-yaml"
 	}
 }
