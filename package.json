@@ -27,6 +27,7 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "1.9.3",
+		"@changesets/changelog-github": "^0.5.0",
 		"@changesets/cli": "^2.27.9",
 		"@faker-js/faker": "^9.0.0",
 		"@nestjs/common": "10.4.4",
