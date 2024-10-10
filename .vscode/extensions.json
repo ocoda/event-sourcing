@@ -1,0 +1,4 @@
+{
+	"recommendations": ["biomejs.biome", "ms-azuretools.vscode-docker", "redhat.vscode-yaml"],
+	"unwantedRecommendations": []
+}
