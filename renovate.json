@@ -1,47 +1,39 @@
 {
 	"$schema": "https://docs.renovatebot.com/renovate-schema.json",
-	"schedule": [
-		"before 5am on monday"
-	],
 	"extends": [
-		"config:base"
+		"config:recommended",
+		"schedule:weekly",
+		"group:allNonMajor",
+		":disablePeerDependencies",
+		"regexManagers:biomeVersions"
 	],
 	"semanticCommits": "enabled",
 	"commitMessagePrefix": ":arrow_up:",
-	"rangeStrategy": "update-lockfile",
+	"labels": ["dependencies"],
+	"rangeStrategy": "bump",
+	"postUpdateOptions": ["pnpmDedupe"],
 	"rebaseConflictedPrs": true,
+	"ignorePaths": ["**/node_modules/**"],
 	"packageRules": [
 		{
 			"groupName": "AWS packages",
-			"matchPackagePatterns": [
-				"aws-sdk"
-			]
+			"matchPackagePatterns": ["aws-sdk"]
 		},
 		{
 			"groupName": "NestJS",
-			"matchPackagePrefixes": [
-				"@nestjs/"
-			]
+			"matchPackagePrefixes": ["@nestjs/"]
 		},
 		{
 			"groupName": "types",
-			"matchPackagePrefixes": [
-				"@types/"
-			],
+			"matchPackagePrefixes": ["@types/"],
 			"automerge": true,
-			"addLabels": [
-				"automerge"
-			]
+			"addLabels": ["automerge"]
 		},
 		{
 			"groupName": "Jest packages",
-			"matchPackagePatterns": [
-				"jest"
-			],
+			"matchPackagePatterns": ["jest"],
 			"automerge": true,
-			"addLabels": [
-				"automerge"
-			]
+			"addLabels": ["automerge"]
 		}
 	]
 }
