@@ -13,7 +13,6 @@
 		"format": "turbo format",
 		"benchmark": "turbo benchmark --",
 		"benchmark:report": "turbo benchmark:report",
-		"changeset": "changeset",
 		"publish-packages": "turbo run build lint test && changeset version && changeset publish"
 	},
 	"engines": {
