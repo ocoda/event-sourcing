@@ -12,8 +12,7 @@
 		"lint": "turbo lint",
 		"format": "turbo format",
 		"benchmark": "turbo benchmark --",
-		"benchmark:report": "turbo benchmark:report",
-		"publish-packages": "turbo run build lint test && changeset version && changeset publish"
+		"benchmark:report": "turbo benchmark:report"
 	},
 	"engines": {
 		"node": ">= 18.0.0"
