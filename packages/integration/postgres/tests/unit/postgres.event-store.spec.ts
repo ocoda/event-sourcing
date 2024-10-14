@@ -3,6 +3,7 @@ import { EventStorePersistenceException } from '@ocoda/event-sourcing';
 import { EventStream } from '@ocoda/event-sourcing';
 import { StreamReadingDirection } from '@ocoda/event-sourcing';
 import type { EventEnvelope } from '@ocoda/event-sourcing';
+import type { IEventCollection } from '@ocoda/event-sourcing';
 import { EventNotFoundException } from '@ocoda/event-sourcing';
 import type { IEvent } from '@ocoda/event-sourcing';
 import { type PostgresEventEntity, PostgresEventStore } from '@ocoda/event-sourcing-postgres';
@@ -248,5 +249,14 @@ describe(PostgresEventStore, () => {
 			expect(envelope.metadata.occurredOn).toBeInstanceOf(Date);
 			expect(envelope.metadata.version).toEqual(envelopesAccountA[index].metadata.version);
 		}
+	});
+
+	it('should list collections', async () => {
+		const resolvedCollections: IEventCollection[] = [];
+		for await (const collections of eventStore.listCollections()) {
+			resolvedCollections.push(...collections);
+		}
+
+		expect(resolvedCollections.sort()).toEqual(['events', 'test-singular-events-events'].sort());
 	});
 });

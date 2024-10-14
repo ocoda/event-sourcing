@@ -1,3 +1,4 @@
+import type { IEventCollection } from '@ocoda/event-sourcing';
 import { EventId, EventStoreVersionConflictException, EventStream } from '@ocoda/event-sourcing';
 import {
 	EventCollection,
@@ -248,5 +249,14 @@ describe(MariaDBEventStore, () => {
 			expect(envelope.metadata.occurredOn).toBeInstanceOf(Date);
 			expect(envelope.metadata.version).toEqual(envelopesAccountA[index].metadata.version);
 		}
+	});
+
+	it('should list collections', async () => {
+		const resolvedCollections: IEventCollection[] = [];
+		for await (const collections of eventStore.listCollections()) {
+			resolvedCollections.push(...collections);
+		}
+
+		expect(resolvedCollections.sort()).toEqual(['events', 'test-singular-events-events'].sort());
 	});
 });
