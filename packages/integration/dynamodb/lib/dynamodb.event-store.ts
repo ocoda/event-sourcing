@@ -68,6 +68,14 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 							AttributeDefinitions: [
 								{ AttributeName: 'streamId', AttributeType: 'S' },
 								{ AttributeName: 'version', AttributeType: 'N' },
+								{ AttributeName: 'eventId', AttributeType: 'S' },
+							],
+							GlobalSecondaryIndexes: [
+								{
+									IndexName: 'eventIdIndex',
+									KeySchema: [{ AttributeName: 'eventId', KeyType: 'HASH' }],
+									Projection: { ProjectionType: 'ALL' },
+								},
 							],
 							ProvisionedThroughput: config?.ProvisionedThroughput || {
 								ReadCapacityUnits: 1,
