@@ -20,7 +20,7 @@
 		"@ocoda/event-sourcing-mongodb": "workspace:*",
 		"@ocoda/event-sourcing-postgres": "workspace:*",
 		"reflect-metadata": "^0.2.0",
-		"rxjs": "^7.2.0"
+		"rxjs": "^7.8.1"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "1.9.3",
@@ -29,6 +29,6 @@
 		"@types/node": "20.16.11",
 		"artillery": "^2.0.20",
 		"tsup": "^8.3.0",
-		"typescript": "5.6.2"
+		"typescript": "5.6.3"
 	}
 }

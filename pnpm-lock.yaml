@@ -18,7 +18,7 @@ importers:
         specifier: ^2.27.9
         version: 2.27.9
       '@faker-js/faker':
-        specifier: ^9.0.0
+        specifier: ^9.0.3
         version: 9.0.3
       '@nestjs/common':
         specifier: 10.4.4
@@ -31,16 +31,16 @@ importers:
         version: 10.4.4(@nestjs/common@10.4.4(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/core@10.4.4)
       '@nestjs/testing':
         specifier: 10.4.4
-        version: 10.4.4(@nestjs/common@10.4.4(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/core@10.4.4(@nestjs/common@10.4.4(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/platform-express@10.4.4)(encoding@0.1.13)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/platform-express@10.4.4(@nestjs/common@10.4.4(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/core@10.4.4))
+        version: 10.4.4(@nestjs/common@10.4.4(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/core@10.4.4)(@nestjs/platform-express@10.4.4)
       '@swc-node/register':
-        specifier: ^1.5.2
-        version: 1.10.9(@swc/core@1.7.26(@swc/helpers@0.5.5))(@swc/types@0.1.12)(typescript@5.6.2)
+        specifier: ^1.10.9
+        version: 1.10.9(@swc/core@1.7.35(@swc/helpers@0.5.5))(@swc/types@0.1.13)(typescript@5.6.3)
       '@swc/core':
-        specifier: 1.7.26
-        version: 1.7.26(@swc/helpers@0.5.5)
+        specifier: 1.7.35
+        version: 1.7.35(@swc/helpers@0.5.5)
       '@swc/jest':
         specifier: 0.2.36
-        version: 0.2.36(@swc/core@1.7.26(@swc/helpers@0.5.5))
+        version: 0.2.36(@swc/core@1.7.35(@swc/helpers@0.5.5))
       '@types/jest':
         specifier: 29.5.13
         version: 29.5.13
@@ -49,7 +49,7 @@ importers:
         version: 20.16.11
       jest:
         specifier: 29.7.0
-        version: 29.7.0(@types/node@20.16.11)(ts-node@10.9.2(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.2))
+        version: 29.7.0(@types/node@20.16.11)(ts-node@10.9.2(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.3))
       jest-mock:
         specifier: 29.7.0
         version: 29.7.0
@@ -57,17 +57,17 @@ importers:
         specifier: 0.2.2
         version: 0.2.2
       release-it:
-        specifier: 17.6.0
-        version: 17.6.0(typescript@5.6.2)
+        specifier: 17.8.2
+        version: 17.8.2(typescript@5.6.3)
       rxjs:
         specifier: 7.8.1
         version: 7.8.1
       turbo:
-        specifier: ^2.1.2
+        specifier: ^2.1.3
         version: 2.1.3
       typescript:
-        specifier: 5.6.2
-        version: 5.6.2
+        specifier: 5.6.3
+        version: 5.6.3
 
   benchmarks:
     dependencies:
@@ -99,7 +99,7 @@ importers:
         specifier: ^0.2.0
         version: 0.2.2
       rxjs:
-        specifier: ^7.2.0
+        specifier: ^7.8.1
         version: 7.8.1
     devDependencies:
       '@biomejs/biome':
@@ -107,7 +107,7 @@ importers:
         version: 1.9.3
       '@codechecks/client':
         specifier: ^0.1.12
-        version: 0.1.12(typescript@5.6.2)
+        version: 0.1.12(typescript@5.6.3)
       '@ocoda/event-sourcing-config':
         specifier: workspace:*
         version: link:../packages/config
@@ -116,18 +116,18 @@ importers:
         version: 20.16.11
       artillery:
         specifier: ^2.0.20
-        version: 2.0.20(@aws-sdk/client-sso-oidc@3.667.0(@aws-sdk/client-sts@3.658.1))(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(@types/react@18.3.9)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.6.2)
+        version: 2.0.20(@aws-sdk/client-sso-oidc@3.667.0(@aws-sdk/client-sts@3.658.1))(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(@types/react@18.3.9)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.6.3)
       tsup:
         specifier: ^8.3.0
-        version: 8.3.0(@swc/core@1.7.26(@swc/helpers@0.5.5))(postcss@8.4.47)(typescript@5.6.2)(yaml@2.5.1)
+        version: 8.3.0(@swc/core@1.7.35(@swc/helpers@0.5.5))(postcss@8.4.47)(typescript@5.6.3)(yaml@2.5.1)
       typescript:
-        specifier: 5.6.2
-        version: 5.6.2
+        specifier: 5.6.3
+        version: 5.6.3
 
   docs:
     dependencies:
       next:
-        specifier: ^14.2.13
+        specifier: ^14.2.15
         version: 14.2.15(@babel/core@7.18.9)(@opentelemetry/api@1.9.0)(@playwright/test@1.45.3)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       nextra:
         specifier: ^2.13.4
@@ -149,8 +149,8 @@ importers:
         specifier: 20.16.11
         version: 20.16.11
       typescript:
-        specifier: 5.6.2
-        version: 5.6.2
+        specifier: 5.6.3
+        version: 5.6.3
 
   example:
     dependencies:
@@ -167,15 +167,15 @@ importers:
         specifier: ^0.2.0
         version: 0.2.2
       rxjs:
-        specifier: ^7.2.0
+        specifier: ^7.8.1
         version: 7.8.1
     devDependencies:
       '@ocoda/event-sourcing-config':
         specifier: workspace:*
         version: link:../packages/config
       typescript:
-        specifier: 5.6.2
-        version: 5.6.2
+        specifier: 5.6.3
+        version: 5.6.3
 
   packages/config: {}
 
@@ -192,7 +192,7 @@ importers:
         specifier: 1.9.3
         version: 1.9.3
       '@faker-js/faker':
-        specifier: ^9.0.0
+        specifier: ^9.0.3
         version: 9.0.3
       '@nestjs/common':
         specifier: 10.4.4
@@ -205,7 +205,7 @@ importers:
         version: 10.4.4(@nestjs/common@10.4.4(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/core@10.4.4)
       '@nestjs/testing':
         specifier: 10.4.4
-        version: 10.4.4(@nestjs/common@10.4.4(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/core@10.4.4(@nestjs/common@10.4.4(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/platform-express@10.4.4)(encoding@0.1.13)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/platform-express@10.4.4(@nestjs/common@10.4.4(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/core@10.4.4))
+        version: 10.4.4(@nestjs/common@10.4.4(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/core@10.4.4)(@nestjs/platform-express@10.4.4)
       '@ocoda/event-sourcing-config':
         specifier: workspace:*
         version: link:../config
@@ -213,14 +213,14 @@ importers:
         specifier: workspace:*
         version: link:../testing
       '@swc-node/register':
-        specifier: ^1.5.2
-        version: 1.10.9(@swc/core@1.7.26(@swc/helpers@0.5.5))(@swc/types@0.1.12)(typescript@5.6.2)
+        specifier: ^1.10.9
+        version: 1.10.9(@swc/core@1.7.35(@swc/helpers@0.5.5))(@swc/types@0.1.13)(typescript@5.6.3)
       '@swc/core':
-        specifier: 1.7.26
-        version: 1.7.26(@swc/helpers@0.5.5)
+        specifier: 1.7.35
+        version: 1.7.35(@swc/helpers@0.5.5)
       '@swc/jest':
         specifier: 0.2.36
-        version: 0.2.36(@swc/core@1.7.26(@swc/helpers@0.5.5))
+        version: 0.2.36(@swc/core@1.7.35(@swc/helpers@0.5.5))
       '@types/jest':
         specifier: 29.5.13
         version: 29.5.13
@@ -229,7 +229,7 @@ importers:
         version: 20.16.11
       jest:
         specifier: 29.7.0
-        version: 29.7.0(@types/node@20.16.11)(ts-node@10.9.2(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.2))
+        version: 29.7.0(@types/node@20.16.11)(ts-node@10.9.2(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.3))
       jest-mock:
         specifier: 29.7.0
         version: 29.7.0
@@ -241,10 +241,10 @@ importers:
         version: 7.8.1
       tsup:
         specifier: ^8.3.0
-        version: 8.3.0(@swc/core@1.7.26(@swc/helpers@0.5.5))(postcss@8.4.47)(typescript@5.6.2)(yaml@2.5.1)
+        version: 8.3.0(@swc/core@1.7.35(@swc/helpers@0.5.5))(postcss@8.4.47)(typescript@5.6.3)(yaml@2.5.1)
       typescript:
-        specifier: 5.6.2
-        version: 5.6.2
+        specifier: 5.6.3
+        version: 5.6.3
 
   packages/integration/dynamodb:
     dependencies:
@@ -262,7 +262,7 @@ importers:
         specifier: 1.9.3
         version: 1.9.3
       '@faker-js/faker':
-        specifier: ^9.0.0
+        specifier: ^9.0.3
         version: 9.0.3
       '@nestjs/common':
         specifier: 10.4.4
@@ -275,7 +275,7 @@ importers:
         version: 10.4.4(@nestjs/common@10.4.4(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/core@10.4.4)
       '@nestjs/testing':
         specifier: 10.4.4
-        version: 10.4.4(@nestjs/common@10.4.4(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/core@10.4.4(@nestjs/common@10.4.4(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/platform-express@10.4.4)(encoding@0.1.13)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/platform-express@10.4.4(@nestjs/common@10.4.4(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/core@10.4.4))
+        version: 10.4.4(@nestjs/common@10.4.4(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/core@10.4.4)(@nestjs/platform-express@10.4.4)
       '@ocoda/event-sourcing-config':
         specifier: workspace:*
         version: link:../../config
@@ -283,14 +283,14 @@ importers:
         specifier: workspace:*
         version: link:../../testing
       '@swc-node/register':
-        specifier: ^1.5.2
-        version: 1.10.9(@swc/core@1.7.26(@swc/helpers@0.5.5))(@swc/types@0.1.12)(typescript@5.6.2)
+        specifier: ^1.10.9
+        version: 1.10.9(@swc/core@1.7.35(@swc/helpers@0.5.5))(@swc/types@0.1.13)(typescript@5.6.3)
       '@swc/core':
-        specifier: 1.7.26
-        version: 1.7.26(@swc/helpers@0.5.5)
+        specifier: 1.7.35
+        version: 1.7.35(@swc/helpers@0.5.5)
       '@swc/jest':
         specifier: 0.2.36
-        version: 0.2.36(@swc/core@1.7.26(@swc/helpers@0.5.5))
+        version: 0.2.36(@swc/core@1.7.35(@swc/helpers@0.5.5))
       '@types/jest':
         specifier: 29.5.13
         version: 29.5.13
@@ -299,7 +299,7 @@ importers:
         version: 20.16.11
       jest:
         specifier: 29.7.0
-        version: 29.7.0(@types/node@20.16.11)(ts-node@10.9.2(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.2))
+        version: 29.7.0(@types/node@20.16.11)(ts-node@10.9.2(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.3))
       jest-mock:
         specifier: 29.7.0
         version: 29.7.0
@@ -311,10 +311,10 @@ importers:
         version: 7.8.1
       tsup:
         specifier: ^8.3.0
-        version: 8.3.0(@swc/core@1.7.26(@swc/helpers@0.5.5))(postcss@8.4.47)(typescript@5.6.2)(yaml@2.5.1)
+        version: 8.3.0(@swc/core@1.7.35(@swc/helpers@0.5.5))(postcss@8.4.47)(typescript@5.6.3)(yaml@2.5.1)
       typescript:
-        specifier: 5.6.2
-        version: 5.6.2
+        specifier: 5.6.3
+        version: 5.6.3
 
   packages/integration/mariadb:
     dependencies:
@@ -322,14 +322,14 @@ importers:
         specifier: workspace:*
         version: link:../../core
       mariadb:
-        specifier: ^3.3.1
+        specifier: ^3.3.2
         version: 3.3.2
     devDependencies:
       '@biomejs/biome':
         specifier: 1.9.3
         version: 1.9.3
       '@faker-js/faker':
-        specifier: ^9.0.0
+        specifier: ^9.0.3
         version: 9.0.3
       '@nestjs/common':
         specifier: 10.4.4
@@ -342,7 +342,7 @@ importers:
         version: 10.4.4(@nestjs/common@10.4.4(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/core@10.4.4)
       '@nestjs/testing':
         specifier: 10.4.4
-        version: 10.4.4(@nestjs/common@10.4.4(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/core@10.4.4(@nestjs/common@10.4.4(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/platform-express@10.4.4)(encoding@0.1.13)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/platform-express@10.4.4(@nestjs/common@10.4.4(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/core@10.4.4))
+        version: 10.4.4(@nestjs/common@10.4.4(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/core@10.4.4)(@nestjs/platform-express@10.4.4)
       '@ocoda/event-sourcing-config':
         specifier: workspace:*
         version: link:../../config
@@ -350,14 +350,14 @@ importers:
         specifier: workspace:*
         version: link:../../testing
       '@swc-node/register':
-        specifier: ^1.5.2
-        version: 1.10.9(@swc/core@1.7.26(@swc/helpers@0.5.5))(@swc/types@0.1.12)(typescript@5.6.2)
+        specifier: ^1.10.9
+        version: 1.10.9(@swc/core@1.7.35(@swc/helpers@0.5.5))(@swc/types@0.1.13)(typescript@5.6.3)
       '@swc/core':
-        specifier: 1.7.26
-        version: 1.7.26(@swc/helpers@0.5.5)
+        specifier: 1.7.35
+        version: 1.7.35(@swc/helpers@0.5.5)
       '@swc/jest':
         specifier: 0.2.36
-        version: 0.2.36(@swc/core@1.7.26(@swc/helpers@0.5.5))
+        version: 0.2.36(@swc/core@1.7.35(@swc/helpers@0.5.5))
       '@types/jest':
         specifier: 29.5.13
         version: 29.5.13
@@ -366,7 +366,7 @@ importers:
         version: 20.16.11
       jest:
         specifier: 29.7.0
-        version: 29.7.0(@types/node@20.16.11)(ts-node@10.9.2(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.2))
+        version: 29.7.0(@types/node@20.16.11)(ts-node@10.9.2(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.3))
       jest-mock:
         specifier: 29.7.0
         version: 29.7.0
@@ -378,10 +378,10 @@ importers:
         version: 7.8.1
       tsup:
         specifier: ^8.3.0
-        version: 8.3.0(@swc/core@1.7.26(@swc/helpers@0.5.5))(postcss@8.4.47)(typescript@5.6.2)(yaml@2.5.1)
+        version: 8.3.0(@swc/core@1.7.35(@swc/helpers@0.5.5))(postcss@8.4.47)(typescript@5.6.3)(yaml@2.5.1)
       typescript:
-        specifier: 5.6.2
-        version: 5.6.2
+        specifier: 5.6.3
+        version: 5.6.3
 
   packages/integration/mongodb:
     dependencies:
@@ -396,7 +396,7 @@ importers:
         specifier: 1.9.3
         version: 1.9.3
       '@faker-js/faker':
-        specifier: ^9.0.0
+        specifier: ^9.0.3
         version: 9.0.3
       '@nestjs/common':
         specifier: 10.4.4
@@ -409,7 +409,7 @@ importers:
         version: 10.4.4(@nestjs/common@10.4.4(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/core@10.4.4)
       '@nestjs/testing':
         specifier: 10.4.4
-        version: 10.4.4(@nestjs/common@10.4.4(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/core@10.4.4(@nestjs/common@10.4.4(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/platform-express@10.4.4)(encoding@0.1.13)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/platform-express@10.4.4(@nestjs/common@10.4.4(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/core@10.4.4))
+        version: 10.4.4(@nestjs/common@10.4.4(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/core@10.4.4)(@nestjs/platform-express@10.4.4)
       '@ocoda/event-sourcing-config':
         specifier: workspace:*
         version: link:../../config
@@ -417,14 +417,14 @@ importers:
         specifier: workspace:*
         version: link:../../testing
       '@swc-node/register':
-        specifier: ^1.5.2
-        version: 1.10.9(@swc/core@1.7.26(@swc/helpers@0.5.5))(@swc/types@0.1.12)(typescript@5.6.2)
+        specifier: ^1.10.9
+        version: 1.10.9(@swc/core@1.7.35(@swc/helpers@0.5.5))(@swc/types@0.1.13)(typescript@5.6.3)
       '@swc/core':
-        specifier: 1.7.26
-        version: 1.7.26(@swc/helpers@0.5.5)
+        specifier: 1.7.35
+        version: 1.7.35(@swc/helpers@0.5.5)
       '@swc/jest':
         specifier: 0.2.36
-        version: 0.2.36(@swc/core@1.7.26(@swc/helpers@0.5.5))
+        version: 0.2.36(@swc/core@1.7.35(@swc/helpers@0.5.5))
       '@types/jest':
         specifier: 29.5.13
         version: 29.5.13
@@ -433,7 +433,7 @@ importers:
         version: 20.16.11
       jest:
         specifier: 29.7.0
-        version: 29.7.0(@types/node@20.16.11)(ts-node@10.9.2(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.2))
+        version: 29.7.0(@types/node@20.16.11)(ts-node@10.9.2(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.3))
       jest-mock:
         specifier: 29.7.0
         version: 29.7.0
@@ -445,10 +445,10 @@ importers:
         version: 7.8.1
       tsup:
         specifier: ^8.3.0
-        version: 8.3.0(@swc/core@1.7.26(@swc/helpers@0.5.5))(postcss@8.4.47)(typescript@5.6.2)(yaml@2.5.1)
+        version: 8.3.0(@swc/core@1.7.35(@swc/helpers@0.5.5))(postcss@8.4.47)(typescript@5.6.3)(yaml@2.5.1)
       typescript:
-        specifier: 5.6.2
-        version: 5.6.2
+        specifier: 5.6.3
+        version: 5.6.3
 
   packages/integration/postgres:
     dependencies:
@@ -456,17 +456,17 @@ importers:
         specifier: workspace:*
         version: link:../../core
       pg:
-        specifier: ^8.12.0
+        specifier: ^8.13.0
         version: 8.13.0
       pg-cursor:
-        specifier: ^2.11.0
-        version: 2.11.0(pg@8.13.0)
+        specifier: ^2.12.0
+        version: 2.12.0(pg@8.13.0)
     devDependencies:
       '@biomejs/biome':
         specifier: 1.9.3
         version: 1.9.3
       '@faker-js/faker':
-        specifier: ^9.0.0
+        specifier: ^9.0.3
         version: 9.0.3
       '@nestjs/common':
         specifier: 10.4.4
@@ -479,7 +479,7 @@ importers:
         version: 10.4.4(@nestjs/common@10.4.4(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/core@10.4.4)
       '@nestjs/testing':
         specifier: 10.4.4
-        version: 10.4.4(@nestjs/common@10.4.4(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/core@10.4.4(@nestjs/common@10.4.4(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/platform-express@10.4.4)(encoding@0.1.13)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/platform-express@10.4.4(@nestjs/common@10.4.4(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/core@10.4.4))
+        version: 10.4.4(@nestjs/common@10.4.4(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/core@10.4.4)(@nestjs/platform-express@10.4.4)
       '@ocoda/event-sourcing-config':
         specifier: workspace:*
         version: link:../../config
@@ -487,14 +487,14 @@ importers:
         specifier: workspace:*
         version: link:../../testing
       '@swc-node/register':
-        specifier: ^1.5.2
-        version: 1.10.9(@swc/core@1.7.26(@swc/helpers@0.5.5))(@swc/types@0.1.12)(typescript@5.6.2)
+        specifier: ^1.10.9
+        version: 1.10.9(@swc/core@1.7.35(@swc/helpers@0.5.5))(@swc/types@0.1.13)(typescript@5.6.3)
       '@swc/core':
-        specifier: 1.7.26
-        version: 1.7.26(@swc/helpers@0.5.5)
+        specifier: 1.7.35
+        version: 1.7.35(@swc/helpers@0.5.5)
       '@swc/jest':
         specifier: 0.2.36
-        version: 0.2.36(@swc/core@1.7.26(@swc/helpers@0.5.5))
+        version: 0.2.36(@swc/core@1.7.35(@swc/helpers@0.5.5))
       '@types/jest':
         specifier: 29.5.13
         version: 29.5.13
@@ -509,7 +509,7 @@ importers:
         version: 2.7.2
       jest:
         specifier: 29.7.0
-        version: 29.7.0(@types/node@20.16.11)(ts-node@10.9.2(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.2))
+        version: 29.7.0(@types/node@20.16.11)(ts-node@10.9.2(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.3))
       jest-mock:
         specifier: 29.7.0
         version: 29.7.0
@@ -521,10 +521,10 @@ importers:
         version: 7.8.1
       tsup:
         specifier: ^8.3.0
-        version: 8.3.0(@swc/core@1.7.26(@swc/helpers@0.5.5))(postcss@8.4.47)(typescript@5.6.2)(yaml@2.5.1)
+        version: 8.3.0(@swc/core@1.7.35(@swc/helpers@0.5.5))(postcss@8.4.47)(typescript@5.6.3)(yaml@2.5.1)
       typescript:
-        specifier: 5.6.2
-        version: 5.6.2
+        specifier: 5.6.3
+        version: 5.6.3
 
   packages/testing:
     dependencies:
@@ -2271,10 +2271,6 @@ packages:
     resolution: {integrity: sha512-t09vSN3MdfsyCHoFcTRCH/iUtG7OJ0CsjzB8cjAmKc/va/kIgeDI/TxsigdncE/4be734m0cvIYwNaV4i2XqAw==}
     engines: {node: '>=10'}
 
-  '@sindresorhus/is@5.3.0':
-    resolution: {integrity: sha512-CX6t4SYQ37lzxicAqsBtxA3OseeoVrh9cSJ5PFYam0GksYlupRfy1A+Q4aYD3zvcfECLc0zO2u+ZnR2UYKvCrw==}
-    engines: {node: '>=14.16'}
-
   '@sindresorhus/merge-streams@2.2.1':
     resolution: {integrity: sha512-255V7MMIKw6aQ43Wbqp9HZ+VHn6acddERTLiiLnlcPLU9PdTq9Aijl12oklAgUEblLWye+vHLzmqBx6f2TGcZw==}
     engines: {node: '>=18'}
@@ -2476,68 +2472,68 @@ packages:
   '@swc-node/sourcemap-support@0.5.1':
     resolution: {integrity: sha512-JxIvIo/Hrpv0JCHSyRpetAdQ6lB27oFYhv0PKCNf1g2gUXOjpeR1exrXccRxLMuAV5WAmGFBwRnNOJqN38+qtg==}
 
-  '@swc/core-darwin-arm64@1.7.26':
-    resolution: {integrity: sha512-FF3CRYTg6a7ZVW4yT9mesxoVVZTrcSWtmZhxKCYJX9brH4CS/7PRPjAKNk6kzWgWuRoglP7hkjQcd6EpMcZEAw==}
+  '@swc/core-darwin-arm64@1.7.35':
+    resolution: {integrity: sha512-BQSSozVxjxS+SVQz6e3GC/+OBWGIK3jfe52pWdANmycdjF3ch7lrCKTHTU7eHwyoJ96mofszPf5AsiVJF34Fwg==}
     engines: {node: '>=10'}
     cpu: [arm64]
     os: [darwin]
 
-  '@swc/core-darwin-x64@1.7.26':
-    resolution: {integrity: sha512-az3cibZdsay2HNKmc4bjf62QVukuiMRh5sfM5kHR/JMTrLyS6vSw7Ihs3UTkZjUxkLTT8ro54LI6sV6sUQUbLQ==}
+  '@swc/core-darwin-x64@1.7.35':
+    resolution: {integrity: sha512-44TYdKN/EWtkU88foXR7IGki9JzhEJzaFOoPevfi9Xe7hjAD/x2+AJOWWqQNzDPMz9+QewLdUVLyR6s5okRgtg==}
     engines: {node: '>=10'}
     cpu: [x64]
     os: [darwin]
 
-  '@swc/core-linux-arm-gnueabihf@1.7.26':
-    resolution: {integrity: sha512-VYPFVJDO5zT5U3RpCdHE5v1gz4mmR8BfHecUZTmD2v1JeFY6fv9KArJUpjrHEEsjK/ucXkQFmJ0jaiWXmpOV9Q==}
+  '@swc/core-linux-arm-gnueabihf@1.7.35':
+    resolution: {integrity: sha512-ccfA5h3zxwioD+/z/AmYtkwtKz9m4rWTV7RoHq6Jfsb0cXHrd6tbcvgqRWXra1kASlE+cDWsMtEZygs9dJRtUQ==}
     engines: {node: '>=10'}
     cpu: [arm]
     os: [linux]
 
-  '@swc/core-linux-arm64-gnu@1.7.26':
-    resolution: {integrity: sha512-YKevOV7abpjcAzXrhsl+W48Z9mZvgoVs2eP5nY+uoMAdP2b3GxC0Df1Co0I90o2lkzO4jYBpTMcZlmUXLdXn+Q==}
+  '@swc/core-linux-arm64-gnu@1.7.35':
+    resolution: {integrity: sha512-hx65Qz+G4iG/IVtxJKewC5SJdki8PAPFGl6gC/57Jb0+jA4BIoGLD/J3Q3rCPeoHfdqpkCYpahtyUq8CKx41Jg==}
     engines: {node: '>=10'}
     cpu: [arm64]
     os: [linux]
 
-  '@swc/core-linux-arm64-musl@1.7.26':
-    resolution: {integrity: sha512-3w8iZICMkQQON0uIcvz7+Q1MPOW6hJ4O5ETjA0LSP/tuKqx30hIniCGOgPDnv3UTMruLUnQbtBwVCZTBKR3Rkg==}
+  '@swc/core-linux-arm64-musl@1.7.35':
+    resolution: {integrity: sha512-kL6tQL9No7UEoEvDRuPxzPTpxrvbwYteNRbdChSSP74j13/55G2/2hLmult5yFFaWuyoyU/2lvzjRL/i8OLZxg==}
     engines: {node: '>=10'}
     cpu: [arm64]
     os: [linux]
 
-  '@swc/core-linux-x64-gnu@1.7.26':
-    resolution: {integrity: sha512-c+pp9Zkk2lqb06bNGkR2Looxrs7FtGDMA4/aHjZcCqATgp348hOKH5WPvNLBl+yPrISuWjbKDVn3NgAvfvpH4w==}
+  '@swc/core-linux-x64-gnu@1.7.35':
+    resolution: {integrity: sha512-Ke4rcLQSwCQ2LHdJX1FtnqmYNQ3IX6BddKlUtS7mcK13IHkQzZWp0Dcu6MgNA3twzb/dBpKX5GLy07XdGgfmyw==}
     engines: {node: '>=10'}
     cpu: [x64]
     os: [linux]
 
-  '@swc/core-linux-x64-musl@1.7.26':
-    resolution: {integrity: sha512-PgtyfHBF6xG87dUSSdTJHwZ3/8vWZfNIXQV2GlwEpslrOkGqy+WaiiyE7Of7z9AvDILfBBBcJvJ/r8u980wAfQ==}
+  '@swc/core-linux-x64-musl@1.7.35':
+    resolution: {integrity: sha512-T30tlLnz0kYyDFyO5RQF5EQ4ENjW9+b56hEGgFUYmfhFhGA4E4V67iEx7KIG4u0whdPG7oy3qjyyIeTb7nElEw==}
     engines: {node: '>=10'}
     cpu: [x64]
     os: [linux]
 
-  '@swc/core-win32-arm64-msvc@1.7.26':
-    resolution: {integrity: sha512-9TNXPIJqFynlAOrRD6tUQjMq7KApSklK3R/tXgIxc7Qx+lWu8hlDQ/kVPLpU7PWvMMwC/3hKBW+p5f+Tms1hmA==}
+  '@swc/core-win32-arm64-msvc@1.7.35':
+    resolution: {integrity: sha512-CfM/k8mvtuMyX+okRhemfLt784PLS0KF7Q9djA8/Dtavk0L5Ghnq+XsGltO3d8B8+XZ7YOITsB14CrjehzeHsg==}
     engines: {node: '>=10'}
     cpu: [arm64]
     os: [win32]
 
-  '@swc/core-win32-ia32-msvc@1.7.26':
-    resolution: {integrity: sha512-9YngxNcG3177GYdsTum4V98Re+TlCeJEP4kEwEg9EagT5s3YejYdKwVAkAsJszzkXuyRDdnHUpYbTrPG6FiXrQ==}
+  '@swc/core-win32-ia32-msvc@1.7.35':
+    resolution: {integrity: sha512-ATB3uuH8j/RmS64EXQZJSbo2WXfRNpTnQszHME/sGaexsuxeijrp3DTYSFAA3R2Bu6HbIIX6jempe1Au8I3j+A==}
     engines: {node: '>=10'}
     cpu: [ia32]
     os: [win32]
 
-  '@swc/core-win32-x64-msvc@1.7.26':
-    resolution: {integrity: sha512-VR+hzg9XqucgLjXxA13MtV5O3C0bK0ywtLIBw/+a+O+Oc6mxFWHtdUeXDbIi5AiPbn0fjgVJMqYnyjGyyX8u0w==}
+  '@swc/core-win32-x64-msvc@1.7.35':
+    resolution: {integrity: sha512-iDGfQO1571NqWUXtLYDhwIELA/wadH42ioGn+J9R336nWx40YICzy9UQyslWRhqzhQ5kT+QXAW/MoCWc058N6Q==}
     engines: {node: '>=10'}
     cpu: [x64]
     os: [win32]
 
-  '@swc/core@1.7.26':
-    resolution: {integrity: sha512-f5uYFf+TmMQyYIoxkn/evWhNGuUzC730dFwAKGwBVHHVoPyak1/GvJUm6i1SKl+2Hrj9oN0i3WSoWWZ4pgI8lw==}
+  '@swc/core@1.7.35':
+    resolution: {integrity: sha512-3cUteCTbr2r5jqfgx0r091sfq5Mgh6F1SQh8XAOnSvtKzwv2bC31mvBHVAieD1uPa2kHJhLav20DQgXOhpEitw==}
     engines: {node: '>=10'}
     peerDependencies:
       '@swc/helpers': '*'
@@ -2557,16 +2553,12 @@ packages:
     peerDependencies:
       '@swc/core': '*'
 
-  '@swc/types@0.1.12':
-    resolution: {integrity: sha512-wBJA+SdtkbFhHjTMYH+dEH1y4VpfGdAc2Kw/LK09i9bXd/K6j6PkDcFCEzb6iVfZMkPRrl/q0e3toqTAJdkIVA==}
+  '@swc/types@0.1.13':
+    resolution: {integrity: sha512-JL7eeCk6zWCbiYQg2xQSdLXQJl8Qoc9rXmG2cEKvHe3CKwMHwHGpfOb8frzNLmbycOo6I51qxnLnn9ESf4I20Q==}
 
   '@szmarczak/http-timer@4.0.6':
     resolution: {integrity: sha512-4BAffykYOgO+5nzBWYwE3W90sBgLJoUPRWWcL8wlyiM8IB8ipJz3UMJ9KXQd1RKQXpKp8Tutn80HZtWsu2u76w==}
     engines: {node: '>=10'}
-
-  '@szmarczak/http-timer@5.0.1':
-    resolution: {integrity: sha512-+PmQX0PiAYPMeVYe237LJAYvOMYW1j2rH5YROyS3b4CTVJum34HfRvKvAzozHAQG0TnHNdUfY9nCeUyRAs//cw==}
-    engines: {node: '>=14.16'}
 
   '@tanstack/react-virtual@3.10.8':
     resolution: {integrity: sha512-VbzbVGSsZlQktyLrP5nxE+vE1ZR+U0NFAWPbJLoG2+DKPwd2D7dVICTVIIaYlJqX1ZCEnYDbaOpmMwbsyhBoIA==}
@@ -3136,6 +3128,9 @@ packages:
   asynckit@0.4.0:
     resolution: {integrity: sha512-Oei9OH4tRh0YqU3GxhX79dM/mwVgvbZJaSNaRk+bshkj0S5cfHcgYakreBjrHwatXKbz+IoIdYLxrKim2MjW0Q==}
 
+  atomically@2.0.3:
+    resolution: {integrity: sha512-kU6FmrwZ3Lx7/7y3hPS5QnbJfaohcIul5fGqf7ok+4KklIEk9tJ0C2IQPdacSbVUWv6zVHXEBWoWd6NrVMT7Cw==}
+
   auto-bind@5.0.1:
     resolution: {integrity: sha512-ooviqdwwgfIfNmDwo94wlshcdzfO64XV0Cg6oDsDYBJfITDz1EngD2z7DkbvCWn+XIMsIqW27sEVF6qcpJrRcg==}
     engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
@@ -3234,9 +3229,9 @@ packages:
   bowser@2.11.0:
     resolution: {integrity: sha512-AlcaJBi/pqqJBIQ8U9Mcpc9i8Aqxn88Skv5d+xBX006BY5u8N3mGLHa5Lgppa7L/HfwgwLgZ6NYs+Ag6uUmJRA==}
 
-  boxen@7.1.1:
-    resolution: {integrity: sha512-2hCgjEmP8YLWQ130n2FerGv7rYpfBmnmp9Uy2Le1vge6X3gZIfSmEzP5QTDElFxcvVcXlEn8Aq6MU/PZygIOog==}
-    engines: {node: '>=14.16'}
+  boxen@8.0.1:
+    resolution: {integrity: sha512-F3PH5k5juxom4xktynS7MoFY+NUWH5LC4CnH11YB8NPew+HLpmBLCybSAEyb2F+4pRXhuhWqFesoQd6DAyc2hw==}
+    engines: {node: '>=18'}
 
   brace-expansion@1.1.11:
     resolution: {integrity: sha512-iCuPHDFgrHX7H2vEI/5xpz07zSHB00TpugqhmYtVmMO6518mCuRMoOYFldEBl0g187ufozdaHgWKcYFb61qGiA==}
@@ -3313,14 +3308,6 @@ packages:
     resolution: {integrity: sha512-2/kNscPhpcxrOigMZzbiWF7dz8ilhb/nIHU3EyZiXWXpeq/au8qJ8VhdftMkty3n7Gj6HIGalQG8oiBNB3AJgA==}
     engines: {node: '>=10.6.0'}
 
-  cacheable-lookup@7.0.0:
-    resolution: {integrity: sha512-+qJyx4xiKra8mZrcwhjMRMUhD5NR1R8esPkzIYxX96JiecFoxAXFuz/GpR3+ev4PE1WamHip78wV0vcmPQtp8w==}
-    engines: {node: '>=14.16'}
-
-  cacheable-request@10.2.10:
-    resolution: {integrity: sha512-v6WB+Epm/qO4Hdlio/sfUn69r5Shgh39SsE9DSd4bIezP0mblOlObI+I0kUEM7J0JFc+I7pSeMeYaOYtX1N/VQ==}
-    engines: {node: '>=14.16'}
-
   cacheable-request@7.0.4:
     resolution: {integrity: sha512-v+p6ongsrp0yTGbJXjgxPow2+DL93DASP4kXCDKb8/bwRtt9OEF3whggkkDkGNzgcWy2XaF4a8nZglC7uElscg==}
     engines: {node: '>=8'}
@@ -3341,9 +3328,9 @@ packages:
     resolution: {integrity: sha512-Gmy6FhYlCY7uOElZUSbxo2UCDH8owEk996gkbrpsgGtrJLM3J7jGxl9Ic7Qwwj4ivOE5AWZWRMecDdF7hqGjFA==}
     engines: {node: '>=10'}
 
-  camelcase@7.0.1:
-    resolution: {integrity: sha512-xlx1yCK2Oc1APsPXDL2LdlNP6+uu8OCDdhOBSVT279M/S+y75O30C2VuD8T2ogdePBBl7PfPF4504tnLgX3zfw==}
-    engines: {node: '>=14.16'}
+  camelcase@8.0.0:
+    resolution: {integrity: sha512-8WB3Jcas3swSvjIeA2yvCJ+Miyz5l1ZmB6HFb9R1317dt9LCQoswg/BGrmAmkWVEszSrrg4RwmO46qIm2OEnSA==}
+    engines: {node: '>=16'}
 
   caniuse-lite@1.0.30001667:
     resolution: {integrity: sha512-7LTwJjcRkzKFmtqGsibMeuXmvFDfZq/nzIjnmgCGzKKRVzjD72selLDK1oPF/Oxzmt4fNcPvTDvGqSDG4tCALw==}
@@ -3416,6 +3403,10 @@ packages:
     resolution: {integrity: sha512-NIxF55hv4nSqQswkAeiOi1r83xy8JldOFDTWiug55KBu9Jnblncd2U6ViHmYgHf01TPZS77NJBhBMKdWj9HQMQ==}
     engines: {node: '>=8'}
 
+  ci-info@4.0.0:
+    resolution: {integrity: sha512-TdHqgGf9odd8SXNuxtUBVx8Nv+qZOejE6qyqiy5NtbYYQOeFa6zmHkxlPzmaLxWWHsU6nJmB7AETdVPi+2NBUg==}
+    engines: {node: '>=8'}
+
   cjs-module-lexer@1.2.2:
     resolution: {integrity: sha512-cOU9usZw8/dXIXKtwa8pM0OTJQuJkxMN6w30csNRUerHfeQ5R6U3kkU/FtJeIf3M202OHfY2U8ccInBG7/xogA==}
 
@@ -3441,6 +3432,10 @@ packages:
   cli-cursor@4.0.0:
     resolution: {integrity: sha512-VGtlMu3x/4DOtIUwEkRezxUZ2lBacNJCHash0N0WeZDBS+7Ux1dm3XWAgWYxLJFMMdOeXMHXorshEFhbMSGelg==}
     engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
+
+  cli-cursor@5.0.0:
+    resolution: {integrity: sha512-aCj4O5wKyszjMmDT4tZj93kxyydN/K5zPWSCe6/0AV/AA1pqe5ZBIw0a2ZfPQV7lL5/yb5HsUreJ6UFAF1tEQw==}
+    engines: {node: '>=18'}
 
   cli-progress@3.12.0:
     resolution: {integrity: sha512-tRkV3HJ1ASwm19THiiLIXLO7Im7wlTuKnvkYaTkyoAPefqjNg7W7DHKUlGRxy9vxDvbyCYQkQozvptuMkGCg8A==}
@@ -3562,9 +3557,9 @@ packages:
   config-chain@1.1.13:
     resolution: {integrity: sha512-qj+f8APARXHrM0hraqXYb2/bOVSV4PvJQlNZ/DVj0QrmNM2q2euizkeuVckQ57J+W0mRH6Hvi+k50M4Jul2VRQ==}
 
-  configstore@6.0.0:
-    resolution: {integrity: sha512-cD31W1v3GqUlQvbBCGcXmd2Nj9SvLDOP1oQ0YFuLETufzSPaKp11rYBsSOm7rCsW3OnIRAFM3OxRhceaXNYHkA==}
-    engines: {node: '>=12'}
+  configstore@7.0.0:
+    resolution: {integrity: sha512-yk7/5PN5im4qwz0WFZW3PXnzHgPu9mX29Y8uZ3aefe2lBPC1FYttWZRcaW9fKkT0pBCJyuQ2HfbmPVaODi9jcQ==}
+    engines: {node: '>=18'}
 
   consola@2.15.3:
     resolution: {integrity: sha512-9vAdYbHj6x2fLKC4+oPH0kFzY/orMZyG2Aj+kNylHxKGJ/Ed4dpNyAQYwJOdqO4zdM7XpVHmyejQDcQHrnuXbw==}
@@ -3655,10 +3650,6 @@ packages:
   cross-spawn@7.0.3:
     resolution: {integrity: sha512-iRDPJKUPVEND7dHPO8rkbOnPpyDygcDFtWjpeWNCgy8WP2rXcxXL8TskReQl6OrB2G7+UJrags1q15Fudc7G6w==}
     engines: {node: '>= 8'}
-
-  crypto-random-string@4.0.0:
-    resolution: {integrity: sha512-x8dy3RnvYdlUcPOjkEHqozhiwzKNSq7GcPuXFbnyMOCHxX8V3OgIg/pYuabl2sbUPfIJaeAQB7PMOK8DFIdoRA==}
-    engines: {node: '>=12'}
 
   css-select@5.1.0:
     resolution: {integrity: sha512-nwoRF1rvRRnnCqqY7updORDsuqKzqYJ28+oSMaJMMgOauh3fvwHqMS7EZpIPqK8GL+g9mKxF1vP/ZjSeNjEVHg==}
@@ -3827,10 +3818,6 @@ packages:
   dashdash@1.14.1:
     resolution: {integrity: sha512-jRFi8UDGo6j+odZiEpjazZaWqEal3w/basFjQHQEwVtZJGDpxbH1MeYluwCS8Xq5wmLJooDlMgvVarmWfGM44g==}
     engines: {node: '>=0.10'}
-
-  data-uri-to-buffer@4.0.0:
-    resolution: {integrity: sha512-Vr3mLBA8qWmcuschSLAOogKgQ/Jwxulv3RNE4FXnYWRGujzrRWQI4m12fQqRkwX06C0KanhLr4hK+GydchZsaA==}
-    engines: {node: '>= 12'}
 
   data-uri-to-buffer@5.0.1:
     resolution: {integrity: sha512-a9l6T1qqDogvvnw0nKlfZzqsyikEBZBClF39V3TFoKhDtGBqHu2HkuomJc02j5zft8zrUaXEuoicLeW54RkzPg==}
@@ -4038,9 +4025,9 @@ packages:
   domutils@3.1.0:
     resolution: {integrity: sha512-H78uMmQtI2AhgDJjWeQmHwJJ2bLPD3GMmO7Zja/ZZh84wkm+4ut+IUnUdRa8uCGX88DiVx1j6FRe1XfxEgjEZA==}
 
-  dot-prop@6.0.1:
-    resolution: {integrity: sha512-tE7ztYzXHIeyvc7N+hR3oi7FIbf/NIjVP9hmAt3yMXzrQ072/fpjGLx2GxNxGxUl5V73MEqYzioOMoVhGMJ5cA==}
-    engines: {node: '>=10'}
+  dot-prop@9.0.0:
+    resolution: {integrity: sha512-1gxPBJpI/pcjQhKgIU91II6Wkay+dLcN3M6rf2uwP8hRur3HtQXjVrdAK3sjC0piaEuxzMwjXChcETiJl47lAQ==}
+    engines: {node: '>=18'}
 
   dotenv@16.4.5:
     resolution: {integrity: sha512-ZmdL2rui+eB2YwhsWzjInR8LldtZHGDoQ1ugH85ppHKwpUHL7j7rN0Ti9NCnGiQbhaZ11FpR+7ao1dNsmduNUg==}
@@ -4265,8 +4252,8 @@ packages:
     resolution: {integrity: sha512-8uSpZZocAZRBAPIEINJj3Lo9HyGitllczc27Eh5YYojjMFMn8yHMDMaUHE2Jqfq05D/wucwI4JGURyXt1vchyg==}
     engines: {node: '>=10'}
 
-  execa@8.0.1:
-    resolution: {integrity: sha512-VyhnebXciFV2DESc+p6B+y0LjSm0krU4OgJN44qFAhBY0TJ+1V61tYD2+wHusZ6F9n5K+vl8k0sTy7PEfV4qpg==}
+  execa@8.0.0:
+    resolution: {integrity: sha512-CTNS0BcKBcoOsawKBlpcKNmK4Kjuyz5jVLhf+PUsHGMqiKMVTa4cN3U7r7bRY8KTpfOGpXMo27fdy0dYVg2pqA==}
     engines: {node: '>=16.17'}
 
   exit@0.1.2:
@@ -4340,10 +4327,6 @@ packages:
       picomatch:
         optional: true
 
-  fetch-blob@3.2.0:
-    resolution: {integrity: sha512-7yAQpD2UMJzLi1Dqv7qFYnPbaPx7ZfFK6PiIxQ4PfkGPyNyl2Ugx+a/umUonmKqjhM4DnfbMvdX6otXq83soQQ==}
-    engines: {node: ^12.20 || >= 14.13}
-
   fflate@0.8.1:
     resolution: {integrity: sha512-/exOvEuc+/iaUm105QIiOt4LpBdMTWsXxqR0HDF35vx3fmaKzw7354gTilCh5rkzEt8WYyG//ku3h3nRmd7CHQ==}
 
@@ -4405,10 +4388,6 @@ packages:
   forever-agent@0.6.1:
     resolution: {integrity: sha512-j0KLYPhm6zeac4lz3oJ3o65qvgQCcPubiyotZrXqEaG4hNagNYO8qdlUrX5vwqv9ohqeT/Z3j6+yW067yWWdUw==}
 
-  form-data-encoder@2.1.2:
-    resolution: {integrity: sha512-FCaIOVTRA9E0siY6FeXid7D5yrCqpsErplUkE2a1BEiKj1BE9z6FbKB4ntDTwC4NVLie9p+4E9nX4mWwEOT05A==}
-    engines: {node: '>= 14.17'}
-
   form-data@2.3.3:
     resolution: {integrity: sha512-1lLKB2Mu3aGP1Q/2eCOx0fNbRMe7XdwktwOruhfqqd0rIJWwN4Dh+E3hrPSlDCXnSR7UtZ1N38rVXm+6+MEhJQ==}
     engines: {node: '>= 0.12'}
@@ -4420,10 +4399,6 @@ packages:
   form-data@4.0.0:
     resolution: {integrity: sha512-ETEklSGi5t0QMZuiXoA/Q6vcnxcLQP5vdugSpuAyi6SVGi2clPPp+xgEhuMaHC+zGgn31Kd235W35f7Hykkaww==}
     engines: {node: '>= 6'}
-
-  formdata-polyfill@4.0.10:
-    resolution: {integrity: sha512-buewHzMvYL29jdeQTVILecSaZKnt/RJWjoZCF5OW60Z67/GmSLBkOFM7qh1PI3zFNtJbaZL5eQu1vLfazOwj4g==}
-    engines: {node: '>=12.20.0'}
 
   forwarded@0.2.0:
     resolution: {integrity: sha512-buRG0fpBtRHSTCOASe6hD258tEubFoRLb4ZNA6NxMVHNw2gOcwHo9wyablzMzOA5z9xA9L1KNjk/Nt6MT9aYow==}
@@ -4587,10 +4562,6 @@ packages:
     resolution: {integrity: sha512-6tfZ91bOr7bOXnK7PRDCGBLa1H4U080YHNaAQ2KsMGlLEzRbk44nsZF2E1IeRc3vtJHPVbKCYgdFbaGO2ljd8g==}
     engines: {node: '>=10.19.0'}
 
-  got@13.0.0:
-    resolution: {integrity: sha512-XfBk1CxOOScDcMr9O1yKkNaQyy865NbYs+F7dr4H0LZMVgCj2Le59k6PqbNHoL5ToeaEQUYh6c6yMfVcc6SJxA==}
-    engines: {node: '>=16'}
-
   graceful-fs@4.2.10:
     resolution: {integrity: sha512-9ByhssR2fPVsNZj478qUUbKfmL0+t5BDVyjShtyZZLiK7ZDAArFFfopyOTj0M05wE2tJPisA4iTnnXl2YoPvOA==}
 
@@ -4723,10 +4694,6 @@ packages:
     resolution: {integrity: sha512-V+23sDMr12Wnz7iTcDeJr3O6AIxlnvT/bmaAAAP/Xda35C90p9599p0F1eHR/N1KILWSoWVAiOMFjBBXaXSMxg==}
     engines: {node: '>=10.19.0'}
 
-  http2-wrapper@2.1.11:
-    resolution: {integrity: sha512-aNAk5JzLturWEUiuhAN73Jcbq96R7rTitAoXV54FYMatvihnpD2+6PUgU4ce3D/m5VDbw+F5CsyKSF176ptitQ==}
-    engines: {node: '>=10.19.0'}
-
   https-proxy-agent@5.0.0:
     resolution: {integrity: sha512-EkYm5BcKUGiduxzSt3Eppko+PiNWNEpa4ySk9vTC6wDsQJW9rHSa+UhGNJoRYp7bz6Ht1eaRIa6QaJqO5rCFbA==}
     engines: {node: '>= 6'}
@@ -4782,10 +4749,6 @@ packages:
   import-fresh@3.3.0:
     resolution: {integrity: sha512-veYYhQa+D1QBKznvhUHxb8faxlrwUnxseDAbAp457E0wLNio2bOSKnjYDhMj+YiAq61xrMGhQk9iXVk5FzgQMw==}
     engines: {node: '>=6'}
-
-  import-lazy@4.0.0:
-    resolution: {integrity: sha512-rKtvo6a868b5Hu3heneU+L4yEQ4jYKLtjpnPeUdK7h0yzXGmyBTypknlkCvHFBqfX9YlorEiMM6Dnq/5atfHkw==}
-    engines: {node: '>=8'}
 
   import-local@3.1.0:
     resolution: {integrity: sha512-ASB07uLtnDs1o6EHjKpX34BKYDSqnFerfTOJL2HvMqF70LnxpjkzDB8J44oT9pu4AMPkQwf8jl6szgvNd2tRIg==}
@@ -4947,8 +4910,8 @@ packages:
   is-hexadecimal@2.0.1:
     resolution: {integrity: sha512-DgZQp241c8oO6cA1SbTEWiXeoxV42vlcJxgH+B3hi1AiqqKruZR3ZGF8In3fj4+/y/7rHvlOZLZtgJ/4ttYGZg==}
 
-  is-in-ci@0.1.0:
-    resolution: {integrity: sha512-d9PXLEY0v1iJ64xLiQMJ51J128EYHAaOR4yZqQi8aHGfw6KgifM3/Viw1oZZ1GCVmb3gBuyhLyHj0HgR2DhSXQ==}
+  is-in-ci@1.0.0:
+    resolution: {integrity: sha512-eUuAjybVTHMYWm/U+vBO1sY/JOCgoPCXRxzdju0K+K0BiGW0SChEL1MLC0PoCIR1OlPo5YAp8HuQoUlsWEICwg==}
     engines: {node: '>=18'}
     hasBin: true
 
@@ -4986,10 +4949,6 @@ packages:
   is-obj@1.0.1:
     resolution: {integrity: sha512-l4RyHgRqGN4Y3+9JHVrNqO+tN0rV5My76uW5/nuO4K1b6vw5G8d/cmFjP9tRfEsdhZNt0IFdZuK/c2Vr4Nb+Qg==}
     engines: {node: '>=0.10.0'}
-
-  is-obj@2.0.0:
-    resolution: {integrity: sha512-drqDG3cbczxxEJRoOXcOjtdp1J/lyp1mNn0xaznRs8+muBhgQcrnbspox5X5fOw0HnMnbfDzvnEMEtqDEJEo8w==}
-    engines: {node: '>=8'}
 
   is-obj@3.0.0:
     resolution: {integrity: sha512-IlsXEHOjtKhpN8r/tRFj2nDyTmHvcfNeu/nrRIcXE17ROeatXchkojffa1SpdqW4cr/Fj6QkEf/Gn4zf6KKvEQ==}
@@ -5521,10 +5480,6 @@ packages:
     resolution: {integrity: sha512-tqNXrS78oMOE73NMxK4EMLQsQowWf8jKooH9g7xPavRT706R6bkQJ6DY2Te7QukaZsulxa30wQ7bk0pm4XiHmA==}
     engines: {node: '>=8'}
 
-  lowercase-keys@3.0.0:
-    resolution: {integrity: sha512-ozCC6gdQ+glXOQsveKD0YsDy8DSQFjDTz4zyzEHNV5+JP5D62LmfDZ6o1cycFx9ouG940M5dE8C8CTewdj2YWQ==}
-    engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
-
   lru-cache@10.4.3:
     resolution: {integrity: sha512-JNAzZcXrCt42VGLuYz0zfAzDfAvJWW6AfYlDBQyDV5DClI2m5sAmK+OIO7s59XfsRsWHp02jAJrRadPRGTt6SQ==}
 
@@ -5809,6 +5764,10 @@ packages:
     resolution: {integrity: sha512-vqiC06CuhBTUdZH+RYl8sFrL096vA45Ok5ISO6sE/Mr1jRbGH4Csnhi8f3wKVl7x8mO4Au7Ir9D3Oyv1VYMFJw==}
     engines: {node: '>=12'}
 
+  mimic-function@5.0.1:
+    resolution: {integrity: sha512-VP79XUPxV2CigYP3jWwAUFSku2aKqBH7uTAapFWCBqutsbmDo96KY5o8uh6U+/YSIn5OxJnXp73beVkpqMIGhA==}
+    engines: {node: '>=18'}
+
   mimic-response@1.0.1:
     resolution: {integrity: sha512-j5EctnkH7amfV/q5Hgmoal1g2QHFJRraOtmx0JpIqkxhBhI/lJSl1nMpQ45hVarwNETOoWEimndZ4QK0RHxuxQ==}
     engines: {node: '>=4'}
@@ -5816,10 +5775,6 @@ packages:
   mimic-response@3.1.0:
     resolution: {integrity: sha512-z0yWI+4FDrrweS8Zmt4Ej5HdJmky15+L2e6Wgn3+iK5fWzb6T3fhNFq2+MeTRb064c6Wr4N/wv0DzQTjNzHNGQ==}
     engines: {node: '>=10'}
-
-  mimic-response@4.0.0:
-    resolution: {integrity: sha512-e5ISH9xMYU0DzrT+jl8q2ze9D6eWBto+I8CNpe+VI+K2J/F/k3PdkdTdz4wvGVH4NTpo+NRYTVIuMQEMMcsLqg==}
-    engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
 
   minimatch@3.1.2:
     resolution: {integrity: sha512-J7p63hRiAjw1NDEww1W7i37+ByIrOWO5XQQAzZ3VOcL0PNybwpfmV/N05zFAzwQ9USyEcX6t3UO+K5aqBQOIHw==}
@@ -6052,10 +6007,6 @@ packages:
   nice-try@1.0.5:
     resolution: {integrity: sha512-1nh45deeb5olNY7eX82BkPO7SSxR5SSYJiPTrTdFUVYwAl8CKMA5N9PjTYkHiRjisVcxcQ1HXdLhx2qxxJzLNQ==}
 
-  node-domexception@1.0.0:
-    resolution: {integrity: sha512-/jKZoMpw0F8GRwl4/eLROPA3cfcXtLApP0QzLmUT/HuPCZWyB7IY9ZrMeKw2O/nFIqPQB3PVM9aYm0F312AXDQ==}
-    engines: {node: '>=10.5.0'}
-
   node-emoji@1.11.0:
     resolution: {integrity: sha512-wo2DpQkQp7Sjm2A0cq+sN7EHKO6Sl0ctXeBdFZrL9T9+UywORbufTcTZxom8YqpLQt/FqNMUkOpkZrJVYSKD3A==}
 
@@ -6067,10 +6018,6 @@ packages:
     peerDependenciesMeta:
       encoding:
         optional: true
-
-  node-fetch@3.3.2:
-    resolution: {integrity: sha512-dRB78srN/l6gqWulah9SrxeYnxeddIG30+GOqK/9OlLVyLg3HPnr6SqOWTWOXKRwC2eGYCkZ59NNuSgvSrpgOA==}
-    engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
 
   node-gyp@10.2.0:
     resolution: {integrity: sha512-sp3FonBAaFe4aYTcFdZUn2NYkbP7xroPGYvQmP4Nl5PxamznItBnNCgjrVTKrEfQynInMsJvZrdmqUnysCJ8rw==}
@@ -6106,10 +6053,6 @@ packages:
   normalize-url@6.1.0:
     resolution: {integrity: sha512-DlL+XwOy3NxAQ8xuC0okPgK46iuVNAK01YN7RueYBqqFeGsBjV9XmCAzAdgt+667bCl5kPh9EqKKDwnaPG1I7A==}
     engines: {node: '>=10'}
-
-  normalize-url@8.0.0:
-    resolution: {integrity: sha512-uVFpKhj5MheNBJRTiMZ9pE/7hD1QTeEvugSJW/OmLzAp78PB5O6adfMNTvmfKhXBkvCzC+rqifWcVYpGFwTjnw==}
-    engines: {node: '>=14.16'}
 
   npm-bundled@3.0.1:
     resolution: {integrity: sha512-+AvaheE/ww1JEwRHOrn4WHNzOxGtVp+adrg2AeZS/7KuxGUYFuBta98wYpfHBbJp6Tg6j1NKSEVHNcfZzJHQwQ==}
@@ -6193,6 +6136,10 @@ packages:
     resolution: {integrity: sha512-1FlR+gjXK7X+AsAHso35MnyN5KqGwJRi/31ft6x0M194ht7S+rWAvd7PHss9xSKMzE0asv1pyIHaJYq+BbacAQ==}
     engines: {node: '>=12'}
 
+  onetime@7.0.0:
+    resolution: {integrity: sha512-VXJjc87FScF88uafS3JllDgvAm+c/Slfz06lorj2uAY34rlUu0Nt+v8wreiImcrgAjjIHp1rXpTDlLOGw29WwQ==}
+    engines: {node: '>=18'}
+
   open@10.1.0:
     resolution: {integrity: sha512-mnkeQ1qP5Ue2wd+aivTD3NHd/lZ96Lu0jgf0pwktLPtx6cTZiH7tyeGRRHs0zX0rbrahXPnXlUnbeXyaBBuIaw==}
     engines: {node: '>=18'}
@@ -6217,8 +6164,8 @@ packages:
     resolution: {integrity: sha512-5b6Y85tPxZZ7QytO+BQzysW31HJku27cRIlkbAXaNx+BdcVi+LlRFmVXzeF6a7JCwJpyw5c4b+YSVImQIrBpuQ==}
     engines: {node: '>=10'}
 
-  ora@8.0.1:
-    resolution: {integrity: sha512-ANIvzobt1rls2BDny5fWZ3ZVKyD6nscLvfFRpQgfWsythlcsVUC9kL0zq6j2Z5z9wwp1kd7wpsD/T9qNPVLCaQ==}
+  ora@8.1.0:
+    resolution: {integrity: sha512-GQEkNkH/GHOhPFXcqZs3IDahXEQcQxsSjEkK4KvEEST4t7eNzoMjxTzef+EZ+JluDEV+Raoi3WQ2CflnRdSVnQ==}
     engines: {node: '>=18'}
 
   os-name@5.1.0:
@@ -6238,10 +6185,6 @@ packages:
   p-cancelable@2.1.1:
     resolution: {integrity: sha512-BZOr3nRQHOntUjTrH8+Lh54smKHoHyur8We1V8DSMVrl5A2malOOwuJRnKRDjSnkoeBh4at6BwEnb5I7Jl31wg==}
     engines: {node: '>=8'}
-
-  p-cancelable@3.0.0:
-    resolution: {integrity: sha512-mlVgR3PGuzlo0MmTdk4cXqXWlwQDLnONTAg6sm62XkMJEiRxN3GL3SffkYvqwonbkJBcrI7Uvv5Zh9yjvn2iUw==}
-    engines: {node: '>=12.20'}
 
   p-filter@2.1.0:
     resolution: {integrity: sha512-ZBxxZ5sL2HghephhpGAQdoskxplTwr7ICaehZwLIlfL6acuVgZPm8yBNuRAFBGEqtD/hmUeq9eqLg2ys9Xr/yw==}
@@ -6395,8 +6338,8 @@ packages:
   pg-connection-string@2.7.0:
     resolution: {integrity: sha512-PI2W9mv53rXJQEOb8xNR8lH7Hr+EKa6oJa38zsK0S/ky2er16ios1wLKhZyxzD7jUReiWokc9WK5nxSnC7W1TA==}
 
-  pg-cursor@2.11.0:
-    resolution: {integrity: sha512-TLCOCtu+rqMarzjUi+/Ffc2DV5ZqO/27y5GqnK9Z3w51rWXMwC8FcO96Uf9/ORo5o+qRXEVJxM9Ts3K2K31MLg==}
+  pg-cursor@2.12.0:
+    resolution: {integrity: sha512-rppw54OnuYZfMUjiJI2zJMwAjjt2V9EtLUb+t7V5tqwSE5Jxod+7vA7Y0FI6Nq976jNLciA0hoVkwvjjB8qzEw==}
     peerDependencies:
       pg: ^8
 
@@ -6791,8 +6734,8 @@ packages:
   rehype-raw@7.0.0:
     resolution: {integrity: sha512-/aE8hCfKlQeA8LmyeyQvQF3eBiLRGNlfBJEvWH7ivp9sBqs7TNqBL5X3v157rM4IFETqDnIOO+z5M/biZbo9Ww==}
 
-  release-it@17.6.0:
-    resolution: {integrity: sha512-EE34dtRPL7BHpYQC7E+zAU8kjkyxFHxLk5Iqnmn/5nGcjgOQu34Au29M2V9YvxiP3tZbIlEn4gItEzu7vAPRbw==}
+  release-it@17.8.2:
+    resolution: {integrity: sha512-IgTrtALUTDEYBnVk/c6WNUkwNN+8S7/AE+PgdpP1wS+9kBm3H5tQ8AaNwkvQX/smULxOdFqMEd6DMUDHJfW7NA==}
     engines: {node: ^18.18.0 || ^20.9.0 || ^22.0.0}
     hasBin: true
 
@@ -6882,10 +6825,6 @@ packages:
   responselike@2.0.1:
     resolution: {integrity: sha512-4gl03wn3hj1HP3yzgdI7d3lCkF95F21Pz4BPGvKHinyQzALR5CapwC8yIi0Rh58DEMQ/SguC03wFj2k0M/mHhw==}
 
-  responselike@3.0.0:
-    resolution: {integrity: sha512-40yHxbNcl2+rzXvZuVkrYohathsSJlMTXKryG5y8uciHv1+xDLHQpgjG64JUO9nrEq2jGLH6IZ8BcZyw3wrweg==}
-    engines: {node: '>=14.16'}
-
   restore-cursor@3.1.0:
     resolution: {integrity: sha512-l+sSefzHpj5qimhFSE5a8nufZYAM3sBSVMAPtYkmC+4EH2anSGaEMXSD0izRQbu9nfyQ9y5JrVmp7E8oZrUjvA==}
     engines: {node: '>=8'}
@@ -6893,6 +6832,10 @@ packages:
   restore-cursor@4.0.0:
     resolution: {integrity: sha512-I9fPXU9geO9bHOt9pHHOhOkYerIMsmVaWB0rA2AI9ERh/+x/i7MV5HKBNrg+ljO5eoPVgCcnFuRjJ9uH6I/3eg==}
     engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
+
+  restore-cursor@5.1.0:
+    resolution: {integrity: sha512-oMA2dcrw6u0YfxJQXm342bFKX/E4sG9rbTzO9ptUcR/e8A33cHuvStiYOwH7fszkZlZ1z/ta9AAoPk2F4qIOHA==}
+    engines: {node: '>=18'}
 
   retry@0.12.0:
     resolution: {integrity: sha512-9LkiTwjUh6rT555DtE9rTX+BKByPfrMzEAtnlEtdEwr3Nkffwiihqe2bWADg+OQRjt9gl6ICdmB/ZFDCGAtSow==}
@@ -6979,21 +6922,12 @@ packages:
   seedrandom@3.0.5:
     resolution: {integrity: sha512-8OwmbklUNzwezjGInmZ+2clQmExQPvomqjL7LFqOYqtmuxRgQYqOD3mHaU+MvZn5FLUeVxVfQjwLZW/n/JFuqg==}
 
-  semver-diff@4.0.0:
-    resolution: {integrity: sha512-0Ju4+6A8iOnpL/Thra7dZsSlOHYAHIeMxfhWQRI1/VLcT3WDBZKKtQt/QkBOsiIN9ZpuvHE6cGZ0x4glCMmfiA==}
-    engines: {node: '>=12'}
-
   semver@5.7.2:
     resolution: {integrity: sha512-cBznnQ9KjJqU67B52RMC65CMarK2600WFnbkcaiwWq3xy/5haFJlshgnpjovMVJ+Hff49d8GEn0b87C5pDQ10g==}
     hasBin: true
 
   semver@6.3.0:
     resolution: {integrity: sha512-b39TBaTSfV6yBrapU89p5fKekE2m/NwnDocOVruQFS1/veMgdzuPcnOM34M6CwxW8jH/lxEa5rBoDeUwu5HHTw==}
-    hasBin: true
-
-  semver@7.6.2:
-    resolution: {integrity: sha512-FNAIBWCx9qcRhoHcgcJ0gvU7SN1lYU2ZXuSfl04bSC5OpvDHFyJCjdNHomPXxjQlCBU67YW64PzY7/VIEH7F2w==}
-    engines: {node: '>=10'}
     hasBin: true
 
   semver@7.6.3:
@@ -7219,8 +7153,8 @@ packages:
     resolution: {integrity: sha512-HnLOCR3vjcY8beoNLtcjZ5/nxn2afmME6lhrDrebokqMap+XbeW8n9TXpPDOqdGK5qcI3oT0GKTW6wC7EMiVqA==}
     engines: {node: '>=12'}
 
-  string-width@7.1.0:
-    resolution: {integrity: sha512-SEIJCWiX7Kg4c129n48aDRwLbFb2LJmXXFrWBG4NGaRtMQ3myKPKbwrD1BKqQn74oCoNMBVrfDEr5M9YxCsrkw==}
+  string-width@7.2.0:
+    resolution: {integrity: sha512-tsaTIkKW9b4N+AEj+SVA+WhJzV7/zMhcSu78mLKWSk7cXMOSHsBKFWUs0fWwq8QyK3MgJBQRX6Gbi4kYbdvGkQ==}
     engines: {node: '>=18'}
 
   string_decoder@1.1.1:
@@ -7275,6 +7209,9 @@ packages:
 
   strnum@1.0.5:
     resolution: {integrity: sha512-J8bbNyKKXl5qYcR36TIO8W3mVGVHrmmxsd5PAItGkmyzwJvybiw2IVq5nqd0i4LSNSkB/sx9VHllbfFdr9k1JA==}
+
+  stubborn-fs@1.2.5:
+    resolution: {integrity: sha512-H2N9c26eXjzL/S/K+i/RHHcFanE74dptvvjM8iwzwbVcWY/zjBbgRqF3K0DY4+OD+uTTASTBvDoxPDaPN02D7g==}
 
   style-to-object@0.4.4:
     resolution: {integrity: sha512-HYNoHZa2GorYNyqiCaBgsxvcJIn7OHq6inEga+E6Ke3m5JkoqpQbnFssk4jwe+K7AhGa2fcha4wSOf1Kn01dMg==}
@@ -7606,12 +7543,13 @@ packages:
     resolution: {integrity: sha512-RAH822pAdBgcNMAfWnCBU3CFZcfZ/i1eZjwFU/dsLKumyuuP3niueg2UAukXYF0E2AAoc82ZSSf9J0WQBinzHA==}
     engines: {node: '>=12.20'}
 
+  type-fest@4.26.1:
+    resolution: {integrity: sha512-yOGpmOAL7CkKe/91I5O3gPICmJNLJ1G4zFYVAsRHg7M64biSnPtRj0WNQt++bRkjYOqjWXrhnUw1utzmVErAdg==}
+    engines: {node: '>=16'}
+
   type-is@1.6.18:
     resolution: {integrity: sha512-TkRKr9sUTxEH8MdfuCSP7VizJyzRNMjj2J2do2Jr3Kym598JVdEksuzPQCnlFPW4ky9Q+iA+ma9BGm06XQBy8g==}
     engines: {node: '>= 0.6'}
-
-  typedarray-to-buffer@3.1.5:
-    resolution: {integrity: sha512-zdu8XMNEDepKKR+XYOXAVPtWui0ly0NtohUscw+UmaHiAWT8hrV1rr//H6V+0DvJ3OQ19S979M0laLfX8rm82Q==}
 
   typedarray@0.0.6:
     resolution: {integrity: sha512-/aCDEGatGvZ2BIk+HmLf4ifCJFwvKFNb9/JeZPMulfgFracn9QFcAf5GO8B/mweUjSoblS5In0cWhqpfs/5PQA==}
@@ -7621,8 +7559,8 @@ packages:
     engines: {node: '>=14.17'}
     hasBin: true
 
-  typescript@5.6.2:
-    resolution: {integrity: sha512-NW8ByodCSNCwZeghjN3o+JX5OFH0Ojg6sadjEKY4huZ52TqbJTJnDo5+Tw98lSy63NZvi4n+ez5m2u5d4PkZyw==}
+  typescript@5.6.3:
+    resolution: {integrity: sha512-hjcS1mhfuyi4WW8IWtjP7brDrG2cuDZukyrYrSauoXGNgx0S7zceP07adYkJycEr56BOUTNPzbInooiN3fn1qw==}
     engines: {node: '>=14.17'}
     hasBin: true
 
@@ -7655,10 +7593,6 @@ packages:
   unique-slug@4.0.0:
     resolution: {integrity: sha512-WrcA6AyEfqDX5bWige/4NQfPZMtASNVxdmWR76WESYQVAACSgWcR6e9i0mofqqBxYFtL4oAxPIptY73/0YE1DQ==}
     engines: {node: ^14.17.0 || ^16.13.0 || >=18.0.0}
-
-  unique-string@3.0.0:
-    resolution: {integrity: sha512-VGXBUVwxKMBUznyffQweQABPRRW1vHZAbadFZud4pLFAqRGvv/96vafgjWFqzourzr8YonlQiPgH0YCJfawoGQ==}
-    engines: {node: '>=12'}
 
   unist-util-find-after@5.0.0:
     resolution: {integrity: sha512-amQa0Ep2m6hE2g72AugUItjbuM8X8cGQnFoHk0pGfrFeT9GZhzN5SW8nRsiGKK7Aif4CrACPENkA6P/Lw6fHGQ==}
@@ -7739,8 +7673,8 @@ packages:
     peerDependencies:
       browserslist: '>= 4.21.0'
 
-  update-notifier@7.1.0:
-    resolution: {integrity: sha512-8SV3rIqVY6EFC1WxH6L0j55s0MO79MFBS1pivmInRJg3pCEDgWHBj1Q6XByTtCLOZIFA0f6zoG9ZWf2Ks9lvTA==}
+  update-notifier@7.3.1:
+    resolution: {integrity: sha512-+dwUY4L35XFYEzE+OAL3sarJdUioVovq+8f7lcIJ7wnmnYQV5UD1Y/lcwaMSyaQ6Bj3JMj1XSTjZbNLHn/19yA==}
     engines: {node: '>=18'}
 
   uri-js@4.4.1:
@@ -7849,10 +7783,6 @@ packages:
   web-namespaces@2.0.1:
     resolution: {integrity: sha512-bKr1DkiNa2krS7qxNtdrtHAmzuYGFQLiQ13TsorsdT6ULTkPLKuu5+GsFpDlg6JFjUTwX2DyhMPG2be8uPrqsQ==}
 
-  web-streams-polyfill@3.2.1:
-    resolution: {integrity: sha512-e0MO3wdXWKrLbL0DgGnUV7WHVuw9OUvL4hjgnPkIeEvESk74gAITi5G606JtZPp39cd8HA9VQzCIvA49LpPN5Q==}
-    engines: {node: '>= 8'}
-
   web-worker@1.3.0:
     resolution: {integrity: sha512-BSR9wyRsy/KOValMgd5kMyr3JzpdeoR9KVId8u5GVlTTAtNChlsE4yTxeY7zMdNSyOmoKBv8NH2qeRY9Tg+IaA==}
 
@@ -7884,6 +7814,9 @@ packages:
   whatwg-url@7.1.0:
     resolution: {integrity: sha512-WUu7Rg1DroM7oQvGWfOiAK21n74Gg+T4elXEQYkOhtyLeWiJFoOGLXPKI/9gzIie9CtwVLm8wtw6YJdKyxSjeg==}
 
+  when-exit@2.1.3:
+    resolution: {integrity: sha512-uVieSTccFIr/SFQdFWN/fFaQYmV37OKtuaGphMAzi4DmmUlrvRBJW5WSLkHyjNQY/ePJMz3LoiX9R3yy1Su6Hw==}
+
   which-typed-array@1.1.15:
     resolution: {integrity: sha512-oV0jmFtUky6CXfkqehVvBP/LSWJ2sy4vWMioiENyJLePrBO/yKyV9OyJySfAKosh+RYkIl5zJCNZ8/4JncrpdA==}
     engines: {node: '>= 0.4'}
@@ -7910,6 +7843,10 @@ packages:
     resolution: {integrity: sha512-o0cyEG0e8GPzT4iGHphIOh0cJOV8fivsXxddQasHPHfoZf1ZexrfeA21w2NaEN1RHE+fXlfISmOE8R9N3u3Qig==}
     engines: {node: '>=12'}
 
+  widest-line@5.0.0:
+    resolution: {integrity: sha512-c9bZp7b5YtRj2wOe6dlj32MK+Bx/M/d+9VB2SHM1OtsUHR0aV0tdP6DWh/iMt0kWi1t5g1Iudu6hQRNd1A4PVA==}
+    engines: {node: '>=18'}
+
   wildcard-match@5.1.3:
     resolution: {integrity: sha512-a95hPUk+BNzSGLntNXYxsjz2Hooi5oL7xOfJR6CKwSsSALh7vUNuTlzsrZowtYy38JNduYFRVhFv19ocqNOZlg==}
 
@@ -7932,11 +7869,12 @@ packages:
     resolution: {integrity: sha512-si7QWI6zUMq56bESFvagtmzMdGOtoxfR+Sez11Mobfc7tm+VkUckk9bW2UeffTGVUbOksxmSw0AA2gs8g71NCQ==}
     engines: {node: '>=12'}
 
+  wrap-ansi@9.0.0:
+    resolution: {integrity: sha512-G8ura3S+3Z2G+mkgNRq8dqaFZAuxfsxpBB8OCTGRTCtp+l/v9nbFNmCUP1BZMts3G1142MsZfn6eeUKrr4PD1Q==}
+    engines: {node: '>=18'}
+
   wrappy@1.0.2:
     resolution: {integrity: sha512-l4Sp/DRseor9wL6EvV2+TuQn63dMkPjZ/sp9XkghTEbV9KlPS1xUsZ3u7/IQO4wxtcFB4bgpQPRcR3QCvezPcQ==}
-
-  write-file-atomic@3.0.3:
-    resolution: {integrity: sha512-AvHcyZ5JnSfq3ioSyjrBkH9yW4m7Ayk8/9My/DD9onKeu/94fwrMocemO2QAJFAlnnDN+ZDS+ZjAR5ua1/PV/Q==}
 
   write-file-atomic@4.0.2:
     resolution: {integrity: sha512-7KxauUdBmSdWnmpaGFg+ppNjKF8uNLry8LyzjauQDOVONfFLNKrKvQOxZ/VuTIcS/gge/YNahf5RIIQWTSarlg==}
@@ -9786,7 +9724,7 @@ snapshots:
       human-id: 1.0.2
       prettier: 2.8.8
 
-  '@codechecks/client@0.1.12(typescript@5.6.2)':
+  '@codechecks/client@0.1.12(typescript@5.6.3)':
     dependencies:
       bluebird: 3.7.2
       chalk: 2.4.2
@@ -9806,7 +9744,7 @@ snapshots:
       request: 2.88.2
       request-promise: 4.2.6(request@2.88.2)
       ts-essentials: 1.0.4
-      ts-node: 8.10.2(typescript@5.6.2)
+      ts-node: 8.10.2(typescript@5.6.3)
       url-join: 4.0.1
     transitivePeerDependencies:
       - supports-color
@@ -9952,7 +9890,7 @@ snapshots:
       wrap-ansi: 8.1.0
       wrap-ansi-cjs: wrap-ansi@7.0.0
 
-  '@isaacs/ts-node-temp-fork-for-pr-2009@10.9.7(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.4.5)':
+  '@isaacs/ts-node-temp-fork-for-pr-2009@10.9.7(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.4.5)':
     dependencies:
       '@cspotcode/source-map-support': 0.8.1
       '@tsconfig/node14': 14.1.2
@@ -9968,9 +9906,9 @@ snapshots:
       typescript: 5.4.5
       v8-compile-cache-lib: 3.0.1
     optionalDependencies:
-      '@swc/core': 1.7.26(@swc/helpers@0.5.5)
+      '@swc/core': 1.7.35(@swc/helpers@0.5.5)
 
-  '@isaacs/ts-node-temp-fork-for-pr-2009@10.9.7(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.2)':
+  '@isaacs/ts-node-temp-fork-for-pr-2009@10.9.7(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.3)':
     dependencies:
       '@cspotcode/source-map-support': 0.8.1
       '@tsconfig/node14': 14.1.2
@@ -9983,10 +9921,10 @@ snapshots:
       arg: 4.1.3
       diff: 4.0.2
       make-error: 1.3.6
-      typescript: 5.6.2
+      typescript: 5.6.3
       v8-compile-cache-lib: 3.0.1
     optionalDependencies:
-      '@swc/core': 1.7.26(@swc/helpers@0.5.5)
+      '@swc/core': 1.7.35(@swc/helpers@0.5.5)
 
   '@istanbuljs/load-nyc-config@1.1.0':
     dependencies:
@@ -10007,7 +9945,7 @@ snapshots:
       jest-util: 29.7.0
       slash: 3.0.0
 
-  '@jest/core@29.7.0(ts-node@10.9.2(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.2))':
+  '@jest/core@29.7.0(ts-node@10.9.2(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.3))':
     dependencies:
       '@jest/console': 29.7.0
       '@jest/reporters': 29.7.0
@@ -10021,7 +9959,7 @@ snapshots:
       exit: 0.1.2
       graceful-fs: 4.2.11
       jest-changed-files: 29.7.0
-      jest-config: 29.7.0(@types/node@20.16.11)(ts-node@10.9.2(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.2))
+      jest-config: 29.7.0(@types/node@20.16.11)(ts-node@10.9.2(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.3))
       jest-haste-map: 29.7.0
       jest-message-util: 29.7.0
       jest-regex-util: 29.6.3
@@ -10347,7 +10285,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@nestjs/testing@10.4.4(@nestjs/common@10.4.4(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/core@10.4.4(@nestjs/common@10.4.4(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/platform-express@10.4.4)(encoding@0.1.13)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/platform-express@10.4.4(@nestjs/common@10.4.4(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/core@10.4.4))':
+  '@nestjs/testing@10.4.4(@nestjs/common@10.4.4(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/core@10.4.4)(@nestjs/platform-express@10.4.4)':
     dependencies:
       '@nestjs/common': 10.4.4(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1)
       '@nestjs/core': 10.4.4(@nestjs/common@10.4.4(class-transformer@0.5.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/platform-express@10.4.4)(encoding@0.1.13)(reflect-metadata@0.2.2)(rxjs@7.8.1)
@@ -10473,7 +10411,7 @@ snapshots:
     transitivePeerDependencies:
       - encoding
 
-  '@oclif/core@2.16.0(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.2)':
+  '@oclif/core@2.16.0(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.3)':
     dependencies:
       '@types/cli-progress': 3.11.6
       ansi-escapes: 4.3.2
@@ -10498,7 +10436,7 @@ snapshots:
       strip-ansi: 6.0.1
       supports-color: 8.1.1
       supports-hyperlinks: 2.3.0
-      ts-node: 10.9.2(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.2)
+      ts-node: 10.9.2(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.3)
       tslib: 2.7.0
       widest-line: 3.1.0
       wordwrap: 1.0.0
@@ -10509,18 +10447,18 @@ snapshots:
       - '@types/node'
       - typescript
 
-  '@oclif/plugin-help@5.2.20(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.2)':
+  '@oclif/plugin-help@5.2.20(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.3)':
     dependencies:
-      '@oclif/core': 2.16.0(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.2)
+      '@oclif/core': 2.16.0(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.3)
     transitivePeerDependencies:
       - '@swc/core'
       - '@swc/wasm'
       - '@types/node'
       - typescript
 
-  '@oclif/plugin-not-found@2.4.3(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.2)':
+  '@oclif/plugin-not-found@2.4.3(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.3)':
     dependencies:
-      '@oclif/core': 2.16.0(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.2)
+      '@oclif/core': 2.16.0(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.3)
       chalk: 4.1.2
       fast-levenshtein: 3.0.0
     transitivePeerDependencies:
@@ -11002,8 +10940,6 @@ snapshots:
 
   '@sindresorhus/is@4.6.0': {}
 
-  '@sindresorhus/is@5.3.0': {}
-
   '@sindresorhus/merge-streams@2.2.1': {}
 
   '@sinonjs/commons@2.0.0':
@@ -11301,22 +11237,22 @@ snapshots:
 
   '@socket.io/component-emitter@3.1.2': {}
 
-  '@swc-node/core@1.13.3(@swc/core@1.7.26(@swc/helpers@0.5.5))(@swc/types@0.1.12)':
+  '@swc-node/core@1.13.3(@swc/core@1.7.35(@swc/helpers@0.5.5))(@swc/types@0.1.13)':
     dependencies:
-      '@swc/core': 1.7.26(@swc/helpers@0.5.5)
-      '@swc/types': 0.1.12
+      '@swc/core': 1.7.35(@swc/helpers@0.5.5)
+      '@swc/types': 0.1.13
 
-  '@swc-node/register@1.10.9(@swc/core@1.7.26(@swc/helpers@0.5.5))(@swc/types@0.1.12)(typescript@5.6.2)':
+  '@swc-node/register@1.10.9(@swc/core@1.7.35(@swc/helpers@0.5.5))(@swc/types@0.1.13)(typescript@5.6.3)':
     dependencies:
-      '@swc-node/core': 1.13.3(@swc/core@1.7.26(@swc/helpers@0.5.5))(@swc/types@0.1.12)
+      '@swc-node/core': 1.13.3(@swc/core@1.7.35(@swc/helpers@0.5.5))(@swc/types@0.1.13)
       '@swc-node/sourcemap-support': 0.5.1
-      '@swc/core': 1.7.26(@swc/helpers@0.5.5)
+      '@swc/core': 1.7.35(@swc/helpers@0.5.5)
       colorette: 2.0.20
       debug: 4.3.6(supports-color@8.1.1)
       oxc-resolver: 1.10.2
       pirates: 4.0.6
       tslib: 2.7.0
-      typescript: 5.6.2
+      typescript: 5.6.3
     transitivePeerDependencies:
       - '@swc/types'
       - supports-color
@@ -11326,51 +11262,51 @@ snapshots:
       source-map-support: 0.5.21
       tslib: 2.7.0
 
-  '@swc/core-darwin-arm64@1.7.26':
+  '@swc/core-darwin-arm64@1.7.35':
     optional: true
 
-  '@swc/core-darwin-x64@1.7.26':
+  '@swc/core-darwin-x64@1.7.35':
     optional: true
 
-  '@swc/core-linux-arm-gnueabihf@1.7.26':
+  '@swc/core-linux-arm-gnueabihf@1.7.35':
     optional: true
 
-  '@swc/core-linux-arm64-gnu@1.7.26':
+  '@swc/core-linux-arm64-gnu@1.7.35':
     optional: true
 
-  '@swc/core-linux-arm64-musl@1.7.26':
+  '@swc/core-linux-arm64-musl@1.7.35':
     optional: true
 
-  '@swc/core-linux-x64-gnu@1.7.26':
+  '@swc/core-linux-x64-gnu@1.7.35':
     optional: true
 
-  '@swc/core-linux-x64-musl@1.7.26':
+  '@swc/core-linux-x64-musl@1.7.35':
     optional: true
 
-  '@swc/core-win32-arm64-msvc@1.7.26':
+  '@swc/core-win32-arm64-msvc@1.7.35':
     optional: true
 
-  '@swc/core-win32-ia32-msvc@1.7.26':
+  '@swc/core-win32-ia32-msvc@1.7.35':
     optional: true
 
-  '@swc/core-win32-x64-msvc@1.7.26':
+  '@swc/core-win32-x64-msvc@1.7.35':
     optional: true
 
-  '@swc/core@1.7.26(@swc/helpers@0.5.5)':
+  '@swc/core@1.7.35(@swc/helpers@0.5.5)':
     dependencies:
       '@swc/counter': 0.1.3
-      '@swc/types': 0.1.12
+      '@swc/types': 0.1.13
     optionalDependencies:
-      '@swc/core-darwin-arm64': 1.7.26
-      '@swc/core-darwin-x64': 1.7.26
-      '@swc/core-linux-arm-gnueabihf': 1.7.26
-      '@swc/core-linux-arm64-gnu': 1.7.26
-      '@swc/core-linux-arm64-musl': 1.7.26
-      '@swc/core-linux-x64-gnu': 1.7.26
-      '@swc/core-linux-x64-musl': 1.7.26
-      '@swc/core-win32-arm64-msvc': 1.7.26
-      '@swc/core-win32-ia32-msvc': 1.7.26
-      '@swc/core-win32-x64-msvc': 1.7.26
+      '@swc/core-darwin-arm64': 1.7.35
+      '@swc/core-darwin-x64': 1.7.35
+      '@swc/core-linux-arm-gnueabihf': 1.7.35
+      '@swc/core-linux-arm64-gnu': 1.7.35
+      '@swc/core-linux-arm64-musl': 1.7.35
+      '@swc/core-linux-x64-gnu': 1.7.35
+      '@swc/core-linux-x64-musl': 1.7.35
+      '@swc/core-win32-arm64-msvc': 1.7.35
+      '@swc/core-win32-ia32-msvc': 1.7.35
+      '@swc/core-win32-x64-msvc': 1.7.35
       '@swc/helpers': 0.5.5
 
   '@swc/counter@0.1.3': {}
@@ -11380,22 +11316,18 @@ snapshots:
       '@swc/counter': 0.1.3
       tslib: 2.7.0
 
-  '@swc/jest@0.2.36(@swc/core@1.7.26(@swc/helpers@0.5.5))':
+  '@swc/jest@0.2.36(@swc/core@1.7.35(@swc/helpers@0.5.5))':
     dependencies:
       '@jest/create-cache-key-function': 29.7.0
-      '@swc/core': 1.7.26(@swc/helpers@0.5.5)
+      '@swc/core': 1.7.35(@swc/helpers@0.5.5)
       '@swc/counter': 0.1.3
       jsonc-parser: 3.2.0
 
-  '@swc/types@0.1.12':
+  '@swc/types@0.1.13':
     dependencies:
       '@swc/counter': 0.1.3
 
   '@szmarczak/http-timer@4.0.6':
-    dependencies:
-      defer-to-connect: 2.0.1
-
-  '@szmarczak/http-timer@5.0.1':
     dependencies:
       defer-to-connect: 2.0.1
 
@@ -11407,19 +11339,19 @@ snapshots:
 
   '@tanstack/virtual-core@3.10.8': {}
 
-  '@tapjs/after-each@2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))':
+  '@tapjs/after-each@2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))':
     dependencies:
-      '@tapjs/core': 2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@tapjs/core': 2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       function-loop: 4.0.0
 
-  '@tapjs/after@1.1.31(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))':
+  '@tapjs/after@1.1.31(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))':
     dependencies:
-      '@tapjs/core': 2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@tapjs/core': 2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       is-actual-promise: 1.0.2
 
-  '@tapjs/asserts@2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
+  '@tapjs/asserts@2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
     dependencies:
-      '@tapjs/core': 2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@tapjs/core': 2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@tapjs/stack': 2.0.1
       is-actual-promise: 1.0.2
       tcompare: 7.0.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -11428,35 +11360,35 @@ snapshots:
       - react
       - react-dom
 
-  '@tapjs/before-each@2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))':
+  '@tapjs/before-each@2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))':
     dependencies:
-      '@tapjs/core': 2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@tapjs/core': 2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       function-loop: 4.0.0
 
-  '@tapjs/before@2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))':
+  '@tapjs/before@2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))':
     dependencies:
-      '@tapjs/core': 2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@tapjs/core': 2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       is-actual-promise: 1.0.2
 
-  '@tapjs/chdir@1.1.4(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))':
+  '@tapjs/chdir@1.1.4(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))':
     dependencies:
-      '@tapjs/core': 2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@tapjs/core': 2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
 
-  '@tapjs/config@3.1.6(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@tapjs/test@2.2.4(@swc/core@1.7.26(@swc/helpers@0.5.5))(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))':
+  '@tapjs/config@3.1.6(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@tapjs/test@2.2.4(@swc/core@1.7.35(@swc/helpers@0.5.5))(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))':
     dependencies:
-      '@tapjs/core': 2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@tapjs/test': 2.2.4(@swc/core@1.7.26(@swc/helpers@0.5.5))(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@tapjs/core': 2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@tapjs/test': 2.2.4(@swc/core@1.7.35(@swc/helpers@0.5.5))(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       chalk: 5.3.0
       jackspeak: 3.4.3
       polite-json: 4.0.1
       tap-yaml: 2.2.2
       walk-up-path: 3.0.1
 
-  '@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
+  '@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
     dependencies:
       '@tapjs/processinfo': 3.1.8
       '@tapjs/stack': 2.0.1
-      '@tapjs/test': 2.2.4(@swc/core@1.7.26(@swc/helpers@0.5.5))(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@tapjs/test': 2.2.4(@swc/core@1.7.35(@swc/helpers@0.5.5))(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       async-hook-domain: 4.0.1
       diff: 5.2.0
       is-actual-promise: 1.0.2
@@ -11477,33 +11409,33 @@ snapshots:
     dependencies:
       minipass: 7.1.2
 
-  '@tapjs/filter@2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))':
+  '@tapjs/filter@2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))':
     dependencies:
-      '@tapjs/core': 2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@tapjs/core': 2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
 
-  '@tapjs/fixture@2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))':
+  '@tapjs/fixture@2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))':
     dependencies:
-      '@tapjs/core': 2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@tapjs/core': 2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       mkdirp: 3.0.1
       rimraf: 5.0.10
 
-  '@tapjs/intercept@2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))':
+  '@tapjs/intercept@2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))':
     dependencies:
-      '@tapjs/after': 1.1.31(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
-      '@tapjs/core': 2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@tapjs/after': 1.1.31(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
+      '@tapjs/core': 2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@tapjs/stack': 2.0.1
 
-  '@tapjs/mock@2.1.6(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))':
+  '@tapjs/mock@2.1.6(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))':
     dependencies:
-      '@tapjs/after': 1.1.31(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
-      '@tapjs/core': 2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@tapjs/after': 1.1.31(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
+      '@tapjs/core': 2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@tapjs/stack': 2.0.1
       resolve-import: 1.4.6
       walk-up-path: 3.0.1
 
-  '@tapjs/node-serialize@2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))':
+  '@tapjs/node-serialize@2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))':
     dependencies:
-      '@tapjs/core': 2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@tapjs/core': 2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@tapjs/error-serdes': 2.0.1
       '@tapjs/stack': 2.0.1
       tap-parser: 16.0.1
@@ -11515,10 +11447,10 @@ snapshots:
       signal-exit: 4.1.0
       uuid: 8.3.2
 
-  '@tapjs/reporter@2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@tapjs/test@2.2.4(@swc/core@1.7.26(@swc/helpers@0.5.5))(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/react@18.3.9)(react-dom@18.3.1(react@18.3.1))':
+  '@tapjs/reporter@2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@tapjs/test@2.2.4(@swc/core@1.7.35(@swc/helpers@0.5.5))(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/react@18.3.9)(react-dom@18.3.1(react@18.3.1))':
     dependencies:
-      '@tapjs/config': 3.1.6(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@tapjs/test@2.2.4(@swc/core@1.7.26(@swc/helpers@0.5.5))(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
-      '@tapjs/core': 2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@tapjs/config': 3.1.6(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@tapjs/test@2.2.4(@swc/core@1.7.35(@swc/helpers@0.5.5))(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
+      '@tapjs/core': 2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@tapjs/stack': 2.0.1
       chalk: 5.3.0
       ink: 4.4.1(@types/react@18.3.9)(react@18.3.1)
@@ -11539,17 +11471,17 @@ snapshots:
       - react-dom
       - utf-8-validate
 
-  '@tapjs/run@2.1.7(@swc/core@1.7.26(@swc/helpers@0.5.5))(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/node@20.16.11)(@types/react@18.3.9)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
+  '@tapjs/run@2.1.7(@swc/core@1.7.35(@swc/helpers@0.5.5))(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/node@20.16.11)(@types/react@18.3.9)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
     dependencies:
-      '@tapjs/after': 1.1.31(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
-      '@tapjs/before': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
-      '@tapjs/config': 3.1.6(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@tapjs/test@2.2.4(@swc/core@1.7.26(@swc/helpers@0.5.5))(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
-      '@tapjs/core': 2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@tapjs/after': 1.1.31(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
+      '@tapjs/before': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
+      '@tapjs/config': 3.1.6(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@tapjs/test@2.2.4(@swc/core@1.7.35(@swc/helpers@0.5.5))(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
+      '@tapjs/core': 2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@tapjs/processinfo': 3.1.8
-      '@tapjs/reporter': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@tapjs/test@2.2.4(@swc/core@1.7.26(@swc/helpers@0.5.5))(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/react@18.3.9)(react-dom@18.3.1(react@18.3.1))
-      '@tapjs/spawn': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
-      '@tapjs/stdin': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
-      '@tapjs/test': 2.2.4(@swc/core@1.7.26(@swc/helpers@0.5.5))(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@tapjs/reporter': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@tapjs/test@2.2.4(@swc/core@1.7.35(@swc/helpers@0.5.5))(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/react@18.3.9)(react-dom@18.3.1(react@18.3.1))
+      '@tapjs/spawn': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
+      '@tapjs/stdin': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
+      '@tapjs/test': 2.2.4(@swc/core@1.7.35(@swc/helpers@0.5.5))(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       c8: 9.1.0
       chalk: 5.3.0
       chokidar: 3.6.0
@@ -11581,9 +11513,9 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@tapjs/snapshot@2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
+  '@tapjs/snapshot@2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
     dependencies:
-      '@tapjs/core': 2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@tapjs/core': 2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       is-actual-promise: 1.0.2
       tcompare: 7.0.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       trivial-deferred: 2.0.0
@@ -11591,36 +11523,36 @@ snapshots:
       - react
       - react-dom
 
-  '@tapjs/spawn@2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))':
+  '@tapjs/spawn@2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))':
     dependencies:
-      '@tapjs/core': 2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@tapjs/core': 2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
 
   '@tapjs/stack@2.0.1': {}
 
-  '@tapjs/stdin@2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))':
+  '@tapjs/stdin@2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))':
     dependencies:
-      '@tapjs/core': 2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@tapjs/core': 2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
 
-  '@tapjs/test@2.2.4(@swc/core@1.7.26(@swc/helpers@0.5.5))(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
+  '@tapjs/test@2.2.4(@swc/core@1.7.35(@swc/helpers@0.5.5))(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
     dependencies:
-      '@isaacs/ts-node-temp-fork-for-pr-2009': 10.9.7(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.4.5)
-      '@tapjs/after': 1.1.31(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
-      '@tapjs/after-each': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
-      '@tapjs/asserts': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@tapjs/before': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
-      '@tapjs/before-each': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
-      '@tapjs/chdir': 1.1.4(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
-      '@tapjs/core': 2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@tapjs/filter': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
-      '@tapjs/fixture': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
-      '@tapjs/intercept': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
-      '@tapjs/mock': 2.1.6(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
-      '@tapjs/node-serialize': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
-      '@tapjs/snapshot': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@tapjs/spawn': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
-      '@tapjs/stdin': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
-      '@tapjs/typescript': 1.4.13(@swc/core@1.7.26(@swc/helpers@0.5.5))(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/node@20.16.11)(typescript@5.4.5)
-      '@tapjs/worker': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
+      '@isaacs/ts-node-temp-fork-for-pr-2009': 10.9.7(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.4.5)
+      '@tapjs/after': 1.1.31(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
+      '@tapjs/after-each': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
+      '@tapjs/asserts': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@tapjs/before': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
+      '@tapjs/before-each': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
+      '@tapjs/chdir': 1.1.4(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
+      '@tapjs/core': 2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@tapjs/filter': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
+      '@tapjs/fixture': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
+      '@tapjs/intercept': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
+      '@tapjs/mock': 2.1.6(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
+      '@tapjs/node-serialize': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
+      '@tapjs/snapshot': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@tapjs/spawn': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
+      '@tapjs/stdin': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
+      '@tapjs/typescript': 1.4.13(@swc/core@1.7.35(@swc/helpers@0.5.5))(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/node@20.16.11)(typescript@5.4.5)
+      '@tapjs/worker': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
       glob: 10.4.5
       jackspeak: 3.4.3
       mkdirp: 3.0.1
@@ -11639,29 +11571,29 @@ snapshots:
       - react
       - react-dom
 
-  '@tapjs/typescript@1.4.13(@swc/core@1.7.26(@swc/helpers@0.5.5))(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/node@20.16.11)(typescript@5.4.5)':
+  '@tapjs/typescript@1.4.13(@swc/core@1.7.35(@swc/helpers@0.5.5))(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/node@20.16.11)(typescript@5.4.5)':
     dependencies:
-      '@isaacs/ts-node-temp-fork-for-pr-2009': 10.9.7(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.4.5)
-      '@tapjs/core': 2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@isaacs/ts-node-temp-fork-for-pr-2009': 10.9.7(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.4.5)
+      '@tapjs/core': 2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
     transitivePeerDependencies:
       - '@swc/core'
       - '@swc/wasm'
       - '@types/node'
       - typescript
 
-  '@tapjs/typescript@1.4.13(@swc/core@1.7.26(@swc/helpers@0.5.5))(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/node@20.16.11)(typescript@5.6.2)':
+  '@tapjs/typescript@1.4.13(@swc/core@1.7.35(@swc/helpers@0.5.5))(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/node@20.16.11)(typescript@5.6.3)':
     dependencies:
-      '@isaacs/ts-node-temp-fork-for-pr-2009': 10.9.7(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.2)
-      '@tapjs/core': 2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@isaacs/ts-node-temp-fork-for-pr-2009': 10.9.7(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.3)
+      '@tapjs/core': 2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
     transitivePeerDependencies:
       - '@swc/core'
       - '@swc/wasm'
       - '@types/node'
       - typescript
 
-  '@tapjs/worker@2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))':
+  '@tapjs/worker@2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))':
     dependencies:
-      '@tapjs/core': 2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@tapjs/core': 2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
 
   '@theguild/remark-mermaid@0.0.5(react@18.3.1)':
     dependencies:
@@ -11863,7 +11795,7 @@ snapshots:
 
   '@typescript-eslint/types@5.62.0': {}
 
-  '@typescript-eslint/typescript-estree@5.62.0(typescript@5.6.2)':
+  '@typescript-eslint/typescript-estree@5.62.0(typescript@5.6.3)':
     dependencies:
       '@typescript-eslint/types': 5.62.0
       '@typescript-eslint/visitor-keys': 5.62.0
@@ -11871,9 +11803,9 @@ snapshots:
       globby: 11.1.0
       is-glob: 4.0.3
       semver: 7.6.3
-      tsutils: 3.21.0(typescript@5.6.2)
+      tsutils: 3.21.0(typescript@5.6.3)
     optionalDependencies:
-      typescript: 5.6.2
+      typescript: 5.6.3
     transitivePeerDependencies:
       - supports-color
 
@@ -12044,9 +11976,9 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  artillery-plugin-apdex@1.11.0(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(@types/react@18.3.9)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.6.2):
+  artillery-plugin-apdex@1.11.0(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(@types/react@18.3.9)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.6.3):
     dependencies:
-      tap: 19.2.5(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(@types/react@18.3.9)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.6.2)
+      tap: 19.2.5(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(@types/react@18.3.9)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.6.3)
     transitivePeerDependencies:
       - '@swc/core'
       - '@swc/wasm'
@@ -12128,7 +12060,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  artillery@2.0.20(@aws-sdk/client-sso-oidc@3.667.0(@aws-sdk/client-sts@3.658.1))(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(@types/react@18.3.9)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.6.2):
+  artillery@2.0.20(@aws-sdk/client-sso-oidc@3.667.0(@aws-sdk/client-sts@3.658.1))(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(@types/react@18.3.9)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.6.3):
     dependencies:
       '@artilleryio/int-commons': 2.11.0
       '@artilleryio/int-core': 2.15.0
@@ -12137,12 +12069,12 @@ snapshots:
       '@azure/identity': 4.4.1
       '@azure/storage-blob': 12.25.0
       '@azure/storage-queue': 12.24.0
-      '@oclif/core': 2.16.0(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.2)
-      '@oclif/plugin-help': 5.2.20(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.2)
-      '@oclif/plugin-not-found': 2.4.3(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.2)
+      '@oclif/core': 2.16.0(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.3)
+      '@oclif/plugin-help': 5.2.20(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.3)
+      '@oclif/plugin-not-found': 2.4.3(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.3)
       archiver: 5.3.2
       artillery-engine-playwright: 1.17.0
-      artillery-plugin-apdex: 1.11.0(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(@types/react@18.3.9)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.6.2)
+      artillery-plugin-apdex: 1.11.0(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(@types/react@18.3.9)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.6.3)
       artillery-plugin-ensure: 1.14.0
       artillery-plugin-expect: 2.14.0
       artillery-plugin-fake-data: 1.11.0
@@ -12232,6 +12164,11 @@ snapshots:
   async@3.2.6: {}
 
   asynckit@0.4.0: {}
+
+  atomically@2.0.3:
+    dependencies:
+      stubborn-fs: 1.2.5
+      when-exit: 2.1.3
 
   auto-bind@5.0.1: {}
 
@@ -12373,16 +12310,16 @@ snapshots:
 
   bowser@2.11.0: {}
 
-  boxen@7.1.1:
+  boxen@8.0.1:
     dependencies:
       ansi-align: 3.0.1
-      camelcase: 7.0.1
+      camelcase: 8.0.0
       chalk: 5.3.0
       cli-boxes: 3.0.0
-      string-width: 5.1.2
-      type-fest: 2.19.0
-      widest-line: 4.0.1
-      wrap-ansi: 8.1.0
+      string-width: 7.2.0
+      type-fest: 4.26.1
+      widest-line: 5.0.0
+      wrap-ansi: 9.0.0
 
   brace-expansion@1.1.11:
     dependencies:
@@ -12477,18 +12414,6 @@ snapshots:
 
   cacheable-lookup@5.0.4: {}
 
-  cacheable-lookup@7.0.0: {}
-
-  cacheable-request@10.2.10:
-    dependencies:
-      '@types/http-cache-semantics': 4.0.1
-      get-stream: 6.0.1
-      http-cache-semantics: 4.1.1
-      keyv: 4.5.2
-      mimic-response: 4.0.0
-      normalize-url: 8.0.0
-      responselike: 3.0.0
-
   cacheable-request@7.0.4:
     dependencies:
       clone-response: 1.0.3
@@ -12513,7 +12438,7 @@ snapshots:
 
   camelcase@6.3.0: {}
 
-  camelcase@7.0.1: {}
+  camelcase@8.0.0: {}
 
   caniuse-lite@1.0.30001667: {}
 
@@ -12601,6 +12526,8 @@ snapshots:
 
   ci-info@3.9.0: {}
 
+  ci-info@4.0.0: {}
+
   cjs-module-lexer@1.2.2: {}
 
   class-transformer@0.5.1: {}
@@ -12620,6 +12547,10 @@ snapshots:
   cli-cursor@4.0.0:
     dependencies:
       restore-cursor: 4.0.0
+
+  cli-cursor@5.0.0:
+    dependencies:
+      restore-cursor: 5.1.0
 
   cli-progress@3.12.0:
     dependencies:
@@ -12728,12 +12659,11 @@ snapshots:
       ini: 1.3.8
       proto-list: 1.2.4
 
-  configstore@6.0.0:
+  configstore@7.0.0:
     dependencies:
-      dot-prop: 6.0.1
+      atomically: 2.0.3
+      dot-prop: 9.0.0
       graceful-fs: 4.2.11
-      unique-string: 3.0.0
-      write-file-atomic: 3.0.3
       xdg-basedir: 5.1.0
 
   consola@2.15.3: {}
@@ -12778,14 +12708,14 @@ snapshots:
     dependencies:
       layout-base: 1.0.2
 
-  cosmiconfig@9.0.0(typescript@5.6.2):
+  cosmiconfig@9.0.0(typescript@5.6.3):
     dependencies:
       env-paths: 2.2.1
       import-fresh: 3.3.0
       js-yaml: 4.1.0
       parse-json: 5.2.0
     optionalDependencies:
-      typescript: 5.6.2
+      typescript: 5.6.3
 
   crc-32@1.2.2: {}
 
@@ -12794,13 +12724,13 @@ snapshots:
       crc-32: 1.2.2
       readable-stream: 3.6.0
 
-  create-jest@29.7.0(@types/node@20.16.11)(ts-node@10.9.2(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.2)):
+  create-jest@29.7.0(@types/node@20.16.11)(ts-node@10.9.2(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.3)):
     dependencies:
       '@jest/types': 29.6.3
       chalk: 4.1.2
       exit: 0.1.2
       graceful-fs: 4.2.11
-      jest-config: 29.7.0(@types/node@20.16.11)(ts-node@10.9.2(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.2))
+      jest-config: 29.7.0(@types/node@20.16.11)(ts-node@10.9.2(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.3))
       jest-util: 29.7.0
       prompts: 2.4.2
     transitivePeerDependencies:
@@ -12830,10 +12760,6 @@ snapshots:
       path-key: 3.1.1
       shebang-command: 2.0.0
       which: 2.0.2
-
-  crypto-random-string@4.0.0:
-    dependencies:
-      type-fest: 1.4.0
 
   css-select@5.1.0:
     dependencies:
@@ -13032,8 +12958,6 @@ snapshots:
     dependencies:
       assert-plus: 1.0.0
 
-  data-uri-to-buffer@4.0.0: {}
-
   data-uri-to-buffer@5.0.1: {}
 
   datadog-metrics@0.9.3:
@@ -13123,7 +13047,7 @@ snapshots:
       commander: 10.0.1
       filing-cabinet: 4.2.0
       precinct: 11.0.5
-      typescript: 5.6.2
+      typescript: 5.6.3
     transitivePeerDependencies:
       - supports-color
 
@@ -13173,10 +13097,10 @@ snapshots:
 
   detective-typescript@11.2.0:
     dependencies:
-      '@typescript-eslint/typescript-estree': 5.62.0(typescript@5.6.2)
+      '@typescript-eslint/typescript-estree': 5.62.0(typescript@5.6.3)
       ast-module-types: 5.0.0
       node-source-walk: 6.0.2
-      typescript: 5.6.2
+      typescript: 5.6.3
     transitivePeerDependencies:
       - supports-color
 
@@ -13222,9 +13146,9 @@ snapshots:
       domelementtype: 2.3.0
       domhandler: 5.0.3
 
-  dot-prop@6.0.1:
+  dot-prop@9.0.0:
     dependencies:
-      is-obj: 2.0.0
+      type-fest: 4.26.1
 
   dotenv@16.4.5: {}
 
@@ -13463,7 +13387,7 @@ snapshots:
       signal-exit: 3.0.7
       strip-final-newline: 2.0.0
 
-  execa@8.0.1:
+  execa@8.0.0:
     dependencies:
       cross-spawn: 7.0.3
       get-stream: 8.0.1
@@ -13575,11 +13499,6 @@ snapshots:
     optionalDependencies:
       picomatch: 4.0.2
 
-  fetch-blob@3.2.0:
-    dependencies:
-      node-domexception: 1.0.0
-      web-streams-polyfill: 3.2.1
-
   fflate@0.8.1: {}
 
   file-uri-to-path@1.0.0:
@@ -13602,7 +13521,7 @@ snapshots:
       sass-lookup: 5.0.1
       stylus-lookup: 5.0.1
       tsconfig-paths: 4.2.0
-      typescript: 5.6.2
+      typescript: 5.6.3
 
   fill-range@7.0.1:
     dependencies:
@@ -13653,8 +13572,6 @@ snapshots:
 
   forever-agent@0.6.1: {}
 
-  form-data-encoder@2.1.2: {}
-
   form-data@2.3.3:
     dependencies:
       asynckit: 0.4.0
@@ -13672,10 +13589,6 @@ snapshots:
       asynckit: 0.4.0
       combined-stream: 1.0.8
       mime-types: 2.1.35
-
-  formdata-polyfill@4.0.10:
-    dependencies:
-      fetch-blob: 3.2.0
 
   forwarded@0.2.0: {}
 
@@ -13857,20 +13770,6 @@ snapshots:
       lowercase-keys: 2.0.0
       p-cancelable: 2.1.1
       responselike: 2.0.1
-
-  got@13.0.0:
-    dependencies:
-      '@sindresorhus/is': 5.3.0
-      '@szmarczak/http-timer': 5.0.1
-      cacheable-lookup: 7.0.0
-      cacheable-request: 10.2.10
-      decompress-response: 6.0.0
-      form-data-encoder: 2.1.2
-      get-stream: 6.0.1
-      http2-wrapper: 2.1.11
-      lowercase-keys: 3.0.0
-      p-cancelable: 3.0.0
-      responselike: 3.0.0
 
   graceful-fs@4.2.10: {}
 
@@ -14073,11 +13972,6 @@ snapshots:
       quick-lru: 5.1.1
       resolve-alpn: 1.2.1
 
-  http2-wrapper@2.1.11:
-    dependencies:
-      quick-lru: 5.1.1
-      resolve-alpn: 1.2.1
-
   https-proxy-agent@5.0.0:
     dependencies:
       agent-base: 6.0.2
@@ -14133,8 +14027,6 @@ snapshots:
     dependencies:
       parent-module: 1.0.1
       resolve-from: 4.0.0
-
-  import-lazy@4.0.0: {}
 
   import-local@3.1.0:
     dependencies:
@@ -14286,7 +14178,7 @@ snapshots:
 
   is-hexadecimal@2.0.1: {}
 
-  is-in-ci@0.1.0: {}
+  is-in-ci@1.0.0: {}
 
   is-inside-container@1.0.0:
     dependencies:
@@ -14312,8 +14204,6 @@ snapshots:
   is-number@7.0.0: {}
 
   is-obj@1.0.1: {}
-
-  is-obj@2.0.0: {}
 
   is-obj@3.0.0: {}
 
@@ -14485,16 +14375,16 @@ snapshots:
       - babel-plugin-macros
       - supports-color
 
-  jest-cli@29.7.0(@types/node@20.16.11)(ts-node@10.9.2(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.2)):
+  jest-cli@29.7.0(@types/node@20.16.11)(ts-node@10.9.2(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.3)):
     dependencies:
-      '@jest/core': 29.7.0(ts-node@10.9.2(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.2))
+      '@jest/core': 29.7.0(ts-node@10.9.2(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.3))
       '@jest/test-result': 29.7.0
       '@jest/types': 29.6.3
       chalk: 4.1.2
-      create-jest: 29.7.0(@types/node@20.16.11)(ts-node@10.9.2(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.2))
+      create-jest: 29.7.0(@types/node@20.16.11)(ts-node@10.9.2(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.3))
       exit: 0.1.2
       import-local: 3.1.0
-      jest-config: 29.7.0(@types/node@20.16.11)(ts-node@10.9.2(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.2))
+      jest-config: 29.7.0(@types/node@20.16.11)(ts-node@10.9.2(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.3))
       jest-util: 29.7.0
       jest-validate: 29.7.0
       yargs: 17.7.2
@@ -14504,7 +14394,7 @@ snapshots:
       - supports-color
       - ts-node
 
-  jest-config@29.7.0(@types/node@20.16.11)(ts-node@10.9.2(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.2)):
+  jest-config@29.7.0(@types/node@20.16.11)(ts-node@10.9.2(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.3)):
     dependencies:
       '@babel/core': 7.18.9
       '@jest/test-sequencer': 29.7.0
@@ -14530,7 +14420,7 @@ snapshots:
       strip-json-comments: 3.1.1
     optionalDependencies:
       '@types/node': 20.16.11
-      ts-node: 10.9.2(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.2)
+      ts-node: 10.9.2(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.3)
     transitivePeerDependencies:
       - babel-plugin-macros
       - supports-color
@@ -14750,12 +14640,12 @@ snapshots:
       merge-stream: 2.0.0
       supports-color: 8.1.1
 
-  jest@29.7.0(@types/node@20.16.11)(ts-node@10.9.2(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.2)):
+  jest@29.7.0(@types/node@20.16.11)(ts-node@10.9.2(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.3)):
     dependencies:
-      '@jest/core': 29.7.0(ts-node@10.9.2(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.2))
+      '@jest/core': 29.7.0(ts-node@10.9.2(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.3))
       '@jest/types': 29.6.3
       import-local: 3.1.0
-      jest-cli: 29.7.0(@types/node@20.16.11)(ts-node@10.9.2(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.2))
+      jest-cli: 29.7.0(@types/node@20.16.11)(ts-node@10.9.2(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.3))
     transitivePeerDependencies:
       - '@types/node'
       - babel-plugin-macros
@@ -14991,8 +14881,6 @@ snapshots:
       js-tokens: 4.0.0
 
   lowercase-keys@2.0.0: {}
-
-  lowercase-keys@3.0.0: {}
 
   lru-cache@10.4.3: {}
 
@@ -15580,11 +15468,11 @@ snapshots:
 
   mimic-fn@4.0.0: {}
 
+  mimic-function@5.0.1: {}
+
   mimic-response@1.0.1: {}
 
   mimic-response@3.1.0: {}
-
-  mimic-response@4.0.0: {}
 
   minimatch@3.1.2:
     dependencies:
@@ -15841,8 +15729,6 @@ snapshots:
 
   nice-try@1.0.5: {}
 
-  node-domexception@1.0.0: {}
-
   node-emoji@1.11.0:
     dependencies:
       lodash: 4.17.21
@@ -15852,12 +15738,6 @@ snapshots:
       whatwg-url: 5.0.0
     optionalDependencies:
       encoding: 0.1.13
-
-  node-fetch@3.3.2:
-    dependencies:
-      data-uri-to-buffer: 4.0.0
-      fetch-blob: 3.2.0
-      formdata-polyfill: 4.0.10
 
   node-gyp@10.2.0:
     dependencies:
@@ -15897,8 +15777,6 @@ snapshots:
   normalize-path@3.0.0: {}
 
   normalize-url@6.1.0: {}
-
-  normalize-url@8.0.0: {}
 
   npm-bundled@3.0.1:
     dependencies:
@@ -15987,6 +15865,10 @@ snapshots:
     dependencies:
       mimic-fn: 4.0.0
 
+  onetime@7.0.0:
+    dependencies:
+      mimic-function: 5.0.1
+
   open@10.1.0:
     dependencies:
       default-browser: 5.2.1
@@ -16027,16 +15909,16 @@ snapshots:
       strip-ansi: 6.0.1
       wcwidth: 1.0.1
 
-  ora@8.0.1:
+  ora@8.1.0:
     dependencies:
       chalk: 5.3.0
-      cli-cursor: 4.0.0
+      cli-cursor: 5.0.0
       cli-spinners: 2.9.2
       is-interactive: 2.0.0
       is-unicode-supported: 2.0.0
       log-symbols: 6.0.0
       stdin-discarder: 0.2.2
-      string-width: 7.1.0
+      string-width: 7.2.0
       strip-ansi: 7.1.0
 
   os-name@5.1.0:
@@ -16063,8 +15945,6 @@ snapshots:
       '@oxc-resolver/binding-win32-x64-msvc': 1.10.2
 
   p-cancelable@2.1.1: {}
-
-  p-cancelable@3.0.0: {}
 
   p-filter@2.1.0:
     dependencies:
@@ -16242,7 +16122,7 @@ snapshots:
 
   pg-connection-string@2.7.0: {}
 
-  pg-cursor@2.11.0(pg@8.13.0):
+  pg-cursor@2.12.0(pg@8.13.0):
     dependencies:
       pg: 8.13.0
 
@@ -16641,31 +16521,29 @@ snapshots:
       hast-util-raw: 9.0.4
       vfile: 6.0.3
 
-  release-it@17.6.0(typescript@5.6.2):
+  release-it@17.8.2(typescript@5.6.3):
     dependencies:
       '@iarna/toml': 2.2.5
       '@octokit/rest': 20.1.1
       async-retry: 1.3.3
       chalk: 5.3.0
-      cosmiconfig: 9.0.0(typescript@5.6.2)
-      execa: 8.0.1
+      ci-info: 4.0.0
+      cosmiconfig: 9.0.0(typescript@5.6.3)
+      execa: 8.0.0
       git-url-parse: 14.0.0
       globby: 14.0.2
-      got: 13.0.0
       inquirer: 9.3.2
-      is-ci: 3.0.1
       issue-parser: 7.0.1
       lodash: 4.17.21
       mime-types: 2.1.35
       new-github-release-url: 2.0.0
-      node-fetch: 3.3.2
       open: 10.1.0
-      ora: 8.0.1
+      ora: 8.1.0
       os-name: 5.1.0
       proxy-agent: 6.4.0
-      semver: 7.6.2
+      semver: 7.6.3
       shelljs: 0.8.5
-      update-notifier: 7.1.0
+      update-notifier: 7.3.1
       url-join: 5.0.0
       wildcard-match: 5.1.3
       yargs-parser: 21.1.1
@@ -16794,10 +16672,6 @@ snapshots:
     dependencies:
       lowercase-keys: 2.0.0
 
-  responselike@3.0.0:
-    dependencies:
-      lowercase-keys: 3.0.0
-
   restore-cursor@3.1.0:
     dependencies:
       onetime: 5.1.2
@@ -16807,6 +16681,11 @@ snapshots:
     dependencies:
       onetime: 5.1.2
       signal-exit: 3.0.7
+
+  restore-cursor@5.1.0:
+    dependencies:
+      onetime: 7.0.0
+      signal-exit: 4.1.0
 
   retry@0.12.0: {}
 
@@ -16895,15 +16774,9 @@ snapshots:
 
   seedrandom@3.0.5: {}
 
-  semver-diff@4.0.0:
-    dependencies:
-      semver: 7.6.3
-
   semver@5.7.2: {}
 
   semver@6.3.0: {}
-
-  semver@7.6.2: {}
 
   semver@7.6.3: {}
 
@@ -17170,7 +17043,7 @@ snapshots:
       emoji-regex: 9.2.2
       strip-ansi: 7.1.0
 
-  string-width@7.1.0:
+  string-width@7.2.0:
     dependencies:
       emoji-regex: 10.3.0
       get-east-asian-width: 1.2.0
@@ -17216,6 +17089,8 @@ snapshots:
   strip-json-comments@3.1.1: {}
 
   strnum@1.0.5: {}
+
+  stubborn-fs@1.2.5: {}
 
   style-to-object@0.4.4:
     dependencies:
@@ -17289,27 +17164,27 @@ snapshots:
       yaml: 2.5.1
       yaml-types: 0.3.0(yaml@2.5.1)
 
-  tap@19.2.5(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(@types/react@18.3.9)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.6.2):
+  tap@19.2.5(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(@types/react@18.3.9)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.6.3):
     dependencies:
-      '@tapjs/after': 1.1.31(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
-      '@tapjs/after-each': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
-      '@tapjs/asserts': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@tapjs/before': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
-      '@tapjs/before-each': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
-      '@tapjs/chdir': 1.1.4(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
-      '@tapjs/core': 2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@tapjs/filter': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
-      '@tapjs/fixture': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
-      '@tapjs/intercept': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
-      '@tapjs/mock': 2.1.6(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
-      '@tapjs/node-serialize': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
-      '@tapjs/run': 2.1.7(@swc/core@1.7.26(@swc/helpers@0.5.5))(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/node@20.16.11)(@types/react@18.3.9)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@tapjs/snapshot': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@tapjs/spawn': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
-      '@tapjs/stdin': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
-      '@tapjs/test': 2.2.4(@swc/core@1.7.26(@swc/helpers@0.5.5))(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@tapjs/typescript': 1.4.13(@swc/core@1.7.26(@swc/helpers@0.5.5))(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/node@20.16.11)(typescript@5.6.2)
-      '@tapjs/worker': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
+      '@tapjs/after': 1.1.31(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
+      '@tapjs/after-each': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
+      '@tapjs/asserts': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@tapjs/before': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
+      '@tapjs/before-each': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
+      '@tapjs/chdir': 1.1.4(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
+      '@tapjs/core': 2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@tapjs/filter': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
+      '@tapjs/fixture': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
+      '@tapjs/intercept': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
+      '@tapjs/mock': 2.1.6(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
+      '@tapjs/node-serialize': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
+      '@tapjs/run': 2.1.7(@swc/core@1.7.35(@swc/helpers@0.5.5))(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/node@20.16.11)(@types/react@18.3.9)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@tapjs/snapshot': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@tapjs/spawn': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
+      '@tapjs/stdin': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
+      '@tapjs/test': 2.2.4(@swc/core@1.7.35(@swc/helpers@0.5.5))(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@tapjs/typescript': 1.4.13(@swc/core@1.7.35(@swc/helpers@0.5.5))(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/node@20.16.11)(typescript@5.6.3)
+      '@tapjs/worker': 2.0.8(@tapjs/core@2.1.6(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
       resolve-import: 1.4.6
     transitivePeerDependencies:
       - '@swc/core'
@@ -17461,7 +17336,7 @@ snapshots:
 
   ts-interface-checker@0.1.13: {}
 
-  ts-node@10.9.2(@swc/core@1.7.26(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.2):
+  ts-node@10.9.2(@swc/core@1.7.35(@swc/helpers@0.5.5))(@types/node@20.16.11)(typescript@5.6.3):
     dependencies:
       '@cspotcode/source-map-support': 0.8.1
       '@tsconfig/node10': 1.0.11
@@ -17475,19 +17350,19 @@ snapshots:
       create-require: 1.1.1
       diff: 4.0.2
       make-error: 1.3.6
-      typescript: 5.6.2
+      typescript: 5.6.3
       v8-compile-cache-lib: 3.0.1
       yn: 3.1.1
     optionalDependencies:
-      '@swc/core': 1.7.26(@swc/helpers@0.5.5)
+      '@swc/core': 1.7.35(@swc/helpers@0.5.5)
 
-  ts-node@8.10.2(typescript@5.6.2):
+  ts-node@8.10.2(typescript@5.6.3):
     dependencies:
       arg: 4.1.3
       diff: 4.0.2
       make-error: 1.3.6
       source-map-support: 0.5.21
-      typescript: 5.6.2
+      typescript: 5.6.3
       yn: 3.1.1
 
   tsconfig-paths@4.2.0:
@@ -17507,14 +17382,14 @@ snapshots:
       resolve-import: 1.4.6
       rimraf: 5.0.10
       sync-content: 1.0.2
-      typescript: 5.6.2
+      typescript: 5.6.3
       walk-up-path: 3.0.1
 
   tslib@1.14.1: {}
 
   tslib@2.7.0: {}
 
-  tsup@8.3.0(@swc/core@1.7.26(@swc/helpers@0.5.5))(postcss@8.4.47)(typescript@5.6.2)(yaml@2.5.1):
+  tsup@8.3.0(@swc/core@1.7.35(@swc/helpers@0.5.5))(postcss@8.4.47)(typescript@5.6.3)(yaml@2.5.1):
     dependencies:
       bundle-require: 5.0.0(esbuild@0.23.1)
       cac: 6.7.14
@@ -17533,19 +17408,19 @@ snapshots:
       tinyglobby: 0.2.6
       tree-kill: 1.2.2
     optionalDependencies:
-      '@swc/core': 1.7.26(@swc/helpers@0.5.5)
+      '@swc/core': 1.7.35(@swc/helpers@0.5.5)
       postcss: 8.4.47
-      typescript: 5.6.2
+      typescript: 5.6.3
     transitivePeerDependencies:
       - jiti
       - supports-color
       - tsx
       - yaml
 
-  tsutils@3.21.0(typescript@5.6.2):
+  tsutils@3.21.0(typescript@5.6.3):
     dependencies:
       tslib: 1.14.1
-      typescript: 5.6.2
+      typescript: 5.6.3
 
   tuf-js@2.2.1:
     dependencies:
@@ -17598,20 +17473,18 @@ snapshots:
 
   type-fest@2.19.0: {}
 
+  type-fest@4.26.1: {}
+
   type-is@1.6.18:
     dependencies:
       media-typer: 0.3.0
       mime-types: 2.1.35
 
-  typedarray-to-buffer@3.1.5:
-    dependencies:
-      is-typedarray: 1.0.0
-
   typedarray@0.0.6: {}
 
   typescript@5.4.5: {}
 
-  typescript@5.6.2: {}
+  typescript@5.6.3: {}
 
   uid@2.0.2:
     dependencies:
@@ -17644,10 +17517,6 @@ snapshots:
   unique-slug@4.0.0:
     dependencies:
       imurmurhash: 0.1.4
-
-  unique-string@3.0.0:
-    dependencies:
-      crypto-random-string: 4.0.0
 
   unist-util-find-after@5.0.0:
     dependencies:
@@ -17753,19 +17622,17 @@ snapshots:
       escalade: 3.1.1
       picocolors: 1.1.0
 
-  update-notifier@7.1.0:
+  update-notifier@7.3.1:
     dependencies:
-      boxen: 7.1.1
+      boxen: 8.0.1
       chalk: 5.3.0
-      configstore: 6.0.0
-      import-lazy: 4.0.0
-      is-in-ci: 0.1.0
+      configstore: 7.0.0
+      is-in-ci: 1.0.0
       is-installed-globally: 1.0.0
       is-npm: 6.0.0
       latest-version: 9.0.0
       pupa: 3.1.0
       semver: 7.6.3
-      semver-diff: 4.0.0
       xdg-basedir: 5.1.0
 
   uri-js@4.4.1:
@@ -17885,8 +17752,6 @@ snapshots:
 
   web-namespaces@2.0.1: {}
 
-  web-streams-polyfill@3.2.1: {}
-
   web-worker@1.3.0: {}
 
   webidl-conversions@3.0.1: {}
@@ -17917,6 +17782,8 @@ snapshots:
       tr46: 1.0.1
       webidl-conversions: 4.0.2
 
+  when-exit@2.1.3: {}
+
   which-typed-array@1.1.15:
     dependencies:
       available-typed-arrays: 1.0.7
@@ -17945,6 +17812,10 @@ snapshots:
     dependencies:
       string-width: 5.1.2
 
+  widest-line@5.0.0:
+    dependencies:
+      string-width: 7.2.0
+
   wildcard-match@5.1.3: {}
 
   windows-release@5.0.1:
@@ -17971,14 +17842,13 @@ snapshots:
       string-width: 5.1.2
       strip-ansi: 7.1.0
 
-  wrappy@1.0.2: {}
-
-  write-file-atomic@3.0.3:
+  wrap-ansi@9.0.0:
     dependencies:
-      imurmurhash: 0.1.4
-      is-typedarray: 1.0.0
-      signal-exit: 3.0.7
-      typedarray-to-buffer: 3.1.5
+      ansi-styles: 6.2.1
+      string-width: 7.2.0
+      strip-ansi: 7.1.0
+
+  wrappy@1.0.2: {}
 
   write-file-atomic@4.0.2:
     dependencies:
