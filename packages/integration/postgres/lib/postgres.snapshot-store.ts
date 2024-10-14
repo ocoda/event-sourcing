@@ -73,7 +73,7 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 	public async *listCollections(filter?: ISnapshotCollectionFilter): AsyncGenerator<ISnapshotCollection[]> {
 		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
-		const query = `SHOW TABLES LIKE "%snapshots"`;
+		const query = `SELECT tablename FROM pg_catalog.pg_tables WHERE tablename LIKE '%snapshots'`;
 
 		const cursor = this.client.query(new Cursor<Record<string, ISnapshotCollection>>(query));
 
@@ -87,7 +87,7 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 			if (rows.length === 0) {
 				done = true;
 			} else {
-				const collections = rows.map((row) => Object.values<ISnapshotCollection>(row)[0]);
+				const collections = rows.map(({ tablename }) => tablename);
 				yield collections;
 			}
 		}
