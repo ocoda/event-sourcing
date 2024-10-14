@@ -56,7 +56,12 @@ describe(PostgresSnapshotStore, () => {
 	});
 
 	afterAll(async () => {
-		await client.query(`DROP TABLE IF EXISTS "${SnapshotCollection.get()}"`);
+		await Promise.all([
+			client.query(`DROP TABLE IF EXISTS "${SnapshotCollection.get()}"`),
+			client.query(`DROP TABLE IF EXISTS "${SnapshotCollection.get('a')}"`),
+			client.query(`DROP TABLE IF EXISTS "${SnapshotCollection.get('b')}"`),
+			client.query(`DROP TABLE IF EXISTS "${SnapshotCollection.get('c')}"`),
+		]);
 		client.release();
 		await pool.end();
 	});

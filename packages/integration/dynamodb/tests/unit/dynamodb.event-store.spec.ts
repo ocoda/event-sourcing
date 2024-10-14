@@ -56,8 +56,13 @@ describe(DynamoDBEventStore, () => {
 	});
 
 	afterAll(async () => {
-		await client.send(new DeleteTableCommand({ TableName: EventCollection.get() }));
-		await client.send(new DeleteTableCommand({ TableName: EventCollection.get('test-singular-events') }));
+		await Promise.all([
+			client.send(new DeleteTableCommand({ TableName: EventCollection.get() })),
+			client.send(new DeleteTableCommand({ TableName: EventCollection.get('test-singular-events') })),
+			client.send(new DeleteTableCommand({ TableName: EventCollection.get('a') })),
+			client.send(new DeleteTableCommand({ TableName: EventCollection.get('b') })),
+			client.send(new DeleteTableCommand({ TableName: EventCollection.get('c') })),
+		]);
 		client.destroy();
 	});
 
