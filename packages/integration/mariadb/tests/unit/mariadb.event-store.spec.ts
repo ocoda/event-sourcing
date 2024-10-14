@@ -1,11 +1,13 @@
-import type { IEventCollection } from '@ocoda/event-sourcing';
-import { EventId, EventStoreVersionConflictException, EventStream } from '@ocoda/event-sourcing';
 import {
 	EventCollection,
 	type EventEnvelope,
+	EventId,
 	EventNotFoundException,
 	EventStorePersistenceException,
+	EventStoreVersionConflictException,
+	EventStream,
 	type IEvent,
+	type IEventCollection,
 	StreamReadingDirection,
 } from '@ocoda/event-sourcing';
 import { type MariaDBEventEntity, MariaDBEventStore } from '@ocoda/event-sourcing-mariadb';
@@ -252,11 +254,19 @@ describe(MariaDBEventStore, () => {
 	});
 
 	it('should list collections', async () => {
+		await Promise.all([
+			eventStore.ensureCollection('a'),
+			eventStore.ensureCollection('b'),
+			eventStore.ensureCollection('c'),
+		]);
+
 		const resolvedCollections: IEventCollection[] = [];
 		for await (const collections of eventStore.listCollections()) {
 			resolvedCollections.push(...collections);
 		}
 
-		expect(resolvedCollections.sort()).toEqual(['events', 'test-singular-events-events'].sort());
+		expect(resolvedCollections.includes('a-events')).toBe(true);
+		expect(resolvedCollections.includes('b-events')).toBe(true);
+		expect(resolvedCollections.includes('c-events')).toBe(true);
 	});
 });
