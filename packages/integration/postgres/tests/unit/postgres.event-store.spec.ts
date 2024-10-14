@@ -13,6 +13,7 @@ import {
 	eventStreamAccountB,
 	getAccountAEventEnvelopes,
 	getAccountBEventEnvelopes,
+	getAccountEventEnvelopes,
 	getEventMap,
 	getEvents,
 } from '@ocoda/event-sourcing-testing/unit';
@@ -55,19 +56,18 @@ describe(PostgresEventStore, () => {
 
 	afterAll(async () => {
 		await client.query(`DROP TABLE IF EXISTS "${EventCollection.get()}"`);
+		await client.query(`DROP TABLE IF EXISTS "${EventCollection.get('test-singular-events')}"`);
 		client.release();
 		await pool.end();
 	});
 
 	it('should append event envelopes', async () => {
-		await eventStore.appendEvents(eventStreamAccountA, 3, events.slice(0, 3));
-		await eventStore.appendEvents(eventStreamAccountB, 3, events.slice(0, 3));
-		await eventStore.appendEvents(eventStreamAccountA, 6, events.slice(3));
-		await eventStore.appendEvents(eventStreamAccountB, 6, events.slice(3));
+		await eventStore.appendEvents(eventStreamAccountA, envelopesAccountA.length, envelopesAccountA);
+		await eventStore.appendEvents(eventStreamAccountB, envelopesAccountB.length, envelopesAccountB);
 
 		const { rows: entities } = await client.query<PostgresEventEntity>(`
-            SELECT * FROM "${EventCollection.get()}" ORDER BY version ASC
-        `);
+			SELECT * FROM "${EventCollection.get()}" ORDER BY version ASC
+		`);
 
 		const entitiesAccountA = entities.filter(
 			({ stream_id: entityStreamId }) => entityStreamId === eventStreamAccountA.streamId,
@@ -85,7 +85,8 @@ describe(PostgresEventStore, () => {
 			expect(entity.event).toEqual(envelopesAccountA[index].event);
 			expect(entity.payload).toEqual(envelopesAccountA[index].payload);
 			expect(entity.aggregate_id).toEqual(envelopesAccountA[index].metadata.aggregateId);
-			expect(entity.occurred_on).toBeInstanceOf(Date);
+			expect(typeof entity.event_id).toBe('string');
+			expect(entity.occurred_on).toEqual(envelopesAccountA[index].metadata.occurredOn);
 			expect(entity.version).toEqual(envelopesAccountA[index].metadata.version);
 		}
 
@@ -94,11 +95,34 @@ describe(PostgresEventStore, () => {
 			expect(entity.event).toEqual(envelopesAccountB[index].event);
 			expect(entity.payload).toEqual(envelopesAccountB[index].payload);
 			expect(entity.aggregate_id).toEqual(envelopesAccountB[index].metadata.aggregateId);
-			expect(entity.occurred_on).toBeInstanceOf(Date);
+			expect(typeof entity.event_id).toBe('string');
+			expect(entity.occurred_on).toEqual(envelopesAccountB[index].metadata.occurredOn);
 			expect(entity.version).toEqual(envelopesAccountB[index].metadata.version);
 		}
 
 		expect(publish).toHaveBeenCalledTimes(events.length * 2);
+	});
+
+	it('should append events', async () => {
+		const accountId = AccountId.generate();
+		const eventStreamAccountC = EventStream.for(Account, accountId);
+		const envelopesAccountC = getAccountEventEnvelopes(accountId, eventMap, events);
+
+		await eventStore.ensureCollection('test-singular-events');
+		await eventStore.appendEvents(eventStreamAccountC, envelopesAccountC.length, events, 'test-singular-events');
+
+		const { rows: entities } = await client.query<PostgresEventEntity>(`
+			SELECT * FROM "${EventCollection.get('test-singular-events')}" ORDER BY version ASC
+		`);
+
+		for (const [index, entity] of entities.entries()) {
+			expect(entity.stream_id).toEqual(eventStreamAccountC.streamId);
+			expect(entity.event).toEqual(envelopesAccountC[index].event);
+			expect(entity.payload).toEqual(envelopesAccountC[index].payload);
+			expect(entity.aggregate_id).toEqual(envelopesAccountC[index].metadata.aggregateId);
+			expect(entity.occurred_on).toBeInstanceOf(Date);
+			expect(entity.version).toEqual(envelopesAccountC[index].metadata.version);
+		}
 	});
 
 	it('should throw when trying to append an event to a stream that has a version lower or equal to the latest event for that stream', async () => {
