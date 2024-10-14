@@ -16,6 +16,7 @@ import {
 	eventStreamAccountB,
 	getAccountAEventEnvelopes,
 	getAccountBEventEnvelopes,
+	getAccountEventEnvelopes,
 	getEventMap,
 	getEvents,
 } from '@ocoda/event-sourcing-testing/unit';
@@ -52,14 +53,13 @@ describe(DynamoDBEventStore, () => {
 
 	afterAll(async () => {
 		await client.send(new DeleteTableCommand({ TableName: EventCollection.get() }));
+		await client.send(new DeleteTableCommand({ TableName: EventCollection.get('test-singular-events') }));
 		client.destroy();
 	});
 
 	it('should append event envelopes', async () => {
-		await eventStore.appendEvents(eventStreamAccountA, 3, events.slice(0, 3));
-		await eventStore.appendEvents(eventStreamAccountB, 3, events.slice(0, 3));
-		await eventStore.appendEvents(eventStreamAccountA, 6, events.slice(3));
-		await eventStore.appendEvents(eventStreamAccountB, 6, events.slice(3));
+		await eventStore.appendEvents(eventStreamAccountA, envelopesAccountA.length, envelopesAccountA);
+		await eventStore.appendEvents(eventStreamAccountB, envelopesAccountB.length, envelopesAccountB);
 
 		const { Items: itemsAccountA } = await client.send(
 			new QueryCommand({
@@ -92,7 +92,7 @@ describe(DynamoDBEventStore, () => {
 			expect(entity.payload).toEqual(envelopesAccountA[index].payload);
 			expect(entity.aggregateId).toEqual(envelopesAccountA[index].metadata.aggregateId);
 			expect(typeof entity.eventId).toBe('string');
-			expect(typeof entity.occurredOn).toBe('number');
+			expect(entity.occurredOn).toEqual(envelopesAccountA[index].metadata.occurredOn.getTime());
 			expect(entity.version).toEqual(envelopesAccountA[index].metadata.version);
 		}
 
@@ -102,11 +102,41 @@ describe(DynamoDBEventStore, () => {
 			expect(entity.payload).toEqual(envelopesAccountB[index].payload);
 			expect(entity.aggregateId).toEqual(envelopesAccountB[index].metadata.aggregateId);
 			expect(typeof entity.eventId).toBe('string');
-			expect(typeof entity.occurredOn).toBe('number');
+			expect(entity.occurredOn).toEqual(envelopesAccountB[index].metadata.occurredOn.getTime());
 			expect(entity.version).toEqual(envelopesAccountB[index].metadata.version);
 		}
 
 		expect(publish).toHaveBeenCalledTimes(events.length * 2);
+	});
+
+	it('should append events', async () => {
+		const accountId = AccountId.generate();
+		const eventStreamAccountC = EventStream.for(Account, accountId);
+		const envelopesAccountC = getAccountEventEnvelopes(accountId, eventMap, events);
+
+		await eventStore.ensureCollection('test-singular-events');
+		await eventStore.appendEvents(eventStreamAccountC, envelopesAccountC.length, events, 'test-singular-events');
+
+		const { Items: itemsAccountC } = await client.send(
+			new QueryCommand({
+				TableName: EventCollection.get('test-singular-events'),
+				KeyConditionExpression: 'streamId = :streamId',
+				ExpressionAttributeValues: {
+					':streamId': { S: eventStreamAccountC.streamId },
+				},
+			}),
+		);
+		const entitiesAccountC = itemsAccountC?.map((item) => unmarshall(item)) || [];
+
+		for (const [index, entity] of entitiesAccountC.entries()) {
+			expect(entity.streamId).toEqual(eventStreamAccountC.streamId);
+			expect(entity.event).toEqual(envelopesAccountC[index].event);
+			expect(entity.payload).toEqual(envelopesAccountC[index].payload);
+			expect(entity.aggregateId).toEqual(envelopesAccountC[index].metadata.aggregateId);
+			expect(typeof entity.eventId).toBe('string');
+			expect(typeof entity.occurredOn).toBe('number');
+			expect(entity.version).toEqual(envelopesAccountC[index].metadata.version);
+		}
 	});
 
 	it('should throw when trying to append an event to a stream that has a version lower or equal to the latest event for that stream', async () => {
