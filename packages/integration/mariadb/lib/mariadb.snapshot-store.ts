@@ -57,11 +57,6 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 		}
 	}
 
-	async stop(): Promise<void> {
-		this.logger.log('Stopping store');
-		await this.pool.end();
-	}
-
 	async *getSnapshots<A extends AggregateRoot>(
 		{ streamId }: SnapshotStream,
 		filter?: ISnapshotFilter,

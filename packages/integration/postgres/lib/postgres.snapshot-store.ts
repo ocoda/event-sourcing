@@ -69,12 +69,6 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 		}
 	}
 
-	async stop(): Promise<void> {
-		this.logger.log('Stopping store');
-		this.client.release();
-		await this.pool.end();
-	}
-
 	async *getSnapshots<A extends AggregateRoot>(
 		{ streamId }: SnapshotStream,
 		filter?: ISnapshotFilter,
