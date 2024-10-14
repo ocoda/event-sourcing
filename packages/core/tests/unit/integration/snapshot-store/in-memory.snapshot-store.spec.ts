@@ -3,6 +3,7 @@ import {
 	Aggregate,
 	AggregateRoot,
 	type ISnapshot,
+	type ISnapshotCollection,
 	type SnapshotEnvelope,
 	SnapshotNotFoundException,
 	SnapshotStorePersistenceException,
@@ -329,5 +330,14 @@ describe(InMemorySnapshotStore, () => {
 		expect(resolvedAccountBEnvelope.metadata.aggregateId).toEqual(envelopeAccountB.metadata.aggregateId);
 		expect(resolvedAccountBEnvelope.metadata.registeredOn).toBeInstanceOf(Date);
 		expect(resolvedAccountBEnvelope.metadata.version).toEqual(envelopeAccountB.metadata.version);
+	});
+
+	it('should list collections', async () => {
+		const resolvedCollections: ISnapshotCollection[] = [];
+		for await (const collections of snapshotStore.listCollections()) {
+			resolvedCollections.push(...collections);
+		}
+
+		expect(resolvedCollections).toEqual(['snapshots']);
 	});
 });

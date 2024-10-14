@@ -3,6 +3,7 @@ import {
 	Aggregate,
 	AggregateRoot,
 	type ISnapshot,
+	type ISnapshotCollection,
 	SnapshotCollection,
 	type SnapshotEnvelope,
 	SnapshotNotFoundException,
@@ -25,7 +26,6 @@ import {
 	snapshotsAccountA,
 	snapshotsAccountB,
 } from '@ocoda/event-sourcing-testing/unit';
-import {} from '@ocoda/event-sourcing/integration/event-store';
 import type { MongoClient } from 'mongodb';
 
 describe(MongoDBSnapshotStore, () => {
@@ -327,5 +327,14 @@ describe(MongoDBSnapshotStore, () => {
 		expect(resolvedAccountBEnvelope.metadata.aggregateId).toEqual(envelopeAccountB.metadata.aggregateId);
 		expect(resolvedAccountBEnvelope.metadata.registeredOn).toBeInstanceOf(Date);
 		expect(resolvedAccountBEnvelope.metadata.version).toEqual(envelopeAccountB.metadata.version);
+	});
+
+	it('should list collections', async () => {
+		const resolvedCollections: ISnapshotCollection[] = [];
+		for await (const collections of snapshotStore.listCollections()) {
+			resolvedCollections.push(...collections);
+		}
+
+		expect(resolvedCollections).toEqual(['snapshots']);
 	});
 });
