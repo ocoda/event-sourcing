@@ -96,10 +96,6 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 		}
 	}
 
-	public async stop(): Promise<void> {
-		void this.client.destroy();
-	}
-
 	async *getSnapshots<A extends AggregateRoot>(
 		{ streamId }: SnapshotStream,
 		filter?: ISnapshotFilter,

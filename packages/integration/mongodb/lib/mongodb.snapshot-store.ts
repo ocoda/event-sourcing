@@ -56,11 +56,6 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 		}
 	}
 
-	async stop(): Promise<void> {
-		this.logger.log('Stopping store');
-		await this.client.close();
-	}
-
 	async *getSnapshots<A extends AggregateRoot>(
 		{ streamId }: SnapshotStream,
 		filter?: ISnapshotFilter,
