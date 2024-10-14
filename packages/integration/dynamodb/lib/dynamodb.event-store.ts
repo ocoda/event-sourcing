@@ -8,6 +8,7 @@ import {
 	DescribeTableCommand,
 	DynamoDBClient,
 	GetItemCommand,
+	ListTablesCommand,
 	QueryCommand,
 	ResourceNotFoundException,
 } from '@aws-sdk/client-dynamodb';
@@ -25,6 +26,7 @@ import {
 	type EventStream,
 	type IEvent,
 	type IEventCollection,
+	type IEventCollectionFilter,
 	type IEventFilter,
 	type IEventPool,
 	StreamReadingDirection,
@@ -80,6 +82,29 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 					throw new EventStoreCollectionCreationException(collection, err);
 			}
 		}
+	}
+
+	public async *listCollections(filter?: IEventCollectionFilter): AsyncGenerator<IEventCollection[]> {
+		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
+
+		const entities = [];
+		let ExclusiveStartTableName: string;
+		do {
+			const { TableNames, LastEvaluatedTableName } = await this.client.send(
+				new ListTablesCommand({
+					ExclusiveStartTableName,
+					Limit: batch,
+				}),
+			);
+
+			ExclusiveStartTableName = LastEvaluatedTableName;
+			entities.push(...TableNames.filter((name) => name.endsWith('events')));
+
+			if (entities.length > 0 && !ExclusiveStartTableName) {
+				yield entities;
+				entities.length = 0;
+			}
+		} while (ExclusiveStartTableName);
 	}
 
 	async *getEvents({ streamId }: EventStream, filter?: IEventFilter): AsyncGenerator<IEvent[]> {

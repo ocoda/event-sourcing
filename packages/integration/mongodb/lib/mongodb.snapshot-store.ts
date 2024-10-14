@@ -4,6 +4,7 @@ import {
 	type ILatestSnapshotFilter,
 	type ISnapshot,
 	type ISnapshotCollection,
+	type ISnapshotCollectionFilter,
 	type ISnapshotFilter,
 	type ISnapshotPool,
 	SnapshotCollection,
@@ -54,6 +55,28 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 		} catch (error) {
 			throw new SnapshotStoreCollectionCreationException(collection, error);
 		}
+	}
+
+	public async *listCollections(filter?: ISnapshotCollectionFilter): AsyncGenerator<ISnapshotCollection[]> {
+		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
+
+		const cursor = this.database.listCollections({
+			name: { $regex: /snapshots/ },
+		});
+
+		const entities: ISnapshotCollection[] = [];
+		let hasNext: boolean;
+		do {
+			const entity = await cursor.next();
+			hasNext = entity !== null;
+
+			hasNext && entities.push(entity.name as ISnapshotCollection);
+
+			if (entities.length > 0 && (entities.length === batch || !hasNext)) {
+				yield entities;
+				entities.length = 0;
+			}
+		} while (hasNext);
 	}
 
 	async *getSnapshots<A extends AggregateRoot>(

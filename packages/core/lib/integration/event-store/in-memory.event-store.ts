@@ -12,6 +12,7 @@ import type {
 	EventStoreConfig,
 	IEvent,
 	IEventCollection,
+	IEventCollectionFilter,
 	IEventFilter,
 	IEventPayload,
 	IEventPool,
@@ -51,17 +52,12 @@ export class InMemoryEventStore extends EventStore<InMemoryEventStoreConfig> {
 		}
 	}
 
-	public async *listCollections(): AsyncGenerator<IEventCollection[]> {
+	public async *listCollections(filter?: IEventCollectionFilter): AsyncGenerator<IEventCollection[]> {
 		let collections: IEventCollection[] = [];
 
-		const limit = Number.MAX_SAFE_INTEGER;
-		const batch = DEFAULT_BATCH_SIZE;
+		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
 		collections = [...this.collections.keys()];
-
-		if (limit) {
-			collections = collections.slice(0, limit);
-		}
 
 		for (let i = 0; i < collections.length; i += batch) {
 			const chunk = collections.slice(i, i + batch);
