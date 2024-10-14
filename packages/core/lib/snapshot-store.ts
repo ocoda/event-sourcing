@@ -29,8 +29,8 @@ export abstract class SnapshotStore<TOptions = Omit<EventSourcingModuleOptions['
 	public abstract disconnect(): void | Promise<void>;
 
 	/**
-	 * Ensure the snapshot collection exists.
-	 * @param pool The snapshot pool.
+	 * Ensure a snapshot collection exists.
+	 * @param pool The snapshot pool to create the collection for.
 	 * @returns The snapshot collection.
 	 */
 	public abstract ensureCollection(pool?: ISnapshotPool): ISnapshotCollection | Promise<ISnapshotCollection>;

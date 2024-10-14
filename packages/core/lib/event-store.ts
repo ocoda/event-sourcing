@@ -58,11 +58,11 @@ export abstract class EventStore<TOptions = Omit<EventSourcingModuleOptions['eve
 	public abstract disconnect(): void | Promise<void>;
 
 	/**
-	 * Ensure the event collection exists.
-	 * @param pool The event pool.
+	 * Ensure an event collection exists.
+	 * @param pool The event pool to create the collection for.
 	 * @returns The event collection.
 	 */
-	public abstract ensureCollection(pool?: string): IEventCollection | Promise<IEventCollection>;
+	public abstract ensureCollection(pool?: IEventPool): IEventCollection | Promise<IEventCollection>;
 
 	/**
 	 * List the event collections.

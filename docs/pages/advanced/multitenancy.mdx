@@ -2,7 +2,7 @@
 title: Multitenancy
 ---
 
-import { Steps } from 'nextra/components';
+import { Callout, Steps } from 'nextra/components';
 
 # Multitenancy
 
@@ -32,10 +32,18 @@ By default the event- and snapshot-store create a shared collection of streams f
   ```
 ### Create a pool for each tenant
 
+The ensureCollection methods are used to create a pool for a tenant. The pool is created if it does not exist.
+
   ```typescript copy
     await eventStore.ensureCollection('tenant-1');
     await snapshotStore.ensureCollection('tenant-1');
   ```
+
+<Callout type="info" emoji="ℹ️">
+This library makes a distinction between the types for pools and for collections: 
+- a pool (`IEventPool` and `ISnapshotPool`) only represents the name of a tenant, e.g. `tenant-1`
+- a collection (`IEventCollection` and `ISnapshotCollection`) is an internal type that represents the name of the collection **within** the database, e.g. `tenant-1-events` and `tenant-1-snapshots`.
+</Callout>
 
 ### Provide a pool when interacting with the event-store or snapshot-repository
 
