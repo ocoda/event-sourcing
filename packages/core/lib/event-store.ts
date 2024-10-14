@@ -64,6 +64,12 @@ export abstract class EventStore<TOptions = Omit<EventSourcingModuleOptions['eve
 	public abstract ensureCollection(pool?: string): IEventCollection | Promise<IEventCollection>;
 
 	/**
+	 * List the event collections.
+	 * @returns The event collections.
+	 */
+	public abstract listCollections(): AsyncGenerator<IEventCollection[]>;
+
+	/**
 	 * Get events from the event stream.
 	 * @param eventStream The event stream.
 	 * @param filter The event filter.
