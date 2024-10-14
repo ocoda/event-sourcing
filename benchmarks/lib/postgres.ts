@@ -1,5 +1,4 @@
 import { Module } from '@nestjs/common';
-import {} from '@nestjs/core';
 import { EventSourcingModule } from '@ocoda/event-sourcing';
 import {
 	AggregateRepositories,
