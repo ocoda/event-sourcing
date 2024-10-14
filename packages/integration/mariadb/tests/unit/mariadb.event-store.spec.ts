@@ -57,8 +57,13 @@ describe(MariaDBEventStore, () => {
 	});
 
 	afterAll(async () => {
-		await pool.query(`DROP TABLE IF EXISTS \`${EventCollection.get()}\``);
-		await pool.query(`DROP TABLE IF EXISTS \`${EventCollection.get('test-singular-events')}\``);
+		await Promise.all([
+			pool.query(`DROP TABLE IF EXISTS \`${EventCollection.get()}\``),
+			pool.query(`DROP TABLE IF EXISTS \`${EventCollection.get('test-singular-events')}\``),
+			pool.query(`DROP TABLE IF EXISTS \`${EventCollection.get('a')}\``),
+			pool.query(`DROP TABLE IF EXISTS \`${EventCollection.get('b')}\``),
+			pool.query(`DROP TABLE IF EXISTS \`${EventCollection.get('c')}\``),
+		]);
 		await pool.end();
 	});
 

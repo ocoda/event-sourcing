@@ -46,7 +46,12 @@ describe(MongoDBSnapshotStore, () => {
 	});
 
 	afterAll(async () => {
-		await client.db().dropCollection(SnapshotCollection.get());
+		await Promise.all([
+			client.db().dropCollection(SnapshotCollection.get()),
+			client.db().dropCollection(SnapshotCollection.get('a')),
+			client.db().dropCollection(SnapshotCollection.get('b')),
+			client.db().dropCollection(SnapshotCollection.get('c')),
+		]);
 		await client.close();
 	});
 

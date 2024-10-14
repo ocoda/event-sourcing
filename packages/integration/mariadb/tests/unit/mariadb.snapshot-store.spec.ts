@@ -53,7 +53,12 @@ describe(MariaDBSnapshotStore, () => {
 	});
 
 	afterAll(async () => {
-		await pool.query(`DROP TABLE IF EXISTS \`${SnapshotCollection.get()}\``);
+		await Promise.all([
+			pool.query(`DROP TABLE IF EXISTS \`${SnapshotCollection.get()}\``),
+			pool.query(`DROP TABLE IF EXISTS \`${SnapshotCollection.get('a')}\``),
+			pool.query(`DROP TABLE IF EXISTS \`${SnapshotCollection.get('b')}\``),
+			pool.query(`DROP TABLE IF EXISTS \`${SnapshotCollection.get('c')}\``),
+		]);
 		await pool.end();
 	});
 

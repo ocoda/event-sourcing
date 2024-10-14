@@ -53,8 +53,13 @@ describe(MongoDBEventStore, () => {
 	});
 
 	afterAll(async () => {
-		await client.db().dropCollection(EventCollection.get());
-		await client.db().dropCollection(EventCollection.get('test-singular-events'));
+		await Promise.all([
+			client.db().dropCollection(EventCollection.get()),
+			client.db().dropCollection(EventCollection.get('test-singular-events')),
+			client.db().dropCollection(EventCollection.get('a')),
+			client.db().dropCollection(EventCollection.get('b')),
+			client.db().dropCollection(EventCollection.get('c')),
+		]);
 		await client.close();
 	});
 

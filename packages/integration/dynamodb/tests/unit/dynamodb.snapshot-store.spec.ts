@@ -52,7 +52,12 @@ describe(DynamoDBSnapshotStore, () => {
 	});
 
 	afterAll(async () => {
-		await client.send(new DeleteTableCommand({ TableName: SnapshotCollection.get() }));
+		await Promise.all([
+			client.send(new DeleteTableCommand({ TableName: SnapshotCollection.get() })),
+			client.send(new DeleteTableCommand({ TableName: SnapshotCollection.get('a') })),
+			client.send(new DeleteTableCommand({ TableName: SnapshotCollection.get('b') })),
+			client.send(new DeleteTableCommand({ TableName: SnapshotCollection.get('c') })),
+		]);
 		client.destroy();
 	});
 

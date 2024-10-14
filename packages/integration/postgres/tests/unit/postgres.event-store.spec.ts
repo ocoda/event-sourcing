@@ -59,8 +59,13 @@ describe(PostgresEventStore, () => {
 	});
 
 	afterAll(async () => {
-		await client.query(`DROP TABLE IF EXISTS "${EventCollection.get()}"`);
-		await client.query(`DROP TABLE IF EXISTS "${EventCollection.get('test-singular-events')}"`);
+		await Promise.all([
+			client.query(`DROP TABLE IF EXISTS "${EventCollection.get()}"`),
+			client.query(`DROP TABLE IF EXISTS "${EventCollection.get('test-singular-events')}"`),
+			client.query(`DROP TABLE IF EXISTS "${EventCollection.get('a')}"`),
+			client.query(`DROP TABLE IF EXISTS "${EventCollection.get('b')}"`),
+			client.query(`DROP TABLE IF EXISTS "${EventCollection.get('c')}"`),
+		]);
 		client.release();
 		await pool.end();
 	});
