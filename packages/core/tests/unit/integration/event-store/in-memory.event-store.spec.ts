@@ -1,5 +1,6 @@
 import {
 	type EventEnvelope,
+	EventId,
 	EventNotFoundException,
 	EventStorePersistenceException,
 	EventStoreVersionConflictException,
@@ -64,6 +65,7 @@ describe(InMemoryEventStore, () => {
 			expect(entity.event).toEqual(envelopesAccountA[index].event);
 			expect(entity.payload).toEqual(envelopesAccountA[index].payload);
 			expect(entity.aggregateId).toEqual(envelopesAccountA[index].metadata.aggregateId);
+			expect(entity.eventId).toBeInstanceOf(EventId);
 			expect(entity.occurredOn).toBeInstanceOf(Date);
 			expect(entity.version).toEqual(envelopesAccountA[index].metadata.version);
 		}
@@ -73,6 +75,7 @@ describe(InMemoryEventStore, () => {
 			expect(entity.event).toEqual(envelopesAccountB[index].event);
 			expect(entity.payload).toEqual(envelopesAccountB[index].payload);
 			expect(entity.aggregateId).toEqual(envelopesAccountB[index].metadata.aggregateId);
+			expect(entity.eventId).toBeInstanceOf(EventId);
 			expect(entity.occurredOn).toBeInstanceOf(Date);
 			expect(entity.version).toEqual(envelopesAccountB[index].metadata.version);
 		}

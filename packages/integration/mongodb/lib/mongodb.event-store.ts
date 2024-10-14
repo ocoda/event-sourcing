@@ -2,6 +2,7 @@ import {
 	DEFAULT_BATCH_SIZE,
 	EventCollection,
 	EventEnvelope,
+	EventId,
 	EventNotFoundException,
 	EventStore,
 	EventStoreCollectionCreationException,
@@ -137,20 +138,28 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 			}
 
 			const envelopes: EventEnvelope[] = [];
+			const eventIdFactory = EventId.factory();
 			for (const event of events) {
 				const name = this.eventMap.getName(event);
 				const payload = this.eventMap.serializeEvent(event);
-				const envelope = EventEnvelope.create(name, payload, { aggregateId: stream.aggregateId, version: version++ });
+				const envelope = EventEnvelope.create(name, payload, {
+					aggregateId: stream.aggregateId,
+					eventId: eventIdFactory(),
+					version: version++,
+				});
 				envelopes.push(envelope);
 			}
 
-			const entities = envelopes.map<MongoDBEventEntity>(({ event, payload, metadata }) => ({
-				_id: metadata.eventId,
-				streamId: stream.streamId,
-				event,
-				payload,
-				...metadata,
-			}));
+			const entities = envelopes.map<MongoDBEventEntity>(({ event, payload, metadata }) => {
+				const { eventId, ...rest } = metadata;
+				return {
+					_id: eventId.value,
+					streamId: stream.streamId,
+					event,
+					payload,
+					...rest,
+				};
+			});
 
 			await this.database.collection<MongoDBEventEntity>(collection).insertMany(entities);
 
@@ -177,7 +186,7 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 			.collection<
 				Pick<
 					MongoDBEventEntity,
-					'event' | 'payload' | 'eventId' | 'aggregateId' | 'version' | 'occurredOn' | 'correlationId' | 'causationId'
+					'_id' | 'event' | 'payload' | 'aggregateId' | 'version' | 'occurredOn' | 'correlationId' | 'causationId'
 				>
 			>(collection)
 			.find(
@@ -189,10 +198,9 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 					sort: { version: direction === StreamReadingDirection.FORWARD ? 1 : -1 },
 					limit,
 					projection: {
-						_id: 0,
+						_id: 1,
 						event: 1,
 						payload: 1,
-						eventId: 1,
 						aggregateId: 1,
 						version: 1,
 						occurredOn: 1,
@@ -201,9 +209,9 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 					},
 				},
 			)
-			.map(({ event, payload, eventId, aggregateId, version, occurredOn, correlationId, causationId }) =>
+			.map(({ _id, event, payload, aggregateId, version, occurredOn, correlationId, causationId }) =>
 				EventEnvelope.from(event, payload, {
-					eventId,
+					eventId: EventId.from(_id),
 					aggregateId,
 					version,
 					occurredOn,
@@ -234,7 +242,7 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 			.collection<
 				Pick<
 					MongoDBEventEntity,
-					'event' | 'payload' | 'eventId' | 'aggregateId' | 'version' | 'occurredOn' | 'correlationId' | 'causationId'
+					'_id' | 'event' | 'payload' | 'aggregateId' | 'version' | 'occurredOn' | 'correlationId' | 'causationId'
 				>
 			>(collection)
 			.findOne(
@@ -244,7 +252,7 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 				},
 				{
 					projection: {
-						_id: 0,
+						_id: 1,
 						event: 1,
 						payload: 1,
 						eventId: 1,
@@ -262,7 +270,7 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 		}
 
 		return EventEnvelope.from(entity.event, entity.payload, {
-			eventId: entity.eventId,
+			eventId: EventId.from(entity._id),
 			aggregateId: entity.aggregateId,
 			version: entity.version,
 			occurredOn: entity.occurredOn,

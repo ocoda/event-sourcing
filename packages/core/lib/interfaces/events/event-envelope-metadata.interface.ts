@@ -1,3 +1,5 @@
+import type { EventId } from '../../models';
+
 /**
  * `EventEnvelope` metadata
  */
@@ -5,7 +7,7 @@ export interface EventEnvelopeMetadata {
 	/**
 	 * Unique event ID
 	 */
-	eventId: string;
+	eventId: EventId;
 	/**
 	 * Aggregate id the message belongs to.
 	 */

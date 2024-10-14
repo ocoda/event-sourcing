@@ -16,7 +16,7 @@ import type {
 	IEventPayload,
 	IEventPool,
 } from '../../interfaces';
-import { EventCollection, EventEnvelope, type EventStream } from '../../models';
+import { EventCollection, EventEnvelope, EventId, type EventStream } from '../../models';
 
 export type InMemoryEventEntity = {
 	streamId: string;
@@ -123,10 +123,15 @@ export class InMemoryEventStore extends EventStore<InMemoryEventStoreConfig> {
 			let version = aggregateVersion - events.length + 1;
 
 			const envelopes: EventEnvelope[] = [];
+			const eventIdFactory = EventId.factory();
 			for (const event of events) {
 				const name = this.eventMap.getName(event);
 				const payload = this.eventMap.serializeEvent(event);
-				const envelope = EventEnvelope.create(name, payload, { aggregateId: stream.aggregateId, version: version++ });
+				const envelope = EventEnvelope.create(name, payload, {
+					aggregateId: stream.aggregateId,
+					eventId: eventIdFactory(),
+					version: version++,
+				});
 				envelopes.push(envelope);
 			}
 
