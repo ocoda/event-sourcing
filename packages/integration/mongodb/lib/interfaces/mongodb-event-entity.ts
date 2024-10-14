@@ -2,9 +2,9 @@ import type { EventEnvelopeMetadata, IEvent, IEventPayload } from '@ocoda/event-
 import type { Document } from 'mongodb';
 
 export type MongoDBEventEntity = {
-	_id: string;
+	_id: string; // the eventId
 	streamId: string;
 	event: string;
 	payload: IEventPayload<IEvent>;
 } & Document &
-	EventEnvelopeMetadata;
+	Omit<EventEnvelopeMetadata, 'eventId'>;

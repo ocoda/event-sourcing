@@ -1,4 +1,4 @@
-import { EventEnvelope, type IEvent, UUID } from '@ocoda/event-sourcing';
+import { EventEnvelope, EventId, type IEvent, UUID } from '@ocoda/event-sourcing';
 
 describe(EventEnvelope, () => {
 	class FooId extends UUID {}
@@ -18,6 +18,7 @@ describe(EventEnvelope, () => {
 		expect(envelope.event).toBe('foo-created');
 		expect(envelope.payload).toEqual({ bar: 'bar' });
 		expect(envelope.metadata.aggregateId).toEqual(fooId.value);
+		expect(envelope.metadata.eventId).toBeInstanceOf(EventId);
 		expect(envelope.metadata.version).toBe(1);
 		expect(envelope.metadata.occurredOn).toBeInstanceOf(Date);
 	});

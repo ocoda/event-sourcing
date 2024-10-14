@@ -1,4 +1,4 @@
-import { EventStorePersistenceException, EventStoreVersionConflictException } from '@ocoda/event-sourcing';
+import { EventId, EventStorePersistenceException, EventStoreVersionConflictException } from '@ocoda/event-sourcing';
 import {
 	EventCollection,
 	type EventEnvelope,
@@ -202,6 +202,7 @@ describe(MongoDBEventStore, () => {
 		expect(event).toEqual(envelopesAccountA[3].event);
 		expect(payload).toEqual(envelopesAccountA[3].payload);
 		expect(metadata.aggregateId).toEqual(envelopesAccountA[3].metadata.aggregateId);
+		expect(metadata.eventId).toBeInstanceOf(EventId);
 		expect(metadata.occurredOn).toBeInstanceOf(Date);
 		expect(metadata.version).toEqual(envelopesAccountA[3].metadata.version);
 	});
@@ -218,6 +219,7 @@ describe(MongoDBEventStore, () => {
 			expect(envelope.event).toEqual(envelopesAccountA[index].event);
 			expect(envelope.payload).toEqual(envelopesAccountA[index].payload);
 			expect(envelope.metadata.aggregateId).toEqual(envelopesAccountA[index].metadata.aggregateId);
+			expect(envelope.metadata.eventId).toBeInstanceOf(EventId);
 			expect(envelope.metadata.occurredOn).toBeInstanceOf(Date);
 			expect(envelope.metadata.version).toEqual(envelopesAccountA[index].metadata.version);
 		}

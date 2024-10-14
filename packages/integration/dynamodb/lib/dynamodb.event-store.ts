@@ -16,6 +16,7 @@ import {
 	DEFAULT_BATCH_SIZE,
 	EventCollection,
 	EventEnvelope,
+	EventId,
 	EventNotFoundException,
 	EventStore,
 	EventStoreCollectionCreationException,
@@ -180,10 +181,15 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 			let version = aggregateVersion - events.length + 1;
 
 			const envelopes: EventEnvelope[] = [];
+			const eventIdFactory = EventId.factory();
 			for (const event of events) {
 				const name = this.eventMap.getName(event);
 				const payload = this.eventMap.serializeEvent(event);
-				const envelope = EventEnvelope.create(name, payload, { aggregateId: stream.aggregateId, version: version++ });
+				const envelope = EventEnvelope.create(name, payload, {
+					aggregateId: stream.aggregateId,
+					eventId: eventIdFactory(),
+					version: version++,
+				});
 				envelopes.push(envelope);
 			}
 
@@ -197,7 +203,7 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 									event,
 									payload,
 									version: metadata.version,
-									eventId: metadata.eventId,
+									eventId: metadata.eventId.value,
 									aggregateId: metadata.aggregateId,
 									occurredOn: metadata.occurredOn.getTime(),
 									correlationId: metadata.correlationId,
@@ -265,7 +271,7 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 							['event', 'payload', 'aggregateId', 'eventId', 'occurredOn', 'version', 'correlationId', 'causationId']
 						>(item);
 					return EventEnvelope.from(entity.event, entity.payload, {
-						eventId: entity.eventId,
+						eventId: EventId.from(entity.eventId),
 						aggregateId: entity.aggregateId,
 						version: entity.version,
 						occurredOn: new Date(entity.occurredOn),
@@ -303,7 +309,7 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 			>(Item);
 
 		return EventEnvelope.from(entity.event, entity.payload, {
-			eventId: entity.eventId,
+			eventId: EventId.from(entity.eventId),
 			aggregateId: entity.aggregateId,
 			version: entity.version,
 			occurredOn: new Date(entity.occurredOn),

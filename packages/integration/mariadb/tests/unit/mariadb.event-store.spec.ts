@@ -1,4 +1,4 @@
-import { EventStoreVersionConflictException, EventStream } from '@ocoda/event-sourcing';
+import { EventId, EventStoreVersionConflictException, EventStream } from '@ocoda/event-sourcing';
 import {
 	EventCollection,
 	type EventEnvelope,
@@ -83,6 +83,7 @@ describe(MariaDBEventStore, () => {
 			expect(entity.event).toEqual(envelopesAccountA[index].event);
 			expect(entity.payload).toEqual(envelopesAccountA[index].payload);
 			expect(entity.aggregate_id).toEqual(envelopesAccountA[index].metadata.aggregateId);
+			expect(typeof entity.event_id).toBe('string');
 			expect(entity.occurred_on).toBeInstanceOf(Date);
 			expect(entity.version).toEqual(envelopesAccountA[index].metadata.version);
 		}
@@ -92,6 +93,7 @@ describe(MariaDBEventStore, () => {
 			expect(entity.event).toEqual(envelopesAccountB[index].event);
 			expect(entity.payload).toEqual(envelopesAccountB[index].payload);
 			expect(entity.aggregate_id).toEqual(envelopesAccountB[index].metadata.aggregateId);
+			expect(typeof entity.event_id).toBe('string');
 			expect(entity.occurred_on).toBeInstanceOf(Date);
 			expect(entity.version).toEqual(envelopesAccountB[index].metadata.version);
 		}
@@ -203,6 +205,7 @@ describe(MariaDBEventStore, () => {
 		expect(event).toEqual(envelopesAccountA[3].event);
 		expect(payload).toEqual(envelopesAccountA[3].payload);
 		expect(metadata.aggregateId).toEqual(envelopesAccountA[3].metadata.aggregateId);
+		expect(metadata.eventId).toBeInstanceOf(EventId);
 		expect(metadata.occurredOn).toBeInstanceOf(Date);
 		expect(metadata.version).toEqual(envelopesAccountA[3].metadata.version);
 	});
@@ -219,6 +222,7 @@ describe(MariaDBEventStore, () => {
 			expect(envelope.event).toEqual(envelopesAccountA[index].event);
 			expect(envelope.payload).toEqual(envelopesAccountA[index].payload);
 			expect(envelope.metadata.aggregateId).toEqual(envelopesAccountA[index].metadata.aggregateId);
+			expect(envelope.metadata.eventId).toBeInstanceOf(EventId);
 			expect(envelope.metadata.occurredOn).toBeInstanceOf(Date);
 			expect(envelope.metadata.version).toEqual(envelopesAccountA[index].metadata.version);
 		}

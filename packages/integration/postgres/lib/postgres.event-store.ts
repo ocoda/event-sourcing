@@ -2,6 +2,7 @@ import {
 	DEFAULT_BATCH_SIZE,
 	EventCollection,
 	EventEnvelope,
+	EventId,
 	EventNotFoundException,
 	EventStore,
 	EventStoreCollectionCreationException,
@@ -137,16 +138,21 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 			let version = aggregateVersion - events.length + 1;
 
 			const envelopes: EventEnvelope[] = [];
+			const eventIdFactory = EventId.factory();
 			for (const event of events) {
 				const name = this.eventMap.getName(event);
 				const payload = this.eventMap.serializeEvent(event);
-				const envelope = EventEnvelope.create(name, payload, { aggregateId: stream.aggregateId, version: version++ });
+				const envelope = EventEnvelope.create(name, payload, {
+					aggregateId: stream.aggregateId,
+					eventId: eventIdFactory(),
+					version: version++,
+				});
 				envelopes.push(envelope);
 			}
 
 			const entities = envelopes.map(
 				({ event, payload, metadata }) =>
-					`('${stream.streamId}', ${metadata.version}, '${event}', '${JSON.stringify(payload)}', '${metadata.eventId}', '${metadata.aggregateId}', '${metadata.occurredOn.toISOString()}', ${metadata.correlationId ?? null}, ${metadata.causationId ?? null})`,
+					`('${stream.streamId}', ${metadata.version}, '${event}', '${JSON.stringify(payload)}', '${metadata.eventId.value}', '${metadata.aggregateId}', '${metadata.occurredOn.toISOString()}', ${metadata.correlationId ?? null}, ${metadata.causationId ?? null})`,
 			);
 
 			await this.client.query(`
@@ -226,7 +232,7 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 				const entities = rows.map(
 					({ event, payload, event_id, aggregate_id, version, occurred_on, correlation_id, causation_id }) =>
 						EventEnvelope.from(event, payload, {
-							eventId: event_id,
+							eventId: EventId.from(event_id),
 							aggregateId: aggregate_id,
 							version,
 							occurredOn: occurred_on,
@@ -267,7 +273,7 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 		}
 
 		return EventEnvelope.from(entity.event, entity.payload, {
-			eventId: entity.event_id,
+			eventId: EventId.from(entity.event_id),
 			aggregateId: entity.aggregate_id,
 			version: entity.version,
 			occurredOn: entity.occurred_on,

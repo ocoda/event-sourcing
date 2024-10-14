@@ -1,6 +1,6 @@
 import { DeleteTableCommand, type DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb';
 import { unmarshall } from '@aws-sdk/util-dynamodb';
-import { EventCollection, EventStoreVersionConflictException, type IEvent } from '@ocoda/event-sourcing';
+import { EventCollection, EventId, EventStoreVersionConflictException, type IEvent } from '@ocoda/event-sourcing';
 import {
 	type EventEnvelope,
 	EventNotFoundException,
@@ -91,6 +91,7 @@ describe(DynamoDBEventStore, () => {
 			expect(entity.event).toEqual(envelopesAccountA[index].event);
 			expect(entity.payload).toEqual(envelopesAccountA[index].payload);
 			expect(entity.aggregateId).toEqual(envelopesAccountA[index].metadata.aggregateId);
+			expect(typeof entity.eventId).toBe('string');
 			expect(typeof entity.occurredOn).toBe('number');
 			expect(entity.version).toEqual(envelopesAccountA[index].metadata.version);
 		}
@@ -100,6 +101,7 @@ describe(DynamoDBEventStore, () => {
 			expect(entity.event).toEqual(envelopesAccountB[index].event);
 			expect(entity.payload).toEqual(envelopesAccountB[index].payload);
 			expect(entity.aggregateId).toEqual(envelopesAccountB[index].metadata.aggregateId);
+			expect(typeof entity.eventId).toBe('string');
 			expect(typeof entity.occurredOn).toBe('number');
 			expect(entity.version).toEqual(envelopesAccountB[index].metadata.version);
 		}
@@ -211,6 +213,7 @@ describe(DynamoDBEventStore, () => {
 		expect(event).toEqual(envelopesAccountA[3].event);
 		expect(payload).toEqual(envelopesAccountA[3].payload);
 		expect(metadata.aggregateId).toEqual(envelopesAccountA[3].metadata.aggregateId);
+		expect(metadata.eventId).toBeInstanceOf(EventId);
 		expect(metadata.occurredOn).toBeInstanceOf(Date);
 		expect(metadata.version).toEqual(envelopesAccountA[3].metadata.version);
 	});
@@ -227,6 +230,7 @@ describe(DynamoDBEventStore, () => {
 			expect(envelope.event).toEqual(envelopesAccountA[index].event);
 			expect(envelope.payload).toEqual(envelopesAccountA[index].payload);
 			expect(envelope.metadata.aggregateId).toEqual(envelopesAccountA[index].metadata.aggregateId);
+			expect(envelope.metadata.eventId).toBeInstanceOf(EventId);
 			expect(envelope.metadata.occurredOn).toBeInstanceOf(Date);
 			expect(envelope.metadata.version).toEqual(envelopesAccountA[index].metadata.version);
 		}
