@@ -4,6 +4,7 @@ import {
 	DefaultEventSerializer,
 	Event,
 	EventEnvelope,
+	EventId,
 	EventMap,
 	EventStream,
 	type IEvent,
@@ -50,26 +51,32 @@ export const getAccountAEventEnvelopes = (eventMap: EventMap, events: IEvent[]):
 	EventEnvelope.create('account-opened', eventMap.serializeEvent(events[0]), {
 		aggregateId: idAccountA.value,
 		version: 1,
+		eventId: EventId.generate(new Date('2021-01-01T00:00:00Z')),
 	}),
 	EventEnvelope.create('account-credited', eventMap.serializeEvent(events[1]), {
 		aggregateId: idAccountA.value,
 		version: 2,
+		eventId: EventId.generate(new Date('2021-01-01T00:00:20Z')),
 	}),
 	EventEnvelope.create('account-debited', eventMap.serializeEvent(events[2]), {
 		aggregateId: idAccountA.value,
 		version: 3,
+		eventId: EventId.generate(new Date('2021-01-01T00:00:40Z')),
 	}),
 	EventEnvelope.create('account-credited', eventMap.serializeEvent(events[3]), {
 		aggregateId: idAccountA.value,
 		version: 4,
+		eventId: EventId.generate(new Date('2021-01-01T00:01:00Z')),
 	}),
 	EventEnvelope.create('account-debited', eventMap.serializeEvent(events[4]), {
 		aggregateId: idAccountA.value,
 		version: 5,
+		eventId: EventId.generate(new Date('2021-01-01T00:01:20Z')),
 	}),
 	EventEnvelope.create('account-closed', eventMap.serializeEvent(events[5]), {
 		aggregateId: idAccountA.value,
 		version: 6,
+		eventId: EventId.generate(new Date('2021-01-02T00:01:40Z')),
 	}),
 ];
 export const snapshotStreamAccountA = SnapshotStream.for(Account, idAccountA);
@@ -109,26 +116,32 @@ export const getAccountBEventEnvelopes = (eventMap: EventMap, events: IEvent[]):
 	EventEnvelope.create('account-opened', eventMap.serializeEvent(events[0]), {
 		aggregateId: idAccountB.value,
 		version: 1,
+		eventId: EventId.generate(new Date('2021-01-01T00:00:10Z')),
 	}),
 	EventEnvelope.create('account-credited', eventMap.serializeEvent(events[1]), {
 		aggregateId: idAccountB.value,
 		version: 2,
+		eventId: EventId.generate(new Date('2021-01-01T00:00:30Z')),
 	}),
 	EventEnvelope.create('account-debited', eventMap.serializeEvent(events[2]), {
 		aggregateId: idAccountB.value,
 		version: 3,
+		eventId: EventId.generate(new Date('2021-01-01T00:00:50Z')),
 	}),
 	EventEnvelope.create('account-credited', eventMap.serializeEvent(events[3]), {
 		aggregateId: idAccountB.value,
 		version: 4,
+		eventId: EventId.generate(new Date('2021-01-01T00:01:10Z')),
 	}),
 	EventEnvelope.create('account-debited', eventMap.serializeEvent(events[4]), {
 		aggregateId: idAccountB.value,
 		version: 5,
+		eventId: EventId.generate(new Date('2021-01-01T00:01:30Z')),
 	}),
 	EventEnvelope.create('account-closed', eventMap.serializeEvent(events[5]), {
 		aggregateId: idAccountB.value,
 		version: 6,
+		eventId: EventId.generate(new Date('2021-01-02T00:01:50Z')),
 	}),
 ];
 export const snapshotStreamAccountB = SnapshotStream.for(Account, idAccountB);
@@ -154,6 +167,37 @@ export const snapshotEnvelopesAccountB = [
 	SnapshotEnvelope.create<Account>(snapshotsAccountB[3], {
 		aggregateId: idAccountB.value,
 		version: 30,
+	}),
+];
+
+export const getAccountEventEnvelopes = (
+	accountId: AccountId,
+	eventMap: EventMap,
+	events: IEvent[],
+): EventEnvelope[] => [
+	EventEnvelope.create('account-opened', eventMap.serializeEvent(events[0]), {
+		aggregateId: accountId.value,
+		version: 1,
+	}),
+	EventEnvelope.create('account-credited', eventMap.serializeEvent(events[1]), {
+		aggregateId: accountId.value,
+		version: 2,
+	}),
+	EventEnvelope.create('account-debited', eventMap.serializeEvent(events[2]), {
+		aggregateId: accountId.value,
+		version: 3,
+	}),
+	EventEnvelope.create('account-credited', eventMap.serializeEvent(events[3]), {
+		aggregateId: accountId.value,
+		version: 4,
+	}),
+	EventEnvelope.create('account-debited', eventMap.serializeEvent(events[4]), {
+		aggregateId: accountId.value,
+		version: 5,
+	}),
+	EventEnvelope.create('account-closed', eventMap.serializeEvent(events[5]), {
+		aggregateId: accountId.value,
+		version: 6,
 	}),
 ];
 // #endregion
