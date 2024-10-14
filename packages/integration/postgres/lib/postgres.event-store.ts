@@ -118,7 +118,7 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 	async appendEvents(
 		stream: EventStream,
 		aggregateVersion: number,
-		events: IEvent[],
+		events: IEvent[] | EventEnvelope[],
 		pool?: IEventPool,
 	): Promise<EventEnvelope[]> {
 		const collection = EventCollection.get(pool);
@@ -140,6 +140,11 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 			const envelopes: EventEnvelope[] = [];
 			const eventIdFactory = EventId.factory();
 			for (const event of events) {
+				if (event instanceof EventEnvelope) {
+					envelopes.push(event);
+					continue;
+				}
+
 				const name = this.eventMap.getName(event);
 				const payload = this.eventMap.serializeEvent(event);
 				const envelope = EventEnvelope.create(name, payload, {
