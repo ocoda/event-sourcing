@@ -184,6 +184,9 @@ importers:
       class-transformer:
         specifier: 0.5.1
         version: 0.5.1
+      ulidx:
+        specifier: ^2.4.1
+        version: 2.4.1
     devDependencies:
       '@biomejs/biome':
         specifier: 1.9.3
@@ -5392,6 +5395,9 @@ packages:
     resolution: {integrity: sha512-7W0vV3rqv5tokqkBAFV1LbR7HPOWzXQDpDgEuib/aJ1jsZZx6x3c2mBI+TJhJzOhkGeaLbCKEHXEXLfirtG2JA==}
     engines: {node: '>=18'}
 
+  layerr@3.0.0:
+    resolution: {integrity: sha512-tv754Ki2dXpPVApOrjTyRo4/QegVb9eVFq4mjqp4+NM5NaX7syQvN5BBNfV/ZpAHCEHV24XdUVrBAoka4jt3pA==}
+
   layout-base@1.0.2:
     resolution: {integrity: sha512-8h2oVEZNktL4BH2JCOI90iD1yXwL6iNW7KcCKT2QZgQJR2vbqDsldCTPRU9NifTCqHZci57XvQQ15YTu+sTYPg==}
 
@@ -7623,6 +7629,10 @@ packages:
   uid@2.0.2:
     resolution: {integrity: sha512-u3xV3X7uzvi5b1MncmZo3i2Aw222Zk1keqLA1YkHldREkAhAqi65wuPfe7lHx8H/Wzy+8CE7S7uS3jekIM5s8g==}
     engines: {node: '>=8'}
+
+  ulidx@2.4.1:
+    resolution: {integrity: sha512-xY7c8LPyzvhvew0Fn+Ek3wBC9STZAuDI/Y5andCKi9AX6/jvfaX45PhsDX8oxgPL0YFp0Jhr8qWMbS/p9375Xg==}
+    engines: {node: '>=16'}
 
   undici-types@6.19.8:
     resolution: {integrity: sha512-ve2KP6f/JnbPBFyobGHuerC9g1FYGn/F8n1LWTwNxCEzd6IfqTwUQcNXgEtmmQ6DlRrC1hrSrBnCZPokRrDHjw==}
@@ -14879,6 +14889,8 @@ snapshots:
     dependencies:
       package-json: 10.0.1
 
+  layerr@3.0.0: {}
+
   layout-base@1.0.2: {}
 
   lazystream@1.0.1:
@@ -17604,6 +17616,10 @@ snapshots:
   uid@2.0.2:
     dependencies:
       '@lukeed/csprng': 1.0.1
+
+  ulidx@2.4.1:
+    dependencies:
+      layerr: 3.0.0
 
   undici-types@6.19.8: {}
 
