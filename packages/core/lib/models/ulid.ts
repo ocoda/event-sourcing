@@ -13,8 +13,8 @@ export class ULID extends Id {
 		super(id);
 	}
 
-	public static generate(timeSeed?: number): ULID {
-		const value = ulid(timeSeed);
+	public static generate(dateSeed?: Date): ULID {
+		const value = ulid(dateSeed?.getTime());
 		return new ULID(value);
 	}
 
@@ -37,8 +37,8 @@ export class ULID extends Id {
 		return new Date(this.time);
 	}
 
-	static factory(): (seedTime?: number) => ULID {
+	static factory(): (dateSeed?: Date) => ULID {
 		const generator = monotonicFactory();
-		return (seedTime?: number) => new ULID(generator(seedTime));
+		return (dateSeed?: Date) => new ULID(generator(dateSeed?.getTime()));
 	}
 }

@@ -1,29 +1,27 @@
 import { InvalidIdException, UUID } from '@ocoda/event-sourcing';
 
 describe(UUID, () => {
-	class AccountId extends UUID {}
-
-	it('should generate an AccountId', () => {
-		const generatedAccountId = AccountId.generate();
-		expect(generatedAccountId.value).toBeDefined();
+	it('should generate a UUID', () => {
+		const generatedUUID = UUID.generate();
+		expect(generatedUUID.value).toBeDefined();
 	});
 
-	it('should create an AccountId from an existing uuid', () => {
-		const uuid = 'b6bca415-b7a6-499c-9f39-bf8fbf980a82';
-		const createdAccountId = AccountId.from(uuid);
-		expect(createdAccountId.value).toBe(uuid);
+	it('should create a UUID from an existing value', () => {
+		const value = 'b6bca415-b7a6-499c-9f39-bf8fbf980a82';
+		const createdUUID = UUID.from(value);
+		expect(createdUUID.value).toBe(value);
 	});
 
-	it('should throw when trying to create an id from an undefined variable', () => {
-		let uuid: string;
-		expect(() => AccountId.from(uuid)).toThrow(InvalidIdException.becauseEmpty());
+	it('should throw when trying to create a UUID from an undefined variable', () => {
+		let value: string;
+		expect(() => UUID.from(value)).toThrow(InvalidIdException.becauseEmpty());
 	});
 
-	it('should throw when creating an Id from an invalid uuid', () => {
-		const generatedAccountId = AccountId.generate();
-		expect(generatedAccountId.value).toBeDefined();
+	it('should throw when creating a UUID from an invalid value', () => {
+		const generatedUUID = UUID.generate();
+		expect(generatedUUID.value).toBeDefined();
 
-		const uuid = '123-abc';
-		expect(() => AccountId.from(uuid)).toThrow(InvalidIdException.becauseInvalid(uuid));
+		const value = '123-abc';
+		expect(() => UUID.from(value)).toThrow(InvalidIdException.becauseInvalid(value));
 	});
 });
