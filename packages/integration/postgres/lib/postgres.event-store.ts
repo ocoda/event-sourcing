@@ -64,7 +64,7 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 	public async *listCollections(filter?: IEventCollectionFilter): AsyncGenerator<IEventCollection[]> {
 		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
-		const query = `SHOW TABLES LIKE "%events"`;
+		const query = `SELECT tablename FROM pg_catalog.pg_tables WHERE tablename LIKE '%events'`;
 
 		const cursor = this.client.query(new Cursor<Record<string, IEventCollection>>(query));
 
@@ -78,7 +78,7 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 			if (rows.length === 0) {
 				done = true;
 			} else {
-				const collections = rows.map((row) => Object.values<IEventCollection>(row)[0]);
+				const collections = rows.map(({ tablename }) => tablename);
 				yield collections;
 			}
 		}
