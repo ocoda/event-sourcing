@@ -37,9 +37,11 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 	}
 
 	public async ensureCollection(pool?: IEventPool): Promise<IEventCollection> {
+		const connection = await this.pool.connect();
 		const collection = EventCollection.get(pool);
 
 		try {
+			await connection.query('BEGIN');
 			await this.client.query(
 				`CREATE TABLE IF NOT EXISTS "${collection}" (
                     stream_id VARCHAR(120) NOT NULL,
@@ -54,10 +56,15 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
                     PRIMARY KEY (stream_id, version)
                 )`,
 			);
+			await connection.query(`CREATE INDEX IF NOT EXISTS "idx_event_id" ON "${collection}" (event_id)`);
+			await connection.query('COMMIT');
 
 			return collection;
 		} catch (error) {
+			await connection.query('ROLLBACK');
 			throw new EventStoreCollectionCreationException(collection, error);
+		} finally {
+			connection.release();
 		}
 	}
 

@@ -42,7 +42,7 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 			const [existingCollection] = await this.database.listCollections({ name: collection }).toArray();
 			if (!existingCollection) {
 				const eventCollection = await this.database.createCollection<MongoDBEventEntity>(collection);
-				await eventCollection.createIndex({ streamId: 1, version: 1 }, { unique: true });
+				await eventCollection.createIndexes([{ key: { streamId: 1, version: 1 }, unique: true }]);
 			}
 
 			return collection;

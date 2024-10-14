@@ -47,7 +47,8 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
                     occurred_on TIMESTAMP NOT NULL,
                     correlation_id VARCHAR(255),
                     causation_id VARCHAR(255),
-                    PRIMARY KEY (stream_id, version)
+                    PRIMARY KEY (stream_id, version),
+					INDEX idx_event_id (event_id)
                 )`,
 			);
 
