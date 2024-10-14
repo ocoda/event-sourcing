@@ -4,6 +4,7 @@ import {
 	type ILatestSnapshotFilter,
 	type ISnapshot,
 	type ISnapshotCollection,
+	type ISnapshotCollectionFilter,
 	type ISnapshotFilter,
 	type ISnapshotPool,
 	SnapshotCollection,
@@ -54,6 +55,36 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 			return collection;
 		} catch (error) {
 			throw new SnapshotStoreCollectionCreationException(collection, error);
+		}
+	}
+
+	public async *listCollections(filter?: ISnapshotCollectionFilter): AsyncGenerator<ISnapshotCollection[]> {
+		const connection = this.pool.getConnection();
+
+		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
+
+		const query = "SHOW TABLES LIKE '%snapshots'";
+
+		const client = await connection;
+		const stream = client.queryStream(query);
+
+		try {
+			let batchedCollections: ISnapshotCollection[] = [];
+			for await (const collection of stream as unknown as Record<string, ISnapshotCollection>[]) {
+				const tableName = Object.values<ISnapshotCollection>(collection)[0];
+				batchedCollections.push(tableName);
+				if (batchedCollections.length === batch) {
+					yield batchedCollections;
+					batchedCollections = [];
+				}
+			}
+			if (batchedCollections.length > 0) {
+				yield batchedCollections;
+			}
+		} catch (e) {
+			stream.destroy();
+		} finally {
+			await client.release();
 		}
 	}
 

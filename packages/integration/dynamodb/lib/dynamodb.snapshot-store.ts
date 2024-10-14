@@ -6,6 +6,7 @@ import {
 	DescribeTableCommand,
 	DynamoDBClient,
 	GetItemCommand,
+	ListTablesCommand,
 	QueryCommand,
 	ResourceNotFoundException,
 	TransactWriteItemsCommand,
@@ -17,6 +18,7 @@ import {
 	type ILatestSnapshotFilter,
 	type ISnapshot,
 	type ISnapshotCollection,
+	type ISnapshotCollectionFilter,
 	type ISnapshotFilter,
 	type ISnapshotPool,
 	SnapshotCollection,
@@ -94,6 +96,29 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 					throw new SnapshotStoreCollectionCreationException(collection, err);
 			}
 		}
+	}
+
+	public async *listCollections(filter?: ISnapshotCollectionFilter): AsyncGenerator<ISnapshotCollection[]> {
+		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
+
+		const entities = [];
+		let ExclusiveStartTableName: string;
+		do {
+			const { TableNames, LastEvaluatedTableName } = await this.client.send(
+				new ListTablesCommand({
+					ExclusiveStartTableName,
+					Limit: batch,
+				}),
+			);
+
+			ExclusiveStartTableName = LastEvaluatedTableName;
+			entities.push(...TableNames.filter((name) => name.endsWith('snapshots')));
+
+			if (entities.length > 0 && !ExclusiveStartTableName) {
+				yield entities;
+				entities.length = 0;
+			}
+		} while (ExclusiveStartTableName);
 	}
 
 	async *getSnapshots<A extends AggregateRoot>(

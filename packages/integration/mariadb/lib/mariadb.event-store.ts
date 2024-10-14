@@ -11,6 +11,7 @@ import {
 	type EventStream,
 	type IEvent,
 	type IEventCollection,
+	type IEventCollectionFilter,
 	type IEventFilter,
 	type IEventPool,
 	StreamReadingDirection,
@@ -53,6 +54,36 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 			return collection;
 		} catch (error) {
 			throw new EventStoreCollectionCreationException(collection, error);
+		}
+	}
+
+	public async *listCollections(filter?: IEventCollectionFilter): AsyncGenerator<IEventCollection[]> {
+		const connection = this.pool.getConnection();
+
+		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
+
+		const query = "SHOW TABLES LIKE '%events'";
+
+		const client = await connection;
+		const stream = client.queryStream(query);
+
+		try {
+			let batchedCollections: IEventCollection[] = [];
+			for await (const collection of stream as unknown as Record<string, IEventCollection>[]) {
+				const tableName = Object.values<IEventCollection>(collection)[0];
+				batchedCollections.push(tableName);
+				if (batchedCollections.length === batch) {
+					yield batchedCollections;
+					batchedCollections = [];
+				}
+			}
+			if (batchedCollections.length > 0) {
+				yield batchedCollections;
+			}
+		} catch (e) {
+			stream.destroy();
+		} finally {
+			await client.release();
 		}
 	}
 

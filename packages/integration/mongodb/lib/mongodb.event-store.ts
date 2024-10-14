@@ -11,6 +11,7 @@ import {
 	type EventStream,
 	type IEvent,
 	type IEventCollection,
+	type IEventCollectionFilter,
 	type IEventFilter,
 	type IEventPool,
 	StreamReadingDirection,
@@ -48,6 +49,28 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 		} catch (error) {
 			throw new EventStoreCollectionCreationException(collection, error);
 		}
+	}
+
+	public async *listCollections(filter?: IEventCollectionFilter): AsyncGenerator<IEventCollection[]> {
+		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
+
+		const cursor = this.database.listCollections({
+			name: { $regex: /events/ },
+		});
+
+		const entities: IEventCollection[] = [];
+		let hasNext: boolean;
+		do {
+			const entity = await cursor.next();
+			hasNext = entity !== null;
+
+			hasNext && entities.push(entity.name as IEventCollection);
+
+			if (entities.length > 0 && (entities.length === batch || !hasNext)) {
+				yield entities;
+				entities.length = 0;
+			}
+		} while (hasNext);
 	}
 
 	async *getEvents({ streamId }: EventStream, filter?: IEventFilter): AsyncGenerator<IEvent[]> {

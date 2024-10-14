@@ -11,6 +11,7 @@ import {
 	type EventStream,
 	type IEvent,
 	type IEventCollection,
+	type IEventCollectionFilter,
 	type IEventFilter,
 	type IEventPool,
 	StreamReadingDirection,
@@ -58,6 +59,31 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 		} catch (error) {
 			throw new EventStoreCollectionCreationException(collection, error);
 		}
+	}
+
+	public async *listCollections(filter?: IEventCollectionFilter): AsyncGenerator<IEventCollection[]> {
+		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
+
+		const query = `SHOW TABLES LIKE "%events"`;
+
+		const cursor = this.client.query(new Cursor<Record<string, IEventCollection>>(query));
+
+		let done = false;
+
+		while (!done) {
+			const rows: Array<Record<string, IEventCollection>> = await new Promise((resolve, reject) =>
+				cursor.read(batch, (err, result) => (err ? reject(err) : resolve(result))),
+			);
+
+			if (rows.length === 0) {
+				done = true;
+			} else {
+				const collections = rows.map((row) => Object.values<IEventCollection>(row)[0]);
+				yield collections;
+			}
+		}
+
+		cursor.close(() => {});
 	}
 
 	async *getEvents({ streamId }: EventStream, filter?: IEventFilter): AsyncGenerator<IEvent[]> {

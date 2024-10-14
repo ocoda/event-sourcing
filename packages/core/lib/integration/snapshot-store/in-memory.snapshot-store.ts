@@ -10,6 +10,7 @@ import type {
 	ILatestSnapshotFilter,
 	ISnapshot,
 	ISnapshotCollection,
+	ISnapshotCollectionFilter,
 	ISnapshotFilter,
 	ISnapshotPool,
 	SnapshotEnvelopeMetadata,
@@ -52,17 +53,12 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 		}
 	}
 
-	public async *listCollections(): AsyncGenerator<ISnapshotCollection[]> {
+	public async *listCollections(filter?: ISnapshotCollectionFilter): AsyncGenerator<ISnapshotCollection[]> {
 		let collections: ISnapshotCollection[] = [];
 
-		const limit = Number.MAX_SAFE_INTEGER;
-		const batch = DEFAULT_BATCH_SIZE;
+		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
 		collections = [...this.collections.keys()];
-
-		if (limit) {
-			collections = collections.slice(0, limit);
-		}
 
 		for (let i = 0; i < collections.length; i += batch) {
 			const chunk = collections.slice(i, i + batch);

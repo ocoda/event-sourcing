@@ -4,6 +4,7 @@ import {
 	type ILatestSnapshotFilter,
 	type ISnapshot,
 	type ISnapshotCollection,
+	type ISnapshotCollectionFilter,
 	type ISnapshotFilter,
 	type ISnapshotPool,
 	SnapshotCollection,
@@ -67,6 +68,31 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 		} finally {
 			connection.release();
 		}
+	}
+
+	public async *listCollections(filter?: ISnapshotCollectionFilter): AsyncGenerator<ISnapshotCollection[]> {
+		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
+
+		const query = `SHOW TABLES LIKE "%snapshots"`;
+
+		const cursor = this.client.query(new Cursor<Record<string, ISnapshotCollection>>(query));
+
+		let done = false;
+
+		while (!done) {
+			const rows: Array<Record<string, ISnapshotCollection>> = await new Promise((resolve, reject) =>
+				cursor.read(batch, (err, result) => (err ? reject(err) : resolve(result))),
+			);
+
+			if (rows.length === 0) {
+				done = true;
+			} else {
+				const collections = rows.map((row) => Object.values<ISnapshotCollection>(row)[0]);
+				yield collections;
+			}
+		}
+
+		cursor.close(() => {});
 	}
 
 	async *getSnapshots<A extends AggregateRoot>(
