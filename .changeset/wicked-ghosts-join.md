@@ -1,9 +1,9 @@
 ---
-"@ocoda/event-sourcing-dynamodb": minor
-"@ocoda/event-sourcing-postgres": minor
-"@ocoda/event-sourcing-mariadb": minor
-"@ocoda/event-sourcing-mongodb": minor
-"@ocoda/event-sourcing": minor
+"@ocoda/event-sourcing-dynamodb": patch
+"@ocoda/event-sourcing-postgres": patch
+"@ocoda/event-sourcing-mariadb": patch
+"@ocoda/event-sourcing-mongodb": patch
+"@ocoda/event-sourcing": patch
 ---
 
-adds a `listCollections` method to all integrations
+Adds a `listCollections` method to all integrations
