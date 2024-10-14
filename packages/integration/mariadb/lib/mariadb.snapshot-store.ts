@@ -63,16 +63,15 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 
 		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
-		const query = "SHOW TABLES LIKE '%snapshots'";
+		const query = "SELECT TABLE_NAME FROM information_schema.tables WHERE BINARY table_name LIKE '%snapshots'";
 
 		const client = await connection;
 		const stream = client.queryStream(query);
 
 		try {
 			let batchedCollections: ISnapshotCollection[] = [];
-			for await (const collection of stream as unknown as Record<string, ISnapshotCollection>[]) {
-				const tableName = Object.values<ISnapshotCollection>(collection)[0];
-				batchedCollections.push(tableName);
+			for await (const { TABLE_NAME } of stream as unknown as Record<string, ISnapshotCollection>[]) {
+				batchedCollections.push(TABLE_NAME);
 				if (batchedCollections.length === batch) {
 					yield batchedCollections;
 					batchedCollections = [];

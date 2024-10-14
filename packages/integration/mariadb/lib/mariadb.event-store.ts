@@ -62,16 +62,15 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 
 		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
-		const query = "SHOW TABLES LIKE '%events'";
+		const query = "SELECT TABLE_NAME FROM information_schema.tables WHERE BINARY table_name LIKE '%events'";
 
 		const client = await connection;
 		const stream = client.queryStream(query);
 
 		try {
 			let batchedCollections: IEventCollection[] = [];
-			for await (const collection of stream as unknown as Record<string, IEventCollection>[]) {
-				const tableName = Object.values<IEventCollection>(collection)[0];
-				batchedCollections.push(tableName);
+			for await (const { TABLE_NAME } of stream as unknown as Record<string, IEventCollection>[]) {
+				batchedCollections.push(TABLE_NAME);
 				if (batchedCollections.length === batch) {
 					yield batchedCollections;
 					batchedCollections = [];
