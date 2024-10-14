@@ -378,11 +378,19 @@ describe(DynamoDBSnapshotStore, () => {
 	});
 
 	it('should list collections', async () => {
+		await Promise.all([
+			snapshotStore.ensureCollection('a'),
+			snapshotStore.ensureCollection('b'),
+			snapshotStore.ensureCollection('c'),
+		]);
+
 		const resolvedCollections: ISnapshotCollection[] = [];
 		for await (const collections of snapshotStore.listCollections()) {
 			resolvedCollections.push(...collections);
 		}
 
-		expect(resolvedCollections).toEqual(['snapshots']);
+		expect(resolvedCollections.includes('a-snapshots')).toBe(true);
+		expect(resolvedCollections.includes('b-snapshots')).toBe(true);
+		expect(resolvedCollections.includes('c-snapshots')).toBe(true);
 	});
 });
