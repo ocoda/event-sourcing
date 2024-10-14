@@ -1,47 +1,44 @@
 import { InvalidIdException, ULID } from '@ocoda/event-sourcing';
 
 describe(ULID, () => {
-	class EventId extends ULID {}
-
-	it('should generate an EventId', () => {
-		const generatedEventId = EventId.generate();
-		expect(generatedEventId.value).toBeDefined();
+	it('should generate a ULID', () => {
+		const generatedUlid = ULID.generate();
+		expect(generatedUlid.value).toBeDefined();
 	});
 
-	it('should create an EventId from an existing ulid', () => {
+	it('should create a ULID from an existing value', () => {
 		const ulid = '01JA50F56AM0CCDBNVQW3TTWNY';
-		const createdEventId = EventId.from(ulid);
-		expect(createdEventId.value).toBe(ulid);
-		expect(createdEventId.time).toBe(1728892605642);
-		expect(createdEventId.date).toEqual(new Date(1728892605642));
+		const createdULID = ULID.from(ulid);
+		expect(createdULID.value).toBe(ulid);
+		expect(createdULID.time).toBe(1728892605642);
+		expect(createdULID.date).toEqual(new Date(1728892605642));
 	});
 
-	it('should throw when trying to create an id from an undefined variable', () => {
-		let ulid: string;
-		expect(() => EventId.from(ulid)).toThrow(InvalidIdException.becauseEmpty());
+	it('should throw when trying to create a ULID from an undefined variable', () => {
+		let value: string;
+		expect(() => ULID.from(value)).toThrow(InvalidIdException.becauseEmpty());
 	});
 
-	it('should throw when creating an Id from an invalid ulid', () => {
-		const generatedEventId = EventId.generate();
-		expect(generatedEventId.value).toBeDefined();
+	it('should throw when creating a ULID from an invalid value', () => {
+		const generatedULID = ULID.generate();
+		expect(generatedULID.value).toBeDefined();
 
-		const ulid = '123-abc';
-		expect(() => EventId.from(ulid)).toThrow(InvalidIdException.becauseInvalid(ulid));
+		const value = '123-abc';
+		expect(() => ULID.from(value)).toThrow(InvalidIdException.becauseInvalid(value));
 	});
 
-	it('should generate different EventIds for different instances', () => {
-		const eventId1 = EventId.generate();
-		const eventId2 = EventId.generate();
-		expect(eventId1.value).not.toBe(eventId2.value);
+	it("should generate different ULID's for different instances", () => {
+		const generatedUlid1 = ULID.generate();
+		const generatedUlid2 = ULID.generate();
+		expect(generatedUlid1.value).not.toBe(generatedUlid2.value);
 	});
 
-	it('should guarantee different EventIds for the same seed time when using the factory', () => {
-		const eventIdFactory = EventId.factory();
-		const seedTime = Date.now();
+	it("should guarantee different ULID's for the same seed date when using the factory", () => {
+		const ulidFactory = ULID.factory();
+		const dateSeed = new Date();
 
-		const x = eventIdFactory();
-		const eventId1 = eventIdFactory(seedTime);
-		const eventId2 = eventIdFactory(seedTime);
-		expect(eventId1.value).not.toBe(eventId2.value);
+		const generatedUlid1 = ulidFactory(dateSeed);
+		const generatedUlid2 = ulidFactory(dateSeed);
+		expect(generatedUlid1.value).not.toBe(generatedUlid2.value);
 	});
 });

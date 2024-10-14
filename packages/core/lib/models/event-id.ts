@@ -2,9 +2,13 @@ import { monotonicFactory, ulid } from 'ulidx';
 import { InvalidIdException } from '../exceptions';
 import { ULID } from './ulid';
 
+/**
+ * Represents an event identifier.
+ * @description An event identifier is a unique identifier for an event, which also contains a timestamp.
+ */
 export class EventId extends ULID {
-	public static generate(timeSeed?: number): ULID {
-		const value = ulid(timeSeed);
+	public static generate(dateSeed?: Date): ULID {
+		const value = ulid(dateSeed?.getTime());
 		return new EventId(value);
 	}
 
@@ -15,8 +19,8 @@ export class EventId extends ULID {
 		return new EventId(id);
 	}
 
-	static factory(): (seedTime?: number) => EventId {
+	static factory(): (dateSeed?: Date) => EventId {
 		const generator = monotonicFactory();
-		return (seedTime?: number) => new EventId(generator(seedTime));
+		return (dateSeed?: Date) => new EventId(generator(dateSeed?.getTime()));
 	}
 }

@@ -15,9 +15,10 @@ export class EventEnvelope<E extends IEvent = IEvent> {
 			eventId?: EventId;
 		},
 	): EventEnvelope<E> {
+		const eventId = metadata.eventId || EventId.generate();
 		return new EventEnvelope<E>(event, payload, {
-			eventId: metadata.eventId || EventId.generate(),
-			occurredOn: new Date(),
+			eventId: eventId,
+			occurredOn: eventId.date,
 			...metadata,
 		});
 	}
