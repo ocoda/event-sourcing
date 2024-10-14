@@ -47,7 +47,7 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
                     payload JSONB NOT NULL,
                     event_id VARCHAR(40) NOT NULL,
                     aggregate_id VARCHAR(40) NOT NULL,
-                    occurred_on TIMESTAMP NOT NULL,
+                    occurred_on TIMESTAMPTZ NOT NULL,
                     correlation_id VARCHAR(255),
                     causation_id VARCHAR(255),
                     PRIMARY KEY (stream_id, version)
