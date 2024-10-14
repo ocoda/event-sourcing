@@ -30,7 +30,7 @@ export interface InMemorySnapshotStoreConfig extends SnapshotStoreConfig {
 }
 
 export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreConfig> {
-	public collections: Map<ISnapshotPool, InMemorySnapshotEntity<any>[]>;
+	public collections: Map<ISnapshotCollection, InMemorySnapshotEntity<any>[]>;
 
 	public async connect(): Promise<void> {
 		this.logger.log('Starting store');
@@ -49,6 +49,24 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 			return collection;
 		} catch (error) {
 			throw new SnapshotStoreCollectionCreationException(collection, error);
+		}
+	}
+
+	public async *listCollections(): AsyncGenerator<ISnapshotCollection[]> {
+		let collections: ISnapshotCollection[] = [];
+
+		const limit = Number.MAX_SAFE_INTEGER;
+		const batch = DEFAULT_BATCH_SIZE;
+
+		collections = [...this.collections.keys()];
+
+		if (limit) {
+			collections = collections.slice(0, limit);
+		}
+
+		for (let i = 0; i < collections.length; i += batch) {
+			const chunk = collections.slice(i, i + batch);
+			yield chunk;
 		}
 	}
 
