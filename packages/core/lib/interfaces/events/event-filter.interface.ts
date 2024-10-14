@@ -27,3 +27,11 @@ export interface IEventFilter {
 	 */
 	batch?: number;
 }
+
+export interface IEventCollectionFilter {
+	/**
+	 * The amount of collections to read at a time
+	 * @default 100
+	 */
+	batch?: number;
+}

@@ -4,6 +4,7 @@ import type {
 	ILatestSnapshotFilter,
 	ISnapshot,
 	ISnapshotCollection,
+	ISnapshotCollectionFilter,
 	ISnapshotFilter,
 	ISnapshotPool,
 	SnapshotStoreDriver,
@@ -38,7 +39,7 @@ export abstract class SnapshotStore<TOptions = Omit<EventSourcingModuleOptions['
 	 * List the snapshot collections.
 	 * @returns The snapshot collections.
 	 */
-	public abstract listCollections(): AsyncGenerator<ISnapshotCollection[]>;
+	public abstract listCollections(filter?: ISnapshotCollectionFilter): AsyncGenerator<ISnapshotCollection[]>;
 
 	/**
 	 * Get snapshots from the snapshot stream.

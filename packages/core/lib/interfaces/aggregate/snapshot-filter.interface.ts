@@ -27,3 +27,11 @@ export interface ISnapshotFilter {
 	 */
 	batch?: number;
 }
+
+export interface ISnapshotCollectionFilter {
+	/**
+	 * The amount of collections to read at a time
+	 * @default 100
+	 */
+	batch?: number;
+}

@@ -6,6 +6,7 @@ import type {
 	EventStoreDriver,
 	IEvent,
 	IEventCollection,
+	IEventCollectionFilter,
 	IEventFilter,
 	IEventPool,
 } from './interfaces';
@@ -67,7 +68,7 @@ export abstract class EventStore<TOptions = Omit<EventSourcingModuleOptions['eve
 	 * List the event collections.
 	 * @returns The event collections.
 	 */
-	public abstract listCollections(): AsyncGenerator<IEventCollection[]>;
+	public abstract listCollections(filter?: IEventCollectionFilter): AsyncGenerator<IEventCollection[]>;
 
 	/**
 	 * Get events from the event stream.
