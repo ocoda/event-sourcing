@@ -35,6 +35,12 @@ export abstract class SnapshotStore<TOptions = Omit<EventSourcingModuleOptions['
 	public abstract ensureCollection(pool?: ISnapshotPool): ISnapshotCollection | Promise<ISnapshotCollection>;
 
 	/**
+	 * List the snapshot collections.
+	 * @returns The snapshot collections.
+	 */
+	public abstract listCollections(): AsyncGenerator<ISnapshotCollection[]>;
+
+	/**
 	 * Get snapshots from the snapshot stream.
 	 * @param snapshotStream The snapshot stream.
 	 * @param filter The snapshot filter
