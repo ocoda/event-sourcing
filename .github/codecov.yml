@@ -36,20 +36,20 @@ flags:
   core:
     carryforward: true
     paths:
-      - packages/core
+      - packages/core/
   dynamodb:
     carryforward: true
     paths:
-      - packages/integration/dynamodb
+      - packages/integration/dynamodb/
   mariadb:
     carryforward: true
     paths:
-      - packages/integration/mariadb
+      - packages/integration/mariadb/
   mongodb:
     carryforward: true
     paths:
-      - packages/integration/mongodb
+      - packages/integration/mongodb/
   postgres:
     carryforward: true
     paths:
-      - packages/integration/postgres
+      - packages/integration/postgres/
