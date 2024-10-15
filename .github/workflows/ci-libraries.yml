@@ -66,6 +66,13 @@ jobs:
             pnpm test --filter=@ocoda/event-sourcing
           fi
 
+      - name: Upload coverage
+        if: ${{ matrix.node-version == '22.x' }}
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          flags: core
+
   test-integration-libs:
     name: Test ${{ matrix.database }} lib [Node.js ${{ matrix.node-version }}]
     runs-on: ubuntu-latest
@@ -99,6 +106,13 @@ jobs:
           else
             pnpm test --filter=@ocoda/event-sourcing-${{ matrix.database }}
           fi
+
+      - name: Upload coverage
+        if: ${{ matrix.node-version == '22.x' }}
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          flags: ${{ matrix.database }}
 
   merge-check:
     name: Merge check

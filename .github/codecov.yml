@@ -1,8 +1,55 @@
 coverage:
   status:
     project:
-      default:
-        informational: true
+      core:
+        target: auto
+        flags:
+          - core
+      integration:
+        target: auto
+        flags:
+          - dynamodb
+          - mariadb
+          - mongodb
+          - postgres
     patch:
-      default:
-        informational: true
+      core:
+        target: auto
+        flags:
+          - core
+      integration:
+        target: auto
+        flags:
+          - dynamodb
+          - mariadb
+          - mongodb
+          - postgres
+
+comment:
+  layout: "reach, diff, flags, files"
+  behavior: default
+  require_changes: false
+  require_base: true
+  require_head: true
+
+flags:
+  core:
+    carryforward: true
+    paths:
+      - packages/core/coverage/clover.xml
+  dynamodb:
+    carryforward: true
+    paths:
+      - packages/integration/dynamodb/coverage/clover.xml
+  mariadb:
+    carryforward: true
+    paths:
+      - packages/integration/mariadb/coverage/clover.xml
+  mongodb:
+    carryforward: true
+    paths:
+      - packages/integration/mongodb/coverage/clover.xml
+  postgres:
+    carryforward: true
+    paths:
+      - packages/integration/postgres/coverage/clover.xml
