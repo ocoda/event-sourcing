@@ -32,27 +32,24 @@ comment:
   require_base: true
   require_head: true
 
-flag_management:
-  default_rules:
+flags:
+  core:
+    carryforward: false
+    paths:
+      - packages/core/
+  dynamodb:
     carryforward: true
-  individual_flags:
-    - name: core
-      carryforward: true
-      paths:
-        - packages/core/
-    - name: dynamodb
-      carryforward: true
-      paths:
-        - packages/integration/dynamodb/
-    - name: mariadb
-      carryforward: true
-      paths:
-        - packages/integration/mariadb/
-    - name: mongodb
-      carryforward: true
-      paths:
-        - packages/integration/mongodb/
-    - name: postgres
-      carryforward: true
-      paths:
-        - packages/integration/postgres/
+    paths:
+      - packages/integration/dynamodb/
+  mariadb:
+    carryforward: true
+    paths:
+      - packages/integration/mariadb/
+  mongodb:
+    carryforward: true
+    paths:
+      - packages/integration/mongodb/
+  postgres:
+    carryforward: true
+    paths:
+      - packages/integration/postgres/
