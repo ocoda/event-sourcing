@@ -36,20 +36,20 @@ flags:
   core:
     carryforward: true
     paths:
-      - packages/core/coverage/clover.xml
+      - packages/core/coverage/
   dynamodb:
     carryforward: true
     paths:
-      - packages/integration/dynamodb/coverage/clover.xml
+      - packages/integration/dynamodb/coverage/
   mariadb:
     carryforward: true
     paths:
-      - packages/integration/mariadb/coverage/clover.xml
+      - packages/integration/mariadb/coverage/
   mongodb:
     carryforward: true
     paths:
-      - packages/integration/mongodb/coverage/clover.xml
+      - packages/integration/mongodb/coverage/
   postgres:
     carryforward: true
     paths:
-      - packages/integration/postgres/coverage/clover.xml
+      - packages/integration/postgres/coverage/
