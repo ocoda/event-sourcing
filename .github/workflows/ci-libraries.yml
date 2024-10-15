@@ -70,7 +70,7 @@ jobs:
         if: ${{ matrix.node-version == '22.x' }}
         uses: codecov/codecov-action@v4
         with:
-          working-directory: packages/core/
+          directory: packages/integration/core/coverage
           token: ${{ secrets.CODECOV_TOKEN }}
           flags: core
 
@@ -112,7 +112,7 @@ jobs:
         if: ${{ matrix.node-version == '22.x' }}
         uses: codecov/codecov-action@v4
         with:
-          working-directory: packages/integration/${{ matrix.database }}/
+          directory: packages/integration/${{ matrix.database }}/coverage
           token: ${{ secrets.CODECOV_TOKEN }}
           flags: ${{ matrix.database }}
 
