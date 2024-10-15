@@ -5,11 +5,11 @@
 			"dependsOn": ["^build"]
 		},
 		"test": {},
-		"test:ci": {},
+		"test:cov": {},
 		"ci": {},
 		"lint": {},
 		"format": {},
 		"benchmark": {},
-        "benchmark:report": {}
+		"benchmark:report": {}
 	}
 }

@@ -1,30 +1,7 @@
+const baseConfig = require('@ocoda/event-sourcing-config/jest/base');
+
 module.exports = {
-	moduleFileExtensions: ['js', 'json', 'ts'],
-	rootDir: '.',
-	testRegex: '.*\\.spec\\.ts$',
-	transform: {
-		'^.+\\.(t|j)s$': [
-			'@swc/jest',
-			{
-				jsc: {
-					parser: {
-						syntax: 'typescript',
-						decorators: true,
-					},
-					transform: {
-						legacyDecorator: true,
-						decoratorMetadata: true,
-					},
-					target: 'es2016',
-					keepClassNames: true,
-				},
-				minify: false,
-			},
-		],
-	},
-	collectCoverageFrom: ['lib/**/*.(t|j)s'],
-	coverageDirectory: './coverage',
-	testEnvironment: 'node',
+	...baseConfig,
 	moduleNameMapper: {
 		'^@ocoda/event-sourcing(|/.*)$': '<rootDir>/../../core/lib/$1',
 		'^@ocoda/event-sourcing-dynamodb(|/.*)$': '<rootDir>/lib/$1',

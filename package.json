@@ -8,6 +8,7 @@
 		"build": "turbo build",
 		"docs:build": "turbo docs:build",
 		"test": "turbo test",
+		"test:cov": "turbo test:cov",
 		"ci": "turbo ci",
 		"lint": "turbo lint",
 		"format": "turbo format",

@@ -59,7 +59,12 @@ jobs:
         run: pnpm run ci --filter=@ocoda/event-sourcing
 
       - name: Test
-        run: pnpm test --filter=@ocoda/event-sourcing
+        run: |
+          if [ ${{ matrix.node-version }} == '22.x' ]; then
+            pnpm test:cov --filter=@ocoda/event-sourcing
+          else
+            pnpm test --filter=@ocoda/event-sourcing
+          fi
 
   test-integration-libs:
     name: Test ${{ matrix.database }} lib [Node.js ${{ matrix.node-version }}]
@@ -88,7 +93,12 @@ jobs:
         run: pnpm run ci --filter=@ocoda/event-sourcing-${{ matrix.database }}
 
       - name: Test
-        run: pnpm test --filter=@ocoda/event-sourcing-${{ matrix.database }}
+        run: |
+          if [ ${{ matrix.node-version }} == '22.x' ]; then
+            pnpm test:cov --filter=@ocoda/event-sourcing-${{ matrix.database }}
+          else
+            pnpm test --filter=@ocoda/event-sourcing-${{ matrix.database }}
+          fi
 
   merge-check:
     name: Merge check
