@@ -114,7 +114,7 @@ jobs:
         with:
           directory: packages/integration/${{ matrix.database }}/coverage
           token: ${{ secrets.CODECOV_TOKEN }}
-          flags: ${{ matrix.database }}
+          flags: integrations
 
   merge-check:
     name: Merge check

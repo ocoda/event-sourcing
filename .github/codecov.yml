@@ -5,13 +5,10 @@ coverage:
         target: auto
         flags:
           - core
-      integration:
+      integrations:
         target: auto
         flags:
-          - dynamodb
-          - mariadb
-          - mongodb
-          - postgres
+          - integrations
     patch:
       core:
         target: auto
@@ -32,24 +29,18 @@ comment:
   require_base: true
   require_head: true
 
-flags:
-  core:
-    carryforward: false
-    paths:
-      - packages/core/
-  dynamodb:
+flag_management:
+  default_rules:
     carryforward: true
-    paths:
-      - packages/integration/dynamodb/
-  mariadb:
-    carryforward: true
-    paths:
-      - packages/integration/mariadb/
-  mongodb:
-    carryforward: true
-    paths:
-      - packages/integration/mongodb/
-  postgres:
-    carryforward: true
-    paths:
-      - packages/integration/postgres/
+  individual_flags: # exceptions to the default rules above, stated flag by flag
+    - name: core
+      paths:
+        - packages/core
+      carryforward: true
+    - name: integrations
+      paths:
+        - packages/integration/dynamodb
+        - packages/integration/mariadb
+        - packages/integration/mongodb
+        - packages/integration/postgres
+      carryforward: true
