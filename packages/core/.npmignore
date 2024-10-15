@@ -7,7 +7,6 @@ tests
 # misc
 .circleci
 .github
-.release-it.json
 .vscode
 .turbo
 biome.json
