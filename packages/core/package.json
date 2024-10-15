@@ -9,7 +9,7 @@
 	"scripts": {
 		"build": "rm -rf dist && tsup lib/index.ts --format cjs --dts",
 		"test": "jest --config jest.config.js",
-		"test:ci": "jest --config jest.config.js --coverage",
+		"test:cov": "jest --config jest.config.js --coverage --collectCoverageFrom=lib/**/*.ts",
 		"ci": "biome ci",
 		"format": "biome format --write",
 		"lint": "biome check --write"

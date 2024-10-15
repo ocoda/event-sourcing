@@ -6,7 +6,9 @@
 			"outputs": ["dist/**"]
 		},
 		"test": {},
-		"test:ci": {},
+		"test:cov": {
+			"outputs": ["coverage/**"]
+		},
 		"lint": {},
 		"format": {}
 	}
