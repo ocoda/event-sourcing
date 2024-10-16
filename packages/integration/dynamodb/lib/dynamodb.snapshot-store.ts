@@ -12,6 +12,7 @@ import {
 	TransactWriteItemsCommand,
 } from '@aws-sdk/client-dynamodb';
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
+import type { Type } from '@nestjs/common';
 import {
 	type AggregateRoot,
 	DEFAULT_BATCH_SIZE,
@@ -30,6 +31,7 @@ import {
 	SnapshotStoreVersionConflictException,
 	type SnapshotStream,
 	StreamReadingDirection,
+	getAggregateMetadata,
 } from '@ocoda/event-sourcing';
 import type { DynamoDBSnapshotStoreConfig, DynamoSnapshotEntity } from './interfaces';
 
@@ -418,18 +420,19 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 		});
 	}
 
-	async *getLastAggregateEnvelopes<A extends AggregateRoot>(
-		aggregateName: string,
+	async *getLastEnvelopesForAggregate<A extends AggregateRoot>(
+		aggregate: Type<A>,
 		filter?: ILatestSnapshotFilter,
 	): AsyncGenerator<SnapshotEnvelope<A>[]> {
 		const collection = SnapshotCollection.get(filter?.pool);
+		const { streamName } = getAggregateMetadata(aggregate);
 
 		const fromId = filter?.fromId;
 		const limit = filter?.limit || Number.MAX_SAFE_INTEGER;
 		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
 		const KeyConditionExpression = ['aggregateName = :aggregateName'];
-		const ExpressionAttributeValues = { ':aggregateName': { S: aggregateName } };
+		const ExpressionAttributeValues = { ':aggregateName': { S: streamName } };
 
 		if (fromId) {
 			KeyConditionExpression.push('latest > :latest');

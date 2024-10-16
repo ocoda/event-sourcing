@@ -1,4 +1,4 @@
-import { Logger } from '@nestjs/common';
+import { Logger, type Type } from '@nestjs/common';
 import type {
 	EventSourcingModuleOptions,
 	ILatestSnapshotFilter,
@@ -42,17 +42,6 @@ export abstract class SnapshotStore<TOptions = Omit<EventSourcingModuleOptions['
 	public abstract listCollections(filter?: ISnapshotCollectionFilter): AsyncGenerator<ISnapshotCollection[]>;
 
 	/**
-	 * Get snapshots from the snapshot stream.
-	 * @param snapshotStream The snapshot stream.
-	 * @param filter The snapshot filter
-	 * @returns The snapshots.
-	 */
-	abstract getSnapshots<A extends AggregateRoot>(
-		snapshotStream: SnapshotStream,
-		filter?: ISnapshotFilter,
-	): AsyncGenerator<ISnapshot<A>[]>;
-
-	/**
 	 * Get a snapshot from the snapshot stream.
 	 * @param snapshotStream The snapshot stream.
 	 * @param version The snapshot version.
@@ -64,6 +53,17 @@ export abstract class SnapshotStore<TOptions = Omit<EventSourcingModuleOptions['
 		version: number,
 		pool?: ISnapshotPool,
 	): ISnapshot<A> | Promise<ISnapshot<A>>;
+
+	/**
+	 * Get snapshots from the snapshot stream.
+	 * @param snapshotStream The snapshot stream.
+	 * @param filter The snapshot filter
+	 * @returns The snapshots.
+	 */
+	abstract getSnapshots<A extends AggregateRoot>(
+		snapshotStream: SnapshotStream,
+		filter?: ISnapshotFilter,
+	): AsyncGenerator<ISnapshot<A>[]>;
 
 	/**
 	 * Get the last snapshot from the snapshot stream.
@@ -139,12 +139,12 @@ export abstract class SnapshotStore<TOptions = Omit<EventSourcingModuleOptions['
 
 	/**
 	 * Get the last snapshot envelopes for a specified aggregate.
-	 * @param aggregateName The aggregate name.
+	 * @param aggregate The aggregate class.
 	 * @param filter The snapshot filter.
 	 * @returns The snapshot envelopes.
 	 */
-	abstract getLastAggregateEnvelopes?<A extends AggregateRoot>(
-		aggregateName: string,
+	abstract getLastEnvelopesForAggregate?<A extends AggregateRoot>(
+		aggregate: Type<A>,
 		filter?: ILatestSnapshotFilter,
 	): AsyncGenerator<SnapshotEnvelope<A>[]>;
 

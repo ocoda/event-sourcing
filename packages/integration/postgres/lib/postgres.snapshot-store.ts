@@ -1,3 +1,4 @@
+import type { Type } from '@nestjs/common';
 import {
 	type AggregateRoot,
 	DEFAULT_BATCH_SIZE,
@@ -16,6 +17,7 @@ import {
 	SnapshotStoreVersionConflictException,
 	type SnapshotStream,
 	StreamReadingDirection,
+	getAggregateMetadata,
 } from '@ocoda/event-sourcing';
 import { Pool, type PoolClient } from 'pg';
 import Cursor from 'pg-cursor';
@@ -354,11 +356,12 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 		});
 	}
 
-	async *getLastAggregateEnvelopes<A extends AggregateRoot>(
-		aggregateName: string,
+	async *getLastEnvelopesForAggregate<A extends AggregateRoot>(
+		aggregate: Type<A>,
 		filter?: ILatestSnapshotFilter,
 	): AsyncGenerator<SnapshotEnvelope<A>[]> {
 		const collection = SnapshotCollection.get(filter?.pool);
+		const { streamName } = getAggregateMetadata(aggregate);
 
 		const fromId = filter?.fromId;
 		const limit = filter?.limit || Number.MAX_SAFE_INTEGER;
@@ -373,7 +376,7 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
             LIMIT ${fromId ? '$3' : '$2'}
         `;
 
-		const params = fromId ? [aggregateName, fromId, limit] : [aggregateName, limit];
+		const params = fromId ? [streamName, fromId, limit] : [streamName, limit];
 
 		const cursor = this.client.query(
 			new Cursor<

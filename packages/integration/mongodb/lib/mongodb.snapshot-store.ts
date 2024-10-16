@@ -1,3 +1,4 @@
+import type { Type } from '@nestjs/common';
 import {
 	type AggregateRoot,
 	DEFAULT_BATCH_SIZE,
@@ -16,6 +17,7 @@ import {
 	SnapshotStoreVersionConflictException,
 	type SnapshotStream,
 	StreamReadingDirection,
+	getAggregateMetadata,
 } from '@ocoda/event-sourcing';
 import { type Db, MongoClient } from 'mongodb';
 import type { MongoDBSnapshotEntity, MongoDBSnapshotStoreConfig } from './interfaces';
@@ -321,11 +323,12 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 		});
 	}
 
-	async *getLastAggregateEnvelopes<A extends AggregateRoot>(
-		aggregateName: string,
+	async *getLastEnvelopesForAggregate<A extends AggregateRoot>(
+		aggregate: Type<A>,
 		filter?: ILatestSnapshotFilter,
 	): AsyncGenerator<SnapshotEnvelope<A>[]> {
 		const collection = SnapshotCollection.get(filter?.pool);
+		const { streamName } = getAggregateMetadata(aggregate);
 
 		const fromId = filter?.fromId;
 		const limit = filter?.limit || Number.MAX_SAFE_INTEGER;
@@ -337,7 +340,7 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 			>(collection)
 			.find(
 				{
-					aggregateName,
+					aggregateName: streamName,
 					...(fromId ? { latest: { $gte: fromId } } : { latest: { $regex: /^latest/ } }),
 				},
 				{
