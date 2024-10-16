@@ -1,4 +1,5 @@
 import type { Type } from '@nestjs/common';
+import { getAggregateMetadata } from '@ocoda/event-sourcing/helpers';
 import { DEFAULT_BATCH_SIZE, StreamReadingDirection } from '../../constants';
 import {
 	SnapshotNotFoundException,
@@ -273,11 +274,12 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 		});
 	}
 
-	async *getLastAggregateEnvelopes<A extends AggregateRoot>(
-		aggregateName: string,
+	async *getLastEnvelopesForAggregate<A extends AggregateRoot>(
+		aggregate: Type<A>,
 		filter?: ILatestSnapshotFilter,
 	): AsyncGenerator<SnapshotEnvelope<A>[]> {
 		let entities: InMemorySnapshotEntity<any>[] = [];
+		const { streamName: aggregateName } = getAggregateMetadata(aggregate);
 
 		const collection = SnapshotCollection.get(filter?.pool);
 		const fromId = filter?.fromId;

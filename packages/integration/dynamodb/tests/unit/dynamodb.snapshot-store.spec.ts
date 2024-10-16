@@ -289,7 +289,7 @@ describe(DynamoDBSnapshotStore, () => {
 
 	it('should retrieve the last snapshot-envelopes for an aggregate', async () => {
 		let resolvedEnvelopes: SnapshotEnvelope<Account>[] = [];
-		for await (const envelopes of snapshotStore.getLastAggregateEnvelopes('account')) {
+		for await (const envelopes of snapshotStore.getLastEnvelopesForAggregate(Account)) {
 			resolvedEnvelopes.push(...envelopes);
 		}
 
@@ -330,7 +330,7 @@ describe(DynamoDBSnapshotStore, () => {
 
 		const fetchedAccountIds: Set<string> = new Set();
 		const firstPageEnvelopes: SnapshotEnvelope<Account>[] = [];
-		for await (const envelopes of snapshotStore.getLastAggregateEnvelopes('foo', { limit: 15 })) {
+		for await (const envelopes of snapshotStore.getLastEnvelopesForAggregate(Foo, { limit: 15 })) {
 			firstPageEnvelopes.push(...envelopes);
 		}
 
@@ -340,7 +340,7 @@ describe(DynamoDBSnapshotStore, () => {
 		}
 
 		const lastPageEnvelopes: SnapshotEnvelope<Account>[] = [];
-		for await (const envelopes of snapshotStore.getLastAggregateEnvelopes('foo', {
+		for await (const envelopes of snapshotStore.getLastEnvelopesForAggregate(Foo, {
 			limit: 5,
 			fromId: firstPageEnvelopes[14].metadata.aggregateId,
 		})) {

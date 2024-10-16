@@ -71,14 +71,6 @@ export abstract class EventStore<TOptions = Omit<EventSourcingModuleOptions['eve
 	public abstract listCollections(filter?: IEventCollectionFilter): AsyncGenerator<IEventCollection[]>;
 
 	/**
-	 * Get events from the event stream.
-	 * @param eventStream The event stream.
-	 * @param filter The event filter.
-	 * @returns The events.
-	 */
-	abstract getEvents(eventStream: EventStream, filter?: IEventFilter): AsyncGenerator<IEvent[]>;
-
-	/**
 	 * Get an event from the event stream.
 	 * @param eventStream The event stream.
 	 * @param version The event version.
@@ -86,6 +78,14 @@ export abstract class EventStore<TOptions = Omit<EventSourcingModuleOptions['eve
 	 * @returns The event.
 	 */
 	abstract getEvent(eventStream: EventStream, version: number, pool?: IEventPool): IEvent | Promise<IEvent>;
+
+	/**
+	 * Get events from the event stream.
+	 * @param eventStream The event stream.
+	 * @param filter The event filter.
+	 * @returns The events.
+	 */
+	abstract getEvents(eventStream: EventStream, filter?: IEventFilter): AsyncGenerator<IEvent[]>;
 
 	/**
 	 * Append events to the event stream.

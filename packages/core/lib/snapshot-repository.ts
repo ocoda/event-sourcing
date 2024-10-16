@@ -8,7 +8,6 @@ import { SnapshotStore } from './snapshot-store';
 
 export abstract class SnapshotRepository<A extends AggregateRoot = AggregateRoot> implements ISnapshotRepository<A> {
 	private readonly aggregate: Type<A>;
-	private readonly streamName: string;
 	private readonly interval: number;
 
 	constructor(@Inject(SnapshotStore) readonly snapshotStore: SnapshotStore) {
@@ -26,7 +25,6 @@ export abstract class SnapshotRepository<A extends AggregateRoot = AggregateRoot
 
 		this.aggregate = aggregate;
 		this.interval = interval;
-		this.streamName = streamName;
 	}
 
 	async save(id: Id, aggregate: A, pool?: ISnapshotPool): Promise<void> {
@@ -67,7 +65,7 @@ export abstract class SnapshotRepository<A extends AggregateRoot = AggregateRoot
 
 	async *loadAll(filter?: { fromId?: Id; limit?: number; pool?: string }): AsyncGenerator<SnapshotEnvelope<A>[]> {
 		const id = filter?.fromId?.value;
-		for await (const envelopes of this.snapshotStore.getLastAggregateEnvelopes<A>(this.streamName, {
+		for await (const envelopes of this.snapshotStore.getLastEnvelopesForAggregate<A>(this.aggregate, {
 			...filter,
 			fromId: id,
 		})) {
