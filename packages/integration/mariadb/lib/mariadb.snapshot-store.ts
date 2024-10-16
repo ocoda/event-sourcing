@@ -225,7 +225,7 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 		}
 	}
 
-	async getManyLastSnapshots<A extends AggregateRoot>(
+	async getLastSnapshots<A extends AggregateRoot>(
 		streams: SnapshotStream[],
 		pool?: ISnapshotPool,
 	): Promise<Map<SnapshotStream, ISnapshot<A>>> {

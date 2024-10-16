@@ -182,7 +182,7 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 		}
 	}
 
-	getManyLastSnapshots<A extends AggregateRoot>(
+	getLastSnapshots<A extends AggregateRoot>(
 		streams: SnapshotStream[],
 		pool?: ISnapshotPool,
 	): Map<SnapshotStream, ISnapshot<A>> {

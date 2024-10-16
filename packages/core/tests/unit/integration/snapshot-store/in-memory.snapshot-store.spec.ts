@@ -192,7 +192,7 @@ describe(InMemorySnapshotStore, () => {
 	});
 
 	it('should retrieve multiple last snapshots', () => {
-		const resolvedSnapshots = snapshotStore.getManyLastSnapshots([snapshotStreamAccountA, snapshotStreamAccountB]);
+		const resolvedSnapshots = snapshotStore.getLastSnapshots([snapshotStreamAccountA, snapshotStreamAccountB]);
 
 		expect(resolvedSnapshots.size).toBe(2);
 		expect(resolvedSnapshots.get(snapshotStreamAccountA)).toEqual(snapshotsAccountA[snapshotsAccountA.length - 1]);
