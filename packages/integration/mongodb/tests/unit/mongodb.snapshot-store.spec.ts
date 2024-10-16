@@ -294,7 +294,7 @@ describe(MongoDBSnapshotStore, () => {
 		const lastPageEnvelopes: SnapshotEnvelope<Account>[] = [];
 		for await (const envelopes of snapshotStore.getLastEnvelopesForAggregate(Foo, {
 			limit: 5,
-			fromId: firstPageEnvelopes[14].metadata.aggregateId,
+			aggregateId: firstPageEnvelopes[14].metadata.aggregateId,
 		})) {
 			lastPageEnvelopes.push(...envelopes);
 		}

@@ -41,10 +41,10 @@ export class AccountRepository {
 		return accounts;
 	}
 
-	async getAll(fromAccountId?: AccountId, limit?: number): Promise<Account[]> {
+	async getAll(accountId?: AccountId, limit?: number): Promise<Account[]> {
 		const accounts = [];
 		for await (const envelopes of this.accountSnapshotRepository.loadAll({
-			fromId: fromAccountId,
+			aggregateId: accountId,
 			limit,
 		})) {
 			for (const { metadata, payload } of envelopes) {

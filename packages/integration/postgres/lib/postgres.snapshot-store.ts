@@ -363,7 +363,7 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 		const collection = SnapshotCollection.get(filter?.pool);
 		const { streamName } = getAggregateMetadata(aggregate);
 
-		const fromId = filter?.fromId;
+		const aggregateId = filter?.aggregateId;
 		const limit = filter?.limit || Number.MAX_SAFE_INTEGER;
 		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
@@ -371,12 +371,12 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
             SELECT payload, aggregate_id, registered_on, snapshot_id, version
             FROM "${collection}"
             WHERE aggregate_name = $1
-            AND ${fromId ? 'latest >= $2' : "latest LIKE 'latest%'"}
+            AND ${aggregateId ? 'latest >= $2' : "latest LIKE 'latest%'"}
             ORDER BY latest DESC
-            LIMIT ${fromId ? '$3' : '$2'}
+            LIMIT ${aggregateId ? '$3' : '$2'}
         `;
 
-		const params = fromId ? [streamName, fromId, limit] : [streamName, limit];
+		const params = aggregateId ? [streamName, aggregateId, limit] : [streamName, limit];
 
 		const cursor = this.client.query(
 			new Cursor<

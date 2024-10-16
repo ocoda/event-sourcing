@@ -282,7 +282,7 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 		const { streamName: aggregateName } = getAggregateMetadata(aggregate);
 
 		const collection = SnapshotCollection.get(filter?.pool);
-		const fromId = filter?.fromId;
+		const aggregateId = filter?.aggregateId;
 		const limit = filter?.limit || Number.MAX_SAFE_INTEGER;
 		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
@@ -296,8 +296,8 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 			})
 			.reverse();
 
-		if (fromId) {
-			entities = this.collections.get(collection).filter(({ latest }) => latest > fromId);
+		if (aggregateId) {
+			entities = this.collections.get(collection).filter(({ latest }) => latest > aggregateId);
 		}
 
 		if (limit) {
