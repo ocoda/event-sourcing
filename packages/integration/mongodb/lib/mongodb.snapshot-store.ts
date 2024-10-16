@@ -330,7 +330,7 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 		const collection = SnapshotCollection.get(filter?.pool);
 		const { streamName } = getAggregateMetadata(aggregate);
 
-		const fromId = filter?.fromId;
+		const aggregateId = filter?.aggregateId;
 		const limit = filter?.limit || Number.MAX_SAFE_INTEGER;
 		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
@@ -341,7 +341,7 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 			.find(
 				{
 					aggregateName: streamName,
-					...(fromId ? { latest: { $gte: fromId } } : { latest: { $regex: /^latest/ } }),
+					...(aggregateId ? { latest: { $gte: aggregateId } } : { latest: { $regex: /^latest/ } }),
 				},
 				{
 					sort: { latest: -1 },

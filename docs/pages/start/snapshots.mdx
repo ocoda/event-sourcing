@@ -16,7 +16,7 @@ The base class provides the following methods:
 - `save(id: Id, aggregate: A, pool?: ISnapshotPool): Promise<void>`: Saves a snapshot of the aggregate.
 - `load(id: Id, pool?: ISnapshotPool): Promise<A>`: Loads the latest snapshot of the aggregate or returns a blank aggregate.
 - `loadMany(ids: Id[], pool?: ISnapshotPool): Promise<A[]>`: Loads the latest snapshots of multiple aggregates.
-- `*loadAll(filter?: { fromId?: Id; limit?: number; pool?: string }): AsyncGenerator<SnapshotEnvelope<A>[]>`: Search all latest snapshots from the store. Returns an async iterator.
+- `*loadAll(filter?: { aggregateId?: Id; limit?: number; pool?: string }): AsyncGenerator<SnapshotEnvelope<A>[]>`: Search all latest snapshots from the store. Returns an async iterator.
 
 The two methods you will need to implement are **`serialize`** and **`deserialize`**.
 

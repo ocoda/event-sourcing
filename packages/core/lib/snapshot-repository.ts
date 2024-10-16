@@ -63,11 +63,11 @@ export abstract class SnapshotRepository<A extends AggregateRoot = AggregateRoot
 		return aggregates;
 	}
 
-	async *loadAll(filter?: { fromId?: Id; limit?: number; pool?: string }): AsyncGenerator<SnapshotEnvelope<A>[]> {
-		const id = filter?.fromId?.value;
+	async *loadAll(filter?: { aggregateId?: Id; limit?: number; pool?: string }): AsyncGenerator<SnapshotEnvelope<A>[]> {
+		const id = filter?.aggregateId?.value;
 		for await (const envelopes of this.snapshotStore.getLastEnvelopesForAggregate<A>(this.aggregate, {
 			...filter,
-			fromId: id,
+			aggregateId: id,
 		})) {
 			yield envelopes;
 		}

@@ -38,7 +38,7 @@ export class AccountRepository {
 	async getAll(fromAccountId?: AccountId, limit?: number): Promise<Account[]> {
 		const accounts = [];
 		for await (const envelopes of this.accountSnapshotRepository.loadAll({
-			fromId: fromAccountId,
+			aggregateId: fromAccountId,
 			limit,
 			pool: 'e2e',
 		})) {
@@ -61,7 +61,7 @@ export class AccountRepository {
 		const events = account.commit();
 		const stream = EventStream.for<Account>(Account, account.id);
 
-        await this.eventStore.appendEvents(stream, account.version, events, 'e2e');
-        await this.accountSnapshotRepository.save(account.id, account, 'e2e');
+		await this.eventStore.appendEvents(stream, account.version, events, 'e2e');
+		await this.accountSnapshotRepository.save(account.id, account, 'e2e');
 	}
 }

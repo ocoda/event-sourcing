@@ -427,16 +427,16 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 		const collection = SnapshotCollection.get(filter?.pool);
 		const { streamName } = getAggregateMetadata(aggregate);
 
-		const fromId = filter?.fromId;
+		const aggregateId = filter?.aggregateId;
 		const limit = filter?.limit || Number.MAX_SAFE_INTEGER;
 		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
 		const KeyConditionExpression = ['aggregateName = :aggregateName'];
 		const ExpressionAttributeValues = { ':aggregateName': { S: streamName } };
 
-		if (fromId) {
+		if (aggregateId) {
 			KeyConditionExpression.push('latest > :latest');
-			ExpressionAttributeValues[':latest'] = { S: `latest#${fromId}` };
+			ExpressionAttributeValues[':latest'] = { S: `latest#${aggregateId}` };
 		} else {
 			KeyConditionExpression.push('begins_with(latest, :latest)');
 			ExpressionAttributeValues[':latest'] = { S: 'latest' };
