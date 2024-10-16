@@ -234,7 +234,7 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 		}
 	}
 
-	async getManyLastSnapshots<A extends AggregateRoot>(
+	async getLastSnapshots<A extends AggregateRoot>(
 		streams: SnapshotStream[],
 		pool?: ISnapshotPool,
 	): Promise<Map<SnapshotStream, ISnapshot<A>>> {

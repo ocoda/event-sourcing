@@ -293,7 +293,7 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 		}
 	}
 
-	async getManyLastSnapshots<A extends AggregateRoot>(
+	async getLastSnapshots<A extends AggregateRoot>(
 		streams: SnapshotStream[],
 		pool?: ISnapshotPool,
 	): Promise<Map<SnapshotStream, ISnapshot<A>>> {
