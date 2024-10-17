@@ -4,6 +4,7 @@ import { EventMap } from './event-map';
 import type {
 	EventSourcingModuleOptions,
 	EventStoreDriver,
+	IAllEventsFilter,
 	IEvent,
 	IEventCollection,
 	IEventCollectionFilter,
@@ -122,4 +123,10 @@ export abstract class EventStore<TOptions = Omit<EventSourcingModuleOptions['eve
 		version: number,
 		pool?: IEventPool,
 	): EventEnvelope | Promise<EventEnvelope>;
+
+	/**
+	 * Get all envelopes from the event store.
+	 * @description creates a range of YYYY-MM from since to until and gets all events in that range
+	 */
+	abstract getAllEnvelopes(filter: IAllEventsFilter): AsyncGenerator<EventEnvelope[]>;
 }
