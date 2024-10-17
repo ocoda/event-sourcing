@@ -24,6 +24,7 @@ import {
 	EventStorePersistenceException,
 	EventStoreVersionConflictException,
 	type EventStream,
+	type IAllEventsFilter,
 	type IEvent,
 	type IEventCollection,
 	type IEventCollectionFilter,
@@ -68,12 +69,16 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 							AttributeDefinitions: [
 								{ AttributeName: 'streamId', AttributeType: 'S' },
 								{ AttributeName: 'version', AttributeType: 'N' },
+								{ AttributeName: 'eventDate', AttributeType: 'S' },
 								{ AttributeName: 'eventId', AttributeType: 'S' },
 							],
 							GlobalSecondaryIndexes: [
 								{
 									IndexName: 'eventIdIndex',
-									KeySchema: [{ AttributeName: 'eventId', KeyType: 'HASH' }],
+									KeySchema: [
+										{ AttributeName: 'eventDate', KeyType: 'HASH' },
+										{ AttributeName: 'eventId', KeyType: 'RANGE' },
+									],
 									Projection: { ProjectionType: 'ALL' },
 								},
 							],
@@ -241,6 +246,7 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 									event,
 									payload,
 									version: metadata.version,
+									eventDate: metadata.eventId.yearMonth,
 									eventId: metadata.eventId.value,
 									aggregateId: metadata.aggregateId,
 									occurredOn: metadata.occurredOn.getTime(),
@@ -265,6 +271,35 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 					throw new EventStorePersistenceException(collection, error);
 			}
 		}
+	}
+
+	async getEnvelope({ streamId }: EventStream, version: number, pool?: IEventPool): Promise<EventEnvelope> {
+		const collection = EventCollection.get(pool);
+		const { Item } = await this.client.send(
+			new GetItemCommand({
+				TableName: collection,
+				Key: marshall({ streamId, version }, { removeUndefinedValues: true }),
+				ProjectionExpression: 'event, payload, aggregateId, eventId, occurredOn, version, correlationId, causationId',
+			}),
+		);
+
+		if (!Item) {
+			throw new EventNotFoundException(streamId, version);
+		}
+
+		const entity =
+			this.hydrate<
+				['event', 'payload', 'aggregateId', 'eventId', 'occurredOn', 'version', 'correlationId', 'causationId']
+			>(Item);
+
+		return EventEnvelope.from(entity.event, entity.payload, {
+			eventId: EventId.from(entity.eventId),
+			aggregateId: entity.aggregateId,
+			version: entity.version,
+			occurredOn: new Date(entity.occurredOn),
+			correlationId: entity.correlationId,
+			causationId: entity.causationId,
+		});
 	}
 
 	async *getEnvelopes({ streamId }: EventStream, filter?: IEventFilter): AsyncGenerator<EventEnvelope[]> {
@@ -327,33 +362,56 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 		} while (ExclusiveStartKey && leftToFetch > 0);
 	}
 
-	async getEnvelope({ streamId }: EventStream, version: number, pool?: IEventPool): Promise<EventEnvelope> {
-		const collection = EventCollection.get(pool);
-		const { Item } = await this.client.send(
-			new GetItemCommand({
-				TableName: collection,
-				Key: marshall({ streamId, version }, { removeUndefinedValues: true }),
-				ProjectionExpression: 'event, payload, aggregateId, eventId, occurredOn, version, correlationId, causationId',
-			}),
-		);
+	async *getAllEnvelopes(filter: IAllEventsFilter): AsyncGenerator<EventEnvelope[]> {
+		const collection = EventCollection.get(filter?.pool);
+		const yearMonths = this.getYearMonthRange(filter.since, filter.until);
 
-		if (!Item) {
-			throw new EventNotFoundException(streamId, version);
-		}
+		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
-		const entity =
-			this.hydrate<
-				['event', 'payload', 'aggregateId', 'eventId', 'occurredOn', 'version', 'correlationId', 'causationId']
-			>(Item);
+		const entities = [];
+		let monthsFetched = 0;
+		let ExclusiveStartKey: Record<string, AttributeValue>;
+		do {
+			const { Items, LastEvaluatedKey } = await this.client.send(
+				new QueryCommand({
+					TableName: collection,
+					IndexName: 'eventIdIndex',
+					KeyConditionExpression: 'eventDate = :yearMonth',
+					ExclusiveStartKey,
+					ExpressionAttributeValues: {
+						':yearMonth': { S: yearMonths[monthsFetched] },
+					},
+					ProjectionExpression: 'event, payload, aggregateId, eventId, occurredOn, version, correlationId, causationId',
+					...(batch && { Limit: batch }),
+				}),
+			);
 
-		return EventEnvelope.from(entity.event, entity.payload, {
-			eventId: EventId.from(entity.eventId),
-			aggregateId: entity.aggregateId,
-			version: entity.version,
-			occurredOn: new Date(entity.occurredOn),
-			correlationId: entity.correlationId,
-			causationId: entity.causationId,
-		});
+			entities.push(
+				...Items.map((item) => {
+					const entity =
+						this.hydrate<
+							['event', 'payload', 'aggregateId', 'eventId', 'occurredOn', 'version', 'correlationId', 'causationId']
+						>(item);
+					return EventEnvelope.from(entity.event, entity.payload, {
+						eventId: EventId.from(entity.eventId),
+						aggregateId: entity.aggregateId,
+						version: entity.version,
+						occurredOn: new Date(entity.occurredOn),
+						correlationId: entity.correlationId,
+						causationId: entity.causationId,
+					});
+				}),
+			);
+			ExclusiveStartKey = LastEvaluatedKey;
+			if (!LastEvaluatedKey) {
+				monthsFetched++;
+			}
+
+			if (entities.length > 0) {
+				yield entities;
+				entities.length = 0;
+			}
+		} while (monthsFetched < yearMonths.length);
 	}
 
 	hydrate<Fields extends (keyof DynamoEventEntity)[]>(

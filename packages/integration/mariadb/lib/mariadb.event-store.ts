@@ -9,6 +9,7 @@ import {
 	EventStorePersistenceException,
 	EventStoreVersionConflictException,
 	type EventStream,
+	type IAllEventsFilter,
 	type IEvent,
 	type IEventCollection,
 	type IEventCollectionFilter,
@@ -42,13 +43,14 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
                     version INT NOT NULL,
                     event VARCHAR(80) NOT NULL,
                     payload JSON NOT NULL,
+					event_date VARCHAR(7) NOT NULL,
                     event_id VARCHAR(40) NOT NULL,
                     aggregate_id VARCHAR(40) NOT NULL,
                     occurred_on TIMESTAMP NOT NULL,
                     correlation_id VARCHAR(255),
                     causation_id VARCHAR(255),
                     PRIMARY KEY (stream_id, version),
-					INDEX idx_event_id (event_id)
+					INDEX idx_event_date_id (event_date, event_id)
                 )`,
 			);
 
@@ -190,12 +192,13 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 
 			await connection.beginTransaction();
 			await connection.batch(
-				`INSERT INTO \`${collection}\` VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				`INSERT INTO \`${collection}\` VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 				envelopes.map(({ event, payload, metadata }) => [
 					stream.streamId,
 					metadata.version,
 					event,
 					JSON.stringify(payload),
+					metadata.eventId.yearMonth,
 					metadata.eventId.value,
 					metadata.aggregateId,
 					metadata.occurredOn,
@@ -217,6 +220,28 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 		} finally {
 			connection.release();
 		}
+	}
+
+	async getEnvelope({ streamId }: EventStream, version: number, pool?: IEventPool): Promise<EventEnvelope> {
+		const collection = EventCollection.get(pool);
+
+		const [entity] = await this.pool.query<Omit<MariaDBEventEntity, 'stream_id'>[]>(
+			`SELECT event, payload, event_id, aggregate_id, version, occurred_on, correlation_id, causation_id FROM \`${collection}\` WHERE stream_id = ? AND version = ?`,
+			[streamId, version],
+		);
+
+		if (!entity) {
+			throw new EventNotFoundException(streamId, version);
+		}
+
+		return EventEnvelope.from(entity.event, entity.payload, {
+			eventId: EventId.from(entity.event_id),
+			aggregateId: entity.aggregate_id,
+			version: entity.version,
+			occurredOn: entity.occurred_on,
+			correlationId: entity.correlation_id,
+			causationId: entity.causation_id,
+		});
 	}
 
 	async *getEnvelopes({ streamId }: EventStream, filter?: IEventFilter): AsyncGenerator<EventEnvelope[]> {
@@ -279,25 +304,59 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 		}
 	}
 
-	async getEnvelope({ streamId }: EventStream, version: number, pool?: IEventPool): Promise<EventEnvelope> {
-		const collection = EventCollection.get(pool);
+	async *getAllEnvelopes(filter: IAllEventsFilter): AsyncGenerator<EventEnvelope[]> {
+		const connection = this.pool.getConnection();
+		const collection = EventCollection.get(filter?.pool);
+		const yearMonths = this.getYearMonthRange(filter.since, filter.until);
 
-		const [entity] = await this.pool.query<Omit<MariaDBEventEntity, 'stream_id'>[]>(
-			`SELECT event, payload, event_id, aggregate_id, version, occurred_on, correlation_id, causation_id FROM \`${collection}\` WHERE stream_id = ? AND version = ?`,
-			[streamId, version],
-		);
+		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
-		if (!entity) {
-			throw new EventNotFoundException(streamId, version);
+		const query = `
+            SELECT event, payload, event_id, aggregate_id, version, occurred_on, correlation_id, causation_id
+            FROM \`${collection}\`
+            WHERE event_date IN (?)
+            ORDER BY event_date ASC, event_id ASC
+        `;
+
+		const params = [yearMonths];
+
+		const client = await connection;
+		const stream = client.queryStream(query, params);
+
+		try {
+			let batchedEvents: EventEnvelope[] = [];
+			for await (const {
+				event,
+				payload,
+				event_id,
+				aggregate_id,
+				version,
+				occurred_on,
+				correlation_id,
+				causation_id,
+			} of stream as unknown as Omit<MariaDBEventEntity, 'stream_id'>[]) {
+				batchedEvents.push(
+					EventEnvelope.from(event, payload, {
+						eventId: EventId.from(event_id),
+						aggregateId: aggregate_id,
+						version,
+						occurredOn: occurred_on,
+						correlationId: correlation_id,
+						causationId: causation_id,
+					}),
+				);
+				if (batchedEvents.length === batch) {
+					yield batchedEvents;
+					batchedEvents = [];
+				}
+			}
+			if (batchedEvents.length > 0) {
+				yield batchedEvents;
+			}
+		} catch (e) {
+			stream.destroy();
+		} finally {
+			await client.release();
 		}
-
-		return EventEnvelope.from(entity.event, entity.payload, {
-			eventId: EventId.from(entity.event_id),
-			aggregateId: entity.aggregate_id,
-			version: entity.version,
-			occurredOn: entity.occurred_on,
-			correlationId: entity.correlation_id,
-			causationId: entity.causation_id,
-		});
 	}
 }

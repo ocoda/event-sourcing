@@ -37,6 +37,10 @@ export class ULID extends Id {
 		return new Date(this.time);
 	}
 
+	get yearMonth(): string {
+		return this.date.toISOString().substring(0, 7);
+	}
+
 	static factory(): (dateSeed?: Date) => ULID {
 		const generator = monotonicFactory();
 		return (dateSeed?: Date) => new ULID(generator(dateSeed?.getTime()));

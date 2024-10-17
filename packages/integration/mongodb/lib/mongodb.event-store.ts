@@ -9,6 +9,7 @@ import {
 	EventStorePersistenceException,
 	EventStoreVersionConflictException,
 	type EventStream,
+	type IAllEventsFilter,
 	type IEvent,
 	type IEventCollection,
 	type IEventCollectionFilter,
@@ -42,7 +43,10 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 			const [existingCollection] = await this.database.listCollections({ name: collection }).toArray();
 			if (!existingCollection) {
 				const eventCollection = await this.database.createCollection<MongoDBEventEntity>(collection);
-				await eventCollection.createIndexes([{ key: { streamId: 1, version: 1 }, unique: true }]);
+				await eventCollection.createIndexes([
+					{ key: { streamId: 1, version: 1 }, unique: true },
+					{ key: { eventDate: 1, _id: 1 }, unique: true },
+				]);
 			}
 
 			return collection;
@@ -185,6 +189,7 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 					streamId: stream.streamId,
 					event,
 					payload,
+					eventDate: eventId.yearMonth,
 					...rest,
 				};
 			});
@@ -200,6 +205,50 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 					throw new EventStorePersistenceException(collection, error);
 			}
 		}
+	}
+
+	async getEnvelope({ streamId }: EventStream, version: number, pool?: IEventPool): Promise<EventEnvelope> {
+		const collection = EventCollection.get(pool);
+
+		const entity = await this.database
+			.collection<
+				Pick<
+					MongoDBEventEntity,
+					'_id' | 'event' | 'payload' | 'aggregateId' | 'version' | 'occurredOn' | 'correlationId' | 'causationId'
+				>
+			>(collection)
+			.findOne(
+				{
+					streamId,
+					version,
+				},
+				{
+					projection: {
+						_id: 1,
+						event: 1,
+						payload: 1,
+						eventId: 1,
+						aggregateId: 1,
+						version: 1,
+						occurredOn: 1,
+						correlationId: 1,
+						causationId: 1,
+					},
+				},
+			);
+
+		if (!entity) {
+			throw new EventNotFoundException(streamId, version);
+		}
+
+		return EventEnvelope.from(entity.event, entity.payload, {
+			eventId: EventId.from(entity._id),
+			aggregateId: entity.aggregateId,
+			version: entity.version,
+			occurredOn: entity.occurredOn,
+			correlationId: entity.correlationId,
+			causationId: entity.causationId,
+		});
 	}
 
 	async *getEnvelopes({ streamId }: EventStream, filter?: IEventFilter): AsyncGenerator<EventEnvelope[]> {
@@ -263,27 +312,27 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 		} while (hasNext);
 	}
 
-	async getEnvelope({ streamId }: EventStream, version: number, pool?: IEventPool): Promise<EventEnvelope> {
-		const collection = EventCollection.get(pool);
+	async *getAllEnvelopes(filter: IAllEventsFilter): AsyncGenerator<EventEnvelope[]> {
+		const collection = EventCollection.get(filter?.pool);
+		const yearMonths = this.getYearMonthRange(filter.since, filter.until);
 
-		const entity = await this.database
+		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
+
+		const cursor = this.database
 			.collection<
 				Pick<
 					MongoDBEventEntity,
 					'_id' | 'event' | 'payload' | 'aggregateId' | 'version' | 'occurredOn' | 'correlationId' | 'causationId'
 				>
 			>(collection)
-			.findOne(
+			.find(
+				{ eventDate: { $in: yearMonths } },
 				{
-					streamId,
-					version,
-				},
-				{
+					sort: { eventDate: 1, _id: 1 },
 					projection: {
 						_id: 1,
 						event: 1,
 						payload: 1,
-						eventId: 1,
 						aggregateId: 1,
 						version: 1,
 						occurredOn: 1,
@@ -291,19 +340,30 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 						causationId: 1,
 					},
 				},
+			)
+			.map(({ _id, event, payload, aggregateId, version, occurredOn, correlationId, causationId }) =>
+				EventEnvelope.from(event, payload, {
+					eventId: EventId.from(_id),
+					aggregateId,
+					version,
+					occurredOn,
+					correlationId,
+					causationId,
+				}),
 			);
 
-		if (!entity) {
-			throw new EventNotFoundException(streamId, version);
-		}
+		const entities = [];
+		let hasNext: boolean;
+		do {
+			const entity = await cursor.next();
+			hasNext = entity !== null;
 
-		return EventEnvelope.from(entity.event, entity.payload, {
-			eventId: EventId.from(entity._id),
-			aggregateId: entity.aggregateId,
-			version: entity.version,
-			occurredOn: entity.occurredOn,
-			correlationId: entity.correlationId,
-			causationId: entity.causationId,
-		});
+			hasNext && entities.push(entity);
+
+			if (entities.length > 0 && (entities.length === batch || !hasNext)) {
+				yield entities;
+				entities.length = 0;
+			}
+		} while (hasNext);
 	}
 }

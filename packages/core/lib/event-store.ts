@@ -129,4 +129,31 @@ export abstract class EventStore<TOptions = Omit<EventSourcingModuleOptions['eve
 	 * @description creates a range of YYYY-MM from since to until and gets all events in that range
 	 */
 	abstract getAllEnvelopes(filter: IAllEventsFilter): AsyncGenerator<EventEnvelope[]>;
+
+	protected getYearMonthRange(
+		sinceDate: { year: number; month: number },
+		untilDate?: { year: number; month: number },
+	): string[] {
+		const now = new Date();
+		const [untilYear, untilMonth] = untilDate
+			? [untilDate.year, untilDate.month]
+			: [now.getFullYear(), now.getMonth() + 1];
+		const since = Date.UTC(sinceDate.year, sinceDate.month - 1, 1, 0, 0, 0, 0);
+		const until = Date.UTC(untilYear, untilMonth, 0, 23, 59, 59, 999);
+
+		const yearMonthArray: string[] = [];
+		const currentDate = new Date(since);
+
+		// Continue looping until we pass the 'until' date
+		while (currentDate.getTime() <= until) {
+			const year = currentDate.getUTCFullYear();
+			const month = String(currentDate.getUTCMonth() + 1).padStart(2, '0'); // Convert month to 'MM' format
+			yearMonthArray.push(`${year}-${month}`);
+
+			// Move to the next month
+			currentDate.setUTCMonth(currentDate.getUTCMonth() + 1);
+		}
+
+		return yearMonthArray;
+	}
 }
