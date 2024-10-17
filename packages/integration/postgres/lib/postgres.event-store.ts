@@ -9,6 +9,7 @@ import {
 	EventStorePersistenceException,
 	EventStoreVersionConflictException,
 	type EventStream,
+	type IAllEventsFilter,
 	type IEvent,
 	type IEventCollection,
 	type IEventCollectionFilter,
@@ -48,6 +49,7 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
                     version INT NOT NULL,
                     event VARCHAR(80) NOT NULL,
                     payload JSONB NOT NULL,
+					event_date VARCHAR(7) NOT NULL,
                     event_id VARCHAR(40) NOT NULL,
                     aggregate_id VARCHAR(40) NOT NULL,
                     occurred_on TIMESTAMPTZ NOT NULL,
@@ -56,7 +58,9 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
                     PRIMARY KEY (stream_id, version)
                 )`,
 			);
-			await connection.query(`CREATE INDEX IF NOT EXISTS "idx_event_id" ON "${collection}" (event_id)`);
+			await connection.query(
+				`CREATE INDEX IF NOT EXISTS "idx_event_date_id" ON "${collection}" (event_date, event_id)`,
+			);
 			await connection.query('COMMIT');
 
 			return collection;
@@ -190,11 +194,11 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 
 			const entities = envelopes.map(
 				({ event, payload, metadata }) =>
-					`('${stream.streamId}', ${metadata.version}, '${event}', '${JSON.stringify(payload)}', '${metadata.eventId.value}', '${metadata.aggregateId}', '${metadata.occurredOn.toISOString()}', ${metadata.correlationId ?? null}, ${metadata.causationId ?? null})`,
+					`('${stream.streamId}', ${metadata.version}, '${event}', '${JSON.stringify(payload)}', '${metadata.eventId.yearMonth}', '${metadata.eventId.value}', '${metadata.aggregateId}', '${metadata.occurredOn.toISOString()}', ${metadata.correlationId ?? null}, ${metadata.causationId ?? null})`,
 			);
 
 			await this.client.query(`
-            INSERT INTO "${collection}" (stream_id, version, event, payload, event_id, aggregate_id, occurred_on, correlation_id, causation_id)
+            INSERT INTO "${collection}" (stream_id, version, event, payload, event_date, event_id, aggregate_id, occurred_on, correlation_id, causation_id)
 		    VALUES ${entities.join(',')}
 		`);
 
@@ -207,6 +211,41 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 					throw new EventStorePersistenceException(collection, error);
 			}
 		}
+	}
+
+	async getEnvelope({ streamId }: EventStream, version: number, pool?: IEventPool): Promise<EventEnvelope> {
+		const collection = EventCollection.get(pool);
+
+		const { rows: entities } = await this.client.query<
+			Pick<
+				PostgresEventEntity,
+				| 'event'
+				| 'payload'
+				| 'event_id'
+				| 'aggregate_id'
+				| 'version'
+				| 'occurred_on'
+				| 'correlation_id'
+				| 'causation_id'
+			>
+		>(
+			`SELECT event, payload, event_id, aggregate_id, version, occurred_on, correlation_id, causation_id FROM "${collection}" WHERE stream_id = $1 AND version = $2`,
+			[streamId, version],
+		);
+		const entity = entities[0];
+
+		if (!entity) {
+			throw new EventNotFoundException(streamId, version);
+		}
+
+		return EventEnvelope.from(entity.event, entity.payload, {
+			eventId: EventId.from(entity.event_id),
+			aggregateId: entity.aggregate_id,
+			version: entity.version,
+			occurredOn: entity.occurred_on,
+			correlationId: entity.correlation_id,
+			causationId: entity.causation_id,
+		});
 	}
 
 	async *getEnvelopes({ streamId }: EventStream, filter?: IEventFilter): AsyncGenerator<EventEnvelope[]> {
@@ -285,38 +324,75 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 		cursor.close(() => {});
 	}
 
-	async getEnvelope({ streamId }: EventStream, version: number, pool?: IEventPool): Promise<EventEnvelope> {
-		const collection = EventCollection.get(pool);
+	async *getAllEnvelopes(filter: IAllEventsFilter): AsyncGenerator<EventEnvelope[]> {
+		const collection = EventCollection.get(filter?.pool);
+		const yearMonths = this.getYearMonthRange(filter.since, filter.until);
 
-		const { rows: entities } = await this.client.query<
-			Pick<
-				PostgresEventEntity,
-				| 'event'
-				| 'payload'
-				| 'event_id'
-				| 'aggregate_id'
-				| 'version'
-				| 'occurred_on'
-				| 'correlation_id'
-				| 'causation_id'
-			>
-		>(
-			`SELECT event, payload, event_id, aggregate_id, version, occurred_on, correlation_id, causation_id FROM "${collection}" WHERE stream_id = $1 AND version = $2`,
-			[streamId, version],
+		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
+
+		// Build the SQL query with parameterized inputs
+		const query = `
+            SELECT event, payload, event_id, aggregate_id, version, occurred_on, correlation_id, causation_id
+            FROM "${collection}"
+            WHERE event_date = ANY ($1)
+            ORDER BY event_date ASC, event_id ASC
+        `;
+
+		const params = [yearMonths];
+
+		const cursor = this.client.query(
+			new Cursor<
+				Pick<
+					PostgresEventEntity,
+					| 'event'
+					| 'payload'
+					| 'event_id'
+					| 'aggregate_id'
+					| 'version'
+					| 'occurred_on'
+					| 'correlation_id'
+					| 'causation_id'
+				>
+			>(query, params),
 		);
-		const entity = entities[0];
 
-		if (!entity) {
-			throw new EventNotFoundException(streamId, version);
+		let done = false;
+
+		while (!done) {
+			const rows: Array<
+				Pick<
+					PostgresEventEntity,
+					| 'event'
+					| 'payload'
+					| 'event_id'
+					| 'aggregate_id'
+					| 'version'
+					| 'occurred_on'
+					| 'correlation_id'
+					| 'causation_id'
+				>
+			> = await new Promise((resolve, reject) =>
+				cursor.read(batch, (err, result) => (err ? reject(err) : resolve(result))),
+			);
+
+			if (rows.length === 0) {
+				done = true;
+			} else {
+				const entities = rows.map(
+					({ event, payload, event_id, aggregate_id, version, occurred_on, correlation_id, causation_id }) =>
+						EventEnvelope.from(event, payload, {
+							eventId: EventId.from(event_id),
+							aggregateId: aggregate_id,
+							version,
+							occurredOn: occurred_on,
+							correlationId: correlation_id,
+							causationId: causation_id,
+						}),
+				);
+				yield entities;
+			}
 		}
 
-		return EventEnvelope.from(entity.event, entity.payload, {
-			eventId: EventId.from(entity.event_id),
-			aggregateId: entity.aggregate_id,
-			version: entity.version,
-			occurredOn: entity.occurred_on,
-			correlationId: entity.correlation_id,
-			causationId: entity.causation_id,
-		});
+		cursor.close(() => {});
 	}
 }

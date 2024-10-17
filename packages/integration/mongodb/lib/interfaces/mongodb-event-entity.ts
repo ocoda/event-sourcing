@@ -3,6 +3,7 @@ import type { Document } from 'mongodb';
 
 export type MongoDBEventEntity = {
 	_id: string; // the eventId
+	eventDate: string; // YYYY-MM
 	streamId: string;
 	event: string;
 	payload: IEventPayload<IEvent>;

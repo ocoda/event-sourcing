@@ -10,6 +10,7 @@ import {
 import type {
 	EventEnvelopeMetadata,
 	EventStoreConfig,
+	IAllEventsFilter,
 	IEvent,
 	IEventCollection,
 	IEventCollectionFilter,
@@ -174,6 +175,29 @@ export class InMemoryEventStore extends EventStore<InMemoryEventStoreConfig> {
 		}
 	}
 
+	getEnvelope({ streamId }: EventStream, version: number, pool?: IEventPool): EventEnvelope {
+		const collection = EventCollection.get(pool);
+		const eventCollection = this.collections.get(collection) || [];
+
+		const entity = eventCollection.find(
+			({ streamId: eventStreamId, version: aggregateVersion }) =>
+				eventStreamId === streamId && aggregateVersion === version,
+		);
+
+		if (!entity) {
+			throw new EventNotFoundException(streamId, version);
+		}
+
+		return EventEnvelope.from(entity.event, entity.payload, {
+			eventId: entity.eventId,
+			aggregateId: entity.aggregateId,
+			version: entity.version,
+			occurredOn: entity.occurredOn,
+			correlationId: entity.correlationId,
+			causationId: entity.causationId,
+		});
+	}
+
 	async *getEnvelopes({ streamId }: EventStream, filter?: IEventFilter): AsyncGenerator<EventEnvelope[]> {
 		let entities: InMemoryEventEntity[] = [];
 		const collection = EventCollection.get(filter?.pool);
@@ -212,26 +236,49 @@ export class InMemoryEventStore extends EventStore<InMemoryEventStoreConfig> {
 		}
 	}
 
-	getEnvelope({ streamId }: EventStream, version: number, pool?: IEventPool): EventEnvelope {
-		const collection = EventCollection.get(pool);
-		const eventCollection = this.collections.get(collection) || [];
+	async *getAllEnvelopes(filter: IAllEventsFilter): AsyncGenerator<EventEnvelope[]> {
+		let entities: InMemoryEventEntity[] = [];
+		const collection = EventCollection.get(filter?.pool);
 
-		const entity = eventCollection.find(
-			({ streamId: eventStreamId, version: aggregateVersion }) =>
-				eventStreamId === streamId && aggregateVersion === version,
-		);
+		const { since, until } = this.getDateRange(filter.since, filter.until);
 
-		if (!entity) {
-			throw new EventNotFoundException(streamId, version);
+		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
+
+		entities = this.collections
+			.get(collection)
+			.filter(({ occurredOn }) => {
+				const delta = new Date(occurredOn).getTime();
+				return since <= delta && delta <= until;
+			})
+			.sort((a, b) => (a.eventId.value < b.eventId.value ? -1 : 1));
+
+		for (let i = 0; i < entities.length; i += batch) {
+			const chunk = entities.slice(i, i + batch);
+			yield chunk.map(({ event, payload, eventId, aggregateId, version, occurredOn, correlationId, causationId }) =>
+				EventEnvelope.from(event, payload, {
+					eventId,
+					aggregateId,
+					version,
+					occurredOn,
+					correlationId,
+					causationId,
+				}),
+			);
 		}
+	}
 
-		return EventEnvelope.from(entity.event, entity.payload, {
-			eventId: entity.eventId,
-			aggregateId: entity.aggregateId,
-			version: entity.version,
-			occurredOn: entity.occurredOn,
-			correlationId: entity.correlationId,
-			causationId: entity.causationId,
-		});
+	private getDateRange(
+		sinceDate: { year: number; month: number },
+		untilDate: { year: number; month: number },
+	): { since: number; until: number } {
+		const now = new Date();
+		const [untilYear, untilMonth] = untilDate
+			? [untilDate.year, untilDate.month]
+			: [now.getFullYear(), now.getMonth() + 1];
+
+		return {
+			since: Date.UTC(sinceDate.year, sinceDate.month - 1, 1, 0, 0, 0, 0),
+			until: Date.UTC(untilYear, untilMonth, 0, 23, 59, 59, 999),
+		};
 	}
 }
