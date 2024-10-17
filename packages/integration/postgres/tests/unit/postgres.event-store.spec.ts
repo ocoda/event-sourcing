@@ -259,6 +259,35 @@ describe(PostgresEventStore, () => {
 		}
 	});
 
+	it('should retrieve all event-envelopes since a specified time', async () => {
+		const seedAllEnvelopes = [...envelopesAccountA, ...envelopesAccountB].sort((a, b) =>
+			a.metadata.eventId.value < b.metadata.eventId.value ? -1 : 1,
+		);
+
+		const resolvedAllEnvelopes: EventEnvelope[] = [];
+		for await (const envelopes of eventStore.getAllEnvelopes({ since: { year: 2021, month: 1 } })) {
+			resolvedAllEnvelopes.push(...envelopes);
+		}
+
+		expect(resolvedAllEnvelopes).toHaveLength(envelopesAccountA.length + envelopesAccountB.length);
+
+		for (const [index, envelope] of resolvedAllEnvelopes.entries()) {
+			expect(envelope.event).toEqual(seedAllEnvelopes[index].event);
+			expect(envelope.payload).toEqual(seedAllEnvelopes[index].payload);
+			expect(envelope.metadata.aggregateId).toEqual(seedAllEnvelopes[index].metadata.aggregateId);
+			expect(envelope.metadata.eventId.value).toEqual(seedAllEnvelopes[index].metadata.eventId.value);
+			expect(envelope.metadata.version).toEqual(seedAllEnvelopes[index].metadata.version);
+		}
+	});
+
+	it('should retrieve all event-envelopes batched', async () => {
+		const resolvedBatchedEnvelopes: EventEnvelope[] = [];
+		for await (const envelopes of eventStore.getAllEnvelopes({ since: { year: 2021, month: 1 }, batch: 2 })) {
+			expect(envelopes.length).toBe(2);
+			resolvedBatchedEnvelopes.push(...envelopes);
+		}
+	});
+
 	it('should list collections', async () => {
 		await Promise.all([
 			eventStore.ensureCollection('a'),
