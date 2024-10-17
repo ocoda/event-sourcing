@@ -1,6 +1,12 @@
-import { Aggregate, AggregateRoot, EventHandler, MissingEventMetadataException } from '@ocoda/event-sourcing';
-import { Event, type IEvent } from '@ocoda/event-sourcing';
-import { getEventHandlerMetadata } from '@ocoda/event-sourcing/helpers';
+import {
+	Aggregate,
+	AggregateRoot,
+	Event,
+	EventHandler,
+	type IEvent,
+	MissingEventMetadataException,
+	getEventHandlerMetadata,
+} from '@ocoda/event-sourcing';
 
 describe('@EventHandler', () => {
 	@Event()
