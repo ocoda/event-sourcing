@@ -1,5 +1,16 @@
 # @ocoda/event-sourcing-postgres
 
+## 1.1.0.0.0
+
+### Minor Changes
+
+- [#371](https://github.com/ocoda/event-sourcing/pull/371) [`eff4abd`](https://github.com/ocoda/event-sourcing/commit/eff4abda2b44a7fbcb1be7bccde7fc9267e7fded) Thanks [@drieshooghe](https://github.com/drieshooghe)! - Support for a getAllEnvelopes method on the EventStore
+
+### Patch Changes
+
+- Updated dependencies [[`eff4abd`](https://github.com/ocoda/event-sourcing/commit/eff4abda2b44a7fbcb1be7bccde7fc9267e7fded)]:
+  - @ocoda/event-sourcing@1.1.0
+
 ## 1.0.2
 
 ### Patch Changes
