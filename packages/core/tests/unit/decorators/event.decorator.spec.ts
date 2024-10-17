@@ -1,5 +1,4 @@
-import { Event, type IEvent, InvalidEventStreamNameException } from '@ocoda/event-sourcing';
-import { getEventMetadata } from '@ocoda/event-sourcing/helpers';
+import { Event, type IEvent, InvalidEventStreamNameException, getEventMetadata } from '@ocoda/event-sourcing';
 
 describe('@Event', () => {
 	@Event('foo-created')

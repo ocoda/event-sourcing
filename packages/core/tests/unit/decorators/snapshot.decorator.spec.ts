@@ -4,8 +4,8 @@ import {
 	SNAPSHOT_METADATA,
 	Snapshot,
 	type SnapshotRepositoryMetadata,
+	getSnapshotMetadata,
 } from '@ocoda/event-sourcing';
-import { getSnapshotMetadata } from '@ocoda/event-sourcing/helpers';
 
 describe('@Snapshot', () => {
 	class Account extends AggregateRoot {}

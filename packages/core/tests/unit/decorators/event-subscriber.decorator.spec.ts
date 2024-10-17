@@ -1,5 +1,4 @@
-import { EventSubscriber, type IEvent, type IEventSubscriber } from '@ocoda/event-sourcing';
-import { getEventSubscriberMetadata } from '@ocoda/event-sourcing/helpers';
+import { EventSubscriber, type IEvent, type IEventSubscriber, getEventSubscriberMetadata } from '@ocoda/event-sourcing';
 
 describe('@EventSubscriber', () => {
 	class FooEvent implements IEvent {}

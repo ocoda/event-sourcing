@@ -1,5 +1,4 @@
 import type { Type } from '@nestjs/common';
-import { getAggregateMetadata } from '@ocoda/event-sourcing/helpers';
 import { DEFAULT_BATCH_SIZE, StreamReadingDirection } from '../../constants';
 import {
 	SnapshotNotFoundException,
@@ -7,6 +6,7 @@ import {
 	SnapshotStorePersistenceException,
 	SnapshotStoreVersionConflictException,
 } from '../../exceptions';
+import { getAggregateMetadata } from '../../helpers';
 import type {
 	ILatestSnapshotFilter,
 	ISnapshot,

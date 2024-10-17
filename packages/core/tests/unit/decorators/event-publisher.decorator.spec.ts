@@ -1,5 +1,4 @@
-import { EventPublisher, type IEventPublisher } from '@ocoda/event-sourcing';
-import { getEventPublisherMetadata } from '@ocoda/event-sourcing/helpers';
+import { EventPublisher, type IEventPublisher, getEventPublisherMetadata } from '@ocoda/event-sourcing';
 
 describe('@EventPublisher', () => {
 	@EventPublisher()

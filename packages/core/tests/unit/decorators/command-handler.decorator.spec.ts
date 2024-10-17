@@ -1,5 +1,10 @@
-import { CommandHandler, type ICommand, type ICommandHandler } from '@ocoda/event-sourcing';
-import { getCommandHandlerMetadata, getCommandMetadata } from '@ocoda/event-sourcing/helpers';
+import {
+	CommandHandler,
+	type ICommand,
+	type ICommandHandler,
+	getCommandHandlerMetadata,
+	getCommandMetadata,
+} from '@ocoda/event-sourcing';
 
 describe('@CommandHandler', () => {
 	class TestCommand implements ICommand {}
