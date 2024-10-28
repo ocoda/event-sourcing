@@ -16,7 +16,7 @@
 		"benchmark:report": "turbo benchmark:report"
 	},
 	"engines": {
-		"node": ">= 18.20.4"
+		"node": ">= 20.18.0"
 	},
 	"peerDependencies": {
 		"@nestjs/common": "^10.0.0",
