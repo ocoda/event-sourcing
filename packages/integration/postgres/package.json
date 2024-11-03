@@ -21,8 +21,8 @@
 		"node": ">= 18.20.4"
 	},
 	"dependencies": {
-		"pg": "^8.13.0",
-		"pg-cursor": "^2.12.0"
+		"pg": "^8.13.1",
+		"pg-cursor": "^2.12.1"
 	},
 	"peerDependencies": {
 		"@nestjs/core": "^10.0.0",
@@ -31,8 +31,8 @@
 		"rxjs": "^7.2.0"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "1.9.3",
-		"@faker-js/faker": "^9.0.3",
+		"@biomejs/biome": "1.9.4",
+		"@faker-js/faker": "^9.1.0",
 		"@nestjs/common": "10.4.6",
 		"@nestjs/core": "10.4.6",
 		"@nestjs/platform-express": "10.4.6",
@@ -40,7 +40,7 @@
 		"@ocoda/event-sourcing-config": "workspace:*",
 		"@ocoda/event-sourcing-testing": "workspace:*",
 		"@swc-node/register": "^1.10.9",
-		"@swc/core": "1.7.35",
+		"@swc/core": "1.7.42",
 		"@swc/jest": "0.2.36",
 		"@types/jest": "29.5.14",
 		"@types/node": "20.17.1",
@@ -50,7 +50,7 @@
 		"jest-mock": "29.7.0",
 		"reflect-metadata": "0.2.2",
 		"rxjs": "7.8.1",
-		"tsup": "^8.3.0",
+		"tsup": "^8.3.5",
 		"typescript": "5.6.3"
 	},
 	"repository": {
