@@ -7,7 +7,7 @@ Thank you for considering contributing to this project! We appreciate your help 
 ### Prerequisites
 ```shell
 node: "^>=18.20.4"
-pnpm: "^9.12.1"
+pnpm: "^9.12.3"
 # otherwise, your build will fail
 ```
 
