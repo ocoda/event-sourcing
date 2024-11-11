@@ -18,7 +18,7 @@
 		"url": "https://github.com/ocoda/event-sourcing/issues"
 	},
 	"engines": {
-		"node": ">= 18.20.4"
+		"node": ">= 22.11.0"
 	},
 	"dependencies": {
 		"mongodb": "^6.10.0"
