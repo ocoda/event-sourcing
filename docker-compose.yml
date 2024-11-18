@@ -3,7 +3,7 @@ version: '3.3'
 services:
   mongodb:
     container_name: es-mongodb
-    image: mongo:7
+    image: mongo:8
     ports:
       - 27017:27017
     volumes:
