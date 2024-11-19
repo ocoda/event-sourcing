@@ -29,10 +29,10 @@
 		"@changesets/changelog-github": "^0.5.0",
 		"@changesets/cli": "^2.27.9",
 		"@faker-js/faker": "^9.2.0",
-		"@nestjs/common": "10.4.7",
-		"@nestjs/core": "10.4.7",
-		"@nestjs/platform-express": "10.4.7",
-		"@nestjs/testing": "10.4.7",
+		"@nestjs/common": "10.4.8",
+		"@nestjs/core": "10.4.8",
+		"@nestjs/platform-express": "10.4.8",
+		"@nestjs/testing": "10.4.8",
 		"@swc-node/register": "^1.10.9",
 		"@swc/core": "1.9.2",
 		"@swc/jest": "0.2.37",
@@ -42,7 +42,7 @@
 		"jest-mock": "29.7.0",
 		"reflect-metadata": "0.2.2",
 		"rxjs": "7.8.1",
-		"turbo": "^2.2.3",
+		"turbo": "^2.3.0",
 		"typescript": "5.6.3"
 	},
 	"repository": {
