@@ -1,5 +1,14 @@
 # @ocoda/event-sourcing-postgres
 
+## 1.1.2
+
+### Patch Changes
+
+- [#388](https://github.com/ocoda/event-sourcing/pull/388) [`154d20a`](https://github.com/ocoda/event-sourcing/commit/154d20ae3a4845e273c47d970c1b2f3f25daf1f0) Thanks [@renovate](https://github.com/apps/renovate)! - Patch update dependencies
+
+- Updated dependencies [[`154d20a`](https://github.com/ocoda/event-sourcing/commit/154d20ae3a4845e273c47d970c1b2f3f25daf1f0)]:
+  - @ocoda/event-sourcing@1.1.2
+
 ## 1.1.1
 
 ### Patch Changes
