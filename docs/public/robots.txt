@@ -1,0 +1,9 @@
+# *
+User-agent: *
+Allow: /
+
+# Host
+Host: https://ocoda.github.io/event-sourcing/
+
+# Sitemaps
+Sitemap: https://ocoda.github.io/event-sourcing/sitemap.xml

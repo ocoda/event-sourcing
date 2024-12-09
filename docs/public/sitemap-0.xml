@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:news="http://www.google.com/schemas/sitemap-news/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml" xmlns:mobile="http://www.google.com/schemas/sitemap-mobile/1.0" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1" xmlns:video="http://www.google.com/schemas/sitemap-video/1.1">
+<url><loc>https://ocoda.github.io/event-sourcing</loc><lastmod>2024-12-09T18:41:34.347Z</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
+<url><loc>https://ocoda.github.io/event-sourcing/about-ocoda</loc><lastmod>2024-12-09T18:41:34.347Z</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
+<url><loc>https://ocoda.github.io/event-sourcing/advanced/event-pubsub</loc><lastmod>2024-12-09T18:41:34.347Z</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
+<url><loc>https://ocoda.github.io/event-sourcing/advanced/event-serialization</loc><lastmod>2024-12-09T18:41:34.347Z</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
+<url><loc>https://ocoda.github.io/event-sourcing/advanced/multitenancy</loc><lastmod>2024-12-09T18:41:34.347Z</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
+<url><loc>https://ocoda.github.io/event-sourcing/further-reading</loc><lastmod>2024-12-09T18:41:34.347Z</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
+<url><loc>https://ocoda.github.io/event-sourcing/patterns/cqrs</loc><lastmod>2024-12-09T18:41:34.347Z</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
+<url><loc>https://ocoda.github.io/event-sourcing/patterns/ddd</loc><lastmod>2024-12-09T18:41:34.347Z</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
+<url><loc>https://ocoda.github.io/event-sourcing/patterns/event-sourcing</loc><lastmod>2024-12-09T18:41:34.347Z</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
+<url><loc>https://ocoda.github.io/event-sourcing/start/aggregates</loc><lastmod>2024-12-09T18:41:34.347Z</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
+<url><loc>https://ocoda.github.io/event-sourcing/start/commands</loc><lastmod>2024-12-09T18:41:34.347Z</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
+<url><loc>https://ocoda.github.io/event-sourcing/start/events</loc><lastmod>2024-12-09T18:41:34.347Z</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
+<url><loc>https://ocoda.github.io/event-sourcing/start/install</loc><lastmod>2024-12-09T18:41:34.347Z</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
+<url><loc>https://ocoda.github.io/event-sourcing/start/queries</loc><lastmod>2024-12-09T18:41:34.347Z</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
+<url><loc>https://ocoda.github.io/event-sourcing/start/repositories</loc><lastmod>2024-12-09T18:41:34.347Z</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
+<url><loc>https://ocoda.github.io/event-sourcing/start/snapshots</loc><lastmod>2024-12-09T18:41:34.347Z</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
+<url><loc>https://ocoda.github.io/event-sourcing/start/value-objects</loc><lastmod>2024-12-09T18:41:34.347Z</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
+<url><loc>https://ocoda.github.io/event-sourcing/under-the-hood/envelopes</loc><lastmod>2024-12-09T18:41:34.347Z</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
+<url><loc>https://ocoda.github.io/event-sourcing/under-the-hood/event-store</loc><lastmod>2024-12-09T18:41:34.347Z</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
+<url><loc>https://ocoda.github.io/event-sourcing/under-the-hood/snapshot-store</loc><lastmod>2024-12-09T18:41:34.347Z</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
+<url><loc>https://ocoda.github.io/event-sourcing/under-the-hood/streams</loc><lastmod>2024-12-09T18:41:34.347Z</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
+</urlset>
