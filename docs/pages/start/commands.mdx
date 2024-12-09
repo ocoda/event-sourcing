@@ -6,8 +6,7 @@ import { Steps } from 'nextra/components';
 
 # Commands & Command Handlers
 
-
- A **Command** represents a user or system's intent to perform a specific action within your domain. Commands are part of the **CQRS** pattern, where they express actions that change the state of the system. Each command is handled by a **CommandHandler**, which contains the logic for executing the command, such as interacting with the domain's aggregates and repositories.
+A **Command** represents a user or system's intent to perform a specific action within your domain. Commands are part of the **CQRS** pattern, where they express actions that change the state of the system. Each command is handled by a **CommandHandler**, which contains the logic for executing the command, such as interacting with the domain's aggregates and repositories.
 
 Commands should clearly indicate the **intent** and ideally refer to the aggregate they operate on. The name of a command should use imperative language to describe the action, such as `OpenAccountCommand` or `CreditAccountCommand`.
 

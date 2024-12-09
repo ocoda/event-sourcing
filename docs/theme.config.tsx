@@ -1,7 +1,5 @@
 
-import type { DocsThemeConfig } from 'nextra-theme-docs'
-// biome-ignore lint/correctness/noUnusedImports: <explanation>
-import React from 'react';
+import { useConfig, type DocsThemeConfig } from 'nextra-theme-docs'
 
 const config: DocsThemeConfig = {
   logo: <>
@@ -15,7 +13,7 @@ const config: DocsThemeConfig = {
   },
   docsRepositoryBase: 'https://github.com/ocoda/event-sourcing/tree/master/docs',
   footer: {
-    text: (
+    content: (
         <span>
           MIT {new Date().getFullYear()} ©{' '}
           <a href="https://nextra.site" target="_blank" rel="noreferrer">
@@ -25,11 +23,14 @@ const config: DocsThemeConfig = {
         </span>
       )
   },
-  useNextSeoProps(...rest) {
-    console.log(rest)
-    return {
-        titleTemplate: '%s | Ocoda Event Sourcing',
-      }
+  head: function useHead() {
+    const config = useConfig()
+    const title = `${config.title} – Ocoda Event Sourcing`
+    return (
+      <>
+        <title>{title}</title>
+      </>
+    )
   },
 }
 
