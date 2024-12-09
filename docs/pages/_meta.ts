@@ -5,4 +5,5 @@ export default {
 	advanced: 'Advanced',
 	'under-the-hood': 'Under the hood',
 	'further-reading': 'Further reading',
+	'about-ocoda': 'About Ocoda',
 };
