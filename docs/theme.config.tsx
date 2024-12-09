@@ -29,6 +29,7 @@ const config: DocsThemeConfig = {
 		return (
 			<>
 				<title>{title}</title>
+        <meta name="google-site-verification" content="IJJJM6mYKx0BG_eTPjp5Eudq2d4p3aH3hEB9jDVJh1U" />
 			</>
 		);
 	},
