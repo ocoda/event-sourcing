@@ -8,6 +8,7 @@
 	"scripts": {
 		"docs:dev": "next",
 		"docs:build": "next build",
+		"postdocs:build": "next-sitemap",
 		"docs:start": "next start",
 		"ci": "biome ci",
 		"format": "biome format --write",
@@ -15,6 +16,7 @@
 	},
 	"dependencies": {
 		"next": "^15.0.3",
+		"next-sitemap": "^4.2.3",
 		"nextra": "^3.2.5",
 		"nextra-theme-docs": "^3.2.5",
 		"react": "^18.3.1",
