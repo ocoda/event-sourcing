@@ -21,8 +21,8 @@
 		"node": ">= 18.20.4"
 	},
 	"dependencies": {
-		"@aws-sdk/client-dynamodb": "3.716.0",
-		"@aws-sdk/util-dynamodb": "3.716.0"
+		"@aws-sdk/client-dynamodb": "3.721.0",
+		"@aws-sdk/util-dynamodb": "3.721.0"
 	},
 	"peerDependencies": {
 		"@nestjs/core": "^10.0.0",
