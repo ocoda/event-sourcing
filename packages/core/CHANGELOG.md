@@ -1,5 +1,11 @@
 # @ocoda/event-sourcing
 
+## 1.1.4
+
+### Patch Changes
+
+- [#400](https://github.com/ocoda/event-sourcing/pull/400) [`f83eb04`](https://github.com/ocoda/event-sourcing/commit/f83eb045648f107282761f807d870f8844df2bd9) Thanks [@renovate](https://github.com/apps/renovate)! - Patch update dependencies
+
 ## 1.1.3
 
 ### Patch Changes
