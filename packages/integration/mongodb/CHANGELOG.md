@@ -1,5 +1,14 @@
 # @ocoda/event-sourcing-mongodb
 
+## 1.1.5
+
+### Patch Changes
+
+- [#402](https://github.com/ocoda/event-sourcing/pull/402) [`2ea7e18`](https://github.com/ocoda/event-sourcing/commit/2ea7e1849fe3ac4b623246b7662f0e6480be4594) Thanks [@renovate](https://github.com/apps/renovate)! - Patch update dependencies
+
+- Updated dependencies [[`2ea7e18`](https://github.com/ocoda/event-sourcing/commit/2ea7e1849fe3ac4b623246b7662f0e6480be4594)]:
+  - @ocoda/event-sourcing@1.1.5
+
 ## 1.1.4
 
 ### Patch Changes
