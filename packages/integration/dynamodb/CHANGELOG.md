@@ -1,5 +1,14 @@
 # @ocoda/event-sourcing-dynamodb
 
+## 1.1.6
+
+### Patch Changes
+
+- [#407](https://github.com/ocoda/event-sourcing/pull/407) [`475513a`](https://github.com/ocoda/event-sourcing/commit/475513a6eaa92d3e8e8b2383f539a7518264fd5b) Thanks [@renovate](https://github.com/apps/renovate)! - Patch update dependencies
+
+- Updated dependencies [[`475513a`](https://github.com/ocoda/event-sourcing/commit/475513a6eaa92d3e8e8b2383f539a7518264fd5b)]:
+  - @ocoda/event-sourcing@1.1.6
+
 ## 1.1.5
 
 ### Patch Changes
