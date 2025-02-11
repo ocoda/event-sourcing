@@ -27,14 +27,14 @@
 	"devDependencies": {
 		"@biomejs/biome": "1.9.4",
 		"@changesets/changelog-github": "^0.5.0",
-		"@changesets/cli": "^2.27.11",
+		"@changesets/cli": "^2.27.12",
 		"@faker-js/faker": "^9.4.0",
 		"@nestjs/common": "10.4.15",
 		"@nestjs/core": "10.4.15",
 		"@nestjs/platform-express": "10.4.15",
 		"@nestjs/testing": "10.4.15",
 		"@swc-node/register": "^1.10.9",
-		"@swc/core": "1.10.8",
+		"@swc/core": "1.10.15",
 		"@swc/jest": "0.2.37",
 		"@types/jest": "29.5.14",
 		"@types/node": "20.17.6",
@@ -42,7 +42,7 @@
 		"jest-mock": "29.7.0",
 		"reflect-metadata": "0.2.2",
 		"rxjs": "7.8.1",
-		"turbo": "^2.3.3",
+		"turbo": "^2.4.1",
 		"typescript": "5.7.3"
 	},
 	"repository": {
