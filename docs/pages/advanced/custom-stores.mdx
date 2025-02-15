@@ -1,0 +1,161 @@
+---
+title: Custom Event and Snapshot Stores
+---
+
+import { Callout } from 'nextra/components'
+ 
+# Custom Event and Snapshot Stores
+
+## How to create your own Event Store
+To create and register your own Event Store implementation you'll need an EventStore class and a configuration interface to be able to register it in the module.
+
+#### Create a configuration
+The first thing you need to do to be able to register your Event Store is to create a configuration interface.
+It should extend the `EventStoreConfig` interface and define the EventStore you're about to create as the driver, along with additional parameters you'll need to initialize it.
+
+```typescript
+import type { Type } from '@nestjs/common';
+import type { EventStoreConfig } from '@ocoda/event-sourcing';
+import type { FooEventStore } from './foo.event-store';
+
+export interface FooEventStoreConfig extends EventStoreConfig {
+	driver: Type<FooEventStore>;
+	// Add any additional parameters you need to initialize your Event Store
+	// e.g. a connection string
+}
+```
+
+#### Create an Event Store
+Secondly you'll need to create your Event Store which extends the `EventStore` class and implements the required methods.
+If an existing integration suits your needs, but misses only a few things, you could also extend an existing integration EventStore.
+
+```typescript
+import { EventStore } from '@ocoda/event-sourcing';
+import type { FooEventStoreConfig } from './foo-event-store-config';
+
+export class FooEventStore extends EventStore<FooEventStoreConfig> {
+	public async connect(): Promise<void> {
+		// Connect to your Event Store
+	}
+
+	public async disconnect(): Promise<void> {
+		// Disconnect from your Event Store
+	}
+
+	public async ensureCollection(pool?: IEventPool): Promise<void> {
+		// Ensure the collection exists in your Event Store
+	}
+
+	public async *listCollections(filter?: IEventCollectionFilter): AsyncGenerator<string> {
+		// List all collections in your Event Store
+	}
+
+	async getEvent({ streamId }: EventStream, version: number, pool?: IEventPool): Promise<IEvent> {
+		// Get an event from your Event Store
+	}
+
+	... // The other methods
+}
+```
+#### Register your Event Store
+Once you have that, you can register your EventStore in the module, while providing the configuration for it so the module knows that it's an EventStore.
+
+```typescript
+import { Module } from '@nestjs/common';
+import { EventSourcingModule } from '@ocoda/event-sourcing';
+import { FooEventStore } from './foo.event-store';
+import type { FooEventStoreConfig } from './foo-event-store-config';
+
+@Module({
+	imports: [
+		EventSourcingModule.forRootAsync<FooEventStoreConfig>({
+			useFactory: () => ({
+				events: [...Events],
+				eventStore: {
+					driver: FooEventStore,
+					... // the additional parameters from your configuration
+				}
+			}),
+		}),
+	],
+	providers: [...],
+	controllers: [...],
+})
+class AppModule {}
+```
+
+---
+
+## How to create your own Snapshot Store
+Creating a custom snapshot store follows the same pattern as described above.
+
+#### Create a configuration
+
+```typescript
+import type { Type } from '@nestjs/common';
+import type { SnapshotStoreConfig } from '@ocoda/event-sourcing';
+
+export interface FooSnapshotStoreConfig extends SnapshotStoreConfig {
+	driver: Type<FooSnapshotStore>;
+	// Add any additional parameters you need to initialize your Snapshot Store
+	// e.g. a connection string
+}
+```
+
+#### Create a Snapshot Store
+```typescript
+import { SnapshotStore } from '@ocoda/event-sourcing';
+import type { FooSnapshotStoreConfig } from './foo-snapshot-store-config';
+
+export class FooSnapshotStore extends SnapshotStore<FooSnapshotStoreConfig> {
+	public async connect(): Promise<void> {
+		// Connect to your Snapshot Store
+	}
+
+	public async disconnect(): Promise<void> {
+		// Disconnect from your Snapshot Store
+	}
+
+	public async ensureCollection(pool?: ISnapshotPool): Promise<void> {
+		// Ensure the collection exists in your Snapshot Store
+	}
+
+	public async *listCollections(filter?: ISnapshotCollectionFilter): AsyncGenerator<string> {
+		// List all collections in your Snapshot Store
+	}
+
+	async getEvent<A extends AggregateRoot>({ streamId }: SnapshotStream, version: number, pool?: ISnapshotPool): Promise<ISnapshot<A>> {
+		// Get a snapshot from your Snapshot Store
+	}
+
+	... // The other methods
+}
+```
+
+
+#### Register your Snapshot Store
+
+```typescript
+import { Module } from '@nestjs/common';
+import { EventSourcingModule } from '@ocoda/event-sourcing';
+import { FooSnapshotStore } from './foo.snapshot-store';
+import type { FooSnapshotStoreConfig } from './foo-snapshot-store-config';
+
+@Module({
+	imports: [
+		EventSourcingModule.forRootAsync<FooEventStoreConfig, FooSnapshotStoreConfig>({
+			useFactory: () => ({
+				events: [...Events],
+				eventStore: { ... },
+				snapshotStore: {
+					driver: FooSnapshotStore,
+					... // the additional parameters from your configuration
+				}
+			}),
+		}),
+	],
+	providers: [...],
+	controllers: [...],
+})
+class AppModule {}
+```
