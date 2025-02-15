@@ -1,5 +1,19 @@
 # @ocoda/event-sourcing-postgres
 
+## 2.0.0
+
+### Major Changes
+
+- [#406](https://github.com/ocoda/event-sourcing/pull/406) [`d22f846`](https://github.com/ocoda/event-sourcing/commit/d22f8463febe06e43282a10c6fcafdd43a9877e7) Thanks [@renovate](https://github.com/apps/renovate)! - Major bump NestJS dependencies
+
+  - Drops support for NodeJS 18 as it is no longer supported by NestJS v11
+  - Bumps dev dependencies
+
+### Patch Changes
+
+- Updated dependencies [[`d22f846`](https://github.com/ocoda/event-sourcing/commit/d22f8463febe06e43282a10c6fcafdd43a9877e7)]:
+  - @ocoda/event-sourcing@2.0.0
+
 ## 1.1.6
 
 ### Patch Changes
