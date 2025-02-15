@@ -6,7 +6,7 @@
 	"private": true,
 	"keywords": [],
 	"scripts": {
-		"docs:dev": "next",
+		"docs:dev": "next dev --turbopack",
 		"docs:build": "next build",
 		"postdocs:build": "next-sitemap",
 		"docs:start": "next start",
