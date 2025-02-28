@@ -11,8 +11,8 @@
 		"benchmark:report": "node report-benchmark.js"
 	},
 	"dependencies": {
-		"@nestjs/common": "^11.0.9",
-		"@nestjs/core": "^11.0.9",
+		"@nestjs/common": "^11.0.11",
+		"@nestjs/core": "^11.0.11",
 		"@ocoda/event-sourcing": "workspace:*",
 		"@ocoda/event-sourcing-dynamodb": "workspace:*",
 		"@ocoda/event-sourcing-example": "workspace:*",
@@ -20,7 +20,7 @@
 		"@ocoda/event-sourcing-mongodb": "workspace:*",
 		"@ocoda/event-sourcing-postgres": "workspace:*",
 		"reflect-metadata": "^0.2.0",
-		"rxjs": "^7.8.1"
+		"rxjs": "^7.8.2"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "1.9.4",
@@ -28,7 +28,7 @@
 		"@ocoda/event-sourcing-config": "workspace:*",
 		"@types/node": "20.17.6",
 		"artillery": "^2.0.22",
-		"tsup": "^8.3.6",
-		"typescript": "5.7.3"
+		"tsup": "^8.4.0",
+		"typescript": "5.8.2"
 	}
 }
