@@ -148,8 +148,8 @@ export class HandlersLoader implements OnApplicationBootstrap {
 	private registerEventSerializers() {
 		for (const event of this.options?.events || []) {
 			const handler = this.handlers.get(HandlerType.SERIALIZATION)?.find(({ metatype }) => {
-				const { event: registeredEvent } = getEventSerializerMetadata(metatype as Type<IEventSerializer>);
-				return registeredEvent === event;
+				const { event: serializerEvent } = getEventSerializerMetadata(metatype as Type<IEventSerializer>);
+				return serializerEvent === event;
 			});
 
 			const serializer =
