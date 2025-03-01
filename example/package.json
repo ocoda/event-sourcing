@@ -19,6 +19,7 @@
 	},
 	"devDependencies": {
 		"@ocoda/event-sourcing-config": "workspace:*",
+		"tsup": "^8.4.0",
 		"typescript": "5.8.2"
 	}
 }
