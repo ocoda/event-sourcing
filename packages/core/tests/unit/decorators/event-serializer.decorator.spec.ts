@@ -14,7 +14,7 @@ describe('@EventSerializer', () => {
 	}
 
 	it('should specify which event the event-serializer serializes', () => {
-		const event: IEvent = getEventSerializerMetadata(AccountCreatedEventSerializer);
+		const { event } = getEventSerializerMetadata(AccountCreatedEventSerializer);
 		expect(event).toEqual(AccountCreatedEvent);
 	});
 });
