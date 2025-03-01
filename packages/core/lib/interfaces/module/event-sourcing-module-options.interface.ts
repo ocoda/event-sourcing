@@ -11,7 +11,6 @@ export interface EventSourcingModuleOptions<
 	events: Type<IEvent>[];
 	eventStore?: TEventStoreConfig;
 	snapshotStore?: TSnapshotStoreConfig;
-	disableDefaultSerializer?: boolean;
 }
 
 export interface EventSourcingOptionsFactory<
