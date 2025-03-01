@@ -152,8 +152,7 @@ export class HandlersLoader implements OnApplicationBootstrap {
 				return serializerEvent === event;
 			});
 
-			const serializer =
-				handler?.instance || (!this.options.disableDefaultSerializer && DefaultEventSerializer.for(event));
+			const serializer = handler?.instance || DefaultEventSerializer.for(event);
 
 			this.eventMap.register(event, serializer as IEventSerializer);
 		}
