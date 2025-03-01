@@ -1,27 +1,28 @@
-import { Test, type TestingModuleBuilder, type TestingModule } from '@nestjs/testing';
 import { DiscoveryService } from '@nestjs/core';
-import { HandlersLoader } from '@ocoda/event-sourcing/handlers.loader';
+import type { InstanceWrapper } from '@nestjs/core/injector/instance-wrapper';
+import { Test, type TestingModule, type TestingModuleBuilder } from '@nestjs/testing';
 import {
-	CommandBus,
-	QueryBus,
-	EventStore,
-	EventMap,
-	type CommandHandler,
-	type QueryHandler,
-	type EventSubscriber,
-	type EventPublisher,
-	type EventSerializer,
-	EVENT_SOURCING_OPTIONS,
-	EVENT_SUBSCRIBER_METADATA,
-	QUERY_HANDLER_METADATA,
 	COMMAND_HANDLER_METADATA,
 	COMMAND_METADATA,
-	QUERY_METADATA,
+	CommandBus,
+	type CommandHandler,
 	EVENT_METADATA,
 	EVENT_PUBLISHER_METADATA,
 	EVENT_SERIALIZER_METADATA,
+	EVENT_SOURCING_OPTIONS,
+	EVENT_SUBSCRIBER_METADATA,
+	EventMap,
+	type EventPublisher,
+	type EventSerializer,
 	type EventSourcingModuleOptions,
+	EventStore,
+	type EventSubscriber,
+	QUERY_HANDLER_METADATA,
+	QUERY_METADATA,
+	QueryBus,
+	type QueryHandler,
 } from '@ocoda/event-sourcing';
+import { EventBus } from '@ocoda/event-sourcing/event-bus';
 import {
 	MissingCommandHandlerMetadataException,
 	MissingCommandMetadataException,
@@ -29,8 +30,7 @@ import {
 	MissingQueryHandlerMetadataException,
 	MissingQueryMetadataException,
 } from '@ocoda/event-sourcing/exceptions';
-import { EventBus } from '@ocoda/event-sourcing/event-bus';
-import type { InstanceWrapper } from '@nestjs/core/injector/instance-wrapper';
+import { HandlersLoader } from '@ocoda/event-sourcing/handlers.loader';
 
 describe('HandlersLoader', () => {
 	let moduleBuilder: TestingModuleBuilder;
