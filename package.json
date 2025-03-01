@@ -5,6 +5,7 @@
 	"license": "MIT",
 	"private": true,
 	"scripts": {
+		"dev": "turbo dev",
 		"build": "turbo build",
 		"docs:build": "turbo docs:build",
 		"test": "turbo test",

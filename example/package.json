@@ -6,6 +6,7 @@
 		"access": "public"
 	},
 	"scripts": {
+		"dev": "tsup --onSuccess \"node dist/main.js\"",
 		"ci": "biome ci",
 		"format": "biome format --write",
 		"lint": "biome check --write"
