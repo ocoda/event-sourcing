@@ -16,6 +16,7 @@ import {
 	QueryHandlers,
 	SnapshotRepositories,
 } from './app.providers';
+import { AccountOpenedEventSerializer } from './domain/events/account-opened.event-serializer';
 
 @Module({
 	imports: [
@@ -40,6 +41,7 @@ import {
 		...SnapshotRepositories,
 		...EventSubscribers,
 		...EventPublishers,
+		AccountOpenedEventSerializer,
 	],
 	controllers: [...Controllers],
 })
