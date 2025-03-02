@@ -49,6 +49,10 @@ This library makes a distinction between the types for pools and for collections
 
   ```typescript copy
     await this.eventStore.appendEvents(stream, account.version, events, 'tenant-1');
+    await this.eventStore.getEvents(eventStream, {
+      fromVersion: account.version + 1,
+      pool: 'tenant-1'
+    });
     await this.accountSnapshotRepository.save(accountId, account, 'tenant-1');
     await this.accountSnapshotRepository.load(accountId, 'tenant-1');
   ```
