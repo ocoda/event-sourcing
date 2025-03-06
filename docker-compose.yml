@@ -46,3 +46,9 @@ services:
     volumes:
       - type: tmpfs
         target: /var/lib/mysql
+
+  redis:
+    container_name: es-redis
+    image: redis:latest
+    ports:
+      - 6379:6379
