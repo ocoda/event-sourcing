@@ -1,0 +1,59 @@
+{
+	"name": "@ocoda/event-sourcing-redis",
+	"version": "2.1.0",
+	"description": "NestJS Event Sourcing Library (@redis)",
+	"author": "Dries Hooghe <dries@drieshooghe.com>",
+	"license": "MIT",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"scripts": {
+		"build": "rm -rf dist && tsup lib/index.ts --format cjs --dts",
+		"test": "jest --config jest.config.js",
+		"test:cov": "jest --config jest.config.js --coverage --collectCoverageFrom=lib/**/*.ts",
+		"ci": "biome ci",
+		"format": "biome format --write",
+		"lint": "biome check --write"
+	},
+	"bugs": {
+		"url": "https://github.com/ocoda/event-sourcing/issues"
+	},
+	"engines": {
+		"node": ">= 20.0.0"
+	},
+	"dependencies": {
+		"redis": "^4.7.0",
+		"redis-om": "^0.4.7"
+	},
+	"peerDependencies": {
+		"@nestjs/core": "^10.0.0",
+		"@ocoda/event-sourcing": "workspace:*",
+		"reflect-metadata": "^0.2.0",
+		"rxjs": "^7.2.0"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "1.9.4",
+		"@faker-js/faker": "^9.5.1",
+		"@nestjs/common": "11.0.11",
+		"@nestjs/core": "11.0.11",
+		"@nestjs/platform-express": "11.0.11",
+		"@nestjs/testing": "11.0.11",
+		"@ocoda/event-sourcing-config": "workspace:*",
+		"@ocoda/event-sourcing-testing": "workspace:*",
+		"@swc-node/register": "^1.10.9",
+		"@swc/core": "1.11.5",
+		"@swc/jest": "0.2.37",
+		"@types/jest": "29.5.14",
+		"@types/node": "20.17.6",
+		"jest": "29.7.0",
+		"jest-mock": "29.7.0",
+		"reflect-metadata": "0.2.2",
+		"rxjs": "7.8.2",
+		"tsup": "^8.4.0",
+		"typescript": "5.8.2"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/ocoda/event-sourcing",
+		"directory": "packages/integration/redis"
+	}
+}

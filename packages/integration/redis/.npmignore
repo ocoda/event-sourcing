@@ -1,0 +1,19 @@
+# source
+example
+index.ts
+lib
+tests
+
+# misc
+.circleci
+.github
+.vscode
+.turbo
+biome.json
+docker-compose.yml
+jest.config.js
+pnpm-lock.yaml
+renovate.json
+tsconfig.build.json
+tsconfig.json
+turbo.json
