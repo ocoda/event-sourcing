@@ -90,7 +90,8 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 							BillingMode: config?.BillingMode || BillingMode.PAY_PER_REQUEST,
 						}),
 					);
-					break;
+
+					return collection;
 				default:
 					throw new EventStoreCollectionCreationException(collection, err);
 			}
@@ -100,8 +101,8 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 	public async *listCollections(filter?: IEventCollectionFilter): AsyncGenerator<IEventCollection[]> {
 		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
-		const entities = [];
-		let ExclusiveStartTableName: string;
+		const entities: IEventCollection[] = [];
+		let ExclusiveStartTableName: string | undefined;
 		do {
 			const { TableNames, LastEvaluatedTableName } = await this.client.send(
 				new ListTablesCommand({
@@ -111,7 +112,7 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 			);
 
 			ExclusiveStartTableName = LastEvaluatedTableName;
-			entities.push(...TableNames.filter((name) => name.endsWith('events')));
+			entities.push(...((TableNames || []).filter((name) => name.endsWith('events')) as IEventCollection[]));
 
 			if (entities.length > 0 && !ExclusiveStartTableName) {
 				yield entities;
@@ -138,9 +139,9 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 			ExpressionAttributeValues[':fromVersion'] = { N: fromVersion.toString() };
 		}
 
-		const entities = [];
+		const entities: IEvent[] = [];
 		let leftToFetch = limit;
-		let ExclusiveStartKey: Record<string, AttributeValue>;
+		let ExclusiveStartKey: Record<string, AttributeValue> | undefined;
 		do {
 			const { Items, LastEvaluatedKey } = await this.client.send(
 				new QueryCommand({
@@ -156,12 +157,12 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 
 			ExclusiveStartKey = LastEvaluatedKey;
 			entities.push(
-				...Items.map((item) => {
+				...(Items || []).map((item) => {
 					const entity = this.hydrate<['event', 'payload']>(item);
 					return this.eventMap.deserializeEvent(entity.event, entity.payload);
 				}),
 			);
-			leftToFetch -= Items.length;
+			leftToFetch -= Items?.length || 0;
 
 			if (entities.length > 0 && (entities.length === batch || !ExclusiveStartKey || leftToFetch <= 0)) {
 				yield entities;
@@ -211,7 +212,7 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 					}),
 				);
 
-				if (Items.length > 0 && unmarshall(Items[0]).version >= aggregateVersion) {
+				if (Items?.length && unmarshall(Items[0]).version >= aggregateVersion) {
 					throw new EventStoreVersionConflictException(stream, aggregateVersion, unmarshall(Items[0]).version);
 				}
 			}
@@ -320,9 +321,9 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 			ExpressionAttributeValues[':fromVersion'] = { N: fromVersion.toString() };
 		}
 
-		const entities = [];
+		const entities: EventEnvelope<IEvent>[] = [];
 		let leftToFetch = limit;
-		let ExclusiveStartKey: Record<string, AttributeValue>;
+		let ExclusiveStartKey: Record<string, AttributeValue> | undefined;
 		do {
 			const { Items, LastEvaluatedKey } = await this.client.send(
 				new QueryCommand({
@@ -338,7 +339,7 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 
 			ExclusiveStartKey = LastEvaluatedKey;
 			entities.push(
-				...Items.map((item) => {
+				...(Items || []).map((item) => {
 					const entity =
 						this.hydrate<
 							['event', 'payload', 'aggregateId', 'eventId', 'occurredOn', 'version', 'correlationId', 'causationId']
@@ -353,7 +354,7 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 					});
 				}),
 			);
-			leftToFetch -= Items.length;
+			leftToFetch -= Items?.length || 0;
 
 			if (entities.length > 0 && (entities.length === batch || !ExclusiveStartKey || leftToFetch <= 0)) {
 				yield entities;
@@ -368,9 +369,9 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 
 		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
-		const entities = [];
+		const entities: EventEnvelope<IEvent>[] = [];
 		let monthsFetched = 0;
-		let ExclusiveStartKey: Record<string, AttributeValue>;
+		let ExclusiveStartKey: Record<string, AttributeValue> | undefined;
 		do {
 			const { Items, LastEvaluatedKey } = await this.client.send(
 				new QueryCommand({
@@ -387,7 +388,7 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 			);
 
 			entities.push(
-				...Items.map((item) => {
+				...(Items || []).map((item) => {
 					const entity =
 						this.hydrate<
 							['event', 'payload', 'aggregateId', 'eventId', 'occurredOn', 'version', 'correlationId', 'causationId']

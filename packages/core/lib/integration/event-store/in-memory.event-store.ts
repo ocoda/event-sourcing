@@ -75,7 +75,8 @@ export class InMemoryEventStore extends EventStore<InMemoryEventStoreConfig> {
 		const limit = filter?.limit || Number.MAX_SAFE_INTEGER;
 		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
-		entities = this.collections.get(collection).filter(({ streamId: entityStreamId }) => entityStreamId === streamId);
+		entities =
+			this.collections.get(collection)?.filter(({ streamId: entityStreamId }) => entityStreamId === streamId) || [];
 
 		if (fromVersion) {
 			entities = entities.filter(({ version }) => version >= fromVersion);
@@ -207,7 +208,8 @@ export class InMemoryEventStore extends EventStore<InMemoryEventStoreConfig> {
 		const limit = filter?.limit || Number.MAX_SAFE_INTEGER;
 		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
-		entities = this.collections.get(collection).filter(({ streamId: entityStreamId }) => entityStreamId === streamId);
+		entities =
+			this.collections.get(collection)?.filter(({ streamId: entityStreamId }) => entityStreamId === streamId) || [];
 
 		if (fromVersion) {
 			entities = entities.filter(({ version }) => version >= fromVersion);
@@ -244,8 +246,7 @@ export class InMemoryEventStore extends EventStore<InMemoryEventStoreConfig> {
 
 		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
-		entities = this.collections
-			.get(collection)
+		entities = (this.collections.get(collection) || [])
 			.filter(({ occurredOn }) => {
 				const delta = new Date(occurredOn).getTime();
 				return since <= delta && delta <= until;
@@ -269,7 +270,7 @@ export class InMemoryEventStore extends EventStore<InMemoryEventStoreConfig> {
 
 	private getDateRange(
 		sinceDate: { year: number; month: number },
-		untilDate: { year: number; month: number },
+		untilDate?: { year: number; month: number },
 	): { since: number; until: number } {
 		const now = new Date();
 		const [untilYear, untilMonth] = untilDate

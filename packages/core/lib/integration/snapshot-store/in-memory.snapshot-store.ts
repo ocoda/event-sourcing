@@ -79,7 +79,9 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 		const limit = filter?.limit || Number.MAX_SAFE_INTEGER;
 		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
-		entities = this.collections.get(collection).filter(({ streamId: entityStreamId }) => entityStreamId === streamId);
+		entities = (this.collections.get(collection) || []).filter(
+			({ streamId: entityStreamId }) => entityStreamId === streamId,
+		);
 
 		if (fromVersion) {
 			entities = entities.filter(({ version }) => version >= fromVersion);
@@ -148,7 +150,7 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 
 			for (const entity of snapshotCollection) {
 				if (entity.streamId === stream.streamId) {
-					entity.latest = null;
+					entity.latest = undefined;
 				}
 			}
 
@@ -171,7 +173,7 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 		}
 	}
 
-	getLastSnapshot<A extends AggregateRoot>(stream: SnapshotStream, pool?: ISnapshotPool): ISnapshot<A> {
+	getLastSnapshot<A extends AggregateRoot>(stream: SnapshotStream, pool?: ISnapshotPool): ISnapshot<A> | void {
 		const collection = SnapshotCollection.get(pool);
 		const snapshotCollection = this.collections.get(collection) || [];
 
@@ -191,15 +193,18 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 
 		const entities = this.getLastStreamEntities<A>(snapshotCollection, streams);
 
-		return new Map(
-			entities.map(({ streamId, payload }) => [
-				streams.find(({ streamId: currentStreamId }) => currentStreamId === streamId),
-				payload,
-			]),
-		);
+		return entities.reduce((acc, { streamId, payload }) => {
+			const stream = streams.find(({ streamId: currentStreamId }) => currentStreamId === streamId);
+
+			if (stream) {
+				acc.set(stream, payload);
+			}
+
+			return acc;
+		}, new Map<SnapshotStream, ISnapshot<A>>());
 	}
 
-	getLastEnvelope<A extends AggregateRoot>(stream: SnapshotStream, pool?: ISnapshotPool): SnapshotEnvelope<A> {
+	getLastEnvelope<A extends AggregateRoot>(stream: SnapshotStream, pool?: ISnapshotPool): SnapshotEnvelope<A> | void {
 		const collection = SnapshotCollection.get(pool);
 		const snapshotCollection = this.collections.get(collection) || [];
 
@@ -227,7 +232,9 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 		const limit = filter?.limit || Number.MAX_SAFE_INTEGER;
 		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
-		entities = this.collections.get(collection).filter(({ streamId: entityStreamId }) => entityStreamId === streamId);
+		entities = (this.collections.get(collection) || []).filter(
+			({ streamId: entityStreamId }) => entityStreamId === streamId,
+		);
 
 		if (fromVersion) {
 			entities = entities.filter(({ version }) => version >= fromVersion);
@@ -286,18 +293,17 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 		const limit = filter?.limit || Number.MAX_SAFE_INTEGER;
 		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
-		entities = this.collections
-			.get(collection)
+		entities = (this.collections.get(collection) || [])
 			.filter(({ aggregateName: name, latest }) => name === aggregateName && latest)
 			.sort((envelopeA, envelopeB) => {
-				const textA = envelopeA.latest.toLowerCase();
-				const textB = envelopeB.latest.toLowerCase();
+				const textA = envelopeA.latest?.toLowerCase() || '';
+				const textB = envelopeB.latest?.toLowerCase() || '';
 				return textA < textB ? -1 : textA > textB ? 1 : 0;
 			})
 			.reverse();
 
 		if (aggregateId) {
-			entities = this.collections.get(collection).filter(({ latest }) => latest > aggregateId);
+			entities = (this.collections.get(collection) || []).filter(({ latest }) => (latest || '') > aggregateId);
 		}
 
 		if (limit) {
@@ -321,12 +327,23 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 
 		const entities = this.getLastStreamEntities<A>(snapshotCollection, streams);
 
-		return new Map(
-			entities.map(({ streamId, payload, aggregateId, registeredOn, snapshotId, version }) => [
-				streams.find(({ streamId: currentStreamId }) => currentStreamId === streamId),
-				SnapshotEnvelope.from<A>(payload, { aggregateId, registeredOn, snapshotId, version }),
-			]),
-		);
+		return entities.reduce((acc, { streamId, payload, aggregateId, registeredOn, snapshotId, version }) => {
+			const stream = streams.find(({ streamId: currentStreamId }) => currentStreamId === streamId);
+
+			if (stream) {
+				acc.set(
+					stream,
+					SnapshotEnvelope.from<A>(payload, {
+						aggregateId,
+						registeredOn: new Date(registeredOn),
+						snapshotId,
+						version,
+					}),
+				);
+			}
+
+			return acc;
+		}, new Map<SnapshotStream, SnapshotEnvelope<A>>());
 	}
 
 	private getLastStreamEntities<A extends AggregateRoot>(
@@ -334,6 +351,6 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 		streams: SnapshotStream[],
 	): InMemorySnapshotEntity<A>[] {
 		const latestIds = streams.map(({ streamId }) => `latest#${streamId}`);
-		return collection.filter(({ latest }) => latestIds.includes(latest));
+		return collection.filter(({ latest }) => latestIds.includes(latest || ''));
 	}
 }

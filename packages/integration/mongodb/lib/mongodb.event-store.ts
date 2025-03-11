@@ -68,7 +68,9 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 			const entity = await cursor.next();
 			hasNext = entity !== null;
 
-			hasNext && entities.push(entity.name as IEventCollection);
+			if (entity) {
+				entities.push(entity.name as IEventCollection);
+			}
 
 			if (entities.length > 0 && (entities.length === batch || !hasNext)) {
 				yield entities;
@@ -100,13 +102,15 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 			)
 			.map(({ event, payload }) => this.eventMap.deserializeEvent(event, payload));
 
-		const entities = [];
+		const entities: IEvent[] = [];
 		let hasNext: boolean;
 		do {
 			const entity = await cursor.next();
 			hasNext = entity !== null;
 
-			hasNext && entities.push(entity);
+			if (entity) {
+				entities.push(entity);
+			}
 
 			if (entities.length > 0 && (entities.length === batch || !hasNext)) {
 				yield entities;
@@ -297,13 +301,15 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 				}),
 			);
 
-		const entities = [];
+		const entities: EventEnvelope<IEvent>[] = [];
 		let hasNext: boolean;
 		do {
 			const entity = await cursor.next();
 			hasNext = entity !== null;
 
-			hasNext && entities.push(entity);
+			if (entity) {
+				entities.push(entity);
+			}
 
 			if (entities.length > 0 && (entities.length === batch || !hasNext)) {
 				yield entities;
@@ -352,13 +358,15 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 				}),
 			);
 
-		const entities = [];
+		const entities: EventEnvelope<IEvent>[] = [];
 		let hasNext: boolean;
 		do {
 			const entity = await cursor.next();
 			hasNext = entity !== null;
 
-			hasNext && entities.push(entity);
+			if (entity) {
+				entities.push(entity);
+			}
 
 			if (entities.length > 0 && (entities.length === batch || !hasNext)) {
 				yield entities;
