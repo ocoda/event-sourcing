@@ -239,8 +239,8 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 			aggregateId: entity.aggregate_id,
 			version: entity.version,
 			occurredOn: entity.occurred_on,
-			correlationId: entity.correlation_id,
-			causationId: entity.causation_id,
+			correlationId: entity.correlation_id ?? undefined,
+			causationId: entity.causation_id ?? undefined,
 		});
 	}
 
@@ -285,8 +285,8 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 						aggregateId: aggregate_id,
 						version,
 						occurredOn: occurred_on,
-						correlationId: correlation_id,
-						causationId: causation_id,
+						correlationId: correlation_id ?? undefined,
+						causationId: causation_id ?? undefined,
 					}),
 				);
 				if (batchedEvents.length === batch) {
@@ -341,8 +341,8 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 						aggregateId: aggregate_id,
 						version,
 						occurredOn: occurred_on,
-						correlationId: correlation_id,
-						causationId: causation_id,
+						correlationId: correlation_id ?? undefined,
+						causationId: causation_id ?? undefined,
 					}),
 				);
 				if (batchedEvents.length === batch) {

@@ -1,4 +1,12 @@
-import { type DynamicModule, Inject, Module, type OnModuleInit, type Provider } from '@nestjs/common';
+import {
+	type DynamicModule,
+	Inject,
+	type InjectionToken,
+	Module,
+	type OnModuleInit,
+	type OptionalFactoryDependency,
+	type Provider,
+} from '@nestjs/common';
 import { DiscoveryModule } from '@nestjs/core';
 import { CommandBus } from './command-bus';
 import { EVENT_SOURCING_OPTIONS } from './constants';
@@ -79,13 +87,16 @@ export class EventSourcingModule implements OnModuleInit {
 		if (options.useExisting || options.useFactory) {
 			return [EventSourcingModule.createAsyncOptionsProvider(options)];
 		}
-		return [
-			EventSourcingModule.createAsyncOptionsProvider(options),
-			{
+		const providers = [EventSourcingModule.createAsyncOptionsProvider(options)];
+
+		if (options.useClass) {
+			providers.push({
 				provide: options.useClass,
 				useClass: options.useClass,
-			},
-		];
+			});
+		}
+
+		return providers;
 	}
 
 	private static createAsyncOptionsProvider<
@@ -99,11 +110,20 @@ export class EventSourcingModule implements OnModuleInit {
 				inject: options.inject || [],
 			};
 		}
+
+		const inject: (InjectionToken | OptionalFactoryDependency)[] = [];
+
+		if (options.useExisting) {
+			inject.push(options.useExisting);
+		} else if (options.useClass) {
+			inject.push(options.useClass);
+		}
+
 		return {
 			provide: EVENT_SOURCING_OPTIONS,
 			useFactory: async (optionsFactory: EventSourcingOptionsFactory) =>
 				await optionsFactory.createEventSourcingOptions(),
-			inject: [options.useExisting || options.useClass],
+			inject,
 		};
 	}
 

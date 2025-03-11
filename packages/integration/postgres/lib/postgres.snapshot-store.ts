@@ -224,7 +224,10 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 		}
 	}
 
-	async getLastSnapshot<A extends AggregateRoot>(stream: SnapshotStream, pool?: ISnapshotPool): Promise<ISnapshot<A>> {
+	async getLastSnapshot<A extends AggregateRoot>(
+		stream: SnapshotStream,
+		pool?: ISnapshotPool,
+	): Promise<ISnapshot<A> | void> {
 		const collection = SnapshotCollection.get(pool);
 
 		const [entity] = await this.getLastStreamEntities<A, ['payload']>(collection, [stream], ['payload']);
@@ -245,18 +248,21 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 			'payload',
 		]);
 
-		return new Map(
-			entities.map(({ stream_id, payload }) => [
-				streams.find(({ streamId: currentStreamId }) => currentStreamId === stream_id),
-				payload,
-			]),
-		);
+		return entities.reduce((acc, { stream_id, payload }) => {
+			const stream = streams.find(({ streamId: currentStreamId }) => currentStreamId === stream_id);
+
+			if (stream) {
+				acc.set(stream, payload);
+			}
+
+			return acc;
+		}, new Map<SnapshotStream, ISnapshot<A>>());
 	}
 
 	async getLastEnvelope<A extends AggregateRoot>(
 		stream: SnapshotStream,
 		pool?: ISnapshotPool,
-	): Promise<SnapshotEnvelope<A>> {
+	): Promise<SnapshotEnvelope<A> | void> {
 		const collection = SnapshotCollection.get(pool);
 
 		const [entity] = await this.getLastStreamEntities<
@@ -421,17 +427,23 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 			['stream_id', 'payload', 'aggregate_id', 'registered_on', 'snapshot_id', 'version']
 		>(collection, streams, ['stream_id', 'payload', 'aggregate_id', 'registered_on', 'snapshot_id', 'version']);
 
-		return new Map(
-			entities.map(({ stream_id, payload, aggregate_id, registered_on, snapshot_id, version }) => [
-				streams.find(({ streamId: currentStreamId }) => currentStreamId === stream_id),
-				SnapshotEnvelope.from<A>(payload, {
-					aggregateId: aggregate_id,
-					registeredOn: new Date(registered_on),
-					snapshotId: snapshot_id,
-					version,
-				}),
-			]),
-		);
+		return entities.reduce((acc, { stream_id, payload, aggregate_id, registered_on, snapshot_id, version }) => {
+			const stream = streams.find(({ streamId: currentStreamId }) => currentStreamId === stream_id);
+
+			if (stream) {
+				acc.set(
+					stream,
+					SnapshotEnvelope.from<A>(payload, {
+						aggregateId: aggregate_id,
+						registeredOn: new Date(registered_on),
+						snapshotId: snapshot_id,
+						version,
+					}),
+				);
+			}
+
+			return acc;
+		}, new Map<SnapshotStream, SnapshotEnvelope<A>>());
 	}
 
 	private async getLastStreamEntities<

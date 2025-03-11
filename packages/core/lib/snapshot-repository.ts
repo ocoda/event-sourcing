@@ -1,4 +1,4 @@
-import { Inject, type Type } from '@nestjs/common';
+import { Inject, NotImplementedException, type Type } from '@nestjs/common';
 import { MissingAggregateMetadataException, MissingSnapshotMetadataException } from './exceptions';
 import { getAggregateMetadata, getSnapshotMetadata } from './helpers';
 import type { ISnapshotPool, ISnapshotRepository } from './interfaces';
@@ -50,10 +50,15 @@ export abstract class SnapshotRepository<A extends AggregateRoot = AggregateRoot
 	}
 
 	async loadMany(ids: Id[], pool?: ISnapshotPool): Promise<A[]> {
+		if (!this.snapshotStore.getManyLastSnapshotEnvelopes) {
+			throw new NotImplementedException('The snapshot store does not support method: getManyLastSnapshotEnvelopes.');
+		}
+
 		const snapshotStreams = ids.map((id) => SnapshotStream.for<A>(this.aggregate, id));
+
 		const envelopes = await this.snapshotStore.getManyLastSnapshotEnvelopes<A>(snapshotStreams, pool);
 
-		const aggregates = [];
+		const aggregates: A[] = [];
 		for (const { payload, metadata } of envelopes.values()) {
 			const aggregate = this.deserialize(payload);
 			aggregate.version = metadata.version;
@@ -64,6 +69,10 @@ export abstract class SnapshotRepository<A extends AggregateRoot = AggregateRoot
 	}
 
 	async *loadAll(filter?: { aggregateId?: Id; limit?: number; pool?: string }): AsyncGenerator<SnapshotEnvelope<A>[]> {
+		if (!this.snapshotStore.getLastEnvelopesForAggregate) {
+			throw new NotImplementedException('The snapshot store does not support method: getLastEnvelopesForAggregate.');
+		}
+
 		const id = filter?.aggregateId?.value;
 		for await (const envelopes of this.snapshotStore.getLastEnvelopesForAggregate<A>(this.aggregate, {
 			...filter,

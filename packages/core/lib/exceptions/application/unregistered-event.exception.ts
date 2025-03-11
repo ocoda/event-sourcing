@@ -17,6 +17,10 @@ export class UnregisteredEventException extends Error {
 				name = target.name;
 				break;
 			}
+			default: {
+				name = 'unknown';
+				break;
+			}
 		}
 
 		super(`Event '${name}' is not registered. Register it in the EventSourcingModule.`);

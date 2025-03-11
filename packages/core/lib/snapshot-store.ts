@@ -74,7 +74,7 @@ export abstract class SnapshotStore<TOptions = Omit<EventSourcingModuleOptions['
 	abstract getLastSnapshot<A extends AggregateRoot>(
 		snapshotStream: SnapshotStream,
 		pool?: ISnapshotPool,
-	): ISnapshot<A> | Promise<ISnapshot<A>>;
+	): ISnapshot<A> | void | Promise<ISnapshot<A> | void>;
 
 	/**
 	 * Get the last snapshot from multiple snapshot streams.
@@ -111,7 +111,7 @@ export abstract class SnapshotStore<TOptions = Omit<EventSourcingModuleOptions['
 	abstract getLastEnvelope<A extends AggregateRoot>(
 		snapshotStream: SnapshotStream,
 		pool?: ISnapshotPool,
-	): SnapshotEnvelope<A> | Promise<SnapshotEnvelope<A>>;
+	): SnapshotEnvelope<A> | void | Promise<SnapshotEnvelope<A> | void>;
 
 	/**
 	 * Get the last snapshot envelopes from the snapshot stream.

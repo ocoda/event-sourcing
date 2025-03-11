@@ -243,8 +243,8 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 			aggregateId: entity.aggregate_id,
 			version: entity.version,
 			occurredOn: entity.occurred_on,
-			correlationId: entity.correlation_id,
-			causationId: entity.causation_id,
+			correlationId: entity.correlation_id ?? undefined,
+			causationId: entity.causation_id ?? undefined,
 		});
 	}
 
@@ -313,8 +313,8 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 							aggregateId: aggregate_id,
 							version,
 							occurredOn: occurred_on,
-							correlationId: correlation_id,
-							causationId: causation_id,
+							correlationId: correlation_id ?? undefined,
+							causationId: causation_id ?? undefined,
 						}),
 				);
 				yield entities;
@@ -385,8 +385,8 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 							aggregateId: aggregate_id,
 							version,
 							occurredOn: occurred_on,
-							correlationId: correlation_id,
-							causationId: causation_id,
+							correlationId: correlation_id ?? undefined,
+							causationId: causation_id ?? undefined,
 						}),
 				);
 				yield entities;

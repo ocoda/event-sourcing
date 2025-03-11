@@ -23,7 +23,7 @@ export type IEventMapTarget<E extends IEvent = IEvent> = IEventName | IEventCons
 
 @Injectable()
 export class EventMap {
-	private readonly eventMap: Set<IEventData<unknown>> = new Set();
+	private readonly eventMap: Set<IEventData<IEvent>> = new Set();
 
 	public register<E extends IEvent>(cls: IEventConstructor<E>, serializer?: IEventSerializer): void {
 		const { name } = getEventMetadata(cls);
