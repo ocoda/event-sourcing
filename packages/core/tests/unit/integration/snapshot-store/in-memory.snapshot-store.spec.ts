@@ -32,7 +32,7 @@ describe(InMemorySnapshotStore, () => {
 	const envelopesAccountB = snapshotEnvelopesAccountB;
 
 	beforeAll(() => {
-		snapshotStore = new InMemorySnapshotStore({ driver: undefined });
+		snapshotStore = new InMemorySnapshotStore({ driver: InMemorySnapshotStore });
 
 		snapshotStore.connect();
 		snapshotStore.ensureCollection();
@@ -229,7 +229,13 @@ describe(InMemorySnapshotStore, () => {
 
 	it('should retrieve the last snapshot-envelope', async () => {
 		const lastEnvelope = envelopesAccountA[envelopesAccountA.length - 1];
-		const { metadata, payload } = snapshotStore.getLastEnvelope(snapshotStreamAccountA);
+		const snapshotEnvelope = snapshotStore.getLastEnvelope(snapshotStreamAccountA);
+
+		if (!snapshotEnvelope) {
+			throw new Error('Snapshot envelope not found');
+		}
+
+		const { metadata, payload } = snapshotEnvelope;
 
 		expect(payload).toEqual(lastEnvelope.payload);
 		expect(metadata.aggregateId).toEqual(lastEnvelope.metadata.aggregateId);
@@ -320,6 +326,10 @@ describe(InMemorySnapshotStore, () => {
 
 		const resolvedAccountAEnvelope = resolvedSnapshots.get(snapshotStreamAccountA);
 		const resolvedAccountBEnvelope = resolvedSnapshots.get(snapshotStreamAccountB);
+
+		if (!resolvedAccountAEnvelope || !resolvedAccountBEnvelope) {
+			throw new Error('Snapshot envelope not found');
+		}
 
 		expect(resolvedAccountAEnvelope.payload).toEqual(envelopeAccountA.payload);
 		expect(resolvedAccountAEnvelope.metadata.aggregateId).toEqual(envelopeAccountA.metadata.aggregateId);

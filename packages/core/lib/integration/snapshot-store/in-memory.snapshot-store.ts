@@ -24,7 +24,7 @@ export type InMemorySnapshotEntity<A extends AggregateRoot> = {
 	streamId: string;
 	payload: ISnapshot<A>;
 	aggregateName: string;
-	latest?: string;
+	latest: string | null;
 } & SnapshotEnvelopeMetadata;
 
 export interface InMemorySnapshotStoreConfig extends SnapshotStoreConfig {
@@ -150,7 +150,7 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 
 			for (const entity of snapshotCollection) {
 				if (entity.streamId === stream.streamId) {
-					entity.latest = undefined;
+					entity.latest = null;
 				}
 			}
 
