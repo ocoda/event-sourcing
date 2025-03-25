@@ -1,5 +1,19 @@
 # @ocoda/event-sourcing-mongodb
 
+## 2.1.1
+
+### Patch Changes
+
+- [#422](https://github.com/ocoda/event-sourcing/pull/422) [`2711e2e`](https://github.com/ocoda/event-sourcing/commit/2711e2e3d26b1ee5ea76e6c0922e92f86ef74a4b) Thanks [@MartinLG-LaFourche](https://github.com/MartinLG-LaFourche)! - # Enhancements
+  Enforces the linter to check for strictNullChecks.
+
+  # Dependencies
+
+  Updated various dependencies to their latest versions.
+
+- Updated dependencies [[`2711e2e`](https://github.com/ocoda/event-sourcing/commit/2711e2e3d26b1ee5ea76e6c0922e92f86ef74a4b)]:
+  - @ocoda/event-sourcing@2.1.1
+
 ## 2.1.0
 
 ### Minor Changes
