@@ -11,8 +11,8 @@
 		"benchmark:report": "node report-benchmark.js"
 	},
 	"dependencies": {
-		"@nestjs/common": "^11.0.11",
-		"@nestjs/core": "^11.0.11",
+		"@nestjs/common": "^11.0.12",
+		"@nestjs/core": "^11.0.12",
 		"@ocoda/event-sourcing": "workspace:*",
 		"@ocoda/event-sourcing-dynamodb": "workspace:*",
 		"@ocoda/event-sourcing-example": "workspace:*",
