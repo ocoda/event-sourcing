@@ -1,5 +1,11 @@
 # @ocoda/event-sourcing
 
+## 2.1.2
+
+### Patch Changes
+
+- [#433](https://github.com/ocoda/event-sourcing/pull/433) [`d645eaa`](https://github.com/ocoda/event-sourcing/commit/d645eaac2b7aca74303eb2908c6af64bd3491d92) Thanks [@drieshooghe](https://github.com/drieshooghe)! - Bump dependencies
+
 ## 2.1.1
 
 ### Patch Changes
