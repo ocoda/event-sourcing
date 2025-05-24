@@ -1,6 +1,6 @@
 {
 	"name": "@ocoda/event-sourcing-dynamodb",
-	"version": "2.1.2",
+	"version": "2.1.3",
 	"description": "NestJS Event Sourcing Library (@dynamodb)",
 	"author": "Dries Hooghe <dries@drieshooghe.com>",
 	"license": "MIT",
