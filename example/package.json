@@ -13,8 +13,8 @@
 	},
 	"dependencies": {
 		"@ocoda/event-sourcing": "workspace:*",
-		"@nestjs/common": "^11.1.1",
-		"@nestjs/core": "^11.1.1",
+		"@nestjs/common": "^11.1.3",
+		"@nestjs/core": "^11.1.3",
 		"reflect-metadata": "^0.2.0",
 		"rxjs": "^7.8.2"
 	},
