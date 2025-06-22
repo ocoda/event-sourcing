@@ -1,6 +1,6 @@
 {
 	"name": "@ocoda/event-sourcing-mongodb",
-	"version": "2.1.3",
+	"version": "2.1.4",
 	"description": "NestJS Event Sourcing Library (@mongodb)",
 	"author": "Dries Hooghe <dries@drieshooghe.com>",
 	"license": "MIT",
