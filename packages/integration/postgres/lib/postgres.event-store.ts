@@ -25,6 +25,19 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 	private pool: Pool;
 	private client: PoolClient;
 
+	private readonly columns = [
+		'stream_id',
+		'version',
+		'event',
+		'payload',
+		'event_date',
+		'event_id',
+		'aggregate_id',
+		'occurred_on',
+		'correlation_id',
+		'causation_id',
+	] as const;
+
 	public async connect(): Promise<void> {
 		this.logger.log('Starting store');
 		this.pool = new Pool(this.options);
@@ -192,15 +205,29 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 				envelopes.push(envelope);
 			}
 
-			const entities = envelopes.map(
-				({ event, payload, metadata }) =>
-					`('${stream.streamId}', ${metadata.version}, '${event}', '${JSON.stringify(payload)}', '${metadata.eventId.yearMonth}', '${metadata.eventId.value}', '${metadata.aggregateId}', '${metadata.occurredOn.toISOString()}', ${metadata.correlationId ?? null}, ${metadata.causationId ?? null})`,
-			);
+			const values: string[] = [];
+			const params: PostgresEventEntity[keyof PostgresEventEntity][] = [];
+			let paramIndex = 1;
+			for (const envelope of envelopes) {
+				values.push(`(${this.columns.map(() => `$${paramIndex++}`).join(', ')})`);
+				params.push(
+					stream.streamId,
+					envelope.metadata.version,
+					envelope.event,
+					envelope.payload,
+					envelope.metadata.eventId.yearMonth,
+					envelope.metadata.eventId.value,
+					envelope.metadata.aggregateId,
+					envelope.metadata.occurredOn.toISOString(),
+					envelope.metadata.correlationId ?? null,
+					envelope.metadata.causationId ?? null,
+				);
+			}
 
-			await this.client.query(`
-            INSERT INTO "${collection}" (stream_id, version, event, payload, event_date, event_id, aggregate_id, occurred_on, correlation_id, causation_id)
-		    VALUES ${entities.join(',')}
-		`);
+			await this.client.query(
+				`INSERT INTO "${collection}" (${this.columns.join(', ')}) VALUES ${values.join(',')}`,
+				params,
+			);
 
 			return envelopes;
 		} catch (error) {
@@ -216,19 +243,7 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 	async getEnvelope({ streamId }: EventStream, version: number, pool?: IEventPool): Promise<EventEnvelope> {
 		const collection = EventCollection.get(pool);
 
-		const { rows: entities } = await this.client.query<
-			Pick<
-				PostgresEventEntity,
-				| 'event'
-				| 'payload'
-				| 'event_id'
-				| 'aggregate_id'
-				| 'version'
-				| 'occurred_on'
-				| 'correlation_id'
-				| 'causation_id'
-			>
-		>(
+		const { rows: entities } = await this.client.query<PostgresEventEntity>(
 			`SELECT event, payload, event_id, aggregate_id, version, occurred_on, correlation_id, causation_id FROM "${collection}" WHERE stream_id = $1 AND version = $2`,
 			[streamId, version],
 		);
@@ -268,38 +283,12 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 
 		const params = fromVersion ? [streamId, fromVersion, limit] : [streamId, limit];
 
-		const cursor = this.client.query(
-			new Cursor<
-				Pick<
-					PostgresEventEntity,
-					| 'event'
-					| 'payload'
-					| 'event_id'
-					| 'aggregate_id'
-					| 'version'
-					| 'occurred_on'
-					| 'correlation_id'
-					| 'causation_id'
-				>
-			>(query, params),
-		);
+		const cursor = this.client.query(new Cursor<PostgresEventEntity>(query, params));
 
 		let done = false;
 
 		while (!done) {
-			const rows: Array<
-				Pick<
-					PostgresEventEntity,
-					| 'event'
-					| 'payload'
-					| 'event_id'
-					| 'aggregate_id'
-					| 'version'
-					| 'occurred_on'
-					| 'correlation_id'
-					| 'causation_id'
-				>
-			> = await new Promise((resolve, reject) =>
+			const rows: PostgresEventEntity[] = await new Promise((resolve, reject) =>
 				cursor.read(batch, (err, result) => (err ? reject(err) : resolve(result))),
 			);
 
@@ -340,38 +329,12 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 
 		const params = [yearMonths];
 
-		const cursor = this.client.query(
-			new Cursor<
-				Pick<
-					PostgresEventEntity,
-					| 'event'
-					| 'payload'
-					| 'event_id'
-					| 'aggregate_id'
-					| 'version'
-					| 'occurred_on'
-					| 'correlation_id'
-					| 'causation_id'
-				>
-			>(query, params),
-		);
+		const cursor = this.client.query(new Cursor<PostgresEventEntity>(query, params));
 
 		let done = false;
 
 		while (!done) {
-			const rows: Array<
-				Pick<
-					PostgresEventEntity,
-					| 'event'
-					| 'payload'
-					| 'event_id'
-					| 'aggregate_id'
-					| 'version'
-					| 'occurred_on'
-					| 'correlation_id'
-					| 'causation_id'
-				>
-			> = await new Promise((resolve, reject) =>
+			const rows: PostgresEventEntity[] = await new Promise((resolve, reject) =>
 				cursor.read(batch, (err, result) => (err ? reject(err) : resolve(result))),
 			);
 
