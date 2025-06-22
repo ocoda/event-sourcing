@@ -28,7 +28,12 @@ export class Account extends AggregateRoot {
 }
 
 @Event('account-opened')
-class AccountOpenedEvent implements IEvent {}
+class AccountOpenedEvent implements IEvent {
+	constructor(
+		public readonly initialBalance: number,
+		public readonly notes: string[] = [],
+	) {}
+}
 
 @Event('account-credited')
 class AccountCreditedEvent implements IEvent {
@@ -231,7 +236,7 @@ export const getEventMap = (): EventMap => {
 };
 
 export const getEvents = (): IEvent[] => [
-	new AccountOpenedEvent(),
+	new AccountOpenedEvent(0, ["Maisel's account"]),
 	new AccountCreditedEvent(50),
 	new AccountDebitedEvent(20),
 	new AccountCreditedEvent(5),
