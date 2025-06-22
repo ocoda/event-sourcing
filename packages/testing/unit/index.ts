@@ -30,7 +30,7 @@ export class Account extends AggregateRoot {
 @Event('account-opened')
 class AccountOpenedEvent implements IEvent {
 	constructor(
-		public readonly initialBalance: number,
+		public readonly initialBalance: number = 0,
 		public readonly notes: string[] = [],
 	) {}
 }
