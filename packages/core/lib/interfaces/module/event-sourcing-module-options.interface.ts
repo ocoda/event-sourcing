@@ -40,5 +40,6 @@ export interface EventSourcingModuleAsyncOptions<
 	useExisting?: Type<TFactory>;
 	useClass?: Type<TFactory>;
 	useFactory?: (...args: any[]) => Promise<TOptions> | TOptions;
+	useValue?: TOptions;
 	inject?: any[];
 }

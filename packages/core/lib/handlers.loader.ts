@@ -46,6 +46,7 @@ import type {
 } from './interfaces';
 // biome-ignore lint/style/useImportType: DI
 import { QueryBus } from './query-bus';
+import {ExplorerService} from "./services";
 
 enum HandlerType {
 	COMMAND = 0,
@@ -54,6 +55,7 @@ enum HandlerType {
 	SERIALIZATION = 3,
 	PUBLISHING = 4,
 }
+
 
 @Injectable()
 export class HandlersLoader implements OnApplicationBootstrap {
@@ -72,6 +74,7 @@ export class HandlersLoader implements OnApplicationBootstrap {
 		private readonly eventBus: EventBus,
 		private readonly eventStore: EventStore,
 		private readonly eventMap: EventMap,
+		private readonly explorerService: ExplorerService
 	) {}
 
 	onApplicationBootstrap() {

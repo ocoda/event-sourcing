@@ -7,7 +7,8 @@
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
 	"scripts": {
-		"build": "rm -rf dist && tsup lib/index.ts --format cjs --dts",
+		"build": "rd /s /q dist && tsup lib/index.ts --format cjs --dts",
+		"build:watch": "rd /s /q dist && tsup lib/index.ts --format cjs --dts --watch",
 		"test": "jest --config jest.config.js",
 		"test:cov": "jest --config jest.config.js --coverage --collectCoverageFrom=lib/**/*.ts",
 		"ci": "biome ci",
