@@ -1,10 +1,17 @@
 import {
-	type DynamicModule,
-	Module,
 	Type,
+	Module,
+	type DynamicModule,
 } from '@nestjs/common';
 import { DiscoveryModule } from '@nestjs/core';
-import type { InMemoryEventStoreConfig, InMemorySnapshotStoreConfig } from './integration';
+
+import {
+	EventRegistry
+} from './registries'
+import type {
+	InMemoryEventStoreConfig,
+	InMemorySnapshotStoreConfig
+} from './integration';
 import type {
 	IEvent,
 	EventStoreConfig,
@@ -19,12 +26,15 @@ import {
 
 @Module({})
 export class EventSourcingModule  {
-
 	/**
 	 * Register the feature module synchronously
 	 */
 	static forFeature(options?: {events: Type<IEvent>[] }): DynamicModule {
+		// prepare the providers
 		const providers = [];
+
+		// register the events
+		EventRegistry.register(...(options?.events ?? []));
 
 		return {
 			module: EventSourcingFeatureModule,

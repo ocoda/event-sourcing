@@ -1,10 +1,38 @@
-import { Injectable, type OnModuleDestroy } from '@nestjs/common';
-import { type Observable, type Subscription, from } from 'rxjs';
-import { filter, mergeMap } from 'rxjs/operators';
-import { ObservableBus } from './helpers';
-import { DefaultEventPubSub } from './helpers/default-event-publisher';
-import type { IEventBus, IEventPublisher, IEventSubscriber } from './interfaces';
-import type { EventEnvelope } from './models';
+import {
+	from,
+	type Observable,
+	type Subscription,
+} from 'rxjs';
+import {
+	filter,
+	mergeMap
+} from 'rxjs/operators';
+import {
+	Injectable,
+	type OnModuleDestroy
+} from '@nestjs/common';
+import {InstanceWrapper} from "@nestjs/core/injector/instance-wrapper";
+
+import {
+	ObservableBus,
+	getEventMetadata,
+	getEventSubscriberMetadata,
+} from './helpers';
+import {
+	DefaultEventPubSub
+} from './helpers/default-event-publisher';
+import type {
+	IEventBus,
+	IEventPublisher,
+	IEventSubscriber
+} from './interfaces';
+import type {
+	EventEnvelope
+} from './models';
+import {
+	MissingEventMetadataException,
+	MissingEventSubscriberMetadataException
+} from './exceptions'
 
 @Injectable()
 export class EventBus extends ObservableBus<EventEnvelope> implements IEventBus, OnModuleDestroy {
@@ -42,4 +70,44 @@ export class EventBus extends ObservableBus<EventEnvelope> implements IEventBus,
 	protected ofEventName(eventName: string): Observable<EventEnvelope> {
 		return this.subject$.pipe(filter(({ event }) => event === eventName));
 	}
+
+	// region registration
+	registerPublishers(publishers: InstanceWrapper<IEventPublisher>[] = []) {
+		publishers.forEach((publisher) => this.registerPublisher(publisher));
+	}
+	registerSubscribers(subscribers: InstanceWrapper<IEventSubscriber>[] = []) {
+		subscribers.forEach((subscriber) => this.registerSubscriber(subscriber));
+	}
+
+	protected registerPublisher(handler: InstanceWrapper<IEventPublisher>) {
+		const { instance } = handler;
+		if(!instance)
+			return;
+
+		this.addPublisher(instance as IEventPublisher);
+	}
+	protected registerSubscriber(handler: InstanceWrapper<IEventSubscriber>) {
+		const { metatype, instance } = handler;
+		if (!metatype || !instance) {
+			throw new MissingEventSubscriberMetadataException(metatype);
+		}
+
+		// check if the handler is an event subscriber
+		const { events } = getEventSubscriberMetadata(metatype as Type<IEventSubscriber>);
+
+		// if not, throw an error
+		if (!events) {
+			throw new MissingEventSubscriberMetadataException(metatype);
+		}
+
+		// register the subscriber for each event
+		for (const event of events) {
+			const { name } = getEventMetadata(event);
+			if (!name) {
+				throw new MissingEventMetadataException(event);
+			}
+			this.bind(instance as IEventSubscriber, name);
+		}
+	}
+	// endregion
 }

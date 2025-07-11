@@ -2,19 +2,20 @@ import {
     DiscoveryModule
 } from "@nestjs/core";
 import {
-    Global,
+    Logger,
     Module,
     OnModuleInit,
     OnModuleDestroy,
     OnApplicationShutdown,
-    OnApplicationBootstrap, type DynamicModule, type Provider, type InjectionToken, type OptionalFactoryDependency
+    OnApplicationBootstrap,
+    type DynamicModule,
 } from "@nestjs/common";
 
 import type {
     EventStoreConfig,
     SnapshotStoreConfig,
     EventSourcingModuleOptions,
-    EventSourcingModuleAsyncOptions, EventSourcingOptionsFactory
+    EventSourcingModuleAsyncOptions,
 } from "./interfaces";
 
 import {QueryBus} from "./query-bus";
@@ -27,7 +28,6 @@ import {SnapshotStore} from "./snapshot-store";
 
 import {ExplorerService} from "./services";
 import {InjectEventSourcingOptions} from "./decorators";
-import {EVENT_SOURCING_OPTIONS} from "./constants";
 
 import type {
     InMemoryEventStoreConfig,
@@ -48,9 +48,16 @@ export class EventSourcingFeatureModule {
 @Module({})
 export class EventSourcingCoreModule implements OnModuleInit, OnModuleDestroy, OnApplicationBootstrap, OnApplicationShutdown {
 
+    private _logger = new Logger(EventSourcingCoreModule.name);
+
+    // noinspection JSUnusedLocalSymbols
     constructor(
         @InjectEventSourcingOptions()
         private readonly options: EventSourcingModuleOptions,
+        private readonly queryBus: QueryBus,
+        private readonly eventBus: EventBus,
+        private readonly eventMap: EventMap,
+        private readonly commandBus: CommandBus,
         private readonly eventStore: EventStore,
         private readonly snapshotStore: SnapshotStore,
         private readonly explorerService: ExplorerService,
@@ -77,7 +84,6 @@ export class EventSourcingCoreModule implements OnModuleInit, OnModuleDestroy, O
 
         return {
             module: EventSourcingCoreModule,
-            // global : true,
             imports : [
                 DiscoveryModule
             ],
@@ -107,7 +113,6 @@ export class EventSourcingCoreModule implements OnModuleInit, OnModuleDestroy, O
 
         return {
             module: EventSourcingCoreModule,
-            // global : true,
             imports : [
                 DiscoveryModule,
                 ...(options?.imports || [])
@@ -121,30 +126,6 @@ export class EventSourcingCoreModule implements OnModuleInit, OnModuleDestroy, O
             ],
         };
     }
-
-    private static createAsyncProviders<
-        TEventStoreConfig extends EventStoreConfig,
-        TSnapshotStoreConfig extends SnapshotStoreConfig
-    >(options: EventSourcingModuleAsyncOptions<TEventStoreConfig, TSnapshotStoreConfig>): Provider[] {
-        if (options.useExisting || options.useFactory) {
-            return [
-                createAsyncEventSourcingOptionsProvider(options)
-            ];
-        }
-        const providers = [
-            createAsyncEventSourcingOptionsProvider(options)
-        ];
-
-        if (options.useClass) {
-            providers.push({
-                provide: options.useClass,
-                useClass: options.useClass,
-            });
-        }
-
-        return providers;
-    }
-
     // endregion
 
     // region Lifecycle Hooks
@@ -161,15 +142,36 @@ export class EventSourcingCoreModule implements OnModuleInit, OnModuleDestroy, O
         ];
         await Promise.all(loadCollections);
     }
-
     async onModuleDestroy() {
         await Promise.all([this.eventStore.disconnect(), this.snapshotStore.disconnect()]); // TODO: Add error handling
     }
 
     onApplicationBootstrap(): any {
+        const {
+            events,
+            queries,
+            commands,
+            eventPublishers,
+            eventSerializers,
+            eventSubscribers,
+        } = this.explorerService.explore();
+
+        // Register the handlers
+        this._logger.debug("Registering event handlers...");
+        this.queryBus.register(queries);
+        this.commandBus.register(commands);
+        this.eventBus.registerPublishers(eventPublishers);
+        this.eventBus.registerSubscribers(eventSubscribers);
+        this.eventMap.registerSerializers(events, eventSerializers);
+        this._logger.debug("Event handlers registered successfully.");
+
+        // some "magic"
+        this.eventStore.publish = this.eventBus.publish;
     }
 
     onApplicationShutdown(signal?: string): any {
     }
+
     // endregion
+
 }
