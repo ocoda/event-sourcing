@@ -1,7 +1,11 @@
 import {Module} from "@nestjs/common";
 import {EventSourcingModule} from "@ocoda/event-sourcing";
 
-import { Events } from "./sub-module.providers";
+import {
+    Events,
+    Controller,
+    CommandHandlers
+} from "./sub-module.providers";
 
 @Module({
     imports: [
@@ -11,8 +15,12 @@ import { Events } from "./sub-module.providers";
             ]
         })
     ],
-    controllers: [],
-    providers: [],
+    controllers: [
+        ...Controller
+    ],
+    providers: [
+        ...CommandHandlers
+    ],
     exports: []
 })
 export class SubModuleModule {

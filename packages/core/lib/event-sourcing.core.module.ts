@@ -45,7 +45,9 @@ export class EventSourcingFeatureModule {
 
 }
 
-@Module({})
+@Module({
+
+})
 export class EventSourcingCoreModule implements OnModuleInit, OnModuleDestroy, OnApplicationBootstrap, OnApplicationShutdown {
 
     private _logger = new Logger(EventSourcingCoreModule.name);
@@ -83,6 +85,7 @@ export class EventSourcingCoreModule implements OnModuleInit, OnModuleDestroy, O
         ];
 
         return {
+            global : true,
             module: EventSourcingCoreModule,
             imports : [
                 DiscoveryModule
@@ -112,6 +115,7 @@ export class EventSourcingCoreModule implements OnModuleInit, OnModuleDestroy, O
         ];
 
         return {
+            global : true,
             module: EventSourcingCoreModule,
             imports : [
                 DiscoveryModule,

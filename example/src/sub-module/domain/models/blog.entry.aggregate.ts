@@ -22,7 +22,7 @@ export class BlogEntry extends AggregateRoot {
     get title(){ return this._title; }
     get createdAt(){ return this._createdAt; }
 
-    create(author: BlogEntryAuthorId, title: string, content: string, createdOn?:Date){
+    create(author: BlogEntryAuthorId, title: string, content: string, createdOn?:Date) : BlogEntryId {
         // validate the stuff
         if(!author || !author.value)
             throw new Error('Author is required');
@@ -41,6 +41,9 @@ export class BlogEntry extends AggregateRoot {
                 id.value, title, content, author.value, createdOn
             )
         )
+
+        // deliver back the id
+        return id;
     }
     delete() {
         this.applyEvent(

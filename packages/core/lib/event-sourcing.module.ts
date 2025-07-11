@@ -39,8 +39,12 @@ export class EventSourcingModule  {
 		return {
 			module: EventSourcingFeatureModule,
 			imports: [DiscoveryModule],
-			providers,
-			exports: providers,
+			providers : [
+				...providers
+			],
+			exports: [
+				...providers
+			],
 		};
 	}
 
