@@ -5,5 +5,8 @@ export default defineConfig({
 	format: ['cjs'],
 	target: 'es2023',
 	noExternal: ['@ocoda/event-sourcing'],
-	watch: ['./src/**/*'],
+	watch: [
+		'./src/**/*',
+		'../packages/core/lib/**/*',
+	],
 });

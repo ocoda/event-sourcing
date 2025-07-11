@@ -5,7 +5,7 @@ import {
 	AccountDebitedEvent,
 	AccountOpenedEvent,
 	AccountOwnerAddedEvent,
-	AccountOwnerRemovedEvent,
+	AccountOwnerRemovedEvent
 } from '../events';
 import { CannotCloseAccountException, InsufficientFundsException } from '../exceptions';
 

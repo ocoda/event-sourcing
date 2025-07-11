@@ -17,9 +17,21 @@ import {
 	SnapshotRepositories,
 } from './app.providers';
 import { AccountOpenedEventSerializer } from './domain/events/account-opened.event-serializer';
+import {SubModuleModule} from "./sub-module/sub-module.module";
 
 @Module({
 	imports: [
+		// EventSourcingModule.forRoot<MongoDBEventStoreConfig, MongoDBSnapshotStoreConfig>({
+		// 	events: [...Events],
+		// 	eventStore: {
+		// 		driver: MongoDBEventStore,
+		// 		url: 'mongodb://127.0.0.1:27017',
+		// 	},
+		// 	snapshotStore: {
+		// 		driver: MongoDBSnapshotStore,
+		// 		url: 'mongodb://127.0.0.1:27017',
+		// 	},
+		// }),
 		EventSourcingModule.forRootAsync<MongoDBEventStoreConfig, MongoDBSnapshotStoreConfig>({
 			useFactory: () => ({
 				events: [...Events],
@@ -33,6 +45,7 @@ import { AccountOpenedEventSerializer } from './domain/events/account-opened.eve
 				},
 			}),
 		}),
+		SubModuleModule
 	],
 	providers: [
 		...AggregateRepositories,
