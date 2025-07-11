@@ -1,24 +1,14 @@
 import 'reflect-metadata';
-import {Injectable, Type} from '@nestjs/common';
-import {InstanceWrapper} from "@nestjs/core/injector/instance-wrapper";
+import { Injectable, type Type } from '@nestjs/common';
+import type { InstanceWrapper } from '@nestjs/core/injector/instance-wrapper';
 
 import {
+	MissingQueryHandlerMetadataException,
 	MissingQueryMetadataException,
 	QueryHandlerNotFoundException,
-	MissingQueryHandlerMetadataException
 } from './exceptions';
-import {
-	DefaultQueryPubSub,
-	ObservableBus,
-	getQueryMetadata,
-	getQueryHandlerMetadata
-} from './helpers';
-import type {
-	IQuery,
-	IQueryBus,
-	IQueryHandler,
-	IQueryPublisher
-} from './interfaces';
+import { DefaultQueryPubSub, ObservableBus, getQueryHandlerMetadata, getQueryMetadata } from './helpers';
+import type { IQuery, IQueryBus, IQueryHandler, IQueryPublisher } from './interfaces';
 
 @Injectable()
 export class QueryBus<QueryBase extends IQuery = IQuery>
@@ -64,14 +54,16 @@ export class QueryBus<QueryBase extends IQuery = IQuery>
 
 	// region registration
 	register(handlers: InstanceWrapper<IQueryHandler>[] = []) {
-		handlers.forEach(handler => this.registerHandler(handler));
+		for (const handler of handlers) {
+			this.registerHandler(handler);
+		}
 	}
 	protected registerHandler(handler: InstanceWrapper<IQueryHandler>) {
 		const { metatype, instance } = handler;
 
 		// check
-		if(!metatype || !instance) {
-			throw new Error("Invalid query handler instance provided.");
+		if (!metatype || !instance) {
+			throw new Error('Invalid query handler instance provided.');
 		}
 
 		// check if the handler is a query handler

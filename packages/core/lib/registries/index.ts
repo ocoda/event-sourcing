@@ -1,1 +1,1 @@
-export * from './event.registry'
+export * from './event.registry';

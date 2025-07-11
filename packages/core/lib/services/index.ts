@@ -1,1 +1,1 @@
-export * from './explorer.service'
+export * from './explorer.service';

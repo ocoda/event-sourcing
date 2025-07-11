@@ -1,24 +1,14 @@
 import 'reflect-metadata';
-import {Injectable, Type} from '@nestjs/common';
-import {InstanceWrapper} from "@nestjs/core/injector/instance-wrapper";
+import { Injectable, type Type } from '@nestjs/common';
+import type { InstanceWrapper } from '@nestjs/core/injector/instance-wrapper';
 
 import {
-	ObservableBus,
-	getCommandMetadata,
-	DefaultCommandPubSub,
-	getCommandHandlerMetadata
-} from './helpers';
-import type {
-	ICommand,
-	ICommandBus,
-	ICommandHandler,
-	ICommandPublisher
-} from './interfaces';
-import {
 	CommandHandlerNotFoundException,
+	MissingCommandHandlerMetadataException,
 	MissingCommandMetadataException,
-	MissingCommandHandlerMetadataException
 } from './exceptions';
+import { DefaultCommandPubSub, ObservableBus, getCommandHandlerMetadata, getCommandMetadata } from './helpers';
+import type { ICommand, ICommandBus, ICommandHandler, ICommandPublisher } from './interfaces';
 
 @Injectable()
 export class CommandBus<CommandBase extends ICommand = ICommand>
@@ -61,16 +51,17 @@ export class CommandBus<CommandBase extends ICommand = ICommand>
 
 	// region registration
 	register(handlers: InstanceWrapper<ICommandHandler>[] = []) {
-		handlers.forEach(handler => this.registerHandler(handler));
+		for (const handler of handlers) {
+			this.registerHandler(handler);
+		}
 	}
 	protected registerHandler(handler: InstanceWrapper<ICommandHandler>) {
-
 		// get the metadata from the handler
 		const { metatype, instance } = handler;
 
 		// if the handler is not a command handler, return
 		if (!metatype || !instance) {
-			throw new Error("Invalid command handler instance provided.");
+			throw new Error('Invalid command handler instance provided.');
 		}
 
 		// get the command metadata

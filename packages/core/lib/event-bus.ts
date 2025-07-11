@@ -1,38 +1,13 @@
-import {
-	from,
-	type Observable,
-	type Subscription,
-} from 'rxjs';
-import {
-	filter,
-	mergeMap
-} from 'rxjs/operators';
-import {
-	Injectable,
-	type OnModuleDestroy
-} from '@nestjs/common';
-import {InstanceWrapper} from "@nestjs/core/injector/instance-wrapper";
+import { Injectable, type OnModuleDestroy, type Type } from '@nestjs/common';
+import type { InstanceWrapper } from '@nestjs/core/injector/instance-wrapper';
+import { type Observable, type Subscription, from } from 'rxjs';
+import { filter, mergeMap } from 'rxjs/operators';
 
-import {
-	ObservableBus,
-	getEventMetadata,
-	getEventSubscriberMetadata,
-} from './helpers';
-import {
-	DefaultEventPubSub
-} from './helpers/default-event-publisher';
-import type {
-	IEventBus,
-	IEventPublisher,
-	IEventSubscriber
-} from './interfaces';
-import type {
-	EventEnvelope
-} from './models';
-import {
-	MissingEventMetadataException,
-	MissingEventSubscriberMetadataException
-} from './exceptions'
+import { MissingEventMetadataException, MissingEventSubscriberMetadataException } from './exceptions';
+import { ObservableBus, getEventMetadata, getEventSubscriberMetadata } from './helpers';
+import { DefaultEventPubSub } from './helpers/default-event-publisher';
+import type { IEventBus, IEventPublisher, IEventSubscriber } from './interfaces';
+import type { EventEnvelope } from './models';
 
 @Injectable()
 export class EventBus extends ObservableBus<EventEnvelope> implements IEventBus, OnModuleDestroy {
@@ -73,23 +48,26 @@ export class EventBus extends ObservableBus<EventEnvelope> implements IEventBus,
 
 	// region registration
 	registerPublishers(publishers: InstanceWrapper<IEventPublisher>[] = []) {
-		publishers.forEach((publisher) => this.registerPublisher(publisher));
+		for (const publisher of publishers) {
+			this.registerPublisher(publisher);
+		}
 	}
 	registerSubscribers(subscribers: InstanceWrapper<IEventSubscriber>[] = []) {
-		subscribers.forEach((subscriber) => this.registerSubscriber(subscriber));
+		for (const subscriber of subscribers) {
+			this.registerSubscriber(subscriber);
+		}
 	}
 
 	protected registerPublisher(handler: InstanceWrapper<IEventPublisher>) {
 		const { instance } = handler;
-		if(!instance)
-			return;
+		if (!instance) return;
 
 		this.addPublisher(instance as IEventPublisher);
 	}
 	protected registerSubscriber(handler: InstanceWrapper<IEventSubscriber>) {
 		const { metatype, instance } = handler;
 		if (!metatype || !instance) {
-			throw new MissingEventSubscriberMetadataException(metatype);
+			throw new MissingEventSubscriberMetadataException(metatype as Type<IEventSubscriber>);
 		}
 
 		// check if the handler is an event subscriber

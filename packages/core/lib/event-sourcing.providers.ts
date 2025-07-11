@@ -1,18 +1,17 @@
-import type {InjectionToken, OptionalFactoryDependency, Provider} from '@nestjs/common';
+import type { InjectionToken, OptionalFactoryDependency, Provider } from '@nestjs/common';
 import { EVENT_SOURCING_OPTIONS } from './constants';
 import { EventMap } from './event-map';
 import { EventStore } from './event-store';
-import {InMemoryEventStore, type InMemoryEventStoreConfig} from './integration/event-store';
-import {InMemorySnapshotStore, type InMemorySnapshotStoreConfig} from './integration/snapshot-store';
+import { InMemoryEventStore, type InMemoryEventStoreConfig } from './integration/event-store';
+import { InMemorySnapshotStore, type InMemorySnapshotStoreConfig } from './integration/snapshot-store';
 import type {
 	EventSourcingModuleAsyncOptions,
-	EventSourcingModuleOptions, EventSourcingOptionsFactory,
+	EventSourcingModuleOptions,
+	EventSourcingOptionsFactory,
 	EventStoreConfig,
-	SnapshotStoreConfig
+	SnapshotStoreConfig,
 } from './interfaces';
 import { SnapshotStore } from './snapshot-store';
-
-
 
 export const EventStoreProvider = {
 	provide: EventStore,
@@ -38,22 +37,16 @@ export const SnapshotStoreProvider = {
 export const getOptionsToken = () => EVENT_SOURCING_OPTIONS;
 
 export function createEventStoreProviders() {
-	return [
-		EventStoreProvider
-	]
+	return [EventStoreProvider];
 }
 export function createSnapshotStoreProviders() {
-	return [
-		SnapshotStoreProvider
-	]
+	return [SnapshotStoreProvider];
 }
 export function createEventSourcingOptionsProvider<
 	TEventStoreConfig extends EventStoreConfig = InMemoryEventStoreConfig,
-	TSnapshotStoreConfig extends SnapshotStoreConfig = InMemorySnapshotStoreConfig
+	TSnapshotStoreConfig extends SnapshotStoreConfig = InMemorySnapshotStoreConfig,
 >(options: EventSourcingModuleOptions<TEventStoreConfig, TSnapshotStoreConfig>): Provider[] {
-	return [
-		{ provide: EVENT_SOURCING_OPTIONS, useValue: options }
-	];
+	return [{ provide: EVENT_SOURCING_OPTIONS, useValue: options }];
 }
 
 export function createAsyncEventSourcingOptionsProvider<
@@ -61,12 +54,12 @@ export function createAsyncEventSourcingOptionsProvider<
 	TSnapshotStoreConfig extends SnapshotStoreConfig,
 >(options: EventSourcingModuleAsyncOptions<TEventStoreConfig, TSnapshotStoreConfig>): Provider[] {
 	// If useExisting or useFactory is provided, we can directly return the provider
-	if(options.useValue) {
+	if (options.useValue) {
 		return [
 			{
 				provide: EVENT_SOURCING_OPTIONS,
 				useValue: options.useValue,
-			}
+			},
 		];
 	}
 
@@ -77,7 +70,7 @@ export function createAsyncEventSourcingOptionsProvider<
 				provide: EVENT_SOURCING_OPTIONS,
 				useFactory: options.useFactory,
 				inject: options.inject || [],
-			}
+			},
 		];
 	}
 
@@ -95,6 +88,6 @@ export function createAsyncEventSourcingOptionsProvider<
 			useFactory: async (optionsFactory: EventSourcingOptionsFactory) =>
 				await optionsFactory.createEventSourcingOptions(),
 			inject,
-		}
+		},
 	];
 }

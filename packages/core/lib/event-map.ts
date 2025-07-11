@@ -1,25 +1,12 @@
+import { Injectable, type Type } from '@nestjs/common';
+import type { InstanceWrapper } from '@nestjs/core/injector/instance-wrapper';
 import {
-	type Type,
-	Injectable,
-} from '@nestjs/common';
-import {
-	InstanceWrapper
-} from "@nestjs/core/injector/instance-wrapper";
-import {
-	UnregisteredEventException,
 	MissingEventMetadataException,
+	UnregisteredEventException,
 	UnregisteredSerializerException,
 } from './exceptions';
-import {
-	DefaultEventSerializer,
-	getEventMetadata,
-	getEventSerializerMetadata,
-} from './helpers';
-import type {
-	IEvent,
-	IEventPayload,
-	IEventSerializer
-} from './interfaces';
+import { DefaultEventSerializer, getEventMetadata, getEventSerializerMetadata } from './helpers';
+import type { IEvent, IEventPayload, IEventSerializer } from './interfaces';
 
 export type EventSerializerType = Type<IEventSerializer<IEvent>>;
 
@@ -110,8 +97,7 @@ export class EventMap {
 
 	// region registration
 	registerSerializers(events: Type<IEvent>[] = [], serializers: InstanceWrapper<IEventSerializer>[] = []) {
-		// go through the events and register them
-		events.forEach(event => {
+		for (const event of events) {
 			// get the handler
 			const handler = serializers.find(({ metatype }) => {
 				return getEventSerializerMetadata(metatype as Type<IEventSerializer>)?.event === event;
@@ -122,7 +108,7 @@ export class EventMap {
 
 			// register the event
 			this.register(event, serializer as IEventSerializer);
-		});
+		}
 	}
 	// endregion
 }

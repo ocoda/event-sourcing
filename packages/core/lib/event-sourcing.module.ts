@@ -1,35 +1,23 @@
-import {
-	Type,
-	Module,
-	type DynamicModule,
-} from '@nestjs/common';
+import { type DynamicModule, Module, type Type } from '@nestjs/common';
 import { DiscoveryModule } from '@nestjs/core';
 
-import {
-	EventRegistry
-} from './registries'
+import { EventSourcingCoreModule, EventSourcingFeatureModule } from './event-sourcing.core.module';
+import type { InMemoryEventStoreConfig, InMemorySnapshotStoreConfig } from './integration';
 import type {
-	InMemoryEventStoreConfig,
-	InMemorySnapshotStoreConfig
-} from './integration';
-import type {
-	IEvent,
-	EventStoreConfig,
-	SnapshotStoreConfig,
-	EventSourcingModuleOptions,
 	EventSourcingModuleAsyncOptions,
+	EventSourcingModuleOptions,
+	EventStoreConfig,
+	IEvent,
+	SnapshotStoreConfig,
 } from './interfaces';
-import {
-	EventSourcingCoreModule,
-	EventSourcingFeatureModule
-} from './event-sourcing.core.module'
+import { EventRegistry } from './registries';
 
 @Module({})
-export class EventSourcingModule  {
+export class EventSourcingModule {
 	/**
 	 * Register the feature module synchronously
 	 */
-	static forFeature(options?: {events: Type<IEvent>[] }): DynamicModule {
+	static forFeature(options?: { events: Type<IEvent>[] }): DynamicModule {
 		// prepare the providers
 		const providers = [];
 
@@ -39,12 +27,8 @@ export class EventSourcingModule  {
 		return {
 			module: EventSourcingFeatureModule,
 			imports: [DiscoveryModule],
-			providers : [
-				...providers
-			],
-			exports: [
-				...providers
-			],
+			providers: [...providers],
+			exports: [...providers],
 		};
 	}
 
@@ -55,20 +39,14 @@ export class EventSourcingModule  {
 		TEventStoreConfig extends EventStoreConfig = InMemoryEventStoreConfig,
 		TSnapshotStoreConfig extends SnapshotStoreConfig = InMemorySnapshotStoreConfig,
 	>(options: EventSourcingModuleOptions<TEventStoreConfig, TSnapshotStoreConfig>): DynamicModule {
-
 		// custom providers on top
 		const providers = [];
 
 		return {
 			module: EventSourcingModule,
-			imports: [
-				EventSourcingCoreModule.forRoot(options),
-			],
-			exports: [
-				...providers,
-				EventSourcingCoreModule
-			],
-			providers : providers,
+			imports: [EventSourcingCoreModule.forRoot(options)],
+			exports: [...providers, EventSourcingCoreModule],
+			providers: providers,
 		};
 	}
 
@@ -79,21 +57,13 @@ export class EventSourcingModule  {
 		TEventStoreConfig extends EventStoreConfig = InMemoryEventStoreConfig,
 		TSnapshotStoreConfig extends SnapshotStoreConfig = InMemorySnapshotStoreConfig,
 	>(options: EventSourcingModuleAsyncOptions<TEventStoreConfig, TSnapshotStoreConfig>): DynamicModule {
-
 		const providers = [];
 
 		return {
 			module: EventSourcingModule,
-			imports: [
-				DiscoveryModule,
-				EventSourcingCoreModule.forRootAsync(options),
-			],
-			exports: [
-				...providers,
-				EventSourcingCoreModule
-			],
-			providers : providers,
+			imports: [DiscoveryModule, EventSourcingCoreModule.forRootAsync(options)],
+			exports: [...providers, EventSourcingCoreModule],
+			providers: providers,
 		};
 	}
-
 }
