@@ -6,23 +6,15 @@ import {
 	MongoDBSnapshotStore,
 	type MongoDBSnapshotStoreConfig,
 } from '@ocoda/event-sourcing-mongodb';
-import {
-	AggregateRepositories,
-	CommandHandlers,
-	Controllers,
-	EventPublishers,
-	EventSubscribers,
-	Events,
-	QueryHandlers,
-	SnapshotRepositories,
-} from './app.providers';
-import { AccountOpenedEventSerializer } from './domain/events/account-opened.event-serializer';
-import { SubModuleModule } from './sub-module/sub-module.module';
+import { CatalogueModule } from './catalogue/catalogue.module';
+import { Events as CatalogueEvents } from './catalogue/catalogue.providers';
+import { Events as LoaningEvents } from './loaning/loaning.providers';
+import { LoaningModule } from './loaning/loaning.module';
 
 @Module({
 	imports: [
 		// EventSourcingModule.forRoot<MongoDBEventStoreConfig, MongoDBSnapshotStoreConfig>({
-		// 	events: [...Events],
+		// 	events: [...CatalogueEvents, ...LoaningEvents],
 		// 	eventStore: {
 		// 		driver: MongoDBEventStore,
 		// 		url: 'mongodb://127.0.0.1:27017',
@@ -34,7 +26,7 @@ import { SubModuleModule } from './sub-module/sub-module.module';
 		// }),
 		EventSourcingModule.forRootAsync<MongoDBEventStoreConfig, MongoDBSnapshotStoreConfig>({
 			useFactory: () => ({
-				events: [...Events],
+				events: [...CatalogueEvents, ...LoaningEvents],
 				eventStore: {
 					driver: MongoDBEventStore,
 					url: 'mongodb://127.0.0.1:27017',
@@ -45,17 +37,8 @@ import { SubModuleModule } from './sub-module/sub-module.module';
 				},
 			}),
 		}),
-		SubModuleModule,
+		CatalogueModule,
+		LoaningModule,
 	],
-	providers: [
-		...AggregateRepositories,
-		...CommandHandlers,
-		...QueryHandlers,
-		...SnapshotRepositories,
-		...EventSubscribers,
-		...EventPublishers,
-		AccountOpenedEventSerializer,
-	],
-	controllers: [...Controllers],
 })
 export class AppModule {}
