@@ -1,1 +1,1 @@
-export * from './create.blog-entry.command'
+export * from './create.blog-entry.command';

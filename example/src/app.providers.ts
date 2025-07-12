@@ -49,7 +49,7 @@ export const Events = [
 	AccountDebitedEvent,
 	AccountOwnerAddedEvent,
 	AccountOwnerRemovedEvent,
-	AccountClosedEvent
+	AccountClosedEvent,
 ];
 
 export const AggregateRepositories = [AccountRepository];

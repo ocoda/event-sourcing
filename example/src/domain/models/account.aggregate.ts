@@ -5,7 +5,7 @@ import {
 	AccountDebitedEvent,
 	AccountOpenedEvent,
 	AccountOwnerAddedEvent,
-	AccountOwnerRemovedEvent
+	AccountOwnerRemovedEvent,
 } from '../events';
 import { CannotCloseAccountException, InsufficientFundsException } from '../exceptions';
 
@@ -64,7 +64,7 @@ export class Account extends AggregateRoot {
 		this.id = AccountId.from(event.accountId);
 		this.balance = event.balance;
 		this.openedOn = event.openedOn;
-		this.ownerIds = event.accountOwnerIds?.map(AccountOwnerId.from);
+		this.ownerIds = event.accountOwnerIds?.map(AccountOwnerId.from) || [];
 	}
 
 	@EventHandler(AccountOwnerAddedEvent)

@@ -1,22 +1,8 @@
-import {
-    BlogEntryDeletedEvent,
-    BlogEntryCreatedEvent
-} from './domain/events'
+import { BlogEntryCreatedEvent, BlogEntryDeletedEvent } from './domain/events';
 
-import {
-    BlogEntryController
-} from './application/controller'
-import {
-    CreateBlogEntryCommandHandler
-} from './application/commands'
+import { CreateBlogEntryCommandHandler } from './application/commands';
+import { BlogEntryController } from './application/controller';
 
-export const Events = [
-    BlogEntryCreatedEvent,
-    BlogEntryDeletedEvent
-]
-export const Controller = [
-    BlogEntryController
-];
-export const CommandHandlers = [
-    CreateBlogEntryCommandHandler
-];
+export const Events = [BlogEntryCreatedEvent, BlogEntryDeletedEvent];
+export const Controller = [BlogEntryController];
+export const CommandHandlers = [CreateBlogEntryCommandHandler];

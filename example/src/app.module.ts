@@ -17,7 +17,7 @@ import {
 	SnapshotRepositories,
 } from './app.providers';
 import { AccountOpenedEventSerializer } from './domain/events/account-opened.event-serializer';
-import {SubModuleModule} from "./sub-module/sub-module.module";
+import { SubModuleModule } from './sub-module/sub-module.module';
 
 @Module({
 	imports: [
@@ -45,7 +45,7 @@ import {SubModuleModule} from "./sub-module/sub-module.module";
 				},
 			}),
 		}),
-		SubModuleModule
+		SubModuleModule,
 	],
 	providers: [
 		...AggregateRepositories,

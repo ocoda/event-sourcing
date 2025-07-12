@@ -1,1 +1,1 @@
-export * from './blog.entry.aggregate'
+export * from './blog.entry.aggregate';
