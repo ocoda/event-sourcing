@@ -8,8 +8,8 @@ import {
 } from '@ocoda/event-sourcing-mongodb';
 import { CatalogueModule } from './catalogue/catalogue.module';
 import { Events as CatalogueEvents } from './catalogue/catalogue.providers';
-import { Events as LoaningEvents } from './loaning/loaning.providers';
 import { LoaningModule } from './loaning/loaning.module';
+import { Events as LoaningEvents } from './loaning/loaning.providers';
 
 @Module({
 	imports: [

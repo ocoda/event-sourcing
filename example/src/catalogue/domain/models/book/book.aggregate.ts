@@ -1,8 +1,8 @@
 import { Aggregate, AggregateRoot, EventHandler } from '@ocoda/event-sourcing';
 import { BookAddedEvent, BookAuthorAddedEvent, BookAuthorRemovedEvent, BookRemovedEvent } from '../../events';
-import { Isbn } from './isbn.vo';
-import { BookId } from './book-id.vo';
 import { AuthorId } from '../author';
+import { BookId } from './book-id.vo';
+import { Isbn } from './isbn.vo';
 
 @Aggregate({ streamName: 'book' })
 export class Book extends AggregateRoot {

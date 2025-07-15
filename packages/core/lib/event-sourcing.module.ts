@@ -1,4 +1,4 @@
-import { type DynamicModule, Module, type Provider, type Type } from '@nestjs/common';
+import { type DynamicModule, Module, type Type } from '@nestjs/common';
 import { DiscoveryModule } from '@nestjs/core';
 
 import { EventSourcingCoreModule, EventSourcingFeatureModule } from './event-sourcing.core.module';

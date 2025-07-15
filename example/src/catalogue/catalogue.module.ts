@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
+import { APP_FILTER } from '@nestjs/core';
 import { EventSourcingModule } from '@ocoda/event-sourcing';
+import { DomainExceptionsFilter } from './application/exceptions';
 import {
 	AggregateRepositories,
 	CommandHandlers,
@@ -8,8 +10,6 @@ import {
 	QueryHandlers,
 	SnapshotRepositories,
 } from './catalogue.providers';
-import { APP_FILTER } from '@nestjs/core';
-import { DomainExceptionsFilter } from './application/exceptions';
 
 @Module({
 	imports: [EventSourcingModule.forFeature({ events: [...Events] })],

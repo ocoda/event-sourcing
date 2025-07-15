@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 // biome-ignore lint/style/useImportType: DI
 import { EventStore, EventStream } from '@ocoda/event-sourcing';
-// biome-ignore lint/style/useImportType: DI
 import { BookLoan, BookLoanId } from '../../domain/models';
 // biome-ignore lint/style/useImportType: DI
 import { BookLoanSnapshotRepository } from './book-loan.snapshot-repository';

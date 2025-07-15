@@ -1,8 +1,8 @@
 import { CommandHandler, type ICommand, type ICommandHandler } from '@ocoda/event-sourcing';
+import { BookLoanNotFoundException } from '../../domain/exceptions';
 import { BookLoanId } from '../../domain/models';
 // biome-ignore lint/style/useImportType: DI
 import { BookLoanRepository } from '../repositories';
-import { BookLoanNotFoundException } from '../../domain/exceptions';
 
 export class ExtendBookLoanCommand implements ICommand {
 	constructor(

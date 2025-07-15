@@ -2,8 +2,8 @@ import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 // biome-ignore lint/style/useImportType: DI
 import { CommandBus, QueryBus } from '@ocoda/event-sourcing';
 import type { BookLoanId } from '../domain/models';
-import { CreateBookLoanCommand, ExtendBookLoanCommand, ReturnBookLoanCommand } from './commands';
 import type { CreateBookLoanDto, ExtendBookLoanDto } from './book-loan.dtos';
+import { CreateBookLoanCommand, ExtendBookLoanCommand, ReturnBookLoanCommand } from './commands';
 import { GetBookLoanByIdQuery } from './queries';
 
 @Controller('book-loan')
