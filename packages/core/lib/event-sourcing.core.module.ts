@@ -3,7 +3,6 @@ import {
 	Logger,
 	Module,
 	type OnApplicationBootstrap,
-	type OnApplicationShutdown,
 	type OnModuleDestroy,
 	type OnModuleInit,
 } from '@nestjs/common';
@@ -42,12 +41,9 @@ import type { InMemoryEventStoreConfig, InMemorySnapshotStoreConfig } from './in
 export class EventSourcingFeatureModule {}
 
 @Module({})
-export class EventSourcingCoreModule
-	implements OnModuleInit, OnModuleDestroy, OnApplicationBootstrap, OnApplicationShutdown
-{
+export class EventSourcingCoreModule implements OnModuleInit, OnModuleDestroy, OnApplicationBootstrap {
 	private _logger = new Logger(EventSourcingCoreModule.name);
 
-	// noinspection JSUnusedLocalSymbols
 	constructor(
 		@InjectEventSourcingOptions()
 		private readonly options: EventSourcingModuleOptions,
@@ -60,7 +56,6 @@ export class EventSourcingCoreModule
 		private readonly explorerService: ExplorerService,
 	) {}
 
-	// region Module Configuration
 	static forRoot<
 		TEventStoreConfig extends EventStoreConfig = InMemoryEventStoreConfig,
 		TSnapshotStoreConfig extends SnapshotStoreConfig = InMemorySnapshotStoreConfig,
@@ -88,7 +83,6 @@ export class EventSourcingCoreModule
 		TEventStoreConfig extends EventStoreConfig = InMemoryEventStoreConfig,
 		TSnapshotStoreConfig extends SnapshotStoreConfig = InMemorySnapshotStoreConfig,
 	>(options: EventSourcingModuleAsyncOptions<TEventStoreConfig, TSnapshotStoreConfig>): DynamicModule {
-		// Create providers based on the provided options
 		const exportedProviders = [
 			EventBus,
 			EventMap,
@@ -107,9 +101,7 @@ export class EventSourcingCoreModule
 			exports: [...exportedProviders],
 		};
 	}
-	// endregion
 
-	// region Lifecycle Hooks
 	async onModuleInit() {
 		const createDefaultEventPool = this.options.eventStore?.useDefaultPool ?? true;
 		const createDefaultSnapshotPool = this.options.snapshotStore?.useDefaultPool ?? true;
@@ -124,7 +116,7 @@ export class EventSourcingCoreModule
 		await Promise.all(loadCollections);
 	}
 	async onModuleDestroy() {
-		await Promise.all([this.eventStore.disconnect(), this.snapshotStore.disconnect()]); // TODO: Add error handling
+		await Promise.all([this.eventStore.disconnect(), this.snapshotStore.disconnect()]);
 	}
 
 	onApplicationBootstrap(): any {
@@ -140,11 +132,6 @@ export class EventSourcingCoreModule
 		this.eventMap.registerSerializers(events, eventSerializers);
 		this._logger.debug('Event handlers registered successfully.');
 
-		// some "magic"
 		this.eventStore.publish = this.eventBus.publish;
 	}
-
-	onApplicationShutdown(signal?: string): any {}
-
-	// endregion
 }

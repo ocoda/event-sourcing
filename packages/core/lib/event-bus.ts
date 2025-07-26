@@ -46,7 +46,6 @@ export class EventBus extends ObservableBus<EventEnvelope> implements IEventBus,
 		return this.subject$.pipe(filter(({ event }) => event === eventName));
 	}
 
-	// region registration
 	registerPublishers(publishers: InstanceWrapper<IEventPublisher>[] = []) {
 		for (const publisher of publishers) {
 			this.registerPublisher(publisher);
@@ -87,5 +86,4 @@ export class EventBus extends ObservableBus<EventEnvelope> implements IEventBus,
 			this.bind(instance as IEventSubscriber, name);
 		}
 	}
-	// endregion
 }

@@ -52,7 +52,6 @@ export class QueryBus<QueryBase extends IQuery = IQuery>
 		return id;
 	}
 
-	// region registration
 	register(handlers: InstanceWrapper<IQueryHandler>[] = []) {
 		for (const handler of handlers) {
 			this.registerHandler(handler);
@@ -85,5 +84,4 @@ export class QueryBus<QueryBase extends IQuery = IQuery>
 		// bind the handler to the query id
 		this.bind(instance as IQueryHandler, id);
 	}
-	// endregion
 }

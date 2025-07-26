@@ -49,7 +49,6 @@ export class CommandBus<CommandBase extends ICommand = ICommand>
 		return id;
 	}
 
-	// region registration
 	register(handlers: InstanceWrapper<ICommandHandler>[] = []) {
 		for (const handler of handlers) {
 			this.registerHandler(handler);
@@ -83,5 +82,4 @@ export class CommandBus<CommandBase extends ICommand = ICommand>
 		// bind the handler to the command id
 		this.bind(instance as ICommandHandler, id);
 	}
-	// endregion
 }

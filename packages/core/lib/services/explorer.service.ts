@@ -39,7 +39,7 @@ export type ProvidersIntrospectionResult = {
 };
 
 @Injectable()
-export class ExplorerService<EventBase extends IEvent = IEvent> {
+export class ExplorerService {
 	constructor(
 		@InjectEventSourcingOptions()
 		private readonly options: EventSourcingModuleOptions,
@@ -51,10 +51,8 @@ export class ExplorerService<EventBase extends IEvent = IEvent> {
 	}
 
 	explore(): ProvidersIntrospectionResult {
-		// get all modules from the module container
 		const modules = [...this.modulesContainer.values()];
 
-		// deliver what we need
 		return {
 			sagas: [],
 			events: this.events,

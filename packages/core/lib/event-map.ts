@@ -95,7 +95,6 @@ export class EventMap {
 		return name;
 	}
 
-	// region registration
 	registerSerializers(events: Type<IEvent>[] = [], serializers: InstanceWrapper<IEventSerializer>[] = []) {
 		for (const event of events) {
 			// get the handler
@@ -110,5 +109,4 @@ export class EventMap {
 			this.register(event, serializer as IEventSerializer);
 		}
 	}
-	// endregion
 }
