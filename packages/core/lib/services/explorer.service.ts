@@ -25,6 +25,10 @@ import type {
 import { EventRegistry } from '../registries';
 
 export type ProvidersIntrospectionResult = {
+	/**
+	 * For future saga support, currently unused.
+	 * @ignore
+	 */
 	sagas?: InstanceWrapper[];
 	events?: Type<IEvent>[];
 	queries?: InstanceWrapper<IQueryHandler>[];
