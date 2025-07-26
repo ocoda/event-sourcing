@@ -116,7 +116,12 @@ export class EventSourcingCoreModule implements OnModuleInit, OnModuleDestroy, O
 		await Promise.all(loadCollections);
 	}
 	async onModuleDestroy() {
-		await Promise.all([this.eventStore.disconnect(), this.snapshotStore.disconnect()]);
+		const disconnects = await Promise.allSettled([this.eventStore.disconnect(), this.snapshotStore.disconnect()]);
+		for (const disconnect of disconnects) {
+			if (disconnect.status === 'rejected') {
+				this._logger.error('Error while disconnecting from event store or snapshot store', disconnect.reason);
+			}
+		}
 	}
 
 	onApplicationBootstrap(): any {
