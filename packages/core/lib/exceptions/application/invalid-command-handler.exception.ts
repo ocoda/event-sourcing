@@ -1,4 +1,4 @@
-import type { ICommandHandler } from '@ocoda/event-sourcing/interfaces';
+import type { ICommandHandler } from '../../interfaces';
 
 export class InvalidCommandHandlerException extends Error {
 	constructor(commandHandler: ICommandHandler) {

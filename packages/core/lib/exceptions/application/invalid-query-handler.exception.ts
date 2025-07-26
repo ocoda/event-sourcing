@@ -1,4 +1,4 @@
-import type { IQueryHandler } from '@ocoda/event-sourcing/interfaces';
+import type { IQueryHandler } from '../../interfaces';
 
 export class InvalidQueryHandlerException extends Error {
 	constructor(queryHandler: IQueryHandler) {
