@@ -3,6 +3,7 @@ import { Injectable, type Type } from '@nestjs/common';
 import type { InstanceWrapper } from '@nestjs/core/injector/instance-wrapper';
 
 import {
+	InvalidQueryHandlerException,
 	MissingQueryHandlerMetadataException,
 	MissingQueryMetadataException,
 	QueryHandlerNotFoundException,
@@ -62,7 +63,7 @@ export class QueryBus<QueryBase extends IQuery = IQuery>
 
 		// check
 		if (!metatype || !instance) {
-			throw new Error('Invalid query handler instance provided.');
+			throw new InvalidQueryHandlerException(instance);
 		}
 
 		// check if the handler is a query handler

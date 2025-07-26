@@ -4,6 +4,7 @@ import type { InstanceWrapper } from '@nestjs/core/injector/instance-wrapper';
 
 import {
 	CommandHandlerNotFoundException,
+	InvalidCommandHandlerException,
 	MissingCommandHandlerMetadataException,
 	MissingCommandMetadataException,
 } from './exceptions';
@@ -60,7 +61,7 @@ export class CommandBus<CommandBase extends ICommand = ICommand>
 
 		// if the handler is not a command handler, return
 		if (!metatype || !instance) {
-			throw new Error('Invalid command handler instance provided.');
+			throw new InvalidCommandHandlerException(instance);
 		}
 
 		// get the command metadata
