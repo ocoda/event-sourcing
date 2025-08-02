@@ -2,7 +2,7 @@ import { Injectable, type Type } from '@nestjs/common';
 import type { InstanceWrapper } from '@nestjs/core/injector/instance-wrapper';
 
 import type { Module } from '@nestjs/core/injector/module';
-// biome-ignore lint/style/useImportType: used in di
+// biome-ignore lint/style/useImportType: DI
 import { ModulesContainer } from '@nestjs/core/injector/modules-container';
 
 import {
