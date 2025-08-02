@@ -1,0 +1,23 @@
+{
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"type": "node",
+			"request": "launch",
+			"name": "Debug Example Package",
+			"skipFiles": ["<node_internals>/**"],
+			"runtimeExecutable": "${workspaceFolder}/node_modules/.bin/turbo",
+			"runtimeArgs": ["dev", "--filter=@ocoda/event-sourcing-example"],
+			"cwd": "${workspaceFolder}",
+			"autoAttachChildProcesses": true,
+			"console": "integratedTerminal",
+			"internalConsoleOptions": "neverOpen",
+			"outputCapture": "std",
+			"env": {
+				"NODE_ENV": "development"
+			},
+			"sourceMaps": true,
+			"outFiles": ["${workspaceFolder}/example/dist/**/*.js"]
+		}
+	]
+}
