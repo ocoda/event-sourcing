@@ -1,10 +1,10 @@
 import type { InstanceWrapper } from '@nestjs/core/injector/instance-wrapper';
 import {
 	COMMAND_HANDLER_METADATA,
-	Event,
 	EVENT_PUBLISHER_METADATA,
 	EVENT_SERIALIZER_METADATA,
 	EVENT_SUBSCRIBER_METADATA,
+	Event,
 	type EventSourcingModuleOptions,
 	type IEvent,
 	QUERY_HANDLER_METADATA,
