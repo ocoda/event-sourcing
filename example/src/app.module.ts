@@ -7,9 +7,7 @@ import {
 	type MongoDBSnapshotStoreConfig,
 } from '@ocoda/event-sourcing-mongodb';
 import { CatalogueModule } from './catalogue/catalogue.module';
-import { Events as CatalogueEvents } from './catalogue/catalogue.providers';
 import { LoaningModule } from './loaning/loaning.module';
-import { Events as LoaningEvents } from './loaning/loaning.providers';
 
 @Module({
 	imports: [
@@ -26,7 +24,6 @@ import { Events as LoaningEvents } from './loaning/loaning.providers';
 		// }),
 		EventSourcingModule.forRootAsync<MongoDBEventStoreConfig, MongoDBSnapshotStoreConfig>({
 			useFactory: () => ({
-				events: [...CatalogueEvents, ...LoaningEvents],
 				eventStore: {
 					driver: MongoDBEventStore,
 					url: 'mongodb://127.0.0.1:27017',
