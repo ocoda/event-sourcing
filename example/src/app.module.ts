@@ -6,23 +6,24 @@ import {
 	MongoDBSnapshotStore,
 	type MongoDBSnapshotStoreConfig,
 } from '@ocoda/event-sourcing-mongodb';
-import {
-	AggregateRepositories,
-	CommandHandlers,
-	Controllers,
-	EventPublishers,
-	EventSubscribers,
-	Events,
-	QueryHandlers,
-	SnapshotRepositories,
-} from './app.providers';
-import { AccountOpenedEventSerializer } from './domain/events/account-opened.event-serializer';
+import { CatalogueModule } from './catalogue/catalogue.module';
+import { LoaningModule } from './loaning/loaning.module';
 
 @Module({
 	imports: [
+		// EventSourcingModule.forRoot<MongoDBEventStoreConfig, MongoDBSnapshotStoreConfig>({
+		// 	events: [...CatalogueEvents, ...LoaningEvents],
+		// 	eventStore: {
+		// 		driver: MongoDBEventStore,
+		// 		url: 'mongodb://127.0.0.1:27017',
+		// 	},
+		// 	snapshotStore: {
+		// 		driver: MongoDBSnapshotStore,
+		// 		url: 'mongodb://127.0.0.1:27017',
+		// 	},
+		// }),
 		EventSourcingModule.forRootAsync<MongoDBEventStoreConfig, MongoDBSnapshotStoreConfig>({
 			useFactory: () => ({
-				events: [...Events],
 				eventStore: {
 					driver: MongoDBEventStore,
 					url: 'mongodb://127.0.0.1:27017',
@@ -33,16 +34,8 @@ import { AccountOpenedEventSerializer } from './domain/events/account-opened.eve
 				},
 			}),
 		}),
+		CatalogueModule,
+		LoaningModule,
 	],
-	providers: [
-		...AggregateRepositories,
-		...CommandHandlers,
-		...QueryHandlers,
-		...SnapshotRepositories,
-		...EventSubscribers,
-		...EventPublishers,
-		AccountOpenedEventSerializer,
-	],
-	controllers: [...Controllers],
 })
 export class AppModule {}

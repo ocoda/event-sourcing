@@ -8,7 +8,11 @@ export interface EventSourcingModuleOptions<
 	TEventStoreConfig extends EventStoreConfig = InMemoryEventStoreConfig,
 	TSnapshotStoreConfig extends SnapshotStoreConfig = InMemorySnapshotStoreConfig,
 > {
-	events: Type<IEvent>[];
+	/**
+	 * The events to register in the module globally.
+	 * This is optional, as you can also register events in the feature module.
+	 */
+	events?: Type<IEvent>[];
 	eventStore?: TEventStoreConfig;
 	snapshotStore?: TSnapshotStoreConfig;
 }
@@ -40,5 +44,6 @@ export interface EventSourcingModuleAsyncOptions<
 	useExisting?: Type<TFactory>;
 	useClass?: Type<TFactory>;
 	useFactory?: (...args: any[]) => Promise<TOptions> | TOptions;
+	useValue?: TOptions;
 	inject?: any[];
 }
