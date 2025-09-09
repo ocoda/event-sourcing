@@ -80,7 +80,7 @@ describe('EventSourcingModule - e2e', () => {
 		await app.close();
 	});
 
-	it('should open an account', async () => {
+	it('should add a book', async () => {
 		const command = new OpenAccountCommand();
 		accountId = await commandBus.execute(command);
 		expectedVersion++;

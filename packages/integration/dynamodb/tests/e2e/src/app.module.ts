@@ -6,13 +6,12 @@ import {
 	DynamoDBSnapshotStore,
 	type DynamoDBSnapshotStoreConfig,
 } from '@ocoda/event-sourcing-dynamodb';
-import { Events, testProviders } from '@ocoda/event-sourcing-testing/e2e';
+import { CatalogueModule, LoaningModule } from '@ocoda/event-sourcing-testing/e2e';
 
 @Module({
 	imports: [
 		EventSourcingModule.forRootAsync<DynamoDBEventStoreConfig, DynamoDBSnapshotStoreConfig>({
 			useFactory: () => ({
-				events: Events,
 				eventStore: {
 					driver: DynamoDBEventStore,
 					region: 'us-east-1',
@@ -29,7 +28,8 @@ import { Events, testProviders } from '@ocoda/event-sourcing-testing/e2e';
 				},
 			}),
 		}),
+		CatalogueModule,
+		LoaningModule,
 	],
-	providers: testProviders,
 })
 export class AppModule {}

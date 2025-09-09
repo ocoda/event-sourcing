@@ -1,1 +1,2 @@
-export * from './app.providers';
+export * from './catalogue/catalogue.module';
+export * from './loaning/loaning.module';

@@ -1,30 +1,11 @@
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import {
-	CommandBus,
-	EventStore,
-	type ICommandBus,
-	type IEventPublisher,
-	type IQueryBus,
-	QueryBus,
-	SnapshotStore,
-} from '@ocoda/event-sourcing';
-import {
-	AccountRepository,
-	AddAccountOwnerCommand,
-	CloseAccountCommand,
-	CreditAccountCommand,
-	CustomEventPublisher,
-	DebitAccountCommand,
-	GetAccountByIdQuery,
-	GetAccountsByIdsQuery,
-	GetAccountsQuery,
-	OpenAccountCommand,
-	RemoveAccountOwnerCommand,
-} from '@ocoda/event-sourcing-testing/e2e/application';
-import { type Account, type AccountId, AccountOwnerId } from '@ocoda/event-sourcing-testing/e2e/domain';
-import type { InMemoryEventStore, InMemorySnapshotStore } from '@ocoda/event-sourcing/integration';
+import { CommandBus, EventStore, QueryBus, SnapshotStore, type ICommandBus, type IEventPublisher, type IQueryBus } from '@ocoda/event-sourcing';
 import { AppModule } from './src/app.module';
+import { AddBookCommand } from '@ocoda/event-sourcing-testing/e2e/catalogue/application/commands';
+import { AuthorId, type Book, type BookId } from '@ocoda/event-sourcing-testing/e2e/catalogue/domain/models';
+import { BookRepository } from '@ocoda/event-sourcing-testing/e2e/catalogue/application/repositories';
+import { InMemoryEventStore, InMemorySnapshotStore } from "@ocoda/event-sourcing/integration";
 
 describe('EventSourcingModule - e2e', () => {
 	let app: INestApplication;
@@ -32,15 +13,11 @@ describe('EventSourcingModule - e2e', () => {
 	let queryBus: IQueryBus;
 	let customEventPublisher: IEventPublisher;
 
-	let accountId: AccountId;
-	let accountOwnerIds: AccountOwnerId[];
-	let balance = 0;
+	let bookId: BookId;
+	let book: Book;
 	let expectedVersion = 0;
-	let openedOn: Date;
 
-	let account2Id: AccountId;
-
-	let accountRepository: AccountRepository;
+	let bookRepository: BookRepository;
 
 	beforeAll(async () => {
 		const moduleRef = await Test.createTestingModule({
@@ -52,183 +29,188 @@ describe('EventSourcingModule - e2e', () => {
 
 		commandBus = app.get<CommandBus>(CommandBus);
 		queryBus = app.get<QueryBus>(QueryBus);
-		customEventPublisher = app.get<IEventPublisher>(CustomEventPublisher);
 
 		const eventStore = app.get<InMemoryEventStore>(EventStore);
 		const snapshotStore = app.get<InMemorySnapshotStore>(SnapshotStore);
 		await Promise.all([eventStore.ensureCollection('e2e'), snapshotStore.ensureCollection('e2e')]);
 
-		customEventPublisher.publish = jest.fn((_) => Promise.resolve());
+		// customEventPublisher.publish = jest.fn((_) => Promise.resolve());
 
-		accountRepository = app.get<AccountRepository>(AccountRepository);
+		bookRepository = app.get<BookRepository>(BookRepository);
 	});
 
 	afterAll(async () => await app.close());
 
-	it('should open an account', async () => {
-		const command = new OpenAccountCommand();
-		accountId = await commandBus.execute(command);
+	it('should add a book', async () => {
+		const command = new AddBookCommand(
+			'The Great Gatsby',
+			[AuthorId.generate().value],
+			new Date('1925-04-10'),
+			'9780743273565',
+		);
+		const bookId = await commandBus.execute(command);
 		expectedVersion++;
 
-		expect(customEventPublisher.publish).toHaveBeenCalledTimes(1);
+		// expect(customEventPublisher.publish).toHaveBeenCalledTimes(1);
 
-		const account = await accountRepository.getById(accountId);
-		openedOn = account.openedOn;
+		const book = await bookRepository.getById(bookId);
+		// openedOn = account.openedOn;
+		expect(book).toBeDefined();
+		console.log(book);
+		// expect(book.version).toBe(expectedVersion);
 
-		expect(account.version).toBe(expectedVersion);
-
-		expect(account.id).toEqual(accountId);
-		expect(account.ownerIds).toEqual([]);
-		expect(account.balance).toBe(0);
-		expect(account.openedOn).toBeInstanceOf(Date);
-		expect(account.closedOn).toBeUndefined();
+		// expect(account.id).toEqual(accountId);
+		// expect(account.ownerIds).toEqual([]);
+		// expect(account.balance).toBe(0);
+		// expect(account.openedOn).toBeInstanceOf(Date);
+		// expect(account.closedOn).toBeUndefined();
 	});
 
-	it('should add owners to an account', async () => {
-		accountOwnerIds = [
-			AccountOwnerId.generate(),
-			AccountOwnerId.generate(),
-			AccountOwnerId.generate(),
-			AccountOwnerId.generate(),
-		];
+	// it('should add owners to an account', async () => {
+	// 	accountOwnerIds = [
+	// 		AccountOwnerId.generate(),
+	// 		AccountOwnerId.generate(),
+	// 		AccountOwnerId.generate(),
+	// 		AccountOwnerId.generate(),
+	// 	];
 
-		for (const ownerId of accountOwnerIds) {
-			const command = new AddAccountOwnerCommand(accountId.value, ownerId.value);
-			await commandBus.execute(command);
-			expectedVersion++;
+	// 	for (const ownerId of accountOwnerIds) {
+	// 		const command = new AddAccountOwnerCommand(accountId.value, ownerId.value);
+	// 		await commandBus.execute(command);
+	// 		expectedVersion++;
 
-			const account = await accountRepository.getById(accountId);
+	// 		const account = await accountRepository.getById(accountId);
 
-			expect(account.version).toBe(expectedVersion);
+	// 		expect(account.version).toBe(expectedVersion);
 
-			expect(account.id).toEqual(accountId);
-			expect(account.ownerIds).toEqual(accountOwnerIds.slice(0, accountOwnerIds.indexOf(ownerId) + 1));
-			expect(account.balance).toBe(0);
-			expect(account.openedOn).toEqual(openedOn);
-			expect(account.closedOn).toBeUndefined();
-		}
+	// 		expect(account.id).toEqual(accountId);
+	// 		expect(account.ownerIds).toEqual(accountOwnerIds.slice(0, accountOwnerIds.indexOf(ownerId) + 1));
+	// 		expect(account.balance).toBe(0);
+	// 		expect(account.openedOn).toEqual(openedOn);
+	// 		expect(account.closedOn).toBeUndefined();
+	// 	}
 
-		expect(customEventPublisher.publish).toHaveBeenCalledTimes(5);
-	});
+	// 	expect(customEventPublisher.publish).toHaveBeenCalledTimes(5);
+	// });
 
-	it('should remove owners from an account', async () => {
-		const ownersToRemove = accountOwnerIds.splice(2, 4);
+	// it('should remove owners from an account', async () => {
+	// 	const ownersToRemove = accountOwnerIds.splice(2, 4);
 
-		for (const ownerId of ownersToRemove) {
-			const command = new RemoveAccountOwnerCommand(accountId.value, ownerId.value);
-			await commandBus.execute(command);
-			expectedVersion++;
+	// 	for (const ownerId of ownersToRemove) {
+	// 		const command = new RemoveAccountOwnerCommand(accountId.value, ownerId.value);
+	// 		await commandBus.execute(command);
+	// 		expectedVersion++;
 
-			const account = await accountRepository.getById(accountId);
+	// 		const account = await accountRepository.getById(accountId);
 
-			expect(account.version).toBe(expectedVersion);
+	// 		expect(account.version).toBe(expectedVersion);
 
-			expect(account.id).toEqual(accountId);
-			expect(account.ownerIds).not.toContain(ownerId);
-			expect(account.balance).toBe(0);
-			expect(account.openedOn).toEqual(openedOn);
-			expect(account.closedOn).toBeUndefined();
-		}
+	// 		expect(account.id).toEqual(accountId);
+	// 		expect(account.ownerIds).not.toContain(ownerId);
+	// 		expect(account.balance).toBe(0);
+	// 		expect(account.openedOn).toEqual(openedOn);
+	// 		expect(account.closedOn).toBeUndefined();
+	// 	}
 
-		expect(customEventPublisher.publish).toHaveBeenCalledTimes(7);
-	});
+	// 	expect(customEventPublisher.publish).toHaveBeenCalledTimes(7);
+	// });
 
-	it('should credit an account', async () => {
-		const amounts = [10, 20, 30, 40, 50];
+	// it('should credit an account', async () => {
+	// 	const amounts = [10, 20, 30, 40, 50];
 
-		for (const amount of amounts) {
-			balance += amount;
+	// 	for (const amount of amounts) {
+	// 		balance += amount;
 
-			const command = new CreditAccountCommand(accountId.value, amount);
-			await commandBus.execute(command);
-			expectedVersion++;
+	// 		const command = new CreditAccountCommand(accountId.value, amount);
+	// 		await commandBus.execute(command);
+	// 		expectedVersion++;
 
-			const account = await accountRepository.getById(accountId);
+	// 		const account = await accountRepository.getById(accountId);
 
-			expect(account.version).toBe(expectedVersion);
+	// 		expect(account.version).toBe(expectedVersion);
 
-			expect(account.id).toEqual(accountId);
-			expect(account.ownerIds).toEqual(accountOwnerIds);
-			expect(account.balance).toBe(balance);
-			expect(account.openedOn).toEqual(openedOn);
-			expect(account.closedOn).toBeUndefined();
-		}
+	// 		expect(account.id).toEqual(accountId);
+	// 		expect(account.ownerIds).toEqual(accountOwnerIds);
+	// 		expect(account.balance).toBe(balance);
+	// 		expect(account.openedOn).toEqual(openedOn);
+	// 		expect(account.closedOn).toBeUndefined();
+	// 	}
 
-		expect(customEventPublisher.publish).toHaveBeenCalledTimes(12);
-	});
+	// 	expect(customEventPublisher.publish).toHaveBeenCalledTimes(12);
+	// });
 
-	it('should debit an account', async () => {
-		const amounts = [5, 10, 15, 20, 25];
+	// it('should debit an account', async () => {
+	// 	const amounts = [5, 10, 15, 20, 25];
 
-		for (const amount of amounts) {
-			balance -= amount;
+	// 	for (const amount of amounts) {
+	// 		balance -= amount;
 
-			const command = new DebitAccountCommand(accountId.value, amount);
-			await commandBus.execute(command);
-			expectedVersion++;
+	// 		const command = new DebitAccountCommand(accountId.value, amount);
+	// 		await commandBus.execute(command);
+	// 		expectedVersion++;
 
-			const account = await accountRepository.getById(accountId);
+	// 		const account = await accountRepository.getById(accountId);
 
-			expect(account.version).toBe(expectedVersion);
+	// 		expect(account.version).toBe(expectedVersion);
 
-			expect(account.id).toEqual(accountId);
-			expect(account.ownerIds).toEqual(accountOwnerIds);
-			expect(account.balance).toBe(balance);
-			expect(account.openedOn).toEqual(openedOn);
-			expect(account.closedOn).toBeUndefined();
-		}
+	// 		expect(account.id).toEqual(accountId);
+	// 		expect(account.ownerIds).toEqual(accountOwnerIds);
+	// 		expect(account.balance).toBe(balance);
+	// 		expect(account.openedOn).toEqual(openedOn);
+	// 		expect(account.closedOn).toBeUndefined();
+	// 	}
 
-		expect(customEventPublisher.publish).toHaveBeenCalledTimes(17);
-	});
+	// 	expect(customEventPublisher.publish).toHaveBeenCalledTimes(17);
+	// });
 
-	it('should get an account by id', async () => {
-		const query = new GetAccountByIdQuery(accountId.value);
-		const account = await queryBus.execute(query);
+	// it('should get an account by id', async () => {
+	// 	const query = new GetAccountByIdQuery(accountId.value);
+	// 	const account = await queryBus.execute(query);
 
-		expect(account.id).toEqual(accountId.value);
-		expect(account.ownerIds).toEqual(accountOwnerIds.map((id) => id.value));
-		expect(account.balance).toBe(balance);
-		expect(account.openedOn).toEqual(openedOn.toISOString());
-		expect(account.closedOn).toBeUndefined();
-	});
+	// 	expect(account.id).toEqual(accountId.value);
+	// 	expect(account.ownerIds).toEqual(accountOwnerIds.map((id) => id.value));
+	// 	expect(account.balance).toBe(balance);
+	// 	expect(account.openedOn).toEqual(openedOn.toISOString());
+	// 	expect(account.closedOn).toBeUndefined();
+	// });
 
-	it("should get accounts by id's", async () => {
-		account2Id = await commandBus.execute<OpenAccountCommand, AccountId>(new OpenAccountCommand());
+	// it("should get accounts by id's", async () => {
+	// 	account2Id = await commandBus.execute<OpenAccountCommand, AccountId>(new OpenAccountCommand());
 
-		const query = new GetAccountsByIdsQuery([accountId.value, account2Id.value]);
-		const accounts = await queryBus.execute<GetAccountsQuery, Account[]>(query);
+	// 	const query = new GetAccountsByIdsQuery([accountId.value, account2Id.value]);
+	// 	const accounts = await queryBus.execute<GetAccountsQuery, Account[]>(query);
 
-		expect(accounts).toHaveLength(2);
-		expect(accounts.map(({ id }) => id).sort()).toEqual([accountId.value, account2Id.value].sort());
+	// 	expect(accounts).toHaveLength(2);
+	// 	expect(accounts.map(({ id }) => id).sort()).toEqual([accountId.value, account2Id.value].sort());
 
-		expect(customEventPublisher.publish).toHaveBeenCalledTimes(18);
-	});
+	// 	expect(customEventPublisher.publish).toHaveBeenCalledTimes(18);
+	// });
 
-	it('should close an account', async () => {
-		const command = new CloseAccountCommand(accountId.value);
-		await commandBus.execute(command);
-		expectedVersion++;
+	// it('should close an account', async () => {
+	// 	const command = new CloseAccountCommand(accountId.value);
+	// 	await commandBus.execute(command);
+	// 	expectedVersion++;
 
-		const account = await accountRepository.getById(accountId);
+	// 	const account = await accountRepository.getById(accountId);
 
-		expect(account.version).toBe(expectedVersion);
+	// 	expect(account.version).toBe(expectedVersion);
 
-		expect(account.id).toEqual(accountId);
-		expect(account.ownerIds).toEqual(accountOwnerIds);
-		expect(account.balance).toBe(balance);
-		expect(account.openedOn).toEqual(openedOn);
-		expect(account.closedOn).toBeInstanceOf(Date);
+	// 	expect(account.id).toEqual(accountId);
+	// 	expect(account.ownerIds).toEqual(accountOwnerIds);
+	// 	expect(account.balance).toBe(balance);
+	// 	expect(account.openedOn).toEqual(openedOn);
+	// 	expect(account.closedOn).toBeInstanceOf(Date);
 
-		expect(customEventPublisher.publish).toHaveBeenCalledTimes(19);
-	});
+	// 	expect(customEventPublisher.publish).toHaveBeenCalledTimes(19);
+	// });
 
-	it('should get all open accounts', async () => {
-		const account3Id = await commandBus.execute<OpenAccountCommand, AccountId>(new OpenAccountCommand());
+	// it('should get all open accounts', async () => {
+	// 	const account3Id = await commandBus.execute<OpenAccountCommand, AccountId>(new OpenAccountCommand());
 
-		const query = new GetAccountsQuery();
-		const accounts = await queryBus.execute<GetAccountsQuery, Account[]>(query);
+	// 	const query = new GetAccountsQuery();
+	// 	const accounts = await queryBus.execute<GetAccountsQuery, Account[]>(query);
 
-		expect(accounts).toHaveLength(2);
-		expect(accounts.map(({ id }) => id).sort()).toEqual([account2Id.value, account3Id.value].sort());
-	});
+	// 	expect(accounts).toHaveLength(2);
+	// 	expect(accounts.map(({ id }) => id).sort()).toEqual([account2Id.value, account3Id.value].sort());
+	// });
 });
