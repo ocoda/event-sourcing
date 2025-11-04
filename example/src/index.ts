@@ -1,2 +1,1 @@
-export * from './app.providers';
-export * from './application/exceptions';
+export { AppModule } from './app.module';
