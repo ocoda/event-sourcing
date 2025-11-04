@@ -10,7 +10,7 @@ tests
 .vscode
 .turbo
 biome.json
-docker-compose.yml
+compose.yml
 jest.config.js
 pnpm-lock.yaml
 renovate.json
