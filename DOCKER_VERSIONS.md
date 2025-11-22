@@ -71,7 +71,10 @@ import { NodeHttpHandler } from '@aws-sdk/node-http-handler';
 const client = new DynamoDBClient({
   region: 'us-east-1',
   endpoint: 'http://127.0.0.1:8000',
-  credentials: { accessKeyId: 'foo', secretAccessKey: 'bar' },
+  credentials: { 
+    accessKeyId: 'test-access-key',  // Dummy credentials for local development
+    secretAccessKey: 'test-secret-key' 
+  },
   requestHandler: new NodeHttpHandler({
     connectionTimeout: 10000, // 10 seconds
     socketTimeout: 10000,     // 10 seconds
