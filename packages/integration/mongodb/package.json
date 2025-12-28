@@ -21,7 +21,7 @@
 		"node": ">= 20.0.0"
 	},
 	"dependencies": {
-		"mongodb": "^6.19.0"
+		"mongodb": "^7.0.0"
 	},
 	"peerDependencies": {
 		"@nestjs/core": "^11.0.0",
