@@ -1,26 +1,19 @@
 import { Module } from '@nestjs/common';
 import { EventSourcingModule } from '@ocoda/event-sourcing';
 import {
-	AggregateRepositories,
-	CommandHandlers,
-	Controllers,
-	Events,
-	QueryHandlers,
-	SnapshotRepositories,
-} from '@ocoda/event-sourcing-example';
-import {
 	MongoDBEventStore,
 	type MongoDBEventStoreConfig,
 	MongoDBSnapshotStore,
 	type MongoDBSnapshotStoreConfig,
 } from '@ocoda/event-sourcing-mongodb';
 import { bootstrap } from './bootstrap';
+import { CatalogueModule } from '@ocoda/event-sourcing-example/catalogue/catalogue.module';
+import { LoaningModule } from '@ocoda/event-sourcing-example/loaning/loaning.module';
 
 @Module({
 	imports: [
 		EventSourcingModule.forRootAsync<MongoDBEventStoreConfig, MongoDBSnapshotStoreConfig>({
 			useFactory: () => ({
-				events: [...Events],
 				eventStore: {
 					driver: MongoDBEventStore,
 					url: 'mongodb://localhost:27017',
@@ -31,9 +24,9 @@ import { bootstrap } from './bootstrap';
 				},
 			}),
 		}),
+		CatalogueModule,
+		LoaningModule,
 	],
-	providers: [...AggregateRepositories, ...CommandHandlers, ...QueryHandlers, ...SnapshotRepositories],
-	controllers: [...Controllers],
 })
 class AppModule {}
 
