@@ -1,0 +1,46 @@
+services:
+  mongodb:
+    container_name: es-mongodb
+    image: mongo:8
+    ports:
+      - 27017:27017
+    volumes:
+      - type: tmpfs
+        target: /data/db
+
+  dynamodb:
+    container_name: es-dynamodb
+    image: amazon/dynamodb-local:1.15.0
+    command: '-jar DynamoDBLocal.jar -sharedDb -dbPath ./data'
+    ports:
+      - 8000:8000
+    volumes:
+      - type: tmpfs
+        target: /home/dynamodblocal/data
+
+  postgres:
+    container_name: es-postgres
+    image: postgres:14
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    volumes:
+      - type: tmpfs
+        target: /var/lib/postgresql/data
+
+  mariadb:
+    container_name: es-mariadb
+    image: mariadb:10.11
+    ports:
+      - 3306:3306
+    environment:
+      MYSQL_ROOT_PASSWORD: mariadb
+      MYSQL_DATABASE: mariadb
+      MYSQL_USER: mariadb
+      MYSQL_PASSWORD: mariadb
+    volumes:
+      - type: tmpfs
+        target: /var/lib/mysql
