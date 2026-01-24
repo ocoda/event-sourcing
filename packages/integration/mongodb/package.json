@@ -31,7 +31,7 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "1.9.4",
-		"@faker-js/faker": "^9.9.0",
+		"@faker-js/faker": "^10.2.0",
 		"@nestjs/common": "11.1.6",
 		"@nestjs/core": "11.1.6",
 		"@nestjs/platform-express": "11.1.6",
