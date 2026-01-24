@@ -11,6 +11,23 @@ pnpm: "^10.4.0"
 # otherwise, your build will fail
 ```
 
+### Supported database versions
+The repository uses Docker Compose to spin up local database services for integration tests. To keep CI and local runs stable we pin the images used in `docker-compose.yml`. Supported versions:
+
+```text
+Postgres: postgres:14
+MongoDB: mongo:8
+MariaDB: mariadb:10.11
+DynamoDB Local: amazon/dynamodb-local:1.15.0
+```
+
+To start one or more of the pinned services locally:
+
+```bash
+docker compose up -d postgres mariadb
+```
+
+
 ### Steps
 
 1. **Fork the Repository**  
