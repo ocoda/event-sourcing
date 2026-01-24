@@ -12,6 +12,7 @@ import {
 	GetAccountsQueryHandler,
 	OpenAccountCommandHandler,
 	RemoveAccountOwnerCommandHandler,
+	TransferBetweenAccountsCommandHandler,
 } from './application';
 import {
 	AccountClosedEvent,
@@ -23,16 +24,19 @@ import {
 	AccountOwnerAddedEvent,
 	AccountOwnerRemovedEvent,
 	AccountSnapshotRepository,
+	AccountTransferFailedEvent,
+	AccountTransferSucceededEvent,
+	AccountTransferSucceededEventSubscriber,
 } from './domain';
 
 export const CommandHandlers: Type<ICommandHandler>[] = [
 	AddAccountOwnerCommandHandler,
 	CloseAccountCommandHandler,
-	CloseAccountCommandHandler,
 	CreditAccountCommandHandler,
 	DebitAccountCommandHandler,
 	OpenAccountCommandHandler,
 	RemoveAccountOwnerCommandHandler,
+	TransferBetweenAccountsCommandHandler,
 ];
 
 export const QueryHandlers: Type<IQueryHandler>[] = [
@@ -43,7 +47,11 @@ export const QueryHandlers: Type<IQueryHandler>[] = [
 
 export const SnapshotRepositories: Type<SnapshotRepository>[] = [AccountSnapshotRepository];
 
-export const EventSubscribers: Type<IEventSubscriber>[] = [AccountOpenedEventSubscriber, AccountClosedEventSubscriber];
+export const EventSubscribers: Type<IEventSubscriber>[] = [
+	AccountOpenedEventSubscriber,
+	AccountClosedEventSubscriber,
+	AccountTransferSucceededEventSubscriber,
+];
 
 export const EventPublishers = [CustomEventPublisher];
 
@@ -54,6 +62,8 @@ export const Events = [
 	AccountOwnerAddedEvent,
 	AccountOwnerRemovedEvent,
 	AccountClosedEvent,
+	AccountTransferSucceededEvent,
+	AccountTransferFailedEvent,
 ];
 
 export const AggregateRepositories = [AccountRepository];
