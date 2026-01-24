@@ -1,6 +1,7 @@
 export * from './command-bus';
 export * from './constants';
 export * from './decorators';
+export * from './event-bus';
 export * from './event-map';
 export * from './event-store';
 export * from './exceptions';
