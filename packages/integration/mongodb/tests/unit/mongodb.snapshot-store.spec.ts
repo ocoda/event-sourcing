@@ -36,13 +36,20 @@ describe(MongoDBSnapshotStore, () => {
 	let client: MongoClient;
 
 	beforeAll(async () => {
-		snapshotStore = new MongoDBSnapshotStore({ driver: undefined, url: 'mongodb://localhost:27017' });
+		snapshotStore = new MongoDBSnapshotStore({ url: 'mongodb://localhost:27017' } as unknown as ConstructorParameters<
+			typeof MongoDBSnapshotStore
+		>[0]);
 
 		await snapshotStore.connect();
 		await snapshotStore.ensureCollection();
 
 		// biome-ignore lint/complexity/useLiteralKeys: Needed to check the internal workings of the event store
 		client = snapshotStore['client'];
+
+		await client.db().collection(SnapshotCollection.get()).deleteMany({});
+		await client.db().collection(SnapshotCollection.get('a')).deleteMany({});
+		await client.db().collection(SnapshotCollection.get('b')).deleteMany({});
+		await client.db().collection(SnapshotCollection.get('c')).deleteMany({});
 	});
 
 	afterAll(async () => {
@@ -319,6 +326,13 @@ describe(MongoDBSnapshotStore, () => {
 
 		const resolvedAccountAEnvelope = resolvedSnapshots.get(snapshotStreamAccountA);
 		const resolvedAccountBEnvelope = resolvedSnapshots.get(snapshotStreamAccountB);
+
+		expect(resolvedAccountAEnvelope).toBeDefined();
+		expect(resolvedAccountBEnvelope).toBeDefined();
+
+		if (!resolvedAccountAEnvelope || !resolvedAccountBEnvelope) {
+			throw new Error('Expected snapshot envelopes to be resolved');
+		}
 
 		expect(resolvedAccountAEnvelope.payload).toEqual(envelopeAccountA.payload);
 		expect(resolvedAccountAEnvelope.metadata.aggregateId).toEqual(envelopeAccountA.metadata.aggregateId);

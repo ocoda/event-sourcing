@@ -37,9 +37,8 @@ describe(MongoDBEventStore, () => {
 
 	beforeAll(async () => {
 		eventStore = new MongoDBEventStore(eventMap, {
-			driver: undefined,
 			url: 'mongodb://localhost:27017',
-		});
+		} as unknown as ConstructorParameters<typeof MongoDBEventStore>[1]);
 		eventStore.publish = publish;
 
 		await eventStore.connect();
@@ -50,6 +49,12 @@ describe(MongoDBEventStore, () => {
 
 		// biome-ignore lint/complexity/useLiteralKeys: Needed to check the internal workings of the event store
 		client = eventStore['client'];
+
+		await client.db().collection(EventCollection.get()).deleteMany({});
+		await client.db().collection(EventCollection.get('test-singular-events')).deleteMany({});
+		await client.db().collection(EventCollection.get('a')).deleteMany({});
+		await client.db().collection(EventCollection.get('b')).deleteMany({});
+		await client.db().collection(EventCollection.get('c')).deleteMany({});
 	});
 
 	afterAll(async () => {

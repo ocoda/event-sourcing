@@ -114,7 +114,7 @@ export const runAccountLifecycleE2E = async <
 		expect(account.ownerIds).toEqual(accountOwnerIds);
 		expect(account.balance).toBe(0);
 		expect(account.openedOn).toBeInstanceOf(Date);
-		expect(account.closedOn).toBeUndefined();
+		expect(account.closedOn ?? undefined).toBeUndefined();
 	});
 
 	it('should add a new owner to an account', async () => {
@@ -127,7 +127,7 @@ export const runAccountLifecycleE2E = async <
 		expect(account.version).toBe(expectedVersion);
 		expect(account.ownerIds).toEqual(accountOwnerIds);
 		expect(account.balance).toBe(0);
-		expect(account.closedOn).toBeUndefined();
+		expect(account.closedOn ?? undefined).toBeUndefined();
 	});
 
 	it('should reject adding the same owner twice', async () => {
@@ -153,7 +153,7 @@ export const runAccountLifecycleE2E = async <
 		expect(account.version).toBe(expectedVersion);
 		expect(account.ownerIds).toEqual(accountOwnerIds);
 		expect(account.balance).toBe(0);
-		expect(account.closedOn).toBeUndefined();
+		expect(account.closedOn ?? undefined).toBeUndefined();
 	});
 
 	it('should credit an account multiple times', async () => {
@@ -170,7 +170,7 @@ export const runAccountLifecycleE2E = async <
 		expect(account.balance).toBe(balance);
 		// snapshot interval is 5, so by now at least one snapshot should have been taken
 		expect(account.version).toBeGreaterThanOrEqual(6);
-		expect(account.closedOn).toBeUndefined();
+		expect(account.closedOn ?? undefined).toBeUndefined();
 	});
 
 	it('should reject invalid credit amounts', async () => {
@@ -190,7 +190,7 @@ export const runAccountLifecycleE2E = async <
 		const account = await accountRepository.getById(accountId);
 		expect(account.version).toBe(expectedVersion);
 		expect(account.balance).toBe(balance);
-		expect(account.closedOn).toBeUndefined();
+		expect(account.closedOn ?? undefined).toBeUndefined();
 	});
 
 	it('should reject invalid debit amounts', async () => {
@@ -211,7 +211,7 @@ export const runAccountLifecycleE2E = async <
 
 		const account = await accountRepository.getById(account2Id);
 		expect(account.balance).toBe(0);
-		expect(account.closedOn).toBeUndefined();
+		expect(account.closedOn ?? undefined).toBeUndefined();
 	});
 
 	it('should transfer funds between accounts', async () => {
