@@ -10,7 +10,7 @@ services:
 
   dynamodb:
     container_name: es-dynamodb
-    image: amazon/dynamodb-local:3.1.0
+    image: amazon/dynamodb-local:1.15.0
     command: '-jar DynamoDBLocal.jar -sharedDb -dbPath ./data'
     ports:
       - 8000:8000
@@ -20,7 +20,7 @@ services:
 
   postgres:
     container_name: es-postgres
-    image: postgres:17.6
+    image: postgres:14
     ports:
       - 5432:5432
     environment:
@@ -33,7 +33,7 @@ services:
 
   mariadb:
     container_name: es-mariadb
-    image: mariadb:lts-ubi
+    image: mariadb:10.11
     ports:
       - 3306:3306
     environment:
