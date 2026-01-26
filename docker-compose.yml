@@ -33,7 +33,7 @@ services:
 
   mariadb:
     container_name: es-mariadb
-    image: mariadb:10.11
+    image: mariadb:12.1
     ports:
       - 3306:3306
     environment:
