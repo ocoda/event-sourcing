@@ -2,14 +2,6 @@ name: Benchmark
 
 on:
   workflow_dispatch:
-  push:
-    branches: ["master"]
-    paths:
-      - benchmarks/**
-      - packages/**
-      - docker-compose.yml
-      - package.json
-      - pnpm-*.yaml
 
 concurrency:
   group: benchmark-${{ github.ref }}
