@@ -27,13 +27,15 @@ describe('EventSourcingModule - e2e', () => {
 				eventStore: appRef.get<PostgresEventStore>(EventStore),
 				snapshotStore: appRef.get<PostgresSnapshotStore>(SnapshotStore),
 			}),
-			getCleanupContext: (eventStore, snapshotStore) => ({
+			getCleanupContext: (eventStore, snapshotStore, collectionName) => ({
 				// biome-ignore lint/complexity/useLiteralKeys: Needed to clear the event collection
 				eventStoreClient: eventStore['client'] as PoolClient,
 				// biome-ignore lint/complexity/useLiteralKeys: Needed to clear the snapshot collection
 				snapshotStoreClient: snapshotStore['client'] as PoolClient,
+				collectionName,
 			}),
-			cleanup: async (context) => defaultCleanup.postgres(context.eventStoreClient, context.snapshotStoreClient),
+			cleanup: async (context) =>
+				defaultCleanup.postgres(context.eventStoreClient, context.snapshotStoreClient, context.collectionName),
 		}),
 	});
 });

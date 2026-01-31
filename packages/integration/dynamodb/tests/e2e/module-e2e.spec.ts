@@ -27,17 +27,19 @@ describe('EventSourcingModule - e2e', () => {
 				eventStore: appRef.get<DynamoDBEventStore>(EventStore),
 				snapshotStore: appRef.get<DynamoDBSnapshotStore>(SnapshotStore),
 			}),
-			getCleanupContext: (eventStore, snapshotStore) => ({
+			getCleanupContext: (eventStore, snapshotStore, collectionName) => ({
 				// biome-ignore lint/complexity/useLiteralKeys: Needed to clear the event collection
 				eventStoreClient: eventStore['client'] as DynamoDBClient,
 				// biome-ignore lint/complexity/useLiteralKeys: Needed to clear the snapshot collection
 				snapshotStoreClient: snapshotStore['client'] as DynamoDBClient,
+				collectionName,
 			}),
 			cleanup: async (context) =>
 				defaultCleanup.dynamodb({
 					eventStoreClient: context.eventStoreClient,
 					snapshotStoreClient: context.snapshotStoreClient,
 					deleteTable: (tableName) => new DeleteTableCommand({ TableName: tableName }),
+					collectionName: context.collectionName,
 				}),
 		}),
 	});

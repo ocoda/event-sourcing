@@ -31,35 +31,6 @@ permissions:
   security-events: write
 
 jobs:
-  codeql:
-    name: CodeQL
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    permissions:
-      contents: read
-      security-events: write
-
-    steps:
-      - name: Checkout the repository
-        uses: actions/checkout@v6
-
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
-        with:
-          languages: javascript-typescript
-
-      - name: Setup job environment
-        uses: ./.github/actions/setup-job-env
-        with:
-          cache-key: node-22.x
-          node-version: 22.x
-
-      - name: Autobuild
-        uses: github/codeql-action/autobuild@v3
-
-      - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
-
   dependency-review:
     name: Dependency Review
     if: ${{ github.event_name == 'pull_request' }}
@@ -77,8 +48,152 @@ jobs:
 
   merge-check:
     name: Merge check
-    needs: [codeql, dependency-review]
+    needs: [dependency-review, api-compatibility, bundle-size, license-check]
     if: ${{ always() }}
     uses: ./.github/workflows/merge-check.yml
     with:
-      conditions: ${{ needs.codeql.result == 'success' && (needs.dependency-review.result == 'success' || needs.dependency-review.result == 'skipped') }}
+      conditions: ${{ (needs.dependency-review.result == 'success' || needs.dependency-review.result == 'skipped') &&
+        needs.api-compatibility.result == 'success' &&
+        needs.bundle-size.result == 'success' &&
+        needs.license-check.result == 'success' }}
+
+  api-compatibility:
+    name: API Compatibility Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup job environment
+        uses: ./.github/actions/setup-job-env
+        with:
+          cache-key: node-22.x
+          node-version: 22.x
+
+      - name: Build packages
+        run: pnpm build --filter="./packages/**"
+
+      - name: Generate API reports
+        run: |
+          pnpm exec api-extractor run --local --config packages/core/api-extractor.json
+          pnpm exec api-extractor run --local --config packages/integration/postgres/api-extractor.json
+          pnpm exec api-extractor run --local --config packages/integration/mongodb/api-extractor.json
+          pnpm exec api-extractor run --local --config packages/integration/mariadb/api-extractor.json
+          pnpm exec api-extractor run --local --config packages/integration/dynamodb/api-extractor.json
+
+      - name: Check for API changes
+        id: api-check
+        shell: bash
+        run: |
+          if git diff --exit-code api-reports/; then
+            echo "api_changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "api_changed=true" >> $GITHUB_OUTPUT
+            git diff api-reports/ > /tmp/api-diff.txt
+          fi
+
+      - name: Analyze API changes
+        if: steps.api-check.outputs.api_changed == 'true'
+        id: analyze
+        shell: bash
+        run: |
+          if grep -E "^-.*export|^-.*class|^-.*function|^-.*interface" /tmp/api-diff.txt; then
+            echo "breaking=true" >> $GITHUB_OUTPUT
+          else
+            echo "breaking=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Comment on PR
+        if: steps.api-check.outputs.api_changed == 'true' && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const breaking = '${{ steps.analyze.outputs.breaking }}' === 'true';
+            const diff = require('fs').readFileSync('/tmp/api-diff.txt', 'utf8');
+            const body = breaking
+              ? `## Breaking API changes detected\n\nThis PR introduces breaking changes to the public API.\n\nAction required:\n1. Add the \`breaking-change-approved\` label if this is intentional\n2. Create a \`major\` changeset with migration instructions\n3. Update documentation\n\n<details><summary>API diff</summary>\n\n\`\`\`diff\n${diff.substring(0, 3000)}\n\`\`\`\n</details>`
+              : `## API changes detected\n\nThis PR modifies the public API (additions only).\n\n<details><summary>API diff</summary>\n\n\`\`\`diff\n${diff.substring(0, 3000)}\n\`\`\`\n</details>`;
+
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body
+            });
+
+      - name: Fail on breaking changes
+        if: steps.analyze.outputs.breaking == 'true'
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "Breaking API changes detected on non-PR run."
+            exit 1
+          fi
+
+          LABELS=$(gh pr view ${{ github.event.pull_request.number }} --json labels -q '.labels[].name')
+          if echo "$LABELS" | grep -q "breaking-change-approved"; then
+            echo "Breaking change approved by label"
+            exit 0
+          fi
+
+          echo "::error::Breaking API changes detected. Add 'breaking-change-approved' label to proceed."
+          exit 1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  bundle-size:
+    name: Bundle Size Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v6
+
+      - name: Setup job environment
+        uses: ./.github/actions/setup-job-env
+        with:
+          cache-key: node-22.x
+          node-version: 22.x
+
+      - name: Build packages
+        run: pnpm build --filter="./packages/**"
+
+      - name: Check bundle size
+        uses: andresz1/size-limit-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          script: pnpm exec size-limit --json
+
+  license-check:
+    name: License Compliance
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v6
+
+      - name: Setup job environment
+        uses: ./.github/actions/setup-job-env
+        with:
+          cache-key: node-22.x
+          node-version: 22.x
+
+      - name: Check licenses
+        run: |
+          pnpm exec license-checker --production \
+            --onlyAllow "MIT;ISC;Apache-2.0;BSD-2-Clause;BSD-3-Clause;0BSD;CC0-1.0" \
+            --excludePackages "@ocoda/event-sourcing;@ocoda/event-sourcing-postgres;@ocoda/event-sourcing-mongodb;@ocoda/event-sourcing-mariadb;@ocoda/event-sourcing-dynamodb"

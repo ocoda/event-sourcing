@@ -26,7 +26,7 @@ describe('EventSourcingModule - e2e', () => {
 				eventStore: appRef.get<InMemoryEventStore>(EventStore),
 				snapshotStore: appRef.get<InMemorySnapshotStore>(SnapshotStore),
 			}),
-			getCleanupContext: () => ({
+			getCleanupContext: (_eventStore, _snapshotStore, _collectionName) => ({
 				cleanup: async () => Promise.resolve(),
 			}),
 			cleanup: async (context) => context.cleanup(),
