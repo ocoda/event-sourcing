@@ -71,6 +71,10 @@ docker compose up -d postgres mariadb
 
    **Dependency updates:** Dependabot is the source of dependency alerts. Automated update PRs remain disabled until branch protections and auto-merge policies are finalized. Dependabot PRs (when enabled) will receive auto-generated changesets.
 
+   **Quality gates:** CI enforces API compatibility, bundle size checks, benchmark regression checks, and license compliance. Breaking API changes require the `breaking-change-approved` label plus a major changeset.
+
+   **API reports:** when changing public APIs, run `pnpm exec api-extractor run --local --config packages/<package>/api-extractor.json` and commit the updated reports from `api-reports/`.
+
 8. **Commit Your Changes**
   Write clear and concise commit messages:
     ```bash

@@ -1,0 +1,44 @@
+name: CodeQL Security Analysis
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+  schedule:
+    - cron: "0 6 * * 1"
+
+jobs:
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v6
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: typescript
+          queries: +security-and-quality
+
+      - name: Setup job environment
+        uses: ./.github/actions/setup-job-env
+        with:
+          cache-key: node-22.x
+          node-version: 22.x
+
+      - name: Build
+        run: pnpm build --filter="./packages/**"
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:typescript"

@@ -1,0 +1,31 @@
+[
+	{
+		"name": "@ocoda/event-sourcing",
+		"path": "packages/core/dist/index.js",
+		"limit": "50 KB"
+	},
+	{
+		"name": "@ocoda/event-sourcing-postgres",
+		"path": "packages/integration/postgres/dist/index.js",
+		"limit": "10 KB",
+		"ignore": ["pg", "pg-cursor"]
+	},
+	{
+		"name": "@ocoda/event-sourcing-mongodb",
+		"path": "packages/integration/mongodb/dist/index.js",
+		"limit": "10 KB",
+		"ignore": ["mongodb"]
+	},
+	{
+		"name": "@ocoda/event-sourcing-mariadb",
+		"path": "packages/integration/mariadb/dist/index.js",
+		"limit": "10 KB",
+		"ignore": ["mariadb"]
+	},
+	{
+		"name": "@ocoda/event-sourcing-dynamodb",
+		"path": "packages/integration/dynamodb/dist/index.js",
+		"limit": "10 KB",
+		"ignore": ["@aws-sdk/client-dynamodb"]
+	}
+]
