@@ -14,5 +14,15 @@
 	"postUpdateOptions": ["pnpmDedupe"],
 	"rebaseConflictedPrs": true,
 	"ignorePaths": ["**/node_modules/**"],
-	"ignoreDeps": ["@biomejs/biome", "@types/node", "actions/labeler", "node", "pnpm"]
+	"ignoreDeps": ["@biomejs/biome", "@types/node", "actions/labeler", "node", "pnpm"],
+	"packageRules": [
+		{
+			"matchManagers": ["npm", "pnpm"],
+			"enabled": false
+		},
+		{
+			"matchManagers": ["github-actions"],
+			"enabled": false
+		}
+	]
 }
