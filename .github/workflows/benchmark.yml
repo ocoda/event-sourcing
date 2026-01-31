@@ -7,13 +7,22 @@ on:
     paths:
       - benchmarks/**
       - packages/**
+      - docker-compose.yml
       - package.json
       - pnpm-*.yaml
+
+concurrency:
+  group: benchmark-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   generate-benchmark:
     name: Generate benchmark
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     strategy:
       matrix:
         database: [in-memory, mongodb, dynamodb, postgres, mariadb]
@@ -27,6 +36,19 @@ jobs:
       - name: Start database
         if: ${{ matrix.database != 'in-memory' }}
         run: docker compose up -d ${{ matrix.database }}
+
+      - name: Wait for database
+        if: ${{ matrix.database != 'in-memory' }}
+        run: |
+          for attempt in {1..24}; do
+            status=$(docker inspect -f '{{.State.Health.Status}}' "$(docker compose ps -q ${{ matrix.database }})")
+            if [ "$status" = "healthy" ]; then
+              exit 0
+            fi
+            sleep 5
+          done
+          docker compose logs ${{ matrix.database }}
+          exit 1
 
       - name: Setup job environment
         id: setup-job
@@ -48,6 +70,7 @@ jobs:
     name: Report benchmark
     needs: [generate-benchmark]
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Checkout the repository
@@ -72,3 +95,9 @@ jobs:
 
       - name: Upload report (MD)
         run: cat ./benchmarks/report/report.md >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-report-md
+          path: ./benchmarks/report/report.md

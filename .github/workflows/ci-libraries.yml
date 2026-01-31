@@ -8,16 +8,49 @@ on:
   pull_request:
     branches: ['master']
     paths:
-      - .github/ci-libraries.yml
+      - .github/workflows/ci-libraries.yml
+      - .github/workflows/reusable-test-integration.yml
       - packages/**
+      - docker-compose.yml
       - package.json
       - pnpm-*.yaml
       - turbo.json
 
+concurrency:
+  group: ci-libraries-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
+  lint:
+    name: Lint and format [Node.js 22.x]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v6
+
+      - name: Setup job environment
+        id: setup-job
+        uses: ./.github/actions/setup-job-env
+        with:
+          cache-key: node-22.x
+          node-version: 22.x
+
+      - name: Test linting, formatting and import sorting
+        run: pnpm run ci --filter="./packages/**"
+
   build:
     name: Validate build [Node.js ${{ matrix.node-version }}]
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
     strategy:
       fail-fast: true
       matrix:
@@ -40,9 +73,13 @@ jobs:
   test-core-lib:
     name: Test core lib [Node.js ${{ matrix.node-version }}]
     runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
     strategy:
       matrix:
         node-version: [20.x, 22.x]
+    needs: [lint, build]
 
     steps:
       - name: Checkout the repository
@@ -54,9 +91,6 @@ jobs:
         with:
           cache-key: node-${{ matrix.node-version }}
           node-version: ${{ matrix.node-version }}
-
-      - name: Test linting, formatting and import sorting
-        run: pnpm run ci --filter=@ocoda/event-sourcing
 
       - name: Test
         run: |
@@ -75,52 +109,118 @@ jobs:
           flags: core
 
   test-integration-libs:
-    name: Test ${{ matrix.database }} lib [Node.js ${{ matrix.node-version }}]
-    runs-on: ubuntu-latest
+    name: Test ${{ matrix.database }} ${{ matrix.db-version }} [Node.js ${{ matrix.node-version }}]
     needs: [test-core-lib]
+    permissions:
+      contents: read
     strategy:
+      fail-fast: false
       matrix:
-        node-version: [20.x, 22.x]
-        database: [mongodb, dynamodb, postgres, mariadb]
+        include:
+          - node-version: 20.x
+            database: postgres
+            service: postgres-13
+            db-version: "13"
+          - node-version: 22.x
+            database: postgres
+            service: postgres-13
+            db-version: "13"
+          - node-version: 20.x
+            database: postgres
+            service: postgres-14
+            db-version: "14"
+          - node-version: 22.x
+            database: postgres
+            service: postgres-14
+            db-version: "14"
+          - node-version: 20.x
+            database: postgres
+            service: postgres-15
+            db-version: "15"
+          - node-version: 22.x
+            database: postgres
+            service: postgres-15
+            db-version: "15"
+          - node-version: 20.x
+            database: postgres
+            service: postgres-16
+            db-version: "16"
+          - node-version: 22.x
+            database: postgres
+            service: postgres-16
+            db-version: "16"
+          - node-version: 20.x
+            database: postgres
+            service: postgres-17
+            db-version: "17"
+          - node-version: 22.x
+            database: postgres
+            service: postgres-17
+            db-version: "17"
+          - node-version: 20.x
+            database: mongodb
+            service: mongodb-6
+            db-version: "6"
+          - node-version: 22.x
+            database: mongodb
+            service: mongodb-6
+            db-version: "6"
+          - node-version: 20.x
+            database: mongodb
+            service: mongodb-7
+            db-version: "7"
+          - node-version: 22.x
+            database: mongodb
+            service: mongodb-7
+            db-version: "7"
+          - node-version: 20.x
+            database: mongodb
+            service: mongodb-8
+            db-version: "8"
+          - node-version: 22.x
+            database: mongodb
+            service: mongodb-8
+            db-version: "8"
+          - node-version: 20.x
+            database: mariadb
+            service: mariadb-10
+            db-version: "10"
+          - node-version: 22.x
+            database: mariadb
+            service: mariadb-10
+            db-version: "10"
+          - node-version: 20.x
+            database: mariadb
+            service: mariadb-11
+            db-version: "11"
+          - node-version: 22.x
+            database: mariadb
+            service: mariadb-11
+            db-version: "11"
+          - node-version: 20.x
+            database: dynamodb
+            service: dynamodb
+            db-version: "latest"
+          - node-version: 22.x
+            database: dynamodb
+            service: dynamodb
+            db-version: "latest"
 
-    steps:
-      - name: Checkout the repository
-        uses: actions/checkout@v6
-
-      - name: Start database
-        run: docker compose up -d ${{ matrix.database }}
-
-      - name: Setup job environment
-        id: setup-job
-        uses: ./.github/actions/setup-job-env
-        with:
-          cache-key: node-${{ matrix.node-version }}
-          node-version: ${{ matrix.node-version }}
-
-      - name: Test linting, formatting and import sorting
-        run: pnpm run ci --filter=@ocoda/event-sourcing-${{ matrix.database }}
-
-      - name: Test
-        run: |
-          if [ ${{ matrix.node-version }} == '22.x' ]; then
-            pnpm test:cov --filter=@ocoda/event-sourcing-${{ matrix.database }}
-          else
-            pnpm test --filter=@ocoda/event-sourcing-${{ matrix.database }}
-          fi
-
-      - name: Upload coverage
-        if: ${{ matrix.node-version == '22.x' }}
-        uses: codecov/codecov-action@v5
-        with:
-          directory: packages/integration/${{ matrix.database }}/coverage
-          token: ${{ secrets.CODECOV_TOKEN }}
-          flags: integrations
+    uses: ./.github/workflows/reusable-test-integration.yml
+    with:
+      database: ${{ matrix.database }}
+      service: ${{ matrix.service }}
+      db-version: ${{ matrix.db-version }}
+      node-version: ${{ matrix.node-version }}
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   merge-check:
     name: Merge check
-    needs: [build, test-core-lib, test-integration-libs]
+    needs: [lint, build, test-core-lib, test-integration-libs]
     uses: ./.github/workflows/merge-check.yml
     with:
-        conditions: ${{ needs.build.result == 'success' && 
-            needs.test-core-lib.result == 'success' &&
-            needs.test-integration-libs.result == 'success' }}
+      conditions: ${{ needs.build.result == 'success' &&
+        needs.lint.result == 'success' &&
+        needs.test-core-lib.result == 'success' &&
+        needs.test-integration-libs.result == 'success' }}

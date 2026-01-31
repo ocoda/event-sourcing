@@ -1,0 +1,84 @@
+name: CI Quality Gates
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: ['master']
+    paths:
+      - .github/workflows/ci-quality-gates.yml
+      - .github/dependabot.yml
+      - packages/**
+      - package.json
+      - pnpm-*.yaml
+      - turbo.json
+  push:
+    branches:
+      - master
+    paths:
+      - .github/workflows/ci-quality-gates.yml
+      - .github/dependabot.yml
+      - packages/**
+      - package.json
+      - pnpm-*.yaml
+      - turbo.json
+
+concurrency:
+  group: ci-quality-gates-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  codeql:
+    name: CodeQL
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v6
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+
+      - name: Setup job environment
+        uses: ./.github/actions/setup-job-env
+        with:
+          cache-key: node-22.x
+          node-version: 22.x
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+
+  dependency-review:
+    name: Dependency Review
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v6
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+
+  merge-check:
+    name: Merge check
+    needs: [codeql, dependency-review]
+    if: ${{ always() }}
+    uses: ./.github/workflows/merge-check.yml
+    with:
+      conditions: ${{ needs.codeql.result == 'success' && (needs.dependency-review.result == 'success' || needs.dependency-review.result == 'skipped') }}
