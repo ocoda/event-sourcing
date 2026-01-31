@@ -69,7 +69,7 @@ docker compose up -d postgres mariadb
 
    **Release notes (changesets + AI):** release automation relies on changesets for versioning. Release notes are enhanced with AI when the `ANTHROPIC_API_KEY` secret is configured in the repository. Contributors do not need to run the AI generation locally; the workflow will skip AI notes when the secret is missing.
 
-   **Dependency updates:** dependency PRs are handled by Renovate with auto-merge for low-risk patch/minor updates. Major and 0.x updates require manual review. Dependabot remains enabled for alerts only, and Renovate PRs get auto-generated changesets.
+   **Dependency updates:** Dependabot is the source of dependency alerts. Automated update PRs remain disabled until branch protections and auto-merge policies are finalized. Dependabot PRs (when enabled) will receive auto-generated changesets.
 
 8. **Commit Your Changes**
   Write clear and concise commit messages:
