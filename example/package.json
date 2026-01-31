@@ -13,14 +13,14 @@
 	},
 	"dependencies": {
 		"@ocoda/event-sourcing": "workspace:*",
-		"@nestjs/common": "^11.1.6",
-		"@nestjs/core": "^11.1.6",
+		"@nestjs/common": "^11.1.12",
+		"@nestjs/core": "^11.1.12",
 		"reflect-metadata": "^0.2.0",
 		"rxjs": "^7.8.2"
 	},
 	"devDependencies": {
 		"@ocoda/event-sourcing-config": "workspace:*",
-		"tsup": "^8.5.0",
-		"typescript": "5.9.2"
+		"tsup": "^8.5.1",
+		"typescript": "5.9.3"
 	}
 }

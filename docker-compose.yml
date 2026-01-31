@@ -10,7 +10,7 @@ services:
 
   dynamodb:
     container_name: es-dynamodb
-    image: amazon/dynamodb-local:1.15.0
+    image: amazon/dynamodb-local:1.25.1
     command: '-jar DynamoDBLocal.jar -sharedDb -dbPath ./data'
     ports:
       - 8000:8000
