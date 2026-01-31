@@ -40,9 +40,9 @@ jobs:
       - name: Wait for database
         if: ${{ matrix.database != 'in-memory' }}
         run: |
-          for attempt in {1..24}; do
-            status=$(docker inspect -f '{{.State.Health.Status}}' "$(docker compose ps -q ${{ matrix.database }})")
-            if [ "$status" = "healthy" ] || [ "$status" = "" ]; then
+          for attempt in {1..36}; do
+            status=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$(docker compose ps -q ${{ matrix.database }})")
+            if [ "$status" = "healthy" ] || [ "$status" = "running" ]; then
               exit 0
             fi
             sleep 5

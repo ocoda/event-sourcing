@@ -224,8 +224,3 @@ services:
     volumes:
       - type: tmpfs
         target: /var/lib/mysql
-    healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -pmariadb"]
-      interval: 10s
-      timeout: 5s
-      retries: 6
