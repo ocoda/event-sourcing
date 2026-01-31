@@ -17,7 +17,7 @@ services:
     container_name: es-mongodb-6
     image: mongo:6
     ports:
-      - 27026:27017
+      - 27017:27017
     volumes:
       - type: tmpfs
         target: /data/db
@@ -31,7 +31,7 @@ services:
     container_name: es-mongodb-7
     image: mongo:7
     ports:
-      - 27027:27017
+      - 27017:27017
     volumes:
       - type: tmpfs
         target: /data/db
@@ -45,7 +45,7 @@ services:
     container_name: es-mongodb-8
     image: mongo:8
     ports:
-      - 27028:27017
+      - 27017:27017
     volumes:
       - type: tmpfs
         target: /data/db
@@ -64,11 +64,6 @@ services:
     volumes:
       - type: tmpfs
         target: /home/dynamodblocal/data
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/shell/ || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 6
 
   postgres:
     container_name: es-postgres
@@ -92,7 +87,7 @@ services:
     container_name: es-postgres-13
     image: postgres:13
     ports:
-      - 5413:5432
+      - 5432:5432
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -110,7 +105,7 @@ services:
     container_name: es-postgres-14
     image: postgres:14
     ports:
-      - 5414:5432
+      - 5432:5432
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -128,7 +123,7 @@ services:
     container_name: es-postgres-15
     image: postgres:15
     ports:
-      - 5415:5432
+      - 5432:5432
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -146,7 +141,7 @@ services:
     container_name: es-postgres-16
     image: postgres:16
     ports:
-      - 5416:5432
+      - 5432:5432
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -164,7 +159,7 @@ services:
     container_name: es-postgres-17
     image: postgres:17
     ports:
-      - 5417:5432
+      - 5432:5432
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -201,7 +196,7 @@ services:
     container_name: es-mariadb-10
     image: mariadb:10.11
     ports:
-      - 3310:3306
+      - 3306:3306
     environment:
       MYSQL_ROOT_PASSWORD: mariadb
       MYSQL_DATABASE: mariadb
@@ -220,7 +215,7 @@ services:
     container_name: es-mariadb-11
     image: mariadb:11.4
     ports:
-      - 3311:3306
+      - 3306:3306
     environment:
       MYSQL_ROOT_PASSWORD: mariadb
       MYSQL_DATABASE: mariadb

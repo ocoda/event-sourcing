@@ -42,7 +42,7 @@ jobs:
         run: |
           for attempt in {1..24}; do
             status=$(docker inspect -f '{{.State.Health.Status}}' "$(docker compose ps -q ${{ matrix.database }})")
-            if [ "$status" = "healthy" ]; then
+            if [ "$status" = "healthy" ] || [ "$status" = "" ]; then
               exit 0
             fi
             sleep 5
