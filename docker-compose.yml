@@ -7,10 +7,57 @@ services:
     volumes:
       - type: tmpfs
         target: /data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.runCommand({ ping: 1 })"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  mongodb-6:
+    container_name: es-mongodb-6
+    image: mongo:6
+    ports:
+      - 27017:27017
+    volumes:
+      - type: tmpfs
+        target: /data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.runCommand({ ping: 1 })"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  mongodb-7:
+    container_name: es-mongodb-7
+    image: mongo:7
+    ports:
+      - 27017:27017
+    volumes:
+      - type: tmpfs
+        target: /data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.runCommand({ ping: 1 })"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  mongodb-8:
+    container_name: es-mongodb-8
+    image: mongo:8
+    ports:
+      - 27017:27017
+    volumes:
+      - type: tmpfs
+        target: /data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.runCommand({ ping: 1 })"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
 
   dynamodb:
     container_name: es-dynamodb
-    image: amazon/dynamodb-local:1.15.0
+    image: amazon/dynamodb-local:latest
     command: '-jar DynamoDBLocal.jar -sharedDb -dbPath ./data'
     ports:
       - 8000:8000
@@ -30,10 +77,143 @@ services:
     volumes:
       - type: tmpfs
         target: /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  postgres-13:
+    container_name: es-postgres-13
+    image: postgres:13
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    volumes:
+      - type: tmpfs
+        target: /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  postgres-14:
+    container_name: es-postgres-14
+    image: postgres:14
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    volumes:
+      - type: tmpfs
+        target: /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  postgres-15:
+    container_name: es-postgres-15
+    image: postgres:15
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    volumes:
+      - type: tmpfs
+        target: /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  postgres-16:
+    container_name: es-postgres-16
+    image: postgres:16
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    volumes:
+      - type: tmpfs
+        target: /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  postgres-17:
+    container_name: es-postgres-17
+    image: postgres:17
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    volumes:
+      - type: tmpfs
+        target: /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
 
   mariadb:
     container_name: es-mariadb
     image: mariadb:10.11
+    ports:
+      - 3306:3306
+    environment:
+      MYSQL_ROOT_PASSWORD: mariadb
+      MYSQL_DATABASE: mariadb
+      MYSQL_USER: mariadb
+      MYSQL_PASSWORD: mariadb
+    volumes:
+      - type: tmpfs
+        target: /var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -pmariadb"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  mariadb-10:
+    container_name: es-mariadb-10
+    image: mariadb:10.11
+    ports:
+      - 3306:3306
+    environment:
+      MYSQL_ROOT_PASSWORD: mariadb
+      MYSQL_DATABASE: mariadb
+      MYSQL_USER: mariadb
+      MYSQL_PASSWORD: mariadb
+    volumes:
+      - type: tmpfs
+        target: /var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -pmariadb"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  mariadb-11:
+    container_name: es-mariadb-11
+    image: mariadb:11.4
     ports:
       - 3306:3306
     environment:

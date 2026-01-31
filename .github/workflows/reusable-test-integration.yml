@@ -1,0 +1,71 @@
+name: Reusable Integration Test
+
+on:
+  workflow_call:
+    inputs:
+      database:
+        required: true
+        type: string
+      service:
+        required: true
+        type: string
+      db-version:
+        required: true
+        type: string
+      node-version:
+        required: true
+        type: string
+    secrets:
+      CODECOV_TOKEN:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test ${{ inputs.database }} ${{ inputs.db-version }} [Node.js ${{ inputs.node-version }}]
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v6
+
+      - name: Start database
+        run: docker compose up -d ${{ inputs.service }}
+
+      - name: Wait for database
+        run: |
+          for attempt in {1..36}; do
+            status=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$(docker compose ps -q ${{ inputs.service }})")
+            if [ "$status" = "healthy" ] || [ "$status" = "running" ]; then
+              exit 0
+            fi
+            sleep 5
+          done
+          docker compose logs ${{ inputs.service }}
+          exit 1
+
+      - name: Setup job environment
+        id: setup-job
+        uses: ./.github/actions/setup-job-env
+        with:
+          cache-key: node-${{ inputs.node-version }}
+          node-version: ${{ inputs.node-version }}
+
+      - name: Test
+        run: |
+          if [ ${{ inputs.node-version }} == '22.x' ]; then
+            pnpm test:cov --filter=@ocoda/event-sourcing-${{ inputs.database }}
+          else
+            pnpm test --filter=@ocoda/event-sourcing-${{ inputs.database }}
+          fi
+
+      - name: Upload coverage
+        if: ${{ inputs.node-version == '22.x' }}
+        uses: codecov/codecov-action@v5
+        with:
+          directory: packages/integration/${{ inputs.database }}/coverage
+          token: ${{ secrets.CODECOV_TOKEN }}
+          flags: integrations

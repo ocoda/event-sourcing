@@ -1,0 +1,81 @@
+name: Benchmark PR
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: benchmark-pr-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  benchmark:
+    name: Run benchmarks
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      pull-requests: read
+
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Checkout base branch benchmark report
+        run: git checkout origin/${{ github.base_ref }} -- benchmarks/report/
+
+      - name: Setup job environment
+        uses: ./.github/actions/setup-job-env
+        with:
+          cache-key: node-22.x
+          node-version: 22.x
+
+      - name: Start databases
+        run: docker compose up -d mongodb postgres mariadb dynamodb
+
+      - name: Wait for databases
+        run: |
+          for service in mongodb postgres mariadb dynamodb; do
+            healthy=false
+            for attempt in {1..36}; do
+              status=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$(docker compose ps -q $service)")
+              if [ "$status" = "healthy" ] || [ "$status" = "running" ]; then
+                healthy=true
+                break
+              fi
+              sleep 5
+            done
+            if [ "$healthy" = "false" ]; then
+              docker compose logs $service
+              exit 1
+            fi
+          done
+
+      - name: Run benchmarks
+        run: |
+          for integration in in-memory mongodb dynamodb postgres mariadb; do
+            pnpm run benchmark $integration
+          done
+
+      - name: Upload report (JSON)
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-report-json
+          path: ./benchmarks/report/*.json
+
+      - name: Generate report (MD)
+        run: pnpm run benchmark:report
+
+      - name: Upload report (MD)
+        run: cat ./benchmarks/report/report.md >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-report-md
+          path: ./benchmarks/report/report.md

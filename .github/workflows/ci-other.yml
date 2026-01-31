@@ -6,14 +6,26 @@ on:
       branches: ['master']
       paths:
         # Covered by CI Docs
-        - '!.github/ci-docs.yml'
+        - '!.github/workflows/ci-docs.yml'
         - '!docs/**'
         # Covered by CI Libraries
-        - '!.github/ci-libraries.yml'
+        - '!.github/workflows/ci-libraries.yml'
         - '!packages/**'
         - '!package.json'
         - '!pnpm-*.yaml'
         - '!turbo.json'
+        # Covered by Quality Gates
+        - '!.github/workflows/ci-quality-gates.yml'
+        - '!.github/dependabot.yml'
+        # Covered by Benchmark PR
+        - '!.github/workflows/benchmark-pr.yml'
+
+concurrency:
+  group: ci-other-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   merge-check:

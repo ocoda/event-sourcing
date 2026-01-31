@@ -5,13 +5,21 @@ on:
     pull_request:
       branches: ['master']
       paths:
-        - .github/ci-docs.yml
+        - .github/workflows/ci-docs.yml
         - docs/**
+
+concurrency:
+  group: ci-docs-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   build:
     name: Build docs
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Checkout the repository
@@ -31,6 +39,7 @@ jobs:
     name: Test docs
     needs: [build]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Checkout the repository
@@ -51,4 +60,4 @@ jobs:
     needs: [build, test]
     uses: ./.github/workflows/merge-check.yml
     with:
-        conditions: ${{ needs.test.result == 'success' }}
+      conditions: ${{ needs.test.result == 'success' }}
