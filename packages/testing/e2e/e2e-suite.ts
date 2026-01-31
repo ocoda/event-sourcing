@@ -31,7 +31,7 @@ export interface E2EStoreSetup<
 > {
 	resolveStores: (app: INestApplication) => Promise<{ eventStore: TEventStore; snapshotStore: TSnapshotStore }>;
 	cleanup: (context: TCleanup) => Promise<void>;
-	getCleanupContext: (eventStore: TEventStore, snapshotStore: TSnapshotStore) => TCleanup;
+	getCleanupContext: (eventStore: TEventStore, snapshotStore: TSnapshotStore, collectionName: string) => TCleanup;
 }
 
 export interface E2ETestSuiteOptions<
@@ -72,6 +72,7 @@ export const runAccountLifecycleE2E = async <
 	let account2Id: AccountId;
 	let account3Id: AccountId;
 	let cleanupContext: TCleanup;
+	let e2eCollection: string;
 
 	beforeAll(async () => {
 		const app = appRef.current;
@@ -79,15 +80,22 @@ export const runAccountLifecycleE2E = async <
 			throw new Error('E2E app not initialized');
 		}
 		const { eventStore, snapshotStore } = await storeSetup.resolveStores(app);
-		await Promise.all([eventStore.ensureCollection('e2e'), snapshotStore.ensureCollection('e2e')]);
+		e2eCollection = `e2e-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+		await Promise.all([eventStore.ensureCollection(e2eCollection), snapshotStore.ensureCollection(e2eCollection)]);
 
-		cleanupContext = storeSetup.getCleanupContext(eventStore, snapshotStore);
+		cleanupContext = storeSetup.getCleanupContext(eventStore, snapshotStore, e2eCollection);
 
 		commandBus = app.get<CommandBus>(CommandBus);
 		queryBus = app.get<QueryBus>(QueryBus);
 		customEventPublisher = app.get<IEventPublisher>(CustomEventPublisher);
 		customEventPublisher.publish = jest.fn((_) => Promise.resolve());
 		accountRepository = app.get<AccountRepository>(AccountRepository);
+		const repositoryWithCollections = accountRepository as AccountRepository & {
+			eventCollection: string;
+			snapshotCollection: string;
+		};
+		repositoryWithCollections.eventCollection = EventCollection.get(e2eCollection);
+		repositoryWithCollections.snapshotCollection = e2eCollection;
 	});
 
 	afterAll(async () => {
@@ -271,6 +279,7 @@ export interface DynamoDBCleanupContext {
 	eventStoreClient: { send: (command: unknown) => Promise<unknown> };
 	snapshotStoreClient: { send: (command: unknown) => Promise<unknown> };
 	deleteTable: (tableName: string) => unknown;
+	collectionName?: string;
 }
 
 export const defaultCleanup = {
@@ -279,10 +288,11 @@ export const defaultCleanup = {
 		snapshotStoreClient: {
 			query: (query: string) => Promise<unknown>;
 		},
+		collectionName = 'e2e',
 	) {
 		await Promise.all([
-			eventStoreClient.query(`DROP TABLE IF EXISTS "${EventCollection.get('e2e')}"`),
-			snapshotStoreClient.query(`DROP TABLE IF EXISTS "${SnapshotCollection.get('e2e')}"`),
+			eventStoreClient.query(`DROP TABLE IF EXISTS "${EventCollection.get(collectionName)}"`),
+			snapshotStoreClient.query(`DROP TABLE IF EXISTS "${SnapshotCollection.get(collectionName)}"`),
 		]);
 	},
 	async mariadb(
@@ -290,25 +300,28 @@ export const defaultCleanup = {
 		snapshotStoreClient: {
 			query: (query: string) => Promise<unknown>;
 		},
+		collectionName = 'e2e',
 	) {
-		await eventStoreClient.query(`DROP TABLE IF EXISTS \`${EventCollection.get('e2e')}\``);
-		await snapshotStoreClient.query(`DROP TABLE IF EXISTS \`${SnapshotCollection.get('e2e')}\``);
+		await eventStoreClient.query(`DROP TABLE IF EXISTS \`${EventCollection.get(collectionName)}\``);
+		await snapshotStoreClient.query(`DROP TABLE IF EXISTS \`${SnapshotCollection.get(collectionName)}\``);
 	},
 	async mongodb(
 		eventStoreClient: { db: () => { dropCollection: (name: string) => Promise<unknown> } },
 		snapshotStoreClient: {
 			db: () => { dropCollection: (name: string) => Promise<unknown> };
 		},
+		collectionName = 'e2e',
 	) {
 		await Promise.all([
-			eventStoreClient.db().dropCollection(EventCollection.get('e2e')),
-			snapshotStoreClient.db().dropCollection(SnapshotCollection.get('e2e')),
+			eventStoreClient.db().dropCollection(EventCollection.get(collectionName)),
+			snapshotStoreClient.db().dropCollection(SnapshotCollection.get(collectionName)),
 		]);
 	},
-	async dynamodb({ eventStoreClient, snapshotStoreClient, deleteTable }: DynamoDBCleanupContext) {
+	async dynamodb({ eventStoreClient, snapshotStoreClient, deleteTable, collectionName }: DynamoDBCleanupContext) {
+		const resolvedCollection = collectionName ?? 'e2e';
 		await Promise.all([
-			eventStoreClient.send(deleteTable(EventCollection.get('e2e'))),
-			snapshotStoreClient.send(deleteTable(SnapshotCollection.get('e2e'))),
+			eventStoreClient.send(deleteTable(EventCollection.get(resolvedCollection))),
+			snapshotStoreClient.send(deleteTable(SnapshotCollection.get(resolvedCollection))),
 		]);
 	},
 };

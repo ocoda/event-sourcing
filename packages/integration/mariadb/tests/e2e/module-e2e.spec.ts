@@ -27,13 +27,15 @@ describe('EventSourcingModule - e2e', () => {
 				eventStore: appRef.get<MariaDBEventStore>(EventStore),
 				snapshotStore: appRef.get<MariaDBSnapshotStore>(SnapshotStore),
 			}),
-			getCleanupContext: (eventStore, snapshotStore) => ({
+			getCleanupContext: (eventStore, snapshotStore, collectionName) => ({
 				// biome-ignore lint/complexity/useLiteralKeys: Needed to clear the event collection
 				eventStoreClient: eventStore['pool'] as Pool,
 				// biome-ignore lint/complexity/useLiteralKeys: Needed to clear the snapshot collection
 				snapshotStoreClient: snapshotStore['pool'] as Pool,
+				collectionName,
 			}),
-			cleanup: async (context) => defaultCleanup.mariadb(context.eventStoreClient, context.snapshotStoreClient),
+			cleanup: async (context) =>
+				defaultCleanup.mariadb(context.eventStoreClient, context.snapshotStoreClient, context.collectionName),
 		}),
 	});
 });
