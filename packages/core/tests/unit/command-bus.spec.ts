@@ -29,6 +29,12 @@ describe(CommandBus, () => {
 		}
 	}
 
+	class CommandHandlerForCommandWithMetadata {
+		execute() {
+			return 'ok';
+		}
+	}
+
 	beforeAll(() => {
 		Reflect.defineMetadata(COMMAND_METADATA, { id: 'command-with-metadata' }, CommandWithMetadata);
 	});
@@ -75,5 +81,22 @@ describe(CommandBus, () => {
 		} as unknown as InstanceWrapper;
 
 		expect(() => bus.register([wrapper])).toThrow(MissingCommandMetadataException);
+	});
+
+	it('registers a handler with metadata', () => {
+		const bus = new CommandBus();
+		Reflect.defineMetadata(
+			COMMAND_HANDLER_METADATA,
+			{ command: CommandWithMetadata },
+			CommandHandlerForCommandWithMetadata,
+		);
+		const wrapper = {
+			metatype: CommandHandlerForCommandWithMetadata,
+			instance: new CommandHandlerForCommandWithMetadata(),
+		} as unknown as InstanceWrapper;
+
+		bus.register([wrapper]);
+
+		expect((bus as any).handlers.has('command-with-metadata')).toBe(true);
 	});
 });

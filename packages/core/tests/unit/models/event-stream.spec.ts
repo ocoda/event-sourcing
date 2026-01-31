@@ -28,4 +28,12 @@ describe(EventStream, () => {
 
 		expect(() => EventStream.for(Foo, FooId.generate())).toThrow(new MissingAggregateMetadataException(Foo));
 	});
+
+	it('returns aggregate id and stream id for known aggregate', () => {
+		const accountId = AccountId.generate();
+		const eventStream = EventStream.for(Account, accountId);
+
+		expect(eventStream.aggregateId).toBe(accountId.value);
+		expect(eventStream.streamId).toBe(`account-${accountId.value}`);
+	});
 });

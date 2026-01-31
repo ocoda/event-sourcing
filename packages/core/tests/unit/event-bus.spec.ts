@@ -1,7 +1,9 @@
 import type { InstanceWrapper } from '@nestjs/core/injector/instance-wrapper';
 import {
 	EventBus,
+	Event as EventDecorator,
 	EventSubscriber,
+	type IEvent,
 	MissingEventMetadataException,
 	MissingEventSubscriberMetadataException,
 } from '@ocoda/event-sourcing';
@@ -18,6 +20,16 @@ describe(EventBus, () => {
 	}
 
 	class SubscriberWithoutMetadata {
+		handle() {
+			return;
+		}
+	}
+
+	@EventDecorator('account-published')
+	class AccountPublishedEvent implements IEvent {}
+
+	@EventSubscriber(AccountPublishedEvent)
+	class ValidSubscriber {
 		handle() {
 			return;
 		}
@@ -53,5 +65,28 @@ describe(EventBus, () => {
 		} as unknown as InstanceWrapper;
 
 		expect(() => bus.registerSubscribers([wrapper])).toThrow(MissingEventMetadataException);
+	});
+
+	it('registers subscribers with valid metadata', () => {
+		const bus = new EventBus();
+		const wrapper = {
+			metatype: ValidSubscriber,
+			instance: new ValidSubscriber(),
+		} as unknown as InstanceWrapper;
+		const bindSpy = jest.spyOn(bus, 'bind');
+
+		bus.registerSubscribers([wrapper]);
+
+		expect(bindSpy).toHaveBeenCalledWith(wrapper.instance, 'account-published');
+	});
+
+	it('skips registering publishers with no instance', () => {
+		const bus = new EventBus();
+		const wrapper = { metatype: { name: 'MissingPublisher' }, instance: undefined } as unknown as InstanceWrapper;
+		const addPublisherSpy = jest.spyOn(bus, 'addPublisher');
+
+		bus.registerPublishers([wrapper]);
+
+		expect(addPublisherSpy).not.toHaveBeenCalled();
 	});
 });
