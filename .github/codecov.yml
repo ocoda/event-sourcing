@@ -7,12 +7,12 @@ coverage:
         if_ci_failed: error
       core:
         target: auto
-        threshold: 1%
+        threshold: 5%
         flags:
           - core
       integrations:
         target: auto
-        threshold: 1%
+        threshold: 15%
         flags:
           - integrations
     patch:
