@@ -111,6 +111,22 @@ describe(SnapshotRepository, () => {
 		);
 	});
 
+	it('stores a snapshot when the version is one', async () => {
+		account.version = 1;
+		await snapshotRepository.save(account.id, account);
+
+		expect(snapshotStore.appendSnapshot).toHaveBeenCalledWith(
+			snapshotStream,
+			1,
+			{
+				...snapshot,
+				id: account.id.value,
+				openedOn: account.openedOn.toISOString(),
+			},
+			undefined,
+		);
+	});
+
 	it('retrieves the latest snapshot as a snapshot-envelope', async () => {
 		account.version = snapshotInterval;
 		snapshotEnvelope = SnapshotEnvelope.create<Account>(snapshot, {
@@ -125,6 +141,15 @@ describe(SnapshotRepository, () => {
 		expect(loadedAccount).toEqual(account);
 	});
 
+	it('returns a new aggregate when no snapshots are found', async () => {
+		snapshotStore.getLastEnvelope = jest.fn().mockResolvedValue(undefined);
+
+		const loadedAccount = await snapshotRepository.load(account.id);
+
+		expect(loadedAccount.version).toBe(0);
+		expect(loadedAccount.name).toBeUndefined();
+	});
+
 	it('retrieves multiple snapshots as a snapshot-envelope', async () => {
 		account.version = snapshotInterval;
 		snapshotEnvelope = SnapshotEnvelope.create<Account>(snapshot, {
@@ -137,5 +162,22 @@ describe(SnapshotRepository, () => {
 		expect(snapshotStore.getManyLastSnapshotEnvelopes).toHaveBeenCalledWith([snapshotStream], undefined);
 
 		expect(loadedAccounts).toEqual([account]);
+	});
+
+	it('throws when loading many without store support', async () => {
+		snapshotStore.getManyLastSnapshotEnvelopes = undefined;
+
+		await expect(snapshotRepository.loadMany([account.id])).rejects.toThrow(
+			'The snapshot store does not support method: getManyLastSnapshotEnvelopes.',
+		);
+	});
+
+	it('throws when loading all without store support', async () => {
+		snapshotStore.getLastEnvelopesForAggregate = undefined;
+
+		const iterator = snapshotRepository.loadAll();
+		await expect(iterator.next()).rejects.toThrow(
+			'The snapshot store does not support method: getLastEnvelopesForAggregate.',
+		);
 	});
 });

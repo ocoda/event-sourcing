@@ -22,8 +22,8 @@ describe(ULID, () => {
 	});
 
 	it('should throw when trying to create a ULID from an undefined variable', () => {
-		let value: string;
-		expect(() => ULID.from(value)).toThrow(InvalidIdException.becauseEmpty());
+		let value: string | undefined;
+		expect(() => ULID.from(value as unknown as string)).toThrow(InvalidIdException.becauseEmpty());
 	});
 
 	it('should throw when creating a ULID from an invalid value', () => {
@@ -47,5 +47,10 @@ describe(ULID, () => {
 		const generatedUlid1 = ulidFactory(dateSeed);
 		const generatedUlid2 = ulidFactory(dateSeed);
 		expect(generatedUlid1.value).not.toBe(generatedUlid2.value);
+	});
+
+	it('should generate a ULID for a fixed time', () => {
+		const generatedUlid = ULID.generate(new Date('2024-02-01T00:00:00Z'));
+		expect(generatedUlid.value).toHaveLength(26);
 	});
 });

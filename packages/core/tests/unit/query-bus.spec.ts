@@ -23,6 +23,12 @@ describe(QueryBus, () => {
 		}
 	}
 
+	class QueryHandlerForQueryWithMetadata {
+		execute() {
+			return 'ok';
+		}
+	}
+
 	beforeAll(() => {
 		Reflect.defineMetadata(QUERY_METADATA, { id: 'query-with-metadata' }, QueryWithMetadata);
 	});
@@ -69,5 +75,18 @@ describe(QueryBus, () => {
 		} as unknown as InstanceWrapper;
 
 		expect(() => bus.register([wrapper])).toThrow(MissingQueryMetadataException);
+	});
+
+	it('registers a handler with metadata', () => {
+		const bus = new QueryBus();
+		Reflect.defineMetadata(QUERY_HANDLER_METADATA, { query: QueryWithMetadata }, QueryHandlerForQueryWithMetadata);
+		const wrapper = {
+			metatype: QueryHandlerForQueryWithMetadata,
+			instance: new QueryHandlerForQueryWithMetadata(),
+		} as unknown as InstanceWrapper;
+
+		bus.register([wrapper]);
+
+		expect((bus as any).handlers.has('query-with-metadata')).toBe(true);
 	});
 });

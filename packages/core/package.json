@@ -10,7 +10,8 @@
 		"build": "rm -rf dist && tsup lib/index.ts --format cjs --dts",
 		"build:watch": "rm -rf dist && tsup lib/index.ts --format cjs --dts --watch",
 		"test": "jest --config jest.config.js",
-		"test:cov": "jest --config jest.config.js --coverage --collectCoverageFrom=lib/**/*.ts",
+		"test:cov": "jest --config jest.config.js --coverage",
+		"test:cov:check": "jest --config jest.config.js --coverage --coverageThreshold='{'\"global\"':{'\"lines\"':90}}'",
 		"ci": "biome ci",
 		"format": "biome format --write",
 		"lint": "biome check --write"

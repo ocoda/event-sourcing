@@ -32,7 +32,7 @@ describe(InMemoryEventStore, () => {
 	const events = getEvents();
 
 	beforeAll(() => {
-		eventStore = new InMemoryEventStore(eventMap, { driver: undefined });
+		eventStore = new InMemoryEventStore(eventMap, { driver: InMemoryEventStore });
 		eventStore.publish = publish;
 
 		eventStore.connect();
@@ -250,6 +250,18 @@ describe(InMemoryEventStore, () => {
 			expect(envelopes.length).toBe(2);
 			resolvedBatchedEnvelopes.push(...envelopes);
 		}
+	});
+
+	it('should retrieve all event-envelopes until a given date', async () => {
+		const resolvedAllEnvelopes: EventEnvelope[] = [];
+		for await (const envelopes of eventStore.getAllEnvelopes({
+			since: { year: 2021, month: 1 },
+			until: { year: 2021, month: 3 },
+		})) {
+			resolvedAllEnvelopes.push(...envelopes);
+		}
+
+		expect(resolvedAllEnvelopes.length).toBeGreaterThan(0);
 	});
 
 	it('should list collections', async () => {

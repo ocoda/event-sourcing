@@ -31,4 +31,21 @@ describe(ValueObject, () => {
 
 		expect(point1.equals(point2)).toBe(true);
 	});
+
+	it('returns false for different types', () => {
+		class Size extends ValueObject<{ width: number }> {
+			protected constructor(width: number) {
+				super({ width });
+			}
+
+			static from(width: number) {
+				return new Size(width);
+			}
+		}
+
+		const point = Point.from(1, 2);
+		const size = Size.from(1);
+
+		expect(point.equals(size as any)).toBe(false);
+	});
 });

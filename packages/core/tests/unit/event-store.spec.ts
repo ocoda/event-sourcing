@@ -15,28 +15,36 @@ describe(EventStore, () => {
 		public connect(): void | Promise<void> {}
 		public disconnect(): void | Promise<void> {}
 		public ensureCollection(pool?: IEventPool): IEventCollection | Promise<IEventCollection> {
-			return;
+			return {} as IEventCollection;
 		}
 		public listCollections(filter?: IEventCollectionFilter): AsyncGenerator<IEventCollection[]> {
-			return;
+			return (async function* () {
+				yield [] as IEventCollection[];
+			})();
 		}
 		getEvent(): IEvent | Promise<IEvent> {
-			return;
+			return {} as IEvent;
 		}
 		getEvents(): AsyncGenerator<IEvent[]> {
-			return;
+			return (async function* () {
+				yield [] as IEvent[];
+			})();
 		}
 		appendEvents(): Promise<EventEnvelope[]> {
-			return;
+			return Promise.resolve([]);
 		}
 		getEnvelopes?(): AsyncGenerator<EventEnvelope[]> {
-			return;
+			return (async function* () {
+				yield [] as EventEnvelope[];
+			})();
 		}
 		getEnvelope?(): EventEnvelope | Promise<EventEnvelope> {
-			return;
+			return {} as EventEnvelope;
 		}
 		getAllEnvelopes(): AsyncGenerator<EventEnvelope[]> {
-			return;
+			return (async function* () {
+				yield [] as EventEnvelope[];
+			})();
 		}
 		getYearMonthRange(
 			sinceDate: { year: number; month: number },
@@ -54,5 +62,17 @@ describe(EventStore, () => {
 			'2021-02',
 			'2021-03',
 		]);
+	});
+
+	it('should calculate yearMonth values until current date when no end is supplied', () => {
+		jest.useFakeTimers().setSystemTime(new Date('2024-06-15T12:00:00Z'));
+
+		expect(eventStore.getYearMonthRange({ year: 2024, month: 4 })).toEqual(['2024-04', '2024-05', '2024-06']);
+
+		jest.useRealTimers();
+	});
+
+	it('should return a single month when since and until are the same', () => {
+		expect(eventStore.getYearMonthRange({ year: 2022, month: 7 }, { year: 2022, month: 7 })).toEqual(['2022-07']);
 	});
 });
