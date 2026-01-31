@@ -1,15 +1,7 @@
 name: Benchmark PR
 
 on:
-  pull_request:
-    branches: ['master']
-    paths:
-      - .github/workflows/benchmark-pr.yml
-      - docker-compose.yml
-      - benchmarks/**
-      - packages/**
-      - package.json
-      - pnpm-*.yaml
+  workflow_dispatch:
 
 concurrency:
   group: benchmark-pr-${{ github.ref }}
