@@ -67,6 +67,8 @@ docker compose up -d postgres mariadb
     pnpm lint format
     ```
 
+   **Release notes (changesets + AI):** release automation relies on changesets for versioning. Release notes are enhanced with AI when the `ANTHROPIC_API_KEY` secret is configured in the repository. Contributors do not need to run the AI generation locally; the workflow will skip AI notes when the secret is missing.
+
 8. **Commit Your Changes**
   Write clear and concise commit messages:
     ```bash

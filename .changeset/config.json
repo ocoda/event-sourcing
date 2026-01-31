@@ -1,6 +1,6 @@
 {
 	"$schema": "https://unpkg.com/@changesets/config@3.0.3/schema.json",
-	"changelog": ["@changesets/changelog-github", { "repo": "ocoda/event-sourcing" }],
+	"changelog": ["./.changeset/changelog-generator.cjs", { "repo": "ocoda/event-sourcing" }],
 	"commit": false,
 	"fixed": [
 		[
@@ -14,5 +14,6 @@
 	"access": "public",
 	"baseBranch": "master",
 	"updateInternalDependencies": "patch",
-	"privatePackages": false
+	"privatePackages": false,
+	"___changelog_generator_note": "Custom generator combines GitHub links with AI summaries"
 }
