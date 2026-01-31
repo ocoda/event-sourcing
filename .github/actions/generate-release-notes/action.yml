@@ -1,0 +1,44 @@
+name: Generate AI Release Notes
+description: Generate user-facing release notes from changesets and commits
+
+inputs:
+  anthropic-api-key:
+    description: Anthropic API key for Claude
+    required: true
+
+outputs:
+  notes:
+    description: Generated release notes
+
+runs:
+  using: composite
+  steps:
+    - name: Collect changeset information
+      shell: bash
+      run: |
+        CHANGESETS=$(find .changeset -name "*.md" ! -name "README.md" -exec cat {} \;)
+        LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+        if [ -n "$LAST_TAG" ]; then
+          COMMITS=$(git log "$LAST_TAG"..HEAD --pretty=format:"- %s (%h)")
+        else
+          COMMITS=$(git log -20 --pretty=format:"- %s (%h)")
+        fi
+
+        printf "%s" "$CHANGESETS" > /tmp/changesets.txt
+        printf "%s" "$COMMITS" > /tmp/commits.txt
+
+    - name: Generate release notes with AI
+      shell: bash
+      env:
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
+      run: node .github/scripts/generate-release-notes.js
+
+    - name: Set output
+      shell: bash
+      run: |
+        NOTES=$(cat /tmp/release-notes.md)
+        {
+          echo "notes<<EOF"
+          echo "$NOTES"
+          echo "EOF"
+        } >> $GITHUB_OUTPUT

@@ -2,6 +2,9 @@ name: Benchmark
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - master
 
 concurrency:
   group: benchmark-${{ github.ref }}
@@ -93,3 +96,10 @@ jobs:
         with:
           name: benchmark-report-md
           path: ./benchmarks/report/report.md
+
+      - name: Update baseline cache
+        if: github.ref == 'refs/heads/master'
+        uses: actions/cache/save@v4
+        with:
+          path: benchmarks/report
+          key: benchmark-baseline-master-${{ github.sha }}
