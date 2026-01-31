@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 // biome-ignore lint/style/useImportType: DI
-import { EventCollection, EventStore, EventStream } from '@ocoda/event-sourcing';
+import { EventStore, EventStream } from '@ocoda/event-sourcing';
 // biome-ignore lint/style/useImportType: DI
 import { Account, AccountId, AccountSnapshotRepository } from '../../domain/models';
 
@@ -11,7 +11,7 @@ export class AccountRepository {
 		private readonly accountSnapshotRepository: AccountSnapshotRepository,
 	) {}
 
-	eventCollection = EventCollection.get('e2e');
+	eventCollection = 'e2e';
 	snapshotCollection = 'e2e';
 
 	async getById(accountId: AccountId) {

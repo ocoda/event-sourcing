@@ -2,7 +2,8 @@
 	{
 		"name": "@ocoda/event-sourcing",
 		"path": "packages/core/dist/index.js",
-		"limit": "50 KB"
+		"limit": "50 KB",
+		"ignore": ["node:crypto", "crypto"]
 	},
 	{
 		"name": "@ocoda/event-sourcing-postgres",

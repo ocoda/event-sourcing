@@ -94,7 +94,7 @@ export const runAccountLifecycleE2E = async <
 			eventCollection: string;
 			snapshotCollection: string;
 		};
-		repositoryWithCollections.eventCollection = EventCollection.get(e2eCollection);
+		repositoryWithCollections.eventCollection = e2eCollection;
 		repositoryWithCollections.snapshotCollection = e2eCollection;
 	});
 
