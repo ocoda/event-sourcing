@@ -1,0 +1,62 @@
+name: Create Dependency Changeset
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    paths:
+      - "pnpm-lock.yaml"
+
+permissions:
+  contents: write
+
+jobs:
+  create-changeset:
+    if: github.actor == 'renovate[bot]'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.head_ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine changeset type
+        id: type
+        shell: bash
+        run: |
+          title="${{ github.event.pull_request.title }}"
+
+          if echo "$title" | grep -qi "major"; then
+            echo "type=major" >> $GITHUB_OUTPUT
+          elif echo "$title" | grep -qi "minor"; then
+            echo "type=minor" >> $GITHUB_OUTPUT
+          else
+            echo "type=patch" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create changeset
+        shell: bash
+        run: |
+          CHANGESET_ID=$(echo "${{ github.event.pull_request.number }}" | md5sum | cut -c1-8)
+
+          cat > ".changeset/deps-${CHANGESET_ID}.md" << EOF
+          ---
+          "@ocoda/event-sourcing": ${{ steps.type.outputs.type }}
+          "@ocoda/event-sourcing-postgres": ${{ steps.type.outputs.type }}
+          "@ocoda/event-sourcing-mongodb": ${{ steps.type.outputs.type }}
+          "@ocoda/event-sourcing-mariadb": ${{ steps.type.outputs.type }}
+          "@ocoda/event-sourcing-dynamodb": ${{ steps.type.outputs.type }}
+          ---
+
+          ${{ github.event.pull_request.title }}
+          EOF
+
+      - name: Commit changeset
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .changeset/
+          git commit -m "chore: add changeset for dependency update" || exit 0
+          git push
