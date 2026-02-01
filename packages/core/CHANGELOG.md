@@ -1,5 +1,15 @@
 # @ocoda/event-sourcing
 
+## 3.0.0
+
+### Minor Changes
+
+- [#474](https://github.com/ocoda/event-sourcing/pull/474) [`6290979`](https://github.com/ocoda/event-sourcing/commit/6290979d9727a1edbede492c19a330ddef5ba736) Thanks [@drieshooghe](https://github.com/drieshooghe)! - Add feature-module registration helpers, exploration service, and flexible store configuration for event sourcing.
+
+### Patch Changes
+
+- [#474](https://github.com/ocoda/event-sourcing/pull/474) [`7a14fea`](https://github.com/ocoda/event-sourcing/commit/7a14feab663e0d0f323b017127e2771aae6b9183) Thanks [@drieshooghe](https://github.com/drieshooghe)! - Expand shared E2E coverage, align integration test structure, and add core bus edge-case tests.
+
 ## 2.1.4
 
 ### Patch Changes
