@@ -53,7 +53,7 @@ jobs:
         run: pnpm run benchmark ${{ matrix.database }}
 
       - name: Upload report (JSON)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: report-json-${{ matrix.database }}
           path: ./benchmarks/report/${{ matrix.database }}.json
@@ -89,7 +89,7 @@ jobs:
         run: cat ./benchmarks/report/report.md >> $GITHUB_STEP_SUMMARY
 
       - name: Upload report artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: benchmark-report-md
           path: ./benchmarks/report/report.md
