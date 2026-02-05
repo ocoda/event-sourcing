@@ -1,0 +1,35 @@
+name: Create GitHub Release
+description: Create a GitHub Release with release notes
+
+inputs:
+  release-notes:
+    description: Markdown release notes
+    required: true
+  version:
+    description: Published version
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Create GitHub release
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      run: |
+        VERSION="${{ inputs.version }}"
+
+        if git tag -l "v${VERSION}" | grep -q "v${VERSION}"; then
+          gh release create "v${VERSION}" \
+            --title "v${VERSION}" \
+            --notes "${{ inputs.release-notes }}" \
+            --verify-tag
+          exit 0
+        fi
+
+        git tag "v${VERSION}"
+        git push origin "v${VERSION}"
+
+        gh release create "v${VERSION}" \
+          --title "v${VERSION}" \
+          --notes "${{ inputs.release-notes }}"
