@@ -1,0 +1,60 @@
+name: Release Preview
+
+on:
+  pull_request:
+    paths:
+      - ".changeset/**"
+      - "packages/**"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  preview:
+    name: Preview release impact
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v6
+
+      - name: Determine changeset bump
+        id: changesets
+        shell: bash
+        run: |
+          if [ -d ".changeset" ] && [ "$(ls -A .changeset/*.md 2>/dev/null | grep -v README.md)" ]; then
+            echo "has_changesets=true" >> $GITHUB_OUTPUT
+
+            if grep -l "major" .changeset/*.md 2>/dev/null; then
+              echo "bump_type=major" >> $GITHUB_OUTPUT
+            elif grep -l "minor" .changeset/*.md 2>/dev/null; then
+              echo "bump_type=minor" >> $GITHUB_OUTPUT
+            else
+              echo "bump_type=patch" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "has_changesets=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Comment release preview
+        if: steps.changesets.outputs.has_changesets == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const bumpType = '${{ steps.changesets.outputs.bump_type }}';
+            const tag = { major: '[major]', minor: '[minor]', patch: '[patch]' }[bumpType];
+            const files = require('fs')
+              .readdirSync('.changeset')
+              .filter((file) => file.endsWith('.md') && file !== 'README.md')
+              .map((file) => `- ${file}`)
+              .join('\n');
+
+            const body = `## ${tag} Release Preview\n\nThis PR will trigger a **${bumpType}** version bump when merged.\n\n### Changesets included:\n${files}`;
+
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body
+            });
