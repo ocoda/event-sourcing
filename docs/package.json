@@ -24,7 +24,7 @@
 	},
 	"devDependencies": {
 		"@ocoda/event-sourcing-config": "workspace:*",
-		"@types/node": "20.17.6",
+		"@types/node": "25.1.0",
 		"typescript": "5.9.2"
 	}
 }
