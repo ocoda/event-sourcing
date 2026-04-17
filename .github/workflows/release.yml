@@ -18,25 +18,34 @@ jobs:
     steps:
       - name: Checkout the repository
         uses: actions/checkout@v6
-
-      - name: Setup job environment
-        id: setup-job
-        uses: ./.github/actions/setup-job-env
         with:
-          cache-key: node-22.x
-          node-version: 22.x
+          fetch-depth: 0
+
+      - name: Cache turbo build setup
+        uses: actions/cache@v5
+        with:
+          path: .turbo
+          key: node-24.x-turbo-${{ github.sha }}
+          restore-keys: |
+            node-24.x-turbo-
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.4.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: "pnpm"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Build Packages
         run: pnpm build --filter="./packages/**"
-
-      - name: Setup npm registry for publishing
-        uses: actions/setup-node@v6
-        with:
-          node-version: 22.x
-          registry-url: "https://registry.npmjs.org"
-
-      - name: Upgrade npm for trusted publishing support
-        run: npm install -g npm@latest
 
       - name: Create Release Pull Request or Publish
         id: changesets
@@ -48,7 +57,6 @@ jobs:
           title: "[ci] release"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_CONFIG_PROVENANCE: true
 
   merge-check:
     name: Merge check
