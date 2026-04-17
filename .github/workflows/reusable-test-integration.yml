@@ -64,7 +64,7 @@ jobs:
 
       - name: Upload coverage
         if: ${{ inputs.node-version == '22.x' }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           directory: packages/integration/${{ inputs.database }}/coverage
           token: ${{ secrets.CODECOV_TOKEN }}
