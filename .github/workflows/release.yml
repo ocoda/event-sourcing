@@ -29,6 +29,12 @@ jobs:
       - name: Build Packages
         run: pnpm build --filter="./packages/**"
 
+      - name: Setup npm registry for publishing
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22.x
+          registry-url: "https://registry.npmjs.org"
+
       - name: Create Release Pull Request or Publish
         id: changesets
         uses: changesets/action@v1
