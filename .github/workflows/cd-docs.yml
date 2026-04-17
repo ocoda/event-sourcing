@@ -38,7 +38,7 @@ jobs:
           GITHUB_PAGES: true
 
       - name: Upload build
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: ./docs/dist
 
@@ -53,4 +53,4 @@ jobs:
     steps:
       - name: Publish to GitHub Pages 🚀
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
