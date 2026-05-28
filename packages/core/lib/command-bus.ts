@@ -1,6 +1,5 @@
 import 'reflect-metadata';
 import { Injectable, type Type } from '@nestjs/common';
-import type { InstanceWrapper } from '@nestjs/core/injector/instance-wrapper';
 
 import {
 	CommandHandlerNotFoundException,
@@ -9,7 +8,7 @@ import {
 	MissingCommandMetadataException,
 } from './exceptions';
 import { DefaultCommandPubSub, ObservableBus, getCommandHandlerMetadata, getCommandMetadata } from './helpers';
-import type { ICommand, ICommandBus, ICommandHandler, ICommandPublisher } from './interfaces';
+import type { ICommand, ICommandBus, ICommandHandler, ICommandPublisher, ProviderWrapper } from './interfaces';
 
 @Injectable()
 export class CommandBus<CommandBase extends ICommand = ICommand>
@@ -50,12 +49,12 @@ export class CommandBus<CommandBase extends ICommand = ICommand>
 		return id;
 	}
 
-	register(handlers: InstanceWrapper<ICommandHandler>[] = []) {
+	register(handlers: ProviderWrapper<ICommandHandler>[] = []) {
 		for (const handler of handlers) {
 			this.registerHandler(handler);
 		}
 	}
-	protected registerHandler(handler: InstanceWrapper<ICommandHandler>) {
+	protected registerHandler(handler: ProviderWrapper<ICommandHandler>) {
 		// get the metadata from the handler
 		const { metatype, instance } = handler;
 

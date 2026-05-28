@@ -5,9 +5,22 @@
 	"author": "Dries Hooghe <dries@drieshooghe.com>",
 	"license": "MIT",
 	"main": "./dist/index.js",
+	"module": "./dist/index.mjs",
 	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"import": {
+				"types": "./dist/index.d.mts",
+				"default": "./dist/index.mjs"
+			},
+			"require": {
+				"types": "./dist/index.d.ts",
+				"default": "./dist/index.js"
+			}
+		}
+	},
 	"scripts": {
-		"build": "rm -rf dist && tsup lib/index.ts --format cjs --dts",
+		"build": "rm -rf dist && tsup lib/index.ts --format cjs,esm --dts",
 		"test": "jest --config jest.config.js",
 		"test:cov": "jest --config jest.config.js --coverage",
 		"test:cov:check": "jest --config jest.config.js --coverage --coverageThreshold='{'\"global\"':{'\"lines\"':90}}'",
@@ -26,6 +39,7 @@
 		"@aws-sdk/util-dynamodb": "3.883.0"
 	},
 	"peerDependencies": {
+		"@nestjs/common": "^11.0.0",
 		"@nestjs/core": "^11.0.0",
 		"@ocoda/event-sourcing": "workspace:*",
 		"reflect-metadata": "^0.2.0",

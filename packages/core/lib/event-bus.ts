@@ -1,12 +1,11 @@
 import { Injectable, type OnModuleDestroy, type Type } from '@nestjs/common';
-import type { InstanceWrapper } from '@nestjs/core/injector/instance-wrapper';
 import { type Observable, type Subscription, from } from 'rxjs';
 import { filter, mergeMap } from 'rxjs/operators';
 
 import { MissingEventMetadataException, MissingEventSubscriberMetadataException } from './exceptions';
 import { ObservableBus, getEventMetadata, getEventSubscriberMetadata } from './helpers';
 import { DefaultEventPubSub } from './helpers/default-event-publisher';
-import type { IEventBus, IEventPublisher, IEventSubscriber } from './interfaces';
+import type { IEventBus, IEventPublisher, IEventSubscriber, ProviderWrapper } from './interfaces';
 import type { EventEnvelope } from './models';
 
 @Injectable()
@@ -46,24 +45,24 @@ export class EventBus extends ObservableBus<EventEnvelope> implements IEventBus,
 		return this.subject$.pipe(filter(({ event }) => event === eventName));
 	}
 
-	registerPublishers(publishers: InstanceWrapper<IEventPublisher>[] = []) {
+	registerPublishers(publishers: ProviderWrapper<IEventPublisher>[] = []) {
 		for (const publisher of publishers) {
 			this.registerPublisher(publisher);
 		}
 	}
-	registerSubscribers(subscribers: InstanceWrapper<IEventSubscriber>[] = []) {
+	registerSubscribers(subscribers: ProviderWrapper<IEventSubscriber>[] = []) {
 		for (const subscriber of subscribers) {
 			this.registerSubscriber(subscriber);
 		}
 	}
 
-	protected registerPublisher(handler: InstanceWrapper<IEventPublisher>) {
+	protected registerPublisher(handler: ProviderWrapper<IEventPublisher>) {
 		const { instance } = handler;
 		if (!instance) return;
 
 		this.addPublisher(instance as IEventPublisher);
 	}
-	protected registerSubscriber(handler: InstanceWrapper<IEventSubscriber>) {
+	protected registerSubscriber(handler: ProviderWrapper<IEventSubscriber>) {
 		const { metatype, instance } = handler;
 		if (!metatype || !instance) {
 			throw new MissingEventSubscriberMetadataException(metatype as Type<IEventSubscriber>);
