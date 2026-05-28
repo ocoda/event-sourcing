@@ -26,7 +26,7 @@ describe(InMemoryEventStore, () => {
 	let eventStore: InMemoryEventStore;
 	let envelopesAccountA: EventEnvelope[];
 	let envelopesAccountB: EventEnvelope[];
-	const publish = jest.fn(async () => Promise.resolve());
+	const publish = vi.fn(async () => Promise.resolve());
 
 	const eventMap = getEventMap();
 	const events = getEvents();

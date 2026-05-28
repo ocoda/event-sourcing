@@ -2,6 +2,7 @@
 	"extends": "@ocoda/event-sourcing-config/typescript/module.json",
 	"include": ["index.ts", "index.d.ts", "lib/**/*.ts", "tests/**/*.ts"],
 	"compilerOptions": {
+		"types": ["node", "vitest/globals"],
 		"paths": {
 			"@ocoda/event-sourcing": ["../../core/lib"],
 			"@ocoda/event-sourcing/*": ["../../core/lib/*"],

@@ -3,6 +3,7 @@
 	"include": ["index.ts", "index.d.ts", "lib/**/*.ts", "tests/**/*.ts"],
 	"compilerOptions": {
 		"esModuleInterop": true,
+		"types": ["node", "vitest/globals"],
 		"paths": {
 			"@ocoda/event-sourcing": ["../../core/lib"],
 			"@ocoda/event-sourcing/*": ["../../core/lib/*"],

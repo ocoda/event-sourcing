@@ -65,11 +65,11 @@ describe(EventStore, () => {
 	});
 
 	it('should calculate yearMonth values until current date when no end is supplied', () => {
-		jest.useFakeTimers().setSystemTime(new Date('2024-06-15T12:00:00Z'));
+		vi.useFakeTimers().setSystemTime(new Date('2024-06-15T12:00:00Z'));
 
 		expect(eventStore.getYearMonthRange({ year: 2024, month: 4 })).toEqual(['2024-04', '2024-05', '2024-06']);
 
-		jest.useRealTimers();
+		vi.useRealTimers();
 	});
 
 	it('should return a single month when since and until are the same', () => {

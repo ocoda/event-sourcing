@@ -27,7 +27,7 @@ describe(PostgresEventStore, () => {
 	let eventStore: PostgresEventStore;
 	let envelopesAccountA: EventEnvelope[];
 	let envelopesAccountB: EventEnvelope[];
-	const publish = jest.fn(async () => Promise.resolve());
+	const publish = vi.fn(async () => Promise.resolve());
 
 	let pool: Pool;
 	let client: PoolClient;

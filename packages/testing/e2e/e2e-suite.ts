@@ -1,4 +1,5 @@
 import type { INestApplication } from '@nestjs/common';
+import { vi } from 'vitest';
 import type { EventStoreDriver, SnapshotStoreDriver } from '@ocoda/event-sourcing';
 import {
 	CommandBus,
@@ -86,7 +87,7 @@ export const runAccountLifecycleE2E = async <
 		commandBus = app.get<CommandBus>(CommandBus);
 		queryBus = app.get<QueryBus>(QueryBus);
 		customEventPublisher = app.get<IEventPublisher>(CustomEventPublisher);
-		customEventPublisher.publish = jest.fn((_) => Promise.resolve());
+		customEventPublisher.publish = vi.fn((_) => Promise.resolve());
 		accountRepository = app.get<AccountRepository>(AccountRepository);
 	});
 

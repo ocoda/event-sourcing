@@ -28,7 +28,7 @@ describe(MariaDBEventStore, () => {
 	let eventStore: MariaDBEventStore;
 	let envelopesAccountA: EventEnvelope[];
 	let envelopesAccountB: EventEnvelope[];
-	const publish = jest.fn(async () => Promise.resolve());
+	const publish = vi.fn(async () => Promise.resolve());
 
 	let pool: Pool;
 
