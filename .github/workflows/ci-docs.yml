@@ -23,7 +23,7 @@ jobs:
 
     steps:
       - name: Checkout the repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup job environment
         id: setup-job
@@ -43,7 +43,7 @@ jobs:
 
     steps:
       - name: Checkout the repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup job environment
         id: setup-job
