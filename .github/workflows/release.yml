@@ -22,7 +22,7 @@ jobs:
           fetch-depth: 0
 
       - name: Cache turbo build setup
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: .turbo
           key: node-24.x-turbo-${{ github.sha }}
