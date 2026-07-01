@@ -29,6 +29,6 @@
 		"@types/node": "20.17.6",
 		"artillery": "^2.0.24",
 		"tsup": "^8.5.0",
-		"typescript": "5.9.2"
+		"typescript": "6.0.3"
 	}
 }
