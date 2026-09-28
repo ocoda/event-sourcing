@@ -229,6 +229,37 @@ describe(`${MariaDBEventStore.name} resilience`, () => {
 			expect(pool.activeConnections()).toBe(0);
 		});
 
+		it('should throw a persistence exception and release the connection when the collection name cannot be escaped', async () => {
+			await expect(eventStore.appendEvents(newStream(), 1, events.slice(0, 1), 'nul\u0000pool')).rejects.toThrow(
+				EventStorePersistenceException,
+			);
+			expect(pool.activeConnections()).toBe(0);
+		});
+
+		it('should not let a failing rollback hide the original error', async () => {
+			const getConnection = pool.getConnection.bind(pool);
+			const rollbacks: jest.SpyInstance[] = [];
+			const getConnectionSpy = jest.spyOn(pool, 'getConnection').mockImplementation(async () => {
+				const connection: PoolConnection = await getConnection();
+				rollbacks.push(jest.spyOn(connection, 'rollback').mockRejectedValue(new Error('rollback failure')));
+				return connection;
+			});
+
+			try {
+				await expect(
+					eventStore.appendEvents(newStream(), 1, events.slice(0, 1), uniquePool('missing')),
+				).rejects.toThrow(EventStorePersistenceException);
+				expect(rollbacks).toHaveLength(1);
+				expect(rollbacks[0]).toHaveBeenCalled();
+			} finally {
+				getConnectionSpy.mockRestore();
+				for (const rollback of rollbacks) {
+					rollback.mockRestore();
+				}
+			}
+			expect(pool.activeConnections()).toBe(0);
+		});
+
 		describe('concurrent writers', () => {
 			const WRITERS = 8;
 			const settle = (stream: EventStream, eventPool: IEventPool, store: MariaDBEventStore = eventStore) =>

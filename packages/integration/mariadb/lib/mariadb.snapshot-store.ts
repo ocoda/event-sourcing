@@ -141,11 +141,13 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 	): Promise<SnapshotEnvelope<A>> {
 		const connection = await this.pool.getConnection();
 		const collection = SnapshotCollection.get(pool);
-		const table = connection.escapeId(collection);
 
 		let latestVersion = 0;
 
 		try {
+			// Escaped inside the try, so a name the connector refuses to escape still releases the connection
+			const table = connection.escapeId(collection);
+
 			const envelope = SnapshotEnvelope.create<A>(snapshot, {
 				aggregateId: stream.aggregateId,
 				version: aggregateVersion,
@@ -196,7 +198,7 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 
 			// A concurrent writer committed the same (stream_id, version) between our check and our insert.
 			if (isDuplicateEntryError(error)) {
-				latestVersion = await this.getLatestVersion(table, stream, connection, latestVersion);
+				latestVersion = await this.getLatestVersion(collection, stream, connection, latestVersion);
 				throw new SnapshotStoreVersionConflictException(stream, aggregateVersion, latestVersion, error);
 			}
 
@@ -428,15 +430,16 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 	 * Best effort lookup of the latest snapshot version of a stream, used to report a conflict.
 	 */
 	private async getLatestVersion(
-		table: string,
+		collection: ISnapshotCollection,
 		{ streamId }: SnapshotStream,
 		connection: Connection,
 		fallback: number,
 	): Promise<number> {
 		try {
-			const [result] = await connection.query(`SELECT MAX(version) as version FROM ${table} WHERE stream_id = ?`, [
-				streamId,
-			]);
+			const [result] = await connection.query(
+				`SELECT MAX(version) as version FROM ${connection.escapeId(collection)} WHERE stream_id = ?`,
+				[streamId],
+			);
 			return result?.version || fallback;
 		} catch {
 			return fallback;

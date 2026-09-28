@@ -15,6 +15,6 @@ MariaDB:
 MongoDB:
 
 - Cursors are now closed when a read ends early or fails, instead of staying open on the server until they time out.
-- Appends no longer look up the collection on every write. Collections that are known to exist (created through `ensureCollection()` or found once) are remembered per store instance. Unknown pools are still rejected with the same exception and are checked against the server on every attempt.
+- Appends no longer look up the collection on every write. Collections that are known to exist (created through `ensureCollection()` or found once) are remembered per store instance. Unknown pools are still rejected with the same exception and are checked against the server on every attempt. If you drop a collection while a store instance is running, call `ensureCollection()` again before appending to it: otherwise MongoDB re-creates it on the next write without its unique indexes.
 - A concurrent append that loses the race on the `(streamId, version)` unique index now throws `EventStoreVersionConflictException` / `SnapshotStoreVersionConflictException` instead of `EventStorePersistenceException` / `SnapshotStorePersistenceException`. Events of the losing append that were already inserted are removed again.
 - The batches yielded by the read methods are no longer emptied after the consumer resumes, so consumers can safely keep a reference to a batch.

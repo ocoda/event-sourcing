@@ -202,6 +202,37 @@ describe(`${MariaDBSnapshotStore.name} resilience`, () => {
 			expect(pool.activeConnections()).toBe(0);
 		});
 
+		it('should throw a persistence exception and release the connection when the collection name cannot be escaped', async () => {
+			await expect(snapshotStore.appendSnapshot(newStream(), 1, { balance: 0 }, 'nul\u0000pool')).rejects.toThrow(
+				SnapshotStorePersistenceException,
+			);
+			expect(pool.activeConnections()).toBe(0);
+		});
+
+		it('should not let a failing rollback hide the original error', async () => {
+			const getConnection = pool.getConnection.bind(pool);
+			const rollbacks: jest.SpyInstance[] = [];
+			const getConnectionSpy = jest.spyOn(pool, 'getConnection').mockImplementation(async () => {
+				const connection: PoolConnection = await getConnection();
+				rollbacks.push(jest.spyOn(connection, 'rollback').mockRejectedValue(new Error('rollback failure')));
+				return connection;
+			});
+
+			try {
+				await expect(
+					snapshotStore.appendSnapshot(newStream(), 1, { balance: 0 }, uniquePool('missing')),
+				).rejects.toThrow(SnapshotStorePersistenceException);
+				expect(rollbacks).toHaveLength(1);
+				expect(rollbacks[0]).toHaveBeenCalled();
+			} finally {
+				getConnectionSpy.mockRestore();
+				for (const rollback of rollbacks) {
+					rollback.mockRestore();
+				}
+			}
+			expect(pool.activeConnections()).toBe(0);
+		});
+
 		describe('concurrent writers', () => {
 			const WRITERS = 8;
 

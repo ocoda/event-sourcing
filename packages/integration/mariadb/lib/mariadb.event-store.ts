@@ -138,11 +138,13 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 	): Promise<EventEnvelope[]> {
 		const connection = await this.pool.getConnection();
 		const collection = EventCollection.get(pool);
-		const table = connection.escapeId(collection);
 
 		let currentVersion = 0;
 
 		try {
+			// Escaped inside the try, so a name the connector refuses to escape still releases the connection
+			const table = connection.escapeId(collection);
+
 			// Step 1: Get the current version of the stream from the database
 			const [currentVersionResult] = await connection.query(
 				`SELECT MAX(version) as version FROM ${table} WHERE stream_id = ?`,
@@ -205,7 +207,7 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 
 			// A concurrent writer committed the same (stream_id, version) between our check and our insert.
 			if (isDuplicateEntryError(error)) {
-				const latestVersion = await this.getLatestVersion(table, stream, connection, currentVersion);
+				const latestVersion = await this.getLatestVersion(collection, stream, connection, currentVersion);
 				throw new EventStoreVersionConflictException(stream, aggregateVersion, latestVersion, error);
 			}
 
@@ -337,15 +339,16 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 	 * Best effort lookup of the latest version of a stream, used to report a conflict.
 	 */
 	private async getLatestVersion(
-		table: string,
+		collection: IEventCollection,
 		{ streamId }: EventStream,
 		connection: PoolConnection,
 		fallback: number,
 	): Promise<number> {
 		try {
-			const [result] = await connection.query(`SELECT MAX(version) as version FROM ${table} WHERE stream_id = ?`, [
-				streamId,
-			]);
+			const [result] = await connection.query(
+				`SELECT MAX(version) as version FROM ${connection.escapeId(collection)} WHERE stream_id = ?`,
+				[streamId],
+			);
 			return result?.version || fallback;
 		} catch {
 			return fallback;
