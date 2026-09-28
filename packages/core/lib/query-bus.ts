@@ -1,6 +1,5 @@
 import 'reflect-metadata';
 import { Injectable, type Type } from '@nestjs/common';
-import type { InstanceWrapper } from '@nestjs/core/injector/instance-wrapper';
 
 import {
 	InvalidQueryHandlerException,
@@ -9,7 +8,7 @@ import {
 	QueryHandlerNotFoundException,
 } from './exceptions';
 import { DefaultQueryPubSub, ObservableBus, getQueryHandlerMetadata, getQueryMetadata } from './helpers';
-import type { IQuery, IQueryBus, IQueryHandler, IQueryPublisher } from './interfaces';
+import type { IQuery, IQueryBus, IQueryHandler, IQueryPublisher, ProviderWrapper } from './interfaces';
 
 @Injectable()
 export class QueryBus<QueryBase extends IQuery = IQuery>
@@ -53,12 +52,12 @@ export class QueryBus<QueryBase extends IQuery = IQuery>
 		return id;
 	}
 
-	register(handlers: InstanceWrapper<IQueryHandler>[] = []) {
+	register(handlers: ProviderWrapper<IQueryHandler>[] = []) {
 		for (const handler of handlers) {
 			this.registerHandler(handler);
 		}
 	}
-	protected registerHandler(handler: InstanceWrapper<IQueryHandler>) {
+	protected registerHandler(handler: ProviderWrapper<IQueryHandler>) {
 		const { metatype, instance } = handler;
 
 		// check

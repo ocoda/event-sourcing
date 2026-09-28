@@ -1,4 +1,4 @@
-import type { InstanceWrapper } from '@nestjs/core/injector/instance-wrapper';
+import type { DiscoveryService } from '@nestjs/core';
 import {
 	COMMAND_HANDLER_METADATA,
 	EVENT_PUBLISHER_METADATA,
@@ -7,6 +7,7 @@ import {
 	Event,
 	type EventSourcingModuleOptions,
 	type IEvent,
+	type ProviderWrapper,
 	QUERY_HANDLER_METADATA,
 } from '@ocoda/event-sourcing';
 import { EventRegistry } from '@ocoda/event-sourcing/registries';
@@ -20,32 +21,27 @@ class EventB implements IEvent {}
 
 describe('ExplorerService', () => {
 	let explorerService: ExplorerService;
-	let modulesContainerMock: any;
+	let discoveryServiceMock: jest.Mocked<Pick<DiscoveryService, 'getProviders'>>;
 	let optionsMock: jest.Mocked<EventSourcingModuleOptions>;
 
-	const createInstanceWrapper = (instance: any, metadataKey?: string) => {
-		const wrapper: InstanceWrapper = { instance } as any;
+	const createWrapper = (instance: any, metadataKey?: string): ProviderWrapper => {
+		const wrapper = { instance } as ProviderWrapper;
 		if (metadataKey) {
 			Reflect.defineMetadata(metadataKey, true, instance.constructor);
 		}
 		return wrapper;
 	};
 
-	const createModule = (providers: InstanceWrapper[]) => ({
-		providers: new Map(providers.map((p, i) => [i, p])),
-	});
-
 	beforeEach(() => {
 		optionsMock = { events: [EventA] };
-		modulesContainerMock = {
-			values: jest.fn(),
+		discoveryServiceMock = {
+			getProviders: jest.fn().mockReturnValue([]),
 		};
-		explorerService = new ExplorerService(optionsMock, modulesContainerMock);
+		explorerService = new ExplorerService(optionsMock, discoveryServiceMock as unknown as DiscoveryService);
 		jest.spyOn(EventRegistry, 'getEvents').mockReturnValue([EventB]);
 	});
 
 	it('should return correct events from options and registry', () => {
-		modulesContainerMock.values.mockReturnValue([]);
 		const result = explorerService.explore();
 		expect(result.events).toEqual([EventA, EventB]);
 	});
@@ -57,21 +53,19 @@ describe('ExplorerService', () => {
 		class EventSubscriber {}
 		class EventSerializer {}
 
-		const queryWrapper = createInstanceWrapper(new QueryHandler(), QUERY_HANDLER_METADATA);
-		const commandWrapper = createInstanceWrapper(new CommandHandler(), COMMAND_HANDLER_METADATA);
-		const publisherWrapper = createInstanceWrapper(new EventPublisher(), EVENT_PUBLISHER_METADATA);
-		const subscriberWrapper = createInstanceWrapper(new EventSubscriber(), EVENT_SUBSCRIBER_METADATA);
-		const serializerWrapper = createInstanceWrapper(new EventSerializer(), EVENT_SERIALIZER_METADATA);
+		const queryWrapper = createWrapper(new QueryHandler(), QUERY_HANDLER_METADATA);
+		const commandWrapper = createWrapper(new CommandHandler(), COMMAND_HANDLER_METADATA);
+		const publisherWrapper = createWrapper(new EventPublisher(), EVENT_PUBLISHER_METADATA);
+		const subscriberWrapper = createWrapper(new EventSubscriber(), EVENT_SUBSCRIBER_METADATA);
+		const serializerWrapper = createWrapper(new EventSerializer(), EVENT_SERIALIZER_METADATA);
 
-		const moduleMock = createModule([
+		discoveryServiceMock.getProviders.mockReturnValue([
 			queryWrapper,
 			commandWrapper,
 			publisherWrapper,
 			subscriberWrapper,
 			serializerWrapper,
-		]);
-
-		modulesContainerMock.values.mockReturnValue([moduleMock]);
+		] as any);
 
 		const result = explorerService.explore();
 
@@ -84,9 +78,7 @@ describe('ExplorerService', () => {
 
 	it('should skip providers without metadata', () => {
 		class NoMeta {}
-		const wrapper = createInstanceWrapper(new NoMeta());
-		const moduleMock = createModule([wrapper]);
-		modulesContainerMock.values.mockReturnValue([moduleMock]);
+		discoveryServiceMock.getProviders.mockReturnValue([createWrapper(new NoMeta())] as any);
 
 		const result = explorerService.explore();
 
@@ -98,9 +90,7 @@ describe('ExplorerService', () => {
 	});
 
 	it('should skip providers with undefined instance', () => {
-		const wrapper = { instance: undefined } as InstanceWrapper;
-		const moduleMock = createModule([wrapper]);
-		modulesContainerMock.values.mockReturnValue([moduleMock]);
+		discoveryServiceMock.getProviders.mockReturnValue([{ instance: undefined } as ProviderWrapper] as any);
 
 		const result = explorerService.explore();
 

@@ -1,4 +1,4 @@
-import type { InstanceWrapper } from '@nestjs/core/injector/instance-wrapper';
+import type { ProviderWrapper } from '@ocoda/event-sourcing';
 import {
 	EventBus,
 	Event as EventDecorator,
@@ -37,7 +37,7 @@ describe(EventBus, () => {
 
 	it('throws when registering subscriber without instance or metatype', () => {
 		const bus = new EventBus();
-		const wrapper = { metatype: { name: 'MissingSubscriber' }, instance: {} } as unknown as InstanceWrapper;
+		const wrapper = { metatype: { name: 'MissingSubscriber' }, instance: {} } as unknown as ProviderWrapper;
 
 		expect(() => bus.registerSubscribers([wrapper])).toThrow(MissingEventSubscriberMetadataException);
 	});
@@ -47,7 +47,7 @@ describe(EventBus, () => {
 		const wrapper = {
 			metatype: SubscriberWithoutMetadata,
 			instance: new SubscriberWithoutMetadata(),
-		} as unknown as InstanceWrapper;
+		} as unknown as ProviderWrapper;
 
 		expect(() => bus.registerSubscribers([wrapper])).toThrow(MissingEventSubscriberMetadataException);
 	});
@@ -62,7 +62,7 @@ describe(EventBus, () => {
 		const wrapper = {
 			metatype: SubscriberWithMissingEventMetadata,
 			instance: new SubscriberWithMissingEventMetadata(),
-		} as unknown as InstanceWrapper;
+		} as unknown as ProviderWrapper;
 
 		expect(() => bus.registerSubscribers([wrapper])).toThrow(MissingEventMetadataException);
 	});
@@ -72,7 +72,7 @@ describe(EventBus, () => {
 		const wrapper = {
 			metatype: ValidSubscriber,
 			instance: new ValidSubscriber(),
-		} as unknown as InstanceWrapper;
+		} as unknown as ProviderWrapper;
 		const bindSpy = jest.spyOn(bus, 'bind');
 
 		bus.registerSubscribers([wrapper]);
@@ -82,7 +82,7 @@ describe(EventBus, () => {
 
 	it('skips registering publishers with no instance', () => {
 		const bus = new EventBus();
-		const wrapper = { metatype: { name: 'MissingPublisher' }, instance: undefined } as unknown as InstanceWrapper;
+		const wrapper = { metatype: { name: 'MissingPublisher' }, instance: undefined } as unknown as ProviderWrapper;
 		const addPublisherSpy = jest.spyOn(bus, 'addPublisher');
 
 		bus.registerPublishers([wrapper]);

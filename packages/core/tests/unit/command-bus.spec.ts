@@ -1,4 +1,4 @@
-import type { InstanceWrapper } from '@nestjs/core/injector/instance-wrapper';
+import type { ProviderWrapper } from '@ocoda/event-sourcing';
 import {
 	CommandBus,
 	CommandHandlerNotFoundException,
@@ -57,7 +57,7 @@ describe(CommandBus, () => {
 
 	it('throws when registering a handler without instance', () => {
 		const bus = new CommandBus();
-		const wrapper = { metatype: CommandHandlerWithMetadata, instance: undefined } as unknown as InstanceWrapper;
+		const wrapper = { metatype: CommandHandlerWithMetadata, instance: undefined } as unknown as ProviderWrapper;
 
 		expect(() => bus.register([wrapper])).toThrow(TypeError);
 	});
@@ -67,7 +67,7 @@ describe(CommandBus, () => {
 		const wrapper = {
 			metatype: CommandHandlerWithoutMetadata,
 			instance: new CommandHandlerWithoutMetadata(),
-		} as unknown as InstanceWrapper;
+		} as unknown as ProviderWrapper;
 
 		expect(() => bus.register([wrapper])).toThrow(MissingCommandHandlerMetadataException);
 	});
@@ -78,7 +78,7 @@ describe(CommandBus, () => {
 		const wrapper = {
 			metatype: CommandHandlerWithMetadata,
 			instance: new CommandHandlerWithMetadata(),
-		} as unknown as InstanceWrapper;
+		} as unknown as ProviderWrapper;
 
 		expect(() => bus.register([wrapper])).toThrow(MissingCommandMetadataException);
 	});
@@ -93,7 +93,7 @@ describe(CommandBus, () => {
 		const wrapper = {
 			metatype: CommandHandlerForCommandWithMetadata,
 			instance: new CommandHandlerForCommandWithMetadata(),
-		} as unknown as InstanceWrapper;
+		} as unknown as ProviderWrapper;
 
 		bus.register([wrapper]);
 

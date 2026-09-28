@@ -1,4 +1,4 @@
-import type { InstanceWrapper } from '@nestjs/core/injector/instance-wrapper';
+import type { ProviderWrapper } from '@ocoda/event-sourcing';
 import {
 	MissingQueryHandlerMetadataException,
 	MissingQueryMetadataException,
@@ -51,7 +51,7 @@ describe(QueryBus, () => {
 
 	it('throws when registering a handler without instance', () => {
 		const bus = new QueryBus();
-		const wrapper = { metatype: QueryHandlerWithMetadata, instance: undefined } as unknown as InstanceWrapper;
+		const wrapper = { metatype: QueryHandlerWithMetadata, instance: undefined } as unknown as ProviderWrapper;
 
 		expect(() => bus.register([wrapper])).toThrow(TypeError);
 	});
@@ -61,7 +61,7 @@ describe(QueryBus, () => {
 		const wrapper = {
 			metatype: QueryHandlerWithoutMetadata,
 			instance: new QueryHandlerWithoutMetadata(),
-		} as unknown as InstanceWrapper;
+		} as unknown as ProviderWrapper;
 
 		expect(() => bus.register([wrapper])).toThrow(MissingQueryHandlerMetadataException);
 	});
@@ -72,7 +72,7 @@ describe(QueryBus, () => {
 		const wrapper = {
 			metatype: QueryHandlerWithMetadata,
 			instance: new QueryHandlerWithMetadata(),
-		} as unknown as InstanceWrapper;
+		} as unknown as ProviderWrapper;
 
 		expect(() => bus.register([wrapper])).toThrow(MissingQueryMetadataException);
 	});
@@ -83,7 +83,7 @@ describe(QueryBus, () => {
 		const wrapper = {
 			metatype: QueryHandlerForQueryWithMetadata,
 			instance: new QueryHandlerForQueryWithMetadata(),
-		} as unknown as InstanceWrapper;
+		} as unknown as ProviderWrapper;
 
 		bus.register([wrapper]);
 
