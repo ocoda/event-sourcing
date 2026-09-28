@@ -21,6 +21,7 @@ import {
 } from '@ocoda/event-sourcing';
 import { type Connection, type Pool, createPool } from 'mariadb';
 import type { MariaDBSnapshotEntity, MariaDBSnapshotStoreConfig } from './interfaces';
+import { isDuplicateEntryError, streamRows } from './mariadb.utils';
 
 export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConfig> {
 	private pool: Pool;
@@ -40,7 +41,7 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 
 		try {
 			await this.pool.query(
-				`CREATE TABLE IF NOT EXISTS \`${collection}\` (
+				`CREATE TABLE IF NOT EXISTS ${this.pool.escapeId(collection)} (
                     stream_id VARCHAR(90) NOT NULL,
                     version INT NOT NULL,
                     payload JSON NOT NULL,
@@ -61,31 +62,20 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 	}
 
 	public async *listCollections(filter?: ISnapshotCollectionFilter): AsyncGenerator<ISnapshotCollection[]> {
-		const connection = this.pool.getConnection();
-
 		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
 		const query = "SELECT TABLE_NAME FROM information_schema.tables WHERE BINARY table_name LIKE '%snapshots'";
 
-		const client = await connection;
-		const stream = client.queryStream(query);
-
-		try {
-			let batchedCollections: ISnapshotCollection[] = [];
-			for await (const { TABLE_NAME } of stream as unknown as Record<string, ISnapshotCollection>[]) {
-				batchedCollections.push(TABLE_NAME);
-				if (batchedCollections.length === batch) {
-					yield batchedCollections;
-					batchedCollections = [];
-				}
-			}
-			if (batchedCollections.length > 0) {
+		let batchedCollections: ISnapshotCollection[] = [];
+		for await (const { TABLE_NAME } of streamRows<Record<string, ISnapshotCollection>>(this.pool, query)) {
+			batchedCollections.push(TABLE_NAME);
+			if (batchedCollections.length === batch) {
 				yield batchedCollections;
+				batchedCollections = [];
 			}
-		} catch (e) {
-			stream.destroy();
-		} finally {
-			await client.release();
+		}
+		if (batchedCollections.length > 0) {
+			yield batchedCollections;
 		}
 	}
 
@@ -93,7 +83,6 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 		{ streamId }: SnapshotStream,
 		filter?: ISnapshotFilter,
 	): AsyncGenerator<ISnapshot<A>[]> {
-		const connection = this.pool.getConnection();
 		const collection = SnapshotCollection.get(filter?.pool);
 
 		const fromVersion = filter?.fromVersion;
@@ -103,7 +92,7 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 
 		const query = `
 	        SELECT payload
-	        FROM \`${collection}\`
+	        FROM ${this.pool.escapeId(collection)}
 	        WHERE stream_id = ?
 	        ${fromVersion ? 'AND version >= ?' : ''}
 	        ORDER BY version ${direction === StreamReadingDirection.FORWARD ? 'ASC' : 'DESC'}
@@ -112,25 +101,16 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 
 		const params = fromVersion ? [streamId, fromVersion, limit] : [streamId, limit];
 
-		const client = await connection;
-		const stream = client.queryStream(query, params);
-
-		try {
-			let batchedEvents: ISnapshot<A>[] = [];
-			for await (const { payload } of stream as unknown as Pick<MariaDBSnapshotEntity<A>, 'payload'>[]) {
-				batchedEvents.push(payload);
-				if (batchedEvents.length === batch) {
-					yield batchedEvents;
-					batchedEvents = [];
-				}
-			}
-			if (batchedEvents.length > 0) {
+		let batchedEvents: ISnapshot<A>[] = [];
+		for await (const { payload } of streamRows<Pick<MariaDBSnapshotEntity<A>, 'payload'>>(this.pool, query, params)) {
+			batchedEvents.push(payload);
+			if (batchedEvents.length === batch) {
 				yield batchedEvents;
+				batchedEvents = [];
 			}
-		} catch (e) {
-			stream.destroy();
-		} finally {
-			await client.release();
+		}
+		if (batchedEvents.length > 0) {
+			yield batchedEvents;
 		}
 	}
 
@@ -142,7 +122,7 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 		const collection = SnapshotCollection.get(pool);
 
 		const [entity] = await this.pool.query<Pick<MariaDBSnapshotEntity<A>, 'payload'>[]>(
-			`SELECT payload FROM \`${collection}\` WHERE stream_id = ? AND version = ?`,
+			`SELECT payload FROM ${this.pool.escapeId(collection)} WHERE stream_id = ? AND version = ?`,
 			[streamId, version],
 		);
 
@@ -161,6 +141,9 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 	): Promise<SnapshotEnvelope<A>> {
 		const connection = await this.pool.getConnection();
 		const collection = SnapshotCollection.get(pool);
+		const table = connection.escapeId(collection);
+
+		let latestVersion = 0;
 
 		try {
 			const envelope = SnapshotEnvelope.create<A>(snapshot, {
@@ -175,6 +158,8 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 				connection,
 			);
 
+			latestVersion = lastStreamEntity?.version ?? 0;
+
 			if (aggregateVersion <= lastStreamEntity?.version) {
 				throw new SnapshotStoreVersionConflictException(stream, aggregateVersion, lastStreamEntity.version);
 			}
@@ -182,13 +167,13 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 			await connection.beginTransaction();
 
 			if (lastStreamEntity) {
-				await connection.query(`UPDATE \`${collection}\` SET latest = null WHERE stream_id = ? AND version = ?`, [
+				await connection.query(`UPDATE ${table} SET latest = null WHERE stream_id = ? AND version = ?`, [
 					lastStreamEntity.stream_id,
 					lastStreamEntity.version,
 				]);
 			}
 
-			await connection.query(`INSERT INTO \`${collection}\` VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [
+			await connection.query(`INSERT INTO ${table} VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [
 				stream.streamId,
 				envelope.metadata.version,
 				JSON.stringify(envelope.payload),
@@ -203,15 +188,21 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 
 			return envelope;
 		} catch (error) {
-			await connection.rollback();
-			switch (error.constructor) {
-				case SnapshotStoreVersionConflictException:
-					throw error;
-				default:
-					throw new SnapshotStorePersistenceException(collection, error);
+			await connection.rollback().catch(() => undefined);
+
+			if (error instanceof SnapshotStoreVersionConflictException) {
+				throw error;
 			}
+
+			// A concurrent writer committed the same (stream_id, version) between our check and our insert.
+			if (isDuplicateEntryError(error)) {
+				latestVersion = await this.getLatestVersion(table, stream, connection, latestVersion);
+				throw new SnapshotStoreVersionConflictException(stream, aggregateVersion, latestVersion, error);
+			}
+
+			throw new SnapshotStorePersistenceException(collection, error);
 		} finally {
-			connection.release();
+			await connection.release();
 		}
 	}
 
@@ -275,7 +266,6 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 		{ streamId }: SnapshotStream,
 		filter?: ISnapshotFilter,
 	): AsyncGenerator<SnapshotEnvelope<A>[]> {
-		const connection = this.pool.getConnection();
 		const collection = SnapshotCollection.get(filter?.pool);
 
 		const fromVersion = filter?.fromVersion;
@@ -285,7 +275,7 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 
 		const query = `
 	        SELECT payload, aggregate_id, registered_on, snapshot_id, version
-	        FROM \`${collection}\`
+	        FROM ${this.pool.escapeId(collection)}
 	        WHERE stream_id = ?
 	        ${fromVersion ? 'AND version >= ?' : ''}
 	        ORDER BY version ${direction === StreamReadingDirection.FORWARD ? 'ASC' : 'DESC'}
@@ -294,35 +284,25 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 
 		const params = fromVersion ? [streamId, fromVersion, limit] : [streamId, limit];
 
-		const client = await connection;
-		const stream = client.queryStream(query, params);
-
-		try {
-			let batchedSnapshots: SnapshotEnvelope<A>[] = [];
-			for await (const { payload, aggregate_id, registered_on, snapshot_id, version } of stream as unknown as Pick<
-				MariaDBSnapshotEntity<A>,
-				'payload' | 'aggregate_id' | 'registered_on' | 'snapshot_id' | 'version'
-			>[]) {
-				batchedSnapshots.push(
-					SnapshotEnvelope.from<A>(payload, {
-						aggregateId: aggregate_id,
-						registeredOn: registered_on,
-						snapshotId: snapshot_id,
-						version,
-					}),
-				);
-				if (batchedSnapshots.length === batch) {
-					yield batchedSnapshots;
-					batchedSnapshots = [];
-				}
-			}
-			if (batchedSnapshots.length > 0) {
+		let batchedSnapshots: SnapshotEnvelope<A>[] = [];
+		for await (const { payload, aggregate_id, registered_on, snapshot_id, version } of streamRows<
+			Pick<MariaDBSnapshotEntity<A>, 'payload' | 'aggregate_id' | 'registered_on' | 'snapshot_id' | 'version'>
+		>(this.pool, query, params)) {
+			batchedSnapshots.push(
+				SnapshotEnvelope.from<A>(payload, {
+					aggregateId: aggregate_id,
+					registeredOn: registered_on,
+					snapshotId: snapshot_id,
+					version,
+				}),
+			);
+			if (batchedSnapshots.length === batch) {
 				yield batchedSnapshots;
+				batchedSnapshots = [];
 			}
-		} catch (e) {
-			stream.destroy();
-		} finally {
-			await client.release();
+		}
+		if (batchedSnapshots.length > 0) {
+			yield batchedSnapshots;
 		}
 	}
 
@@ -336,7 +316,7 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 		const [entity] = await this.pool.query<
 			Pick<MariaDBSnapshotEntity<A>, 'payload' | 'aggregate_id' | 'registered_on' | 'snapshot_id' | 'version'>[]
 		>(
-			`SELECT payload, aggregate_id, registered_on, snapshot_id, version FROM \`${collection}\` WHERE stream_id = ? AND version = ?`,
+			`SELECT payload, aggregate_id, registered_on, snapshot_id, version FROM ${this.pool.escapeId(collection)} WHERE stream_id = ? AND version = ?`,
 			[streamId, version],
 		);
 
@@ -356,7 +336,6 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 		aggregate: Type<A>,
 		filter?: ILatestSnapshotFilter,
 	): AsyncGenerator<SnapshotEnvelope<A>[]> {
-		const connection = this.pool.getConnection();
 		const collection = SnapshotCollection.get(filter?.pool);
 		const { streamName } = getAggregateMetadata(aggregate);
 
@@ -366,7 +345,7 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 
 		const query = `
 	        SELECT payload, aggregate_id, registered_on, snapshot_id, version
-	        FROM \`${collection}\`
+	        FROM ${this.pool.escapeId(collection)}
 	        WHERE aggregate_name = ?
 	        AND ${aggregateId ? 'latest >= ?' : "latest LIKE 'latest%'"}
 	        LIMIT ?
@@ -374,35 +353,25 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 
 		const params = aggregateId ? [streamName, aggregateId, limit] : [streamName, limit];
 
-		const client = await connection;
-		const stream = client.queryStream(query, params);
-
-		try {
-			let batchedSnapshots: SnapshotEnvelope<A>[] = [];
-			for await (const { payload, aggregate_id, registered_on, snapshot_id, version } of stream as unknown as Pick<
-				MariaDBSnapshotEntity<A>,
-				'payload' | 'aggregate_id' | 'registered_on' | 'snapshot_id' | 'version'
-			>[]) {
-				batchedSnapshots.push(
-					SnapshotEnvelope.from<A>(payload, {
-						aggregateId: aggregate_id,
-						registeredOn: registered_on,
-						snapshotId: snapshot_id,
-						version,
-					}),
-				);
-				if (batchedSnapshots.length === batch) {
-					yield batchedSnapshots;
-					batchedSnapshots = [];
-				}
-			}
-			if (batchedSnapshots.length > 0) {
+		let batchedSnapshots: SnapshotEnvelope<A>[] = [];
+		for await (const { payload, aggregate_id, registered_on, snapshot_id, version } of streamRows<
+			Pick<MariaDBSnapshotEntity<A>, 'payload' | 'aggregate_id' | 'registered_on' | 'snapshot_id' | 'version'>
+		>(this.pool, query, params)) {
+			batchedSnapshots.push(
+				SnapshotEnvelope.from<A>(payload, {
+					aggregateId: aggregate_id,
+					registeredOn: registered_on,
+					snapshotId: snapshot_id,
+					version,
+				}),
+			);
+			if (batchedSnapshots.length === batch) {
 				yield batchedSnapshots;
+				batchedSnapshots = [];
 			}
-		} catch (e) {
-			stream.destroy();
-		} finally {
-			await client.release();
+		}
+		if (batchedSnapshots.length > 0) {
+			yield batchedSnapshots;
 		}
 	}
 
@@ -448,10 +417,29 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 		const latestIds = streams.map(({ streamId }) => `latest#${streamId}`);
 		return (connection || this.pool).query<Pick<MariaDBSnapshotEntity<A>, Fields[number]>[]>(
 			`SELECT ${fields.join(', ')} 
-                FROM \`${collection}\` 
+                FROM ${this.pool.escapeId(collection)} 
                 WHERE latest IN (?)
             `,
 			[latestIds],
 		);
+	}
+
+	/**
+	 * Best effort lookup of the latest snapshot version of a stream, used to report a conflict.
+	 */
+	private async getLatestVersion(
+		table: string,
+		{ streamId }: SnapshotStream,
+		connection: Connection,
+		fallback: number,
+	): Promise<number> {
+		try {
+			const [result] = await connection.query(`SELECT MAX(version) as version FROM ${table} WHERE stream_id = ?`, [
+				streamId,
+			]);
+			return result?.version || fallback;
+		} catch {
+			return fallback;
+		}
 	}
 }
