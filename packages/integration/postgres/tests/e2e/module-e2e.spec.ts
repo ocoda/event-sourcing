@@ -3,7 +3,7 @@ import { Test } from '@nestjs/testing';
 import { EventStore, SnapshotStore } from '@ocoda/event-sourcing';
 import type { PostgresEventStore, PostgresSnapshotStore } from '@ocoda/event-sourcing-postgres';
 import { createDefaultStoreSetup, defaultCleanup, runAccountLifecycleE2E } from '@ocoda/event-sourcing-testing/e2e';
-import type { PoolClient } from 'pg';
+import type { Pool } from 'pg';
 import { AppModule } from './src/app.module';
 
 describe('EventSourcingModule - e2e', () => {
@@ -29,11 +29,11 @@ describe('EventSourcingModule - e2e', () => {
 			}),
 			getCleanupContext: (eventStore, snapshotStore) => ({
 				// biome-ignore lint/complexity/useLiteralKeys: Needed to clear the event collection
-				eventStoreClient: eventStore['client'] as PoolClient,
+				eventStorePool: eventStore['pool'] as Pool,
 				// biome-ignore lint/complexity/useLiteralKeys: Needed to clear the snapshot collection
-				snapshotStoreClient: snapshotStore['client'] as PoolClient,
+				snapshotStorePool: snapshotStore['pool'] as Pool,
 			}),
-			cleanup: async (context) => defaultCleanup.postgres(context.eventStoreClient, context.snapshotStoreClient),
+			cleanup: async (context) => defaultCleanup.postgres(context.eventStorePool, context.snapshotStorePool),
 		}),
 	});
 });
