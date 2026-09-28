@@ -371,6 +371,19 @@ describe(PostgresEventStore, () => {
 		throw new Error(`No insert into ${table} is waiting for a lock`);
 	};
 
+	/**
+	 * Rejects when the given promise doesn't settle in time, so a starved connection pool fails a test instead of hanging it.
+	 */
+	const withinTimeout = <T>(promise: Promise<T>, milliseconds = 5_000): Promise<T> => {
+		let timer: NodeJS.Timeout;
+		return Promise.race([
+			promise,
+			new Promise<never>((_, reject) => {
+				timer = setTimeout(() => reject(new Error(`Timed out after ${milliseconds}ms`)), milliseconds);
+			}),
+		]).finally(() => clearTimeout(timer));
+	};
+
 	describe('connection handling', () => {
 		const connectionPool = 'postgres-connection';
 		const streamX = EventStream.for(Account, AccountId.generate());
@@ -531,6 +544,77 @@ describe(PostgresEventStore, () => {
 			expect(copiedEvents).toEqual(events);
 			await expectStoreToBeUsable();
 		}, 15_000);
+
+		it('should read every event when the batch size is not a positive integer', async () => {
+			// pg sends these batch sizes truncated or wrapped, so a batch with fewer rows than requested isn't necessarily the last
+			for (const batch of [2.5, 2 ** 31]) {
+				const resolvedEvents: IEvent[] = [];
+				for await (const batchOfEvents of eventStore.getEvents(streamY, { pool: connectionPool, batch })) {
+					resolvedEvents.push(...batchOfEvents);
+				}
+				expect(resolvedEvents).toEqual(events);
+			}
+
+			await expectStoreToBeUsable();
+		});
+
+		describe('with more readers than connections', () => {
+			let smallStore: PostgresEventStore;
+			let smallPool: Pool;
+
+			beforeEach(async () => {
+				smallStore = new PostgresEventStore(eventMap, { driver: undefined, ...connectionOptions, max: 2 });
+				await smallStore.connect();
+				// biome-ignore lint/complexity/useLiteralKeys: Needed to check the connections of the store
+				smallPool = smallStore['pool'];
+			});
+
+			afterEach(async () => {
+				// A leaked connection keeps the pool from ending
+				await withinTimeout(smallStore.disconnect()).catch(() => undefined);
+			});
+
+			it('should not hold a connection while the last batch is consumed', async () => {
+				// Every reader calls the store while it holds the last batch, which needs a connection of its own
+				await withinTimeout(
+					Promise.all(
+						Array.from({ length: 6 }, async () => {
+							const resolvedEvents: IEvent[] = [];
+							for await (const batch of smallStore.getEvents(streamY, { pool: connectionPool })) {
+								resolvedEvents.push(...batch);
+								await expect(smallStore.getEvent(streamY, 1, connectionPool)).resolves.toEqual(events[0]);
+							}
+							expect(resolvedEvents).toEqual(events);
+						}),
+					),
+				);
+
+				expect(smallPool.idleCount).toBe(smallPool.totalCount);
+			}, 15_000);
+
+			it.each<[string, (store: PostgresEventStore) => AsyncGenerator<unknown[]>]>([
+				['getEvents', (store) => store.getEvents(streamY, { pool: connectionPool })],
+				['getEnvelopes', (store) => store.getEnvelopes(streamY, { pool: connectionPool })],
+				[
+					'getAllEnvelopes',
+					(store) => store.getAllEnvelopes({ pool: connectionPool, since: { year: 2021, month: 1 } }),
+				],
+				['listCollections', (store) => store.listCollections({ batch: 1_000 })],
+			])(
+				'should not hold a connection when a %s read that fits in one batch is never finished',
+				async (_, read) => {
+					for (let reader = 0; reader < 6; reader++) {
+						const { done, value } = await withinTimeout(read(smallStore).next());
+						expect(done).toBe(false);
+						expect(value.length).toBeGreaterThan(0);
+					}
+
+					await expect(withinTimeout(smallStore.getEvent(streamY, 1, connectionPool))).resolves.toEqual(events[0]);
+					expect(smallPool.idleCount).toBe(smallPool.totalCount);
+				},
+				15_000,
+			);
+		});
 	});
 
 	describe('concurrency', () => {

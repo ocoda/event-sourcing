@@ -431,6 +431,19 @@ describe(PostgresSnapshotStore, () => {
 	};
 
 	/**
+	 * Rejects when the given promise doesn't settle in time, so a starved connection pool fails a test instead of hanging it.
+	 */
+	const withinTimeout = <T>(promise: Promise<T>, milliseconds = 5_000): Promise<T> => {
+		let timer: NodeJS.Timeout;
+		return Promise.race([
+			promise,
+			new Promise<never>((_, reject) => {
+				timer = setTimeout(() => reject(new Error(`Timed out after ${milliseconds}ms`)), milliseconds);
+			}),
+		]).finally(() => clearTimeout(timer));
+	};
+
+	/**
 	 * Resolves the versions of the snapshots of a stream, and which of them is flagged as the latest.
 	 */
 	const getStoredVersions = async (collection: string, { streamId }: SnapshotStream) => {
@@ -571,6 +584,66 @@ describe(PostgresSnapshotStore, () => {
 			expect(copiedSnapshots).toEqual(snapshots);
 			await expectStoreToBeUsable();
 		}, 15_000);
+
+		describe('with more readers than connections', () => {
+			let smallStore: PostgresSnapshotStore;
+			let smallPool: Pool;
+
+			beforeEach(async () => {
+				smallStore = new PostgresSnapshotStore({ driver: undefined, ...connectionOptions, max: 2 });
+				await smallStore.connect();
+				// biome-ignore lint/complexity/useLiteralKeys: Needed to check the connections of the store
+				smallPool = smallStore['pool'];
+			});
+
+			afterEach(async () => {
+				// A leaked connection keeps the pool from ending
+				await withinTimeout(smallStore.disconnect()).catch(() => undefined);
+			});
+
+			it('should not hold a connection while the last batch is consumed', async () => {
+				// Every reader calls the store while it holds the last batch, which needs a connection of its own
+				await withinTimeout(
+					Promise.all(
+						Array.from({ length: 6 }, async () => {
+							const resolvedSnapshots: ISnapshot<Account>[] = [];
+							for await (const batch of smallStore.getSnapshots(streamY, { pool: connectionPool })) {
+								resolvedSnapshots.push(...batch);
+								await expect(smallStore.getLastSnapshot(streamY, connectionPool)).resolves.toEqual(snapshots[2]);
+							}
+							expect(resolvedSnapshots).toEqual(snapshots);
+						}),
+					),
+				);
+
+				expect(smallPool.idleCount).toBe(smallPool.totalCount);
+			}, 15_000);
+
+			it.each<[string, (store: PostgresSnapshotStore) => AsyncGenerator<unknown[]>]>([
+				['getSnapshots', (store) => store.getSnapshots(streamY, { pool: connectionPool })],
+				['getEnvelopes', (store) => store.getEnvelopes(streamY, { pool: connectionPool })],
+				[
+					'getLastEnvelopesForAggregate',
+					(store) => store.getLastEnvelopesForAggregate(Account, { pool: connectionPool }),
+				],
+				['listCollections', (store) => store.listCollections({ batch: 1_000 })],
+			])(
+				'should not hold a connection when a %s read that fits in one batch is never finished',
+				async (_, read) => {
+					for (let reader = 0; reader < 6; reader++) {
+						const { done, value } = await withinTimeout(read(smallStore).next());
+						expect(done).toBe(false);
+						expect(value.length).toBeGreaterThan(0);
+					}
+
+					await expect(withinTimeout(smallStore.getLastSnapshot(streamY, connectionPool))).resolves.toEqual(
+						snapshots[2],
+					);
+					expect(smallPool.idleCount).toBe(smallPool.totalCount);
+				},
+				15_000,
+			);
+		});
 	});
 
 	describe('appending', () => {

@@ -19,6 +19,11 @@ export const INSUFFICIENT_PRIVILEGE = '42501';
 const MAX_IDENTIFIER_BYTES = 63;
 
 /**
+ * The largest number of rows a single fetch from a cursor can request.
+ */
+const MAX_INT32 = 2 ** 31 - 1;
+
+/**
  * Checks whether an error was raised by Postgres with the given SQLSTATE.
  */
 export const hasErrorCode = (error: unknown, code: string): boolean =>
@@ -93,6 +98,10 @@ export const withTransaction = async <T>(pool: Pool, work: (client: PoolClient) 
  * Streams the rows of a query in batches using a server-side cursor on a dedicated client.
  * The cursor is closed and the client returned to the pool however the iteration ends
  * (fully consumed, exited early, or failed), so an interrupted read never blocks other queries.
+ *
+ * Once the last rows have been read, the client is returned to the pool before they are handed out.
+ * The consumer can then call the store while it processes them without needing a second connection,
+ * and a read that is never finished doesn't hold on to a connection when its rows fit in one batch.
  */
 export async function* readInBatches<Row>(
 	pool: Pool,
@@ -110,17 +119,43 @@ export async function* readInBatches<Row>(
 	};
 	client.on('error', onError);
 
+	let released = false;
+	const release = () => {
+		if (released) {
+			return;
+		}
+		released = true;
+		client.removeListener('error', onError);
+		// Releasing with an error discards the client instead of returning a broken connection to the pool
+		client.release(failure);
+	};
+
+	// Postgres only returns fewer rows than requested once the query completed, after which the cursor's portal is closed.
+	// Batch sizes that don't fit a positive int32 aren't sent as is, so for those only an empty batch marks the end.
+	const isLastBatch = (rows: Row[]) =>
+		rows.length === 0 || (Number.isInteger(batch) && batch > 0 && batch <= MAX_INT32 && rows.length < batch);
+
 	try {
 		const cursor = client.query(new Cursor<Row>(query, values));
 		cursor.on('error', onError);
 
+		let exhausted = false;
 		try {
-			for (let rows = await cursor.read(batch); rows.length > 0; rows = await cursor.read(batch)) {
-				yield rows;
+			while (!exhausted) {
+				const rows = await cursor.read(batch);
+
+				if (isLastBatch(rows)) {
+					exhausted = true;
+					release();
+				}
+
+				if (rows.length > 0) {
+					yield rows;
+				}
 			}
 		} finally {
-			// A failed cursor has already ended its portal (or lost its connection), so there's nothing to close
-			if (!failure) {
+			// An exhausted cursor has nothing left to close, and a failed one has already ended its portal (or lost its connection)
+			if (!exhausted && !failure) {
 				await Promise.race([
 					new Promise<void>((resolve, reject) => cursor.close((error) => (error ? reject(error) : resolve()))),
 					new Promise<void>((resolve) => {
@@ -130,9 +165,7 @@ export async function* readInBatches<Row>(
 			}
 		}
 	} finally {
-		client.removeListener('error', onError);
-		// Releasing with an error discards the client instead of returning a broken connection to the pool
-		client.release(failure);
+		release();
 	}
 }
 
