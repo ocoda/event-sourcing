@@ -36,7 +36,7 @@ export class AccountRepository {
 	}
 
 	async getAll(fromAccountId?: AccountId, limit?: number): Promise<Account[]> {
-		const accounts = [];
+		const accounts: Account[] = [];
 		for await (const envelopes of this.accountSnapshotRepository.loadAll({
 			aggregateId: fromAccountId,
 			limit,

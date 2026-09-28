@@ -37,7 +37,7 @@ describe(MariaDBSnapshotStore, () => {
 
 	beforeAll(async () => {
 		snapshotStore = new MariaDBSnapshotStore({
-			driver: undefined,
+			driver: undefined as never,
 			host: '127.0.0.1',
 			port: 3306,
 			user: 'mariadb',
@@ -246,7 +246,14 @@ describe(MariaDBSnapshotStore, () => {
 
 	it('should retrieve the last snapshot-envelope', async () => {
 		const lastEnvelope = envelopesAccountA[envelopesAccountA.length - 1];
-		const { metadata, payload } = await snapshotStore.getLastEnvelope(snapshotStreamAccountA);
+		const snapshotEnvelope = await snapshotStore.getLastEnvelope(snapshotStreamAccountA);
+
+		if (!snapshotEnvelope) {
+			throw new Error('Snapshot envelope not found');
+		}
+
+		const { metadata, payload } = snapshotEnvelope;
+
 		expect(payload).toEqual(lastEnvelope.payload);
 		expect(metadata.aggregateId).toEqual(lastEnvelope.metadata.aggregateId);
 		expect(metadata.registeredOn).toBeInstanceOf(Date);
@@ -331,6 +338,10 @@ describe(MariaDBSnapshotStore, () => {
 
 		const resolvedAccountAEnvelope = resolvedSnapshots.get(snapshotStreamAccountA);
 		const resolvedAccountBEnvelope = resolvedSnapshots.get(snapshotStreamAccountB);
+
+		if (!resolvedAccountAEnvelope || !resolvedAccountBEnvelope) {
+			throw new Error('Snapshot envelope not found');
+		}
 
 		expect(resolvedAccountAEnvelope.payload).toEqual(envelopeAccountA.payload);
 		expect(resolvedAccountAEnvelope.metadata.aggregateId).toEqual(envelopeAccountA.metadata.aggregateId);

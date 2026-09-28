@@ -46,7 +46,7 @@ describe(PostgresSnapshotStore, () => {
 	let pool: Pool;
 
 	beforeAll(async () => {
-		snapshotStore = new PostgresSnapshotStore({ driver: undefined, ...connectionOptions });
+		snapshotStore = new PostgresSnapshotStore({ driver: undefined as never, ...connectionOptions });
 
 		await snapshotStore.connect();
 		await snapshotStore.ensureCollection();
@@ -249,7 +249,14 @@ describe(PostgresSnapshotStore, () => {
 
 	it('should retrieve the last snapshot-envelope', async () => {
 		const lastEnvelope = envelopesAccountA[envelopesAccountA.length - 1];
-		const { metadata, payload } = await snapshotStore.getLastEnvelope(snapshotStreamAccountA);
+		const snapshotEnvelope = await snapshotStore.getLastEnvelope(snapshotStreamAccountA);
+
+		if (!snapshotEnvelope) {
+			throw new Error('Snapshot envelope not found');
+		}
+
+		const { metadata, payload } = snapshotEnvelope;
+
 		expect(payload).toEqual(lastEnvelope.payload);
 		expect(metadata.aggregateId).toEqual(lastEnvelope.metadata.aggregateId);
 		expect(metadata.registeredOn).toBeInstanceOf(Date);
@@ -335,6 +342,10 @@ describe(PostgresSnapshotStore, () => {
 		const resolvedAccountAEnvelope = resolvedSnapshots.get(snapshotStreamAccountA);
 		const resolvedAccountBEnvelope = resolvedSnapshots.get(snapshotStreamAccountB);
 
+		if (!resolvedAccountAEnvelope || !resolvedAccountBEnvelope) {
+			throw new Error('Snapshot envelope not found');
+		}
+
 		expect(resolvedAccountAEnvelope.payload).toEqual(envelopeAccountA.payload);
 		expect(resolvedAccountAEnvelope.metadata.aggregateId).toEqual(envelopeAccountA.metadata.aggregateId);
 		expect(resolvedAccountAEnvelope.metadata.registeredOn).toBeInstanceOf(Date);
@@ -367,7 +378,7 @@ describe(PostgresSnapshotStore, () => {
 		afterEach(() => jest.restoreAllMocks());
 
 		it('should fail to connect when the database is unreachable', async () => {
-			const unreachableStore = new PostgresSnapshotStore({ driver: undefined, ...connectionOptions, port: 1 });
+			const unreachableStore = new PostgresSnapshotStore({ driver: undefined as never, ...connectionOptions, port: 1 });
 
 			await expect(unreachableStore.connect()).rejects.toMatchObject({ code: 'ECONNREFUSED' });
 			await unreachableStore.disconnect();
@@ -590,7 +601,7 @@ describe(PostgresSnapshotStore, () => {
 			let smallPool: Pool;
 
 			beforeEach(async () => {
-				smallStore = new PostgresSnapshotStore({ driver: undefined, ...connectionOptions, max: 2 });
+				smallStore = new PostgresSnapshotStore({ driver: undefined as never, ...connectionOptions, max: 2 });
 				await smallStore.connect();
 				// biome-ignore lint/complexity/useLiteralKeys: Needed to check the connections of the store
 				smallPool = smallStore['pool'];

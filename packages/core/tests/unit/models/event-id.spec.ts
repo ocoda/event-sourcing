@@ -15,7 +15,7 @@ describe(EventId, () => {
 	});
 
 	it('should throw when trying to create an EventId from an undefined variable', () => {
-		let value: string;
+		const value = undefined as unknown as string;
 		expect(() => EventId.from(value)).toThrow(InvalidIdException.becauseEmpty());
 	});
 

@@ -67,7 +67,7 @@ describe(`${MongoDBSnapshotStore.name} resilience`, () => {
 	/** Seeds more snapshots than fit in the first batch of a server cursor (101). */
 	const seed = async (snapshotPool: ISnapshotPool, count = 300) => {
 		const stream = newStream();
-		await database.collection(SnapshotCollection.get(snapshotPool)).insertMany([
+		await database.collection<MongoDBSnapshotEntity<Account>>(SnapshotCollection.get(snapshotPool)).insertMany([
 			...Array.from({ length: count }, (_, index) => document(stream, index + 1, index === count - 1)),
 			// snapshots of other streams, that are the latest of their stream
 			...Array.from({ length: count }, (_, index) => document(newStream(), 1, true)),

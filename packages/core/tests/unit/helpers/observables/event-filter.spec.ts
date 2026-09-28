@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Event, EventEnvelope, type IEvent, eventFilter } from '@ocoda/event-sourcing';
+import { Event, EventEnvelope, EventId, type IEvent, eventFilter } from '@ocoda/event-sourcing';
 import { Subject } from 'rxjs';
 
 describe(eventFilter, () => {
@@ -27,21 +27,21 @@ describe(eventFilter, () => {
 			EventEnvelope.from(
 				'B',
 				{},
-				{ aggregateId: randomUUID(), eventId: randomUUID(), occurredOn: new Date(), version: 1 },
+				{ aggregateId: randomUUID(), eventId: EventId.generate(), occurredOn: new Date(), version: 1 },
 			),
 		);
 		stream.next(
 			EventEnvelope.from(
 				'C',
 				{},
-				{ aggregateId: randomUUID(), eventId: randomUUID(), occurredOn: new Date(), version: 1 },
+				{ aggregateId: randomUUID(), eventId: EventId.generate(), occurredOn: new Date(), version: 1 },
 			),
 		);
 		stream.next(
 			EventEnvelope.from(
 				'B',
 				{},
-				{ aggregateId: randomUUID(), eventId: randomUUID(), occurredOn: new Date(), version: 2 },
+				{ aggregateId: randomUUID(), eventId: EventId.generate(), occurredOn: new Date(), version: 2 },
 			),
 		);
 
@@ -53,7 +53,7 @@ describe(eventFilter, () => {
 			EventEnvelope.from(
 				'A',
 				{},
-				{ aggregateId: randomUUID(), eventId: randomUUID(), occurredOn: new Date(), version: 1 },
+				{ aggregateId: randomUUID(), eventId: EventId.generate(), occurredOn: new Date(), version: 1 },
 			),
 		);
 
@@ -61,7 +61,7 @@ describe(eventFilter, () => {
 			EventEnvelope.from(
 				'B',
 				{},
-				{ aggregateId: randomUUID(), eventId: randomUUID(), occurredOn: new Date(), version: 1 },
+				{ aggregateId: randomUUID(), eventId: EventId.generate(), occurredOn: new Date(), version: 1 },
 			),
 		);
 		stream.next(expectedResults[0]);

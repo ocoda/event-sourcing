@@ -9,10 +9,10 @@ export class GetAccountByIdQuery implements IQuery {
 }
 
 @QueryHandler(GetAccountByIdQuery)
-export class GetAccountByIdQueryHandler implements IQueryHandler<GetAccountByIdQuery, AccountDto> {
+export class GetAccountByIdQueryHandler implements IQueryHandler<GetAccountByIdQuery, AccountDto | undefined> {
 	constructor(private readonly accountRepository: AccountRepository) {}
 
-	public async execute(query: GetAccountByIdQuery): Promise<AccountDto> {
+	public async execute(query: GetAccountByIdQuery): Promise<AccountDto | undefined> {
 		const accountId = AccountId.from(query.accountId);
 
 		const account = await this.accountRepository.getById(accountId);

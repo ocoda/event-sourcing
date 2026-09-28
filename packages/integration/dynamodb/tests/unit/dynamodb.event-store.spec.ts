@@ -52,7 +52,7 @@ describe(DynamoDBEventStore, () => {
 
 	beforeAll(async () => {
 		eventStore = new DynamoDBEventStore(eventMap, {
-			driver: undefined,
+			driver: undefined as never,
 			region: 'us-east-1',
 			endpoint: 'http://127.0.0.1:8000',
 			credentials: { accessKeyId: 'foo', secretAccessKey: 'bar' },
