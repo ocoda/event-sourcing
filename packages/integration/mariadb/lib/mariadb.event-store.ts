@@ -17,8 +17,9 @@ import {
 	type IEventPool,
 	StreamReadingDirection,
 } from '@ocoda/event-sourcing';
-import { type Pool, createPool } from 'mariadb';
+import { type Pool, type PoolConnection, createPool } from 'mariadb';
 import type { MariaDBEventEntity, MariaDBEventStoreConfig } from './interfaces';
+import { isDuplicateEntryError, streamRows } from './mariadb.utils';
 
 export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 	private pool: Pool;
@@ -38,7 +39,7 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 
 		try {
 			await this.pool.query(
-				`CREATE TABLE IF NOT EXISTS \`${collection}\` (
+				`CREATE TABLE IF NOT EXISTS ${this.pool.escapeId(collection)} (
                     stream_id VARCHAR(120) NOT NULL,
                     version INT NOT NULL,
                     event VARCHAR(80) NOT NULL,
@@ -61,36 +62,24 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 	}
 
 	public async *listCollections(filter?: IEventCollectionFilter): AsyncGenerator<IEventCollection[]> {
-		const connection = this.pool.getConnection();
-
 		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
 		const query = "SELECT TABLE_NAME FROM information_schema.tables WHERE BINARY table_name LIKE '%events'";
 
-		const client = await connection;
-		const stream = client.queryStream(query);
-
-		try {
-			let batchedCollections: IEventCollection[] = [];
-			for await (const { TABLE_NAME } of stream as unknown as Record<string, IEventCollection>[]) {
-				batchedCollections.push(TABLE_NAME);
-				if (batchedCollections.length === batch) {
-					yield batchedCollections;
-					batchedCollections = [];
-				}
-			}
-			if (batchedCollections.length > 0) {
+		let batchedCollections: IEventCollection[] = [];
+		for await (const { TABLE_NAME } of streamRows<Record<string, IEventCollection>>(this.pool, query)) {
+			batchedCollections.push(TABLE_NAME);
+			if (batchedCollections.length === batch) {
 				yield batchedCollections;
+				batchedCollections = [];
 			}
-		} catch (e) {
-			stream.destroy();
-		} finally {
-			await client.release();
+		}
+		if (batchedCollections.length > 0) {
+			yield batchedCollections;
 		}
 	}
 
 	async *getEvents({ streamId }: EventStream, filter?: IEventFilter): AsyncGenerator<IEvent[]> {
-		const connection = this.pool.getConnection();
 		const collection = EventCollection.get(filter?.pool);
 
 		const fromVersion = filter?.fromVersion;
@@ -100,7 +89,7 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 
 		const query = `
             SELECT event, payload
-            FROM \`${collection}\`
+            FROM ${this.pool.escapeId(collection)}
             WHERE stream_id = ?
             ${fromVersion ? 'AND version >= ?' : ''}
             ORDER BY version ${direction === StreamReadingDirection.FORWARD ? 'ASC' : 'DESC'}
@@ -109,25 +98,20 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 
 		const params = fromVersion ? [streamId, fromVersion, limit] : [streamId, limit];
 
-		const client = await connection;
-		const stream = client.queryStream(query, params);
-
-		try {
-			let batchedEvents: IEvent[] = [];
-			for await (const { event, payload } of stream as unknown as Pick<MariaDBEventEntity, 'event' | 'payload'>[]) {
-				batchedEvents.push(this.eventMap.deserializeEvent(event, payload));
-				if (batchedEvents.length === batch) {
-					yield batchedEvents;
-					batchedEvents = [];
-				}
-			}
-			if (batchedEvents.length > 0) {
+		let batchedEvents: IEvent[] = [];
+		for await (const { event, payload } of streamRows<Pick<MariaDBEventEntity, 'event' | 'payload'>>(
+			this.pool,
+			query,
+			params,
+		)) {
+			batchedEvents.push(this.eventMap.deserializeEvent(event, payload));
+			if (batchedEvents.length === batch) {
 				yield batchedEvents;
+				batchedEvents = [];
 			}
-		} catch (e) {
-			stream.destroy();
-		} finally {
-			await client.release();
+		}
+		if (batchedEvents.length > 0) {
+			yield batchedEvents;
 		}
 	}
 
@@ -135,7 +119,7 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 		const collection = EventCollection.get(pool);
 
 		const [entity] = await this.pool.query<Pick<MariaDBEventEntity, 'event' | 'payload'>[]>(
-			`SELECT event, payload FROM \`${collection}\` WHERE stream_id = ? AND version = ?`,
+			`SELECT event, payload FROM ${this.pool.escapeId(collection)} WHERE stream_id = ? AND version = ?`,
 			[streamId, version],
 		);
 
@@ -155,14 +139,19 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 		const connection = await this.pool.getConnection();
 		const collection = EventCollection.get(pool);
 
+		let currentVersion = 0;
+
 		try {
+			// Escaped inside the try, so a name the connector refuses to escape still releases the connection
+			const table = connection.escapeId(collection);
+
 			// Step 1: Get the current version of the stream from the database
 			const [currentVersionResult] = await connection.query(
-				`SELECT MAX(version) as version FROM \`${collection}\` WHERE stream_id = ?`,
+				`SELECT MAX(version) as version FROM ${table} WHERE stream_id = ?`,
 				[stream.streamId],
 			);
 
-			const currentVersion = currentVersionResult?.version || 0;
+			currentVersion = currentVersionResult?.version || 0;
 
 			// Step 2: Check if the aggregateVersion is greater than the current version
 			if (aggregateVersion <= currentVersion) {
@@ -192,7 +181,7 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 
 			await connection.beginTransaction();
 			await connection.batch(
-				`INSERT INTO \`${collection}\` VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				`INSERT INTO ${table} VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 				envelopes.map(({ event, payload, metadata }) => [
 					stream.streamId,
 					metadata.version,
@@ -210,15 +199,21 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 
 			return envelopes;
 		} catch (error) {
-			await connection.rollback();
-			switch (error.constructor) {
-				case EventStoreVersionConflictException:
-					throw error;
-				default:
-					throw new EventStorePersistenceException(collection, error);
+			await connection.rollback().catch(() => undefined);
+
+			if (error instanceof EventStoreVersionConflictException) {
+				throw error;
 			}
+
+			// A concurrent writer committed the same (stream_id, version) between our check and our insert.
+			if (isDuplicateEntryError(error)) {
+				const latestVersion = await this.getLatestVersion(collection, stream, connection, currentVersion);
+				throw new EventStoreVersionConflictException(stream, aggregateVersion, latestVersion, error);
+			}
+
+			throw new EventStorePersistenceException(collection, error);
 		} finally {
-			connection.release();
+			await connection.release();
 		}
 	}
 
@@ -226,7 +221,7 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 		const collection = EventCollection.get(pool);
 
 		const [entity] = await this.pool.query<Omit<MariaDBEventEntity, 'stream_id'>[]>(
-			`SELECT event, payload, event_id, aggregate_id, version, occurred_on, correlation_id, causation_id FROM \`${collection}\` WHERE stream_id = ? AND version = ?`,
+			`SELECT event, payload, event_id, aggregate_id, version, occurred_on, correlation_id, causation_id FROM ${this.pool.escapeId(collection)} WHERE stream_id = ? AND version = ?`,
 			[streamId, version],
 		);
 
@@ -245,7 +240,6 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 	}
 
 	async *getEnvelopes({ streamId }: EventStream, filter?: IEventFilter): AsyncGenerator<EventEnvelope[]> {
-		const connection = this.pool.getConnection();
 		const collection = EventCollection.get(filter?.pool);
 
 		const fromVersion = filter?.fromVersion;
@@ -255,7 +249,7 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 
 		const query = `
             SELECT event, payload, event_id, aggregate_id, version, occurred_on, correlation_id, causation_id
-            FROM \`${collection}\`
+            FROM ${this.pool.escapeId(collection)}
             WHERE stream_id = ?
             ${fromVersion ? 'AND version >= ?' : ''}
             ORDER BY version ${direction === StreamReadingDirection.FORWARD ? 'ASC' : 'DESC'}
@@ -264,48 +258,38 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 
 		const params = fromVersion ? [streamId, fromVersion, limit] : [streamId, limit];
 
-		const client = await connection;
-		const stream = client.queryStream(query, params);
-
-		try {
-			let batchedEvents: EventEnvelope[] = [];
-			for await (const {
-				event,
-				payload,
-				event_id,
-				aggregate_id,
-				version,
-				occurred_on,
-				correlation_id,
-				causation_id,
-			} of stream as unknown as Omit<MariaDBEventEntity, 'stream_id'>[]) {
-				batchedEvents.push(
-					EventEnvelope.from(event, payload, {
-						eventId: EventId.from(event_id),
-						aggregateId: aggregate_id,
-						version,
-						occurredOn: occurred_on,
-						correlationId: correlation_id ?? undefined,
-						causationId: causation_id ?? undefined,
-					}),
-				);
-				if (batchedEvents.length === batch) {
-					yield batchedEvents;
-					batchedEvents = [];
-				}
-			}
-			if (batchedEvents.length > 0) {
+		let batchedEvents: EventEnvelope[] = [];
+		for await (const {
+			event,
+			payload,
+			event_id,
+			aggregate_id,
+			version,
+			occurred_on,
+			correlation_id,
+			causation_id,
+		} of streamRows<Omit<MariaDBEventEntity, 'stream_id'>>(this.pool, query, params)) {
+			batchedEvents.push(
+				EventEnvelope.from(event, payload, {
+					eventId: EventId.from(event_id),
+					aggregateId: aggregate_id,
+					version,
+					occurredOn: occurred_on,
+					correlationId: correlation_id ?? undefined,
+					causationId: causation_id ?? undefined,
+				}),
+			);
+			if (batchedEvents.length === batch) {
 				yield batchedEvents;
+				batchedEvents = [];
 			}
-		} catch (e) {
-			stream.destroy();
-		} finally {
-			await client.release();
+		}
+		if (batchedEvents.length > 0) {
+			yield batchedEvents;
 		}
 	}
 
 	async *getAllEnvelopes(filter: IAllEventsFilter): AsyncGenerator<EventEnvelope[]> {
-		const connection = this.pool.getConnection();
 		const collection = EventCollection.get(filter?.pool);
 		const yearMonths = this.getYearMonthRange(filter.since, filter.until);
 
@@ -313,50 +297,61 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 
 		const query = `
             SELECT event, payload, event_id, aggregate_id, version, occurred_on, correlation_id, causation_id
-            FROM \`${collection}\`
+            FROM ${this.pool.escapeId(collection)}
             WHERE event_date IN (?)
             ORDER BY event_date ASC, event_id ASC
         `;
 
 		const params = [yearMonths];
 
-		const client = await connection;
-		const stream = client.queryStream(query, params);
-
-		try {
-			let batchedEvents: EventEnvelope[] = [];
-			for await (const {
-				event,
-				payload,
-				event_id,
-				aggregate_id,
-				version,
-				occurred_on,
-				correlation_id,
-				causation_id,
-			} of stream as unknown as Omit<MariaDBEventEntity, 'stream_id'>[]) {
-				batchedEvents.push(
-					EventEnvelope.from(event, payload, {
-						eventId: EventId.from(event_id),
-						aggregateId: aggregate_id,
-						version,
-						occurredOn: occurred_on,
-						correlationId: correlation_id ?? undefined,
-						causationId: causation_id ?? undefined,
-					}),
-				);
-				if (batchedEvents.length === batch) {
-					yield batchedEvents;
-					batchedEvents = [];
-				}
-			}
-			if (batchedEvents.length > 0) {
+		let batchedEvents: EventEnvelope[] = [];
+		for await (const {
+			event,
+			payload,
+			event_id,
+			aggregate_id,
+			version,
+			occurred_on,
+			correlation_id,
+			causation_id,
+		} of streamRows<Omit<MariaDBEventEntity, 'stream_id'>>(this.pool, query, params)) {
+			batchedEvents.push(
+				EventEnvelope.from(event, payload, {
+					eventId: EventId.from(event_id),
+					aggregateId: aggregate_id,
+					version,
+					occurredOn: occurred_on,
+					correlationId: correlation_id ?? undefined,
+					causationId: causation_id ?? undefined,
+				}),
+			);
+			if (batchedEvents.length === batch) {
 				yield batchedEvents;
+				batchedEvents = [];
 			}
-		} catch (e) {
-			stream.destroy();
-		} finally {
-			await client.release();
+		}
+		if (batchedEvents.length > 0) {
+			yield batchedEvents;
+		}
+	}
+
+	/**
+	 * Best effort lookup of the latest version of a stream, used to report a conflict.
+	 */
+	private async getLatestVersion(
+		collection: IEventCollection,
+		{ streamId }: EventStream,
+		connection: PoolConnection,
+		fallback: number,
+	): Promise<number> {
+		try {
+			const [result] = await connection.query(
+				`SELECT MAX(version) as version FROM ${connection.escapeId(collection)} WHERE stream_id = ?`,
+				[streamId],
+			);
+			return result?.version || fallback;
+		} catch {
+			return fallback;
 		}
 	}
 }

@@ -122,7 +122,7 @@ describe(MongoDBSnapshotStore, () => {
 	});
 
 	it("should throw when a snapshot envelope can't be appended", async () => {
-		expect(() =>
+		await expect(() =>
 			snapshotStore.appendSnapshot(snapshotStreamAccountA, 1, snapshotsAccountA[0], 'not-a-pool'),
 		).rejects.toThrow(SnapshotStorePersistenceException);
 	});

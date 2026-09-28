@@ -21,10 +21,13 @@ import {
 } from '@ocoda/event-sourcing';
 import { type Db, MongoClient } from 'mongodb';
 import type { MongoDBSnapshotEntity, MongoDBSnapshotStoreConfig } from './interfaces';
+import { batchCursor, isDuplicateKeyError } from './mongodb.utils';
 
 export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConfig> {
 	private client: MongoClient;
 	private database: Db;
+	/** Collections that are known to exist, so that appends don't have to look them up on every write. */
+	private readonly knownCollections = new Set<string>();
 
 	public async connect(): Promise<void> {
 		this.logger.log('Starting store');
@@ -35,6 +38,7 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 
 	public async disconnect(): Promise<void> {
 		this.logger.log('Stopping store');
+		this.knownCollections.clear();
 		await this.client.close();
 	}
 
@@ -43,15 +47,15 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 
 		try {
 			const [existingCollection] = await this.database.listCollections({ name: collection }).toArray();
-			if (existingCollection) {
-				return collection;
+			if (!existingCollection) {
+				const snapshotCollection = await this.database.createCollection(collection);
+				await snapshotCollection.createIndexes([
+					{ key: { streamId: 1, version: 1 }, unique: true },
+					{ key: { aggregateName: 1, latest: 1 }, unique: false },
+				]);
 			}
 
-			const snapshotCollection = await this.database.createCollection(collection);
-			await snapshotCollection.createIndexes([
-				{ key: { streamId: 1, version: 1 }, unique: true },
-				{ key: { aggregateName: 1, latest: 1 }, unique: false },
-			]);
+			this.knownCollections.add(collection);
 
 			return collection;
 		} catch (error) {
@@ -62,25 +66,13 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 	public async *listCollections(filter?: ISnapshotCollectionFilter): AsyncGenerator<ISnapshotCollection[]> {
 		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
-		const cursor = this.database.listCollections({
-			name: { $regex: /snapshots/ },
-		});
+		const cursor = this.database
+			.listCollections({
+				name: { $regex: /snapshots/ },
+			})
+			.map(({ name }) => name as ISnapshotCollection);
 
-		const entities: ISnapshotCollection[] = [];
-		let hasNext: boolean;
-		do {
-			const entity = await cursor.next();
-			hasNext = entity !== null;
-
-			if (entity) {
-				entities.push(entity.name as ISnapshotCollection);
-			}
-
-			if (entities.length > 0 && (entities.length === batch || !hasNext)) {
-				yield entities;
-				entities.length = 0;
-			}
-		} while (hasNext);
+		yield* batchCursor(cursor, batch);
 	}
 
 	async *getSnapshots<A extends AggregateRoot>(
@@ -109,21 +101,7 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 			)
 			.map(({ payload }) => payload);
 
-		const entities: ISnapshot<A>[] = [];
-		let hasNext: boolean;
-		do {
-			const entity = await cursor.next();
-			hasNext = entity !== null;
-
-			if (entity) {
-				entities.push(entity);
-			}
-
-			if (entities.length > 0 && (entities.length === batch || !hasNext)) {
-				yield entities;
-				entities.length = 0;
-			}
-		} while (hasNext);
+		yield* batchCursor(cursor, batch);
 	}
 
 	async getSnapshot<A extends AggregateRoot>(
@@ -157,11 +135,7 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 		const collection = SnapshotCollection.get(pool);
 
 		try {
-			const collections = await this.database.listCollections({ name: collection }).toArray();
-
-			if (collections.length === 0) {
-				throw new Error(`Collection "${collection}" does not exist.`);
-			}
+			await this.assertCollectionExists(collection);
 
 			const envelope = SnapshotEnvelope.create<A>(snapshot, {
 				aggregateId: stream.aggregateId,
@@ -195,12 +169,17 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 
 			return envelope;
 		} catch (error) {
-			switch (error.constructor) {
-				case SnapshotStoreVersionConflictException:
-					throw error;
-				default:
-					throw new SnapshotStorePersistenceException(collection, error);
+			if (error instanceof SnapshotStoreVersionConflictException) {
+				throw error;
 			}
+
+			// A concurrent writer stored the same (streamId, version) between our check and our insert.
+			if (isDuplicateKeyError(error)) {
+				const latestVersion = await this.getLatestVersion(collection, stream);
+				throw new SnapshotStoreVersionConflictException(stream, aggregateVersion, latestVersion, error);
+			}
+
+			throw new SnapshotStorePersistenceException(collection, error);
 		}
 	}
 
@@ -290,21 +269,7 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 				SnapshotEnvelope.from<A>(payload, { aggregateId, registeredOn, snapshotId, version }),
 			);
 
-		const entities: SnapshotEnvelope<A>[] = [];
-		let hasNext: boolean;
-		do {
-			const entity = await cursor.next();
-			hasNext = entity !== null;
-
-			if (entity) {
-				entities.push(entity);
-			}
-
-			if (entities.length > 0 && (entities.length === batch || !hasNext)) {
-				yield entities;
-				entities.length = 0;
-			}
-		} while (hasNext);
+		yield* batchCursor(cursor, batch);
 	}
 
 	async getEnvelope<A extends AggregateRoot>(
@@ -365,21 +330,7 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 				SnapshotEnvelope.from<A>(payload, { aggregateId, registeredOn, snapshotId, version }),
 			);
 
-		const entities: SnapshotEnvelope<A>[] = [];
-		let hasNext: boolean;
-		do {
-			const entity = await cursor.next();
-			hasNext = entity !== null;
-
-			if (entity) {
-				entities.push(entity);
-			}
-
-			if (entities.length > 0 && (entities.length === batch || !hasNext)) {
-				yield entities;
-				entities.length = 0;
-			}
-		} while (hasNext);
+		yield* batchCursor(cursor, batch);
 	}
 
 	async getManyLastSnapshotEnvelopes<A extends AggregateRoot>(
@@ -432,5 +383,41 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 				},
 			)
 			.toArray();
+	}
+
+	/**
+	 * Rejects appends to collections that were never created (unknown pools).
+	 * Collections that are known to exist are not looked up again, the server is only asked on a cache miss.
+	 */
+	private async assertCollectionExists(collection: ISnapshotCollection): Promise<void> {
+		if (this.knownCollections.has(collection)) {
+			return;
+		}
+
+		const collections = await this.database.listCollections({ name: collection }).toArray();
+
+		if (collections.length === 0) {
+			throw new Error(`Collection "${collection}" does not exist.`);
+		}
+
+		this.knownCollections.add(collection);
+	}
+
+	/**
+	 * Best effort lookup of the latest snapshot version of a stream, used to report a conflict.
+	 */
+	private async getLatestVersion(collection: ISnapshotCollection, { streamId }: SnapshotStream): Promise<number> {
+		try {
+			const [latest] = await this.database
+				.collection<MongoDBSnapshotEntity<AggregateRoot>>(collection)
+				.find({ streamId })
+				.sort({ version: -1 })
+				.limit(1)
+				.project({ version: 1 })
+				.toArray();
+			return latest?.version ?? 0;
+		} catch {
+			return 0;
+		}
 	}
 }
