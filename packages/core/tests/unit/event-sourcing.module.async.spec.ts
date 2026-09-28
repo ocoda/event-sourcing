@@ -87,15 +87,50 @@ describe('EventSourcingModule.forRootAsync (bootstrapped)', () => {
 		await expectBootstrapped(app);
 	});
 
+	/**
+	 * Captures the options factory instances that created the options.
+	 */
+	const spyOnOptionsFactories = () => {
+		const factories: EventSourcingOptionsService[] = [];
+		const original = EventSourcingOptionsService.prototype.createEventSourcingOptions;
+		jest.spyOn(EventSourcingOptionsService.prototype, 'createEventSourcingOptions').mockImplementation(function (
+			this: EventSourcingOptionsService,
+		) {
+			factories.push(this);
+			return original.call(this);
+		});
+		return factories;
+	};
+
 	it('bootstraps with useClass', async () => {
+		const factories = spyOnOptionsFactories();
+
 		const app = await bootstrap({
 			imports: [EventSourcingConfigModule],
 			useClass: EventSourcingOptionsService,
 		});
 
 		await expectBootstrapped(app);
-		// the options factory is registered as an internal provider of the module
-		expect(app.get(EventSourcingOptionsService)).toBeInstanceOf(EventSourcingOptionsService);
+		// the options factory is instantiated by the module, with its dependencies injected from the imports
+		expect(factories).toHaveLength(1);
+		expect(factories[0]).toBeInstanceOf(EventSourcingOptionsService);
+		expect((factories[0] as any).config).toBeInstanceOf(EventSourcingConfig);
+	});
+
+	it('bootstraps with useClass when an imported module already provides the options factory', async () => {
+		// Before useClass instantiated the class itself, it only worked when one of the imports exported the class.
+		// Its dependencies (EventSourcingConfig) aren't exported by EventSourcingOptionsModule, so the options factory
+		// can't be instantiated in the event sourcing module: the provided instance has to be reused.
+		const factories = spyOnOptionsFactories();
+
+		const app = await bootstrap({
+			imports: [EventSourcingOptionsModule],
+			useClass: EventSourcingOptionsService,
+		});
+
+		await expectBootstrapped(app);
+		expect(factories).toHaveLength(1);
+		expect(factories[0]).toBe(app.select(EventSourcingOptionsModule).get(EventSourcingOptionsService));
 	});
 
 	it('bootstraps with useExisting', async () => {

@@ -1,4 +1,4 @@
-import { DiscoveryModule } from '@nestjs/core';
+import { DiscoveryModule, ModuleRef } from '@nestjs/core';
 import { EVENT_SOURCING_OPTIONS, EventSourcingModule } from '@ocoda/event-sourcing';
 import { EventSourcingCoreModule } from '../../lib/event-sourcing.core.module';
 import {
@@ -95,10 +95,22 @@ describe('EventSourcing options providers', () => {
 
 		const providers = createAsyncEventSourcingOptionsProvider({ useClass: OptionsFactory });
 		const provider = providers[0] as any;
-		const resolved = await provider.useFactory?.(new OptionsFactory());
+		const moduleRef = { create: jest.fn(async () => new OptionsFactory()) };
 
-		expect(provider.inject).toEqual([OptionsFactory]);
-		expect(resolved).toEqual({ snapshotStore: { driver: InMemorySnapshotStore, useDefaultPool: true } });
+		expect(providers).toHaveLength(1);
+		expect(provider.inject).toEqual([{ token: OptionsFactory, optional: true }, ModuleRef]);
+
+		// an options factory that is already provided is reused
+		await expect(provider.useFactory(new OptionsFactory(), moduleRef)).resolves.toEqual({
+			snapshotStore: { driver: InMemorySnapshotStore, useDefaultPool: true },
+		});
+		expect(moduleRef.create).not.toHaveBeenCalled();
+
+		// otherwise the options factory is instantiated within the module
+		await expect(provider.useFactory(undefined, moduleRef)).resolves.toEqual({
+			snapshotStore: { driver: InMemorySnapshotStore, useDefaultPool: true },
+		});
+		expect(moduleRef.create).toHaveBeenCalledWith(OptionsFactory);
 	});
 
 	it('registers feature modules without events', () => {
