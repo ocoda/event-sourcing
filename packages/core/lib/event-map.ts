@@ -1,12 +1,11 @@
 import { Injectable, type Type } from '@nestjs/common';
-import type { InstanceWrapper } from '@nestjs/core/injector/instance-wrapper';
 import {
 	MissingEventMetadataException,
 	UnregisteredEventException,
 	UnregisteredSerializerException,
 } from './exceptions';
 import { DefaultEventSerializer, getEventMetadata, getEventSerializerMetadata } from './helpers';
-import type { IEvent, IEventPayload, IEventSerializer } from './interfaces';
+import type { IEvent, IEventPayload, IEventSerializer, ProviderWrapper } from './interfaces';
 
 export type EventSerializerType = Type<IEventSerializer<IEvent>>;
 
@@ -95,7 +94,7 @@ export class EventMap {
 		return name;
 	}
 
-	registerSerializers(events: Type<IEvent>[] = [], serializers: InstanceWrapper<IEventSerializer>[] = []) {
+	registerSerializers(events: Type<IEvent>[] = [], serializers: ProviderWrapper<IEventSerializer>[] = []) {
 		for (const event of events) {
 			// get the handler
 			const handler = serializers.find(({ metatype }) => {
