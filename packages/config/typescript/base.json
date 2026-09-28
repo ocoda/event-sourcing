@@ -1,16 +1,23 @@
 {
+	"$schema": "https://json.schemastore.org/tsconfig",
+	"display": "Ocoda Event Sourcing Base",
 	"compilerOptions": {
-		"module": "commonjs",
-		"declaration": true,
+		"module": "nodenext",
+		"moduleResolution": "nodenext",
+		"target": "ES2023",
+		"lib": ["ES2023"],
+		"types": ["node"],
+		"strict": false,
+		"strictNullChecks": true,
 		"noImplicitAny": false,
-		"removeComments": false,
-		"noLib": false,
-		"emitDecoratorMetadata": true,
+		"isolatedModules": true,
 		"experimentalDecorators": true,
-		"target": "es6",
-		"sourceMap": false,
+		"emitDecoratorMetadata": true,
+		"useDefineForClassFields": false,
+		"esModuleInterop": true,
 		"skipLibCheck": true,
-		"strictNullChecks": true
-	},
-	"exclude": ["dist", "node_modules"]
+		"declaration": true,
+		"sourceMap": true,
+		"forceConsistentCasingInFileNames": true
+	}
 }

@@ -1,4 +1,7 @@
 {
-	"extends": "@ocoda/event-sourcing-config/typescript/base.json",
+	"extends": "@ocoda/event-sourcing-config/typescript/module.json",
+	"compilerOptions": {
+		"types": ["node", "jest"]
+	},
 	"include": ["e2e/**/*.ts", "unit/**/*.ts"]
 }
