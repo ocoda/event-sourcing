@@ -108,16 +108,16 @@ describe(InMemoryEventStore, () => {
 		const lastEvent = events[events.length - 1];
 		const lastVersion = events.length;
 		const beforeLastVersion = lastVersion - 1;
-		expect(eventStore.appendEvents(eventStreamAccountA, beforeLastVersion, [lastEvent])).rejects.toThrow(
+		await expect(eventStore.appendEvents(eventStreamAccountA, beforeLastVersion, [lastEvent])).rejects.toThrow(
 			new EventStoreVersionConflictException(eventStreamAccountA, beforeLastVersion, lastVersion),
 		);
-		expect(eventStore.appendEvents(eventStreamAccountA, lastVersion, [lastEvent])).rejects.toThrow(
+		await expect(eventStore.appendEvents(eventStreamAccountA, lastVersion, [lastEvent])).rejects.toThrow(
 			new EventStoreVersionConflictException(eventStreamAccountA, lastVersion, lastVersion),
 		);
 	});
 
 	it("should throw when event envelopes can't be appended", async () => {
-		expect(() => eventStore.appendEvents(eventStreamAccountA, 3, events.slice(0, 3), 'not-a-pool')).rejects.toThrow(
+		await expect(eventStore.appendEvents(eventStreamAccountA, 3, events.slice(0, 3), 'not-a-pool')).rejects.toThrow(
 			EventStorePersistenceException,
 		);
 	});
