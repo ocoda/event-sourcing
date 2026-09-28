@@ -1,14 +1,11 @@
+import { randomUUID } from 'node:crypto';
 import {
 	type AttributeValue,
-	BillingMode,
-	CreateTableCommand,
 	type CreateTableCommandInput,
-	DescribeTableCommand,
 	DynamoDBClient,
 	GetItemCommand,
 	ListTablesCommand,
 	QueryCommand,
-	ResourceNotFoundException,
 	type TransactWriteItem,
 	TransactWriteItemsCommand,
 } from '@aws-sdk/client-dynamodb';
@@ -34,6 +31,7 @@ import {
 	StreamReadingDirection,
 	getAggregateMetadata,
 } from '@ocoda/event-sourcing';
+import { ensureTable, isConflictingTransaction, normalizePayload } from './helpers';
 import type { DynamoDBSnapshotStoreConfig, DynamoSnapshotEntity } from './interfaces';
 
 export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreConfig> {
@@ -56,49 +54,39 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 		const collection = SnapshotCollection.get(pool);
 
 		try {
-			await this.client.send(new DescribeTableCommand({ TableName: collection }));
+			await ensureTable(
+				this.client,
+				{
+					TableName: collection,
+					KeySchema: [
+						{ AttributeName: 'streamId', KeyType: 'HASH' },
+						{ AttributeName: 'version', KeyType: 'RANGE' },
+					],
+					AttributeDefinitions: [
+						{ AttributeName: 'streamId', AttributeType: 'S' },
+						{ AttributeName: 'version', AttributeType: 'N' },
+						{ AttributeName: 'aggregateName', AttributeType: 'S' },
+						{ AttributeName: 'latest', AttributeType: 'S' },
+					],
+					GlobalSecondaryIndexes: [
+						{
+							IndexName: 'aggregate_index',
+							KeySchema: [
+								{ AttributeName: 'aggregateName', KeyType: 'HASH' },
+								{ AttributeName: 'latest', KeyType: 'RANGE' },
+							],
+							Projection: {
+								ProjectionType: 'ALL',
+							},
+						},
+					],
+				},
+				config,
+			);
+
 			return collection;
 		} catch (err) {
-			switch (err.constructor) {
-				case ResourceNotFoundException:
-					await this.client.send(
-						new CreateTableCommand({
-							TableName: collection,
-							KeySchema: [
-								{ AttributeName: 'streamId', KeyType: 'HASH' },
-								{ AttributeName: 'version', KeyType: 'RANGE' },
-							],
-							AttributeDefinitions: [
-								{ AttributeName: 'streamId', AttributeType: 'S' },
-								{ AttributeName: 'version', AttributeType: 'N' },
-								{ AttributeName: 'aggregateName', AttributeType: 'S' },
-								{ AttributeName: 'latest', AttributeType: 'S' },
-							],
-							GlobalSecondaryIndexes: [
-								{
-									IndexName: 'aggregate_index',
-									KeySchema: [
-										{ AttributeName: 'aggregateName', KeyType: 'HASH' },
-										{ AttributeName: 'latest', KeyType: 'RANGE' },
-									],
-									Projection: {
-										ProjectionType: 'ALL',
-									},
-								},
-							],
-							ProvisionedThroughput: config?.ProvisionedThroughput || {
-								ReadCapacityUnits: 1,
-								WriteCapacityUnits: 1,
-							},
-							OnDemandThroughput: config?.OnDemandThroughput,
-							BillingMode: config?.BillingMode || BillingMode.PAY_PER_REQUEST,
-						}),
-					);
-
-					return collection;
-				default:
-					throw new SnapshotStoreCollectionCreationException(collection, err);
-			}
+			throw new SnapshotStoreCollectionCreationException(collection, err);
 		}
 	}
 
@@ -155,6 +143,7 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 					ExclusiveStartKey,
 					ExpressionAttributeValues,
 					ProjectionExpression: 'payload',
+					ConsistentRead: true,
 					...(direction === StreamReadingDirection.BACKWARD && {
 						ScanIndexForward: false,
 					}),
@@ -191,6 +180,7 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 				TableName: collection,
 				Key: marshall({ streamId, version }, { removeUndefinedValues: true }),
 				ProjectionExpression: 'payload',
+				ConsistentRead: true,
 			}),
 		);
 
@@ -203,6 +193,13 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 		return payload;
 	}
 
+	/**
+	 * Appends a snapshot in a single DynamoDB transaction that also moves the 'latest' marker from the previous
+	 * snapshot of the stream. The snapshot is written with a condition on its (streamId, version) key and the marker
+	 * is only removed while the previous snapshot still holds it, so an existing snapshot is never overwritten and
+	 * concurrent appends to the same stream raise a SnapshotStoreVersionConflictException instead of both succeeding.
+	 * Transactional writes consume twice the write capacity of regular writes.
+	 */
 	async appendSnapshot<A extends AggregateRoot>(
 		stream: SnapshotStream,
 		aggregateVersion: number,
@@ -217,14 +214,15 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 				version: aggregateVersion,
 			});
 
-			const updateLastItem: TransactWriteItem[] = [];
-			const [lastStreamEntity] = await this.getLastStreamEntities<A, ['version']>(collection, [stream], ['version']);
+			const lastStreamEntity = await this.getLastStreamEntity<A>(collection, stream);
 
-			if (aggregateVersion <= lastStreamEntity?.version) {
+			if (lastStreamEntity && aggregateVersion <= lastStreamEntity.version) {
 				throw new SnapshotStoreVersionConflictException(stream, aggregateVersion, lastStreamEntity.version);
 			}
 
-			if (lastStreamEntity) {
+			// Without a previous snapshot there is no item to guard, so only snapshots of the same version conflict then
+			const updateLastItem: TransactWriteItem[] = [];
+			if (lastStreamEntity?.latest) {
 				updateLastItem.push({
 					Update: {
 						TableName: collection,
@@ -233,12 +231,17 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 							{ removeUndefinedValues: true },
 						),
 						UpdateExpression: 'REMOVE latest',
+						// Fails when a concurrent append already moved the 'latest' marker
+						ConditionExpression: 'latest = :latest',
+						ExpressionAttributeValues: { ':latest': { S: lastStreamEntity.latest } },
 					},
 				});
 			}
 
 			await this.client.send(
 				new TransactWriteItemsCommand({
+					// Makes retries of a transaction that was already applied idempotent (for 10 minutes)
+					ClientRequestToken: randomUUID(),
 					TransactItems: [
 						...updateLastItem,
 						{
@@ -247,7 +250,7 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 								Item: marshall(
 									{
 										streamId: stream.streamId,
-										payload: envelope.payload,
+										payload: normalizePayload(envelope.payload),
 										version: envelope.metadata.version,
 										aggregateName: stream.aggregate,
 										snapshotId: envelope.metadata.snapshotId,
@@ -257,6 +260,8 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 									},
 									{ removeUndefinedValues: true, convertClassInstanceToMap: true },
 								),
+								// Never overwrite an existing version of the stream
+								ConditionExpression: 'attribute_not_exists(streamId)',
 							},
 						},
 					],
@@ -265,12 +270,22 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 
 			return envelope;
 		} catch (error) {
-			switch (error.constructor) {
-				case SnapshotStoreVersionConflictException:
-					throw error;
-				default:
-					throw new SnapshotStorePersistenceException(collection, error);
+			if (error instanceof SnapshotStoreVersionConflictException) {
+				throw error;
 			}
+
+			if (isConflictingTransaction(error)) {
+				// A concurrent transaction might not be visible yet, in which case the version we tried to write is reported
+				const lastStreamEntity = await this.getLastStreamEntity<A>(collection, stream).catch(() => undefined);
+				throw new SnapshotStoreVersionConflictException(
+					stream,
+					aggregateVersion,
+					lastStreamEntity?.version ?? aggregateVersion,
+					error,
+				);
+			}
+
+			throw new SnapshotStorePersistenceException(collection, error);
 		}
 	}
 
@@ -289,6 +304,7 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 				ScanIndexForward: false,
 				Limit: 1,
 				ProjectionExpression: 'payload',
+				ConsistentRead: true,
 			}),
 		);
 
@@ -373,6 +389,7 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 					ExclusiveStartKey,
 					ExpressionAttributeValues,
 					ProjectionExpression: 'payload, snapshotId, aggregateId, registeredOn, version',
+					ConsistentRead: true,
 					...(direction === StreamReadingDirection.BACKWARD && {
 						ScanIndexForward: false,
 					}),
@@ -416,6 +433,7 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 				TableName: collection,
 				Key: marshall({ streamId, version }, { removeUndefinedValues: true }),
 				ProjectionExpression: 'payload, snapshotId, aggregateId, registeredOn, version',
+				ConsistentRead: true,
 			}),
 		);
 
@@ -535,6 +553,30 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 		entity: Record<string, AttributeValue>,
 	): Pick<DynamoSnapshotEntity<A>, Fields[number]> {
 		return unmarshall(entity) as Pick<DynamoSnapshotEntity<A>, Fields[number]>;
+	}
+
+	/**
+	 * Returns the version and 'latest' marker of the snapshot with the highest version in a stream (strongly consistent).
+	 */
+	private async getLastStreamEntity<A extends AggregateRoot>(
+		collection: ISnapshotCollection,
+		{ streamId }: SnapshotStream,
+	): Promise<Pick<DynamoSnapshotEntity<A>, 'version' | 'latest'> | undefined> {
+		const { Items } = await this.client.send(
+			new QueryCommand({
+				TableName: collection,
+				KeyConditionExpression: 'streamId = :streamId',
+				ExpressionAttributeValues: {
+					':streamId': { S: streamId },
+				},
+				ProjectionExpression: 'version, latest',
+				ConsistentRead: true,
+				ScanIndexForward: false,
+				Limit: 1,
+			}),
+		);
+
+		return Items?.[0] ? this.hydrate<A, ['version', 'latest']>(Items[0]) : undefined;
 	}
 
 	private async getLastStreamEntities<

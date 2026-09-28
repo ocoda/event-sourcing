@@ -1,5 +1,13 @@
 import { randomInt } from 'node:crypto';
-import { DeleteTableCommand, type DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb';
+import {
+	BillingMode,
+	CreateTableCommand,
+	DeleteTableCommand,
+	type DynamoDBClient,
+	GetItemCommand,
+	QueryCommand,
+	TransactWriteItemsCommand,
+} from '@aws-sdk/client-dynamodb';
 import { unmarshall } from '@aws-sdk/util-dynamodb';
 import {
 	Aggregate,
@@ -9,6 +17,7 @@ import {
 	SnapshotCollection,
 	type SnapshotEnvelope,
 	SnapshotNotFoundException,
+	SnapshotStoreCollectionCreationException,
 	SnapshotStorePersistenceException,
 	SnapshotStoreVersionConflictException,
 	SnapshotStream,
@@ -131,7 +140,7 @@ describe(DynamoDBSnapshotStore, () => {
 		const lastSnapshotEnvelope = snapshotEnvelopesAccountA[snapshotEnvelopesAccountA.length - 1];
 		const lastVersion = lastSnapshotEnvelope.metadata.version;
 		const beforeLastVersion = lastVersion - 10;
-		expect(
+		await expect(
 			snapshotStore.appendSnapshot(snapshotStreamAccountA, beforeLastVersion, lastSnapshotEnvelope),
 		).rejects.toThrow(
 			new SnapshotStoreVersionConflictException(snapshotStreamAccountA, beforeLastVersion, lastVersion),
@@ -142,7 +151,7 @@ describe(DynamoDBSnapshotStore, () => {
 	});
 
 	it("should throw when a snapshot envelope can't be appended", async () => {
-		expect(() =>
+		await expect(
 			snapshotStore.appendSnapshot(snapshotStreamAccountA, 1, snapshotsAccountA[0], 'not-a-pool'),
 		).rejects.toThrow(SnapshotStorePersistenceException);
 	});
@@ -396,5 +405,270 @@ describe(DynamoDBSnapshotStore, () => {
 		expect(resolvedCollections.includes('a-snapshots')).toBe(true);
 		expect(resolvedCollections.includes('b-snapshots')).toBe(true);
 		expect(resolvedCollections.includes('c-snapshots')).toBe(true);
+	});
+
+	describe('transactional appends', () => {
+		const pool = 'dynamodb-appends';
+		const collection = SnapshotCollection.get(pool);
+
+		@Aggregate({ streamName: 'dynamodb-ledger' })
+		class Ledger extends AggregateRoot {
+			public balance: number;
+			public openedAt?: Date;
+			public history?: unknown[];
+		}
+
+		class LedgerId extends UUID {}
+
+		const newStream = () => SnapshotStream.for(Ledger, LedgerId.generate());
+
+		const readItems = async ({ streamId }: SnapshotStream) => {
+			const { Items } = await client.send(
+				new QueryCommand({
+					TableName: collection,
+					KeyConditionExpression: 'streamId = :streamId',
+					ExpressionAttributeValues: { ':streamId': { S: streamId } },
+					ConsistentRead: true,
+				}),
+			);
+			return (Items || []).map((item) => unmarshall(item));
+		};
+
+		// Makes the version check see an empty stream, like a stale (eventually consistent) read or a concurrent writer would
+		const simulateStaleVersionCheck = () => {
+			const send = client.send.bind(client);
+			return jest
+				.spyOn(client, 'send')
+				.mockImplementation((async (command: unknown) =>
+					command instanceof QueryCommand && command.input.Limit === 1
+						? { Items: [], $metadata: {} }
+						: send(command as QueryCommand)) as any);
+		};
+
+		// Holds every transaction until `count` of them were sent, so they all race each other
+		const raceTransactions = (count: number) => {
+			const send = client.send.bind(client);
+			let arrived = 0;
+			let release: () => void = () => undefined;
+			const released = new Promise<void>((resolve) => {
+				release = resolve;
+			});
+			return jest.spyOn(client, 'send').mockImplementation((async (command: unknown) => {
+				if (command instanceof TransactWriteItemsCommand) {
+					arrived++;
+					if (arrived === count) {
+						release();
+					}
+					await released;
+				}
+				return send(command as QueryCommand);
+			}) as any);
+		};
+
+		beforeAll(async () => {
+			await snapshotStore.ensureCollection(pool);
+		});
+
+		afterEach(() => {
+			jest.restoreAllMocks();
+		});
+
+		afterAll(async () => {
+			await Promise.all(
+				[collection, SnapshotCollection.get('dynamodb-concurrent')].map((TableName) =>
+					client.send(new DeleteTableCommand({ TableName })).catch(() => undefined),
+				),
+			);
+		});
+
+		it('should not overwrite an existing snapshot when the version check reads stale data', async () => {
+			const stream = newStream();
+			await snapshotStore.appendSnapshot(stream, 10, { balance: 10 }, pool);
+			const storedItems = await readItems(stream);
+
+			simulateStaleVersionCheck();
+
+			const append = snapshotStore.appendSnapshot(stream, 10, { balance: 999 }, pool);
+			await expect(append).rejects.toThrow(new SnapshotStoreVersionConflictException(stream, 10, 10));
+			await expect(append).rejects.toHaveProperty('stack', expect.stringContaining('ConditionalCheckFailed'));
+
+			jest.restoreAllMocks();
+			expect(await readItems(stream)).toEqual(storedItems);
+			expect(storedItems).toHaveLength(1);
+			expect(storedItems[0].payload).toEqual({ balance: 10 });
+		});
+
+		it('should let exactly one of several concurrent appenders of the same version win', async () => {
+			const stream = newStream();
+			const snapshots = Array.from({ length: 10 }, (_, writer) => ({ balance: writer }));
+
+			const results = await Promise.allSettled(
+				snapshots.map((snapshot) => snapshotStore.appendSnapshot(stream, 10, snapshot, pool)),
+			);
+
+			const rejected = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected');
+			expect(results.filter(({ status }) => status === 'fulfilled')).toHaveLength(1);
+			expect(rejected).toHaveLength(9);
+			for (const { reason } of rejected) {
+				expect(reason).toBeInstanceOf(SnapshotStoreVersionConflictException);
+			}
+
+			const winner = snapshots[results.findIndex(({ status }) => status === 'fulfilled')];
+			const items = await readItems(stream);
+			expect(items).toHaveLength(1);
+			expect(items[0].payload).toEqual(winner);
+			expect(items[0].latest).toBe(`latest#${stream.streamId}`);
+		});
+
+		it('should let exactly one of several racing appenders move the latest marker', async () => {
+			const stream = newStream();
+			await snapshotStore.appendSnapshot(stream, 1, { balance: 1 }, pool);
+			const versions = [10, 20, 30, 40, 50];
+
+			raceTransactions(versions.length);
+
+			const results = await Promise.allSettled(
+				versions.map((version) => snapshotStore.appendSnapshot(stream, version, { balance: version }, pool)),
+			);
+
+			jest.restoreAllMocks();
+
+			const rejected = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected');
+			expect(results.filter(({ status }) => status === 'fulfilled')).toHaveLength(1);
+			expect(rejected).toHaveLength(versions.length - 1);
+			for (const { reason } of rejected) {
+				expect(reason).toBeInstanceOf(SnapshotStoreVersionConflictException);
+				// Raised by the conditional transaction, not by the version check
+				expect(reason.stack).toContain('TransactionCanceledException');
+			}
+
+			const winner = versions[results.findIndex(({ status }) => status === 'fulfilled')];
+			const items = await readItems(stream);
+			expect(items.map(({ version }) => version)).toEqual([1, winner]);
+			expect(items.filter(({ latest }) => latest !== undefined).map(({ version }) => version)).toEqual([winner]);
+
+			const lastEnvelope = await snapshotStore.getLastEnvelope(stream, pool);
+			expect(lastEnvelope?.metadata.version).toBe(winner);
+		});
+
+		it('should store dates in snapshot payloads as ISO strings', async () => {
+			const stream = newStream();
+			const openedAt = new Date('2024-02-29T23:59:59.999Z');
+			const note = `It's O'Brien's "quoted" note: ÄÖÜ ß 你好 🚀`;
+			const snapshot = {
+				balance: 42,
+				openedAt,
+				history: [{ at: new Date('2020-01-01T00:00:00.000Z'), note }, [['nested'], { deeper: { at: openedAt } }]],
+			};
+			const expectedPayload = JSON.parse(JSON.stringify(snapshot));
+
+			await snapshotStore.appendSnapshot(stream, 1, snapshot, pool);
+
+			const [item] = await readItems(stream);
+			expect(item.payload).toEqual(expectedPayload);
+			expect(item.payload.openedAt).toBe('2024-02-29T23:59:59.999Z');
+			expect(item.payload.history[0].at).toBe('2020-01-01T00:00:00.000Z');
+			expect(item.payload.history[0].note).toBe(note);
+
+			expect(await snapshotStore.getSnapshot(stream, 1, pool)).toEqual(expectedPayload);
+			expect(await snapshotStore.getLastSnapshot(stream, pool)).toEqual(expectedPayload);
+			expect((await snapshotStore.getEnvelope(stream, 1, pool)).payload).toEqual(expectedPayload);
+		});
+
+		it('should read streams strongly consistently and send a fresh idempotency token per append', async () => {
+			const stream = newStream();
+			const drain = async <T>(generator: AsyncGenerator<T[]>) => {
+				const items: T[] = [];
+				for await (const batch of generator) {
+					items.push(...batch);
+				}
+				return items;
+			};
+			const send = jest.spyOn(client, 'send');
+
+			await snapshotStore.appendSnapshot(stream, 1, { balance: 1 }, pool);
+			await snapshotStore.appendSnapshot(stream, 10, { balance: 10 }, pool);
+			await snapshotStore.getSnapshot(stream, 1, pool);
+			await snapshotStore.getEnvelope(stream, 1, pool);
+			await snapshotStore.getLastSnapshot(stream, pool);
+			expect(await drain(snapshotStore.getSnapshots(stream, { pool }))).toHaveLength(2);
+			expect(await drain(snapshotStore.getEnvelopes(stream, { pool }))).toHaveLength(2);
+			expect((await snapshotStore.getLastEnvelope(stream, pool))?.metadata.version).toBe(10);
+			await snapshotStore.getLastSnapshots([stream], pool);
+			await snapshotStore.getManyLastSnapshotEnvelopes([stream], pool);
+			await drain(snapshotStore.getLastEnvelopesForAggregate(Ledger, { pool }));
+
+			const commands = send.mock.calls.map(([command]) => command);
+			const reads = commands
+				.filter((command) => command instanceof QueryCommand || command instanceof GetItemCommand)
+				.map(({ input }) => input as { IndexName?: string; ConsistentRead?: boolean });
+			const tableReads = reads.filter(({ IndexName }) => !IndexName);
+			const indexReads = reads.filter(({ IndexName }) => IndexName);
+
+			// 2 version checks, getSnapshot, getEnvelope, getLastSnapshot, getSnapshots and getEnvelopes
+			expect(tableReads).toHaveLength(7);
+			for (const input of tableReads) {
+				expect(input.ConsistentRead).toBe(true);
+			}
+			// Global secondary indexes don't support consistent reads
+			expect(indexReads).toHaveLength(4);
+			for (const input of indexReads) {
+				expect(input).not.toHaveProperty('ConsistentRead');
+			}
+
+			const transactions = commands
+				.filter((command): command is TransactWriteItemsCommand => command instanceof TransactWriteItemsCommand)
+				.map(({ input }) => input);
+			expect(transactions).toHaveLength(2);
+			const tokens = transactions.map(({ ClientRequestToken }) => ClientRequestToken);
+			expect(new Set(tokens).size).toBe(2);
+			for (const token of tokens) {
+				expect(token).toMatch(/^[0-9a-f-]{36}$/);
+			}
+			const [first, second] = transactions;
+			expect(first.TransactItems?.map(({ Put, Update }) => (Put ?? Update)?.ConditionExpression)).toEqual([
+				'attribute_not_exists(streamId)',
+			]);
+			expect(second.TransactItems?.map(({ Put, Update }) => (Put ?? Update)?.ConditionExpression)).toEqual([
+				'latest = :latest',
+				'attribute_not_exists(streamId)',
+			]);
+		});
+
+		it('should throw when a collection cannot be created', async () => {
+			const send = client.send.bind(client);
+			jest
+				.spyOn(client, 'send')
+				.mockImplementation((async (command: unknown) =>
+					command instanceof CreateTableCommand
+						? Promise.reject(new Error('LimitExceededException'))
+						: send(command as QueryCommand)) as any);
+
+			await expect(snapshotStore.ensureCollection('dynamodb-create-failure')).rejects.toThrow(
+				new SnapshotStoreCollectionCreationException('dynamodb-create-failure-snapshots', new Error()),
+			);
+		});
+
+		it('should create the same collection concurrently without provisioned throughput', async () => {
+			const send = jest.spyOn(client, 'send');
+
+			await expect(
+				Promise.all([
+					snapshotStore.ensureCollection('dynamodb-concurrent'),
+					snapshotStore.ensureCollection('dynamodb-concurrent'),
+				]),
+			).resolves.toEqual(['dynamodb-concurrent-snapshots', 'dynamodb-concurrent-snapshots']);
+
+			const inputs = send.mock.calls
+				.map(([command]) => command)
+				.filter((command): command is CreateTableCommand => command instanceof CreateTableCommand)
+				.map(({ input }) => input);
+			expect(inputs.length).toBeGreaterThanOrEqual(1);
+			for (const input of inputs) {
+				expect(input.BillingMode).toBe(BillingMode.PAY_PER_REQUEST);
+				expect(input).not.toHaveProperty('ProvisionedThroughput');
+				expect(input.GlobalSecondaryIndexes?.[0]).not.toHaveProperty('ProvisionedThroughput');
+			}
+		});
 	});
 });

@@ -28,6 +28,13 @@ This store-driver library uses [DynamoDB](https://aws.amazon.com/dynamodb/) as a
 ## Documentation 📗
 Ready to dive right in? Visit [the documentation](https://ocoda.github.io/event-sourcing) to find out how to get started.
 
+## DynamoDB specifics
+- The events of a single `appendEvents` call are written in one `TransactWriteItems` transaction, so they are stored all-or-nothing and never overwrite an existing version. DynamoDB limits a transaction to **100 items and 4 MB** (and every item to 400 KB), so at most 100 events can be appended per call; larger appends are rejected before anything is written. Snapshots are appended transactionally as well. Transactional writes consume twice the write capacity of regular writes.
+- Reads of a single stream (and the version checks before an append) are strongly consistent, which consumes twice the read capacity of eventually consistent reads. Queries on the global secondary indexes (all events, latest snapshots of an aggregate) are eventually consistent.
+- `Date` values in event and snapshot payloads are stored as ISO-8601 strings, like the SQL stores do.
+- `ensureCollection(pool, config)` creates tables with `BillingMode: PAY_PER_REQUEST` by default. With `BillingMode: PROVISIONED`, the given `ProvisionedThroughput` (default: 1 read and 1 write capacity unit) is applied to the table and to its global secondary index. It waits until a new table is `ACTIVE`.
+- IAM permissions: `dynamodb:DescribeTable`, `dynamodb:Query`, `dynamodb:GetItem` and `dynamodb:PutItem` on the events and snapshots tables (and `dynamodb:Query` on their indexes), plus `dynamodb:UpdateItem` on the snapshots tables. `ensureCollection` also needs `dynamodb:CreateTable` for tables that don't exist yet, and `listCollections` needs `dynamodb:ListTables`. Transactional writes are authorized per item (`PutItem`, `UpdateItem`), not as `TransactWriteItems`.
+
 ## Contact
 dries@drieshooghe.com
 &nbsp;

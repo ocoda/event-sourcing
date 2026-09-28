@@ -1,16 +1,12 @@
+import { randomUUID } from 'node:crypto';
 import {
 	type AttributeValue,
-	BatchWriteItemCommand,
-	type BatchWriteItemInput,
-	BillingMode,
-	CreateTableCommand,
 	type CreateTableCommandInput,
-	DescribeTableCommand,
 	DynamoDBClient,
 	GetItemCommand,
 	ListTablesCommand,
 	QueryCommand,
-	ResourceNotFoundException,
+	TransactWriteItemsCommand,
 } from '@aws-sdk/client-dynamodb';
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
 import {
@@ -32,6 +28,7 @@ import {
 	type IEventPool,
 	StreamReadingDirection,
 } from '@ocoda/event-sourcing';
+import { MAX_TRANSACTION_ITEMS, ensureTable, isConflictingTransaction, normalizePayload } from './helpers';
 import type { DynamoDBEventStoreConfig, DynamoEventEntity } from './interfaces';
 
 export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
@@ -54,47 +51,37 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 		const collection = EventCollection.get(pool);
 
 		try {
-			await this.client.send(new DescribeTableCommand({ TableName: collection }));
+			await ensureTable(
+				this.client,
+				{
+					TableName: collection,
+					KeySchema: [
+						{ AttributeName: 'streamId', KeyType: 'HASH' },
+						{ AttributeName: 'version', KeyType: 'RANGE' },
+					],
+					AttributeDefinitions: [
+						{ AttributeName: 'streamId', AttributeType: 'S' },
+						{ AttributeName: 'version', AttributeType: 'N' },
+						{ AttributeName: 'eventDate', AttributeType: 'S' },
+						{ AttributeName: 'eventId', AttributeType: 'S' },
+					],
+					GlobalSecondaryIndexes: [
+						{
+							IndexName: 'eventIdIndex',
+							KeySchema: [
+								{ AttributeName: 'eventDate', KeyType: 'HASH' },
+								{ AttributeName: 'eventId', KeyType: 'RANGE' },
+							],
+							Projection: { ProjectionType: 'ALL' },
+						},
+					],
+				},
+				config,
+			);
+
 			return collection;
 		} catch (err) {
-			switch (err.constructor) {
-				case ResourceNotFoundException:
-					await this.client.send(
-						new CreateTableCommand({
-							TableName: collection,
-							KeySchema: [
-								{ AttributeName: 'streamId', KeyType: 'HASH' },
-								{ AttributeName: 'version', KeyType: 'RANGE' },
-							],
-							AttributeDefinitions: [
-								{ AttributeName: 'streamId', AttributeType: 'S' },
-								{ AttributeName: 'version', AttributeType: 'N' },
-								{ AttributeName: 'eventDate', AttributeType: 'S' },
-								{ AttributeName: 'eventId', AttributeType: 'S' },
-							],
-							GlobalSecondaryIndexes: [
-								{
-									IndexName: 'eventIdIndex',
-									KeySchema: [
-										{ AttributeName: 'eventDate', KeyType: 'HASH' },
-										{ AttributeName: 'eventId', KeyType: 'RANGE' },
-									],
-									Projection: { ProjectionType: 'ALL' },
-								},
-							],
-							ProvisionedThroughput: config?.ProvisionedThroughput || {
-								ReadCapacityUnits: 1,
-								WriteCapacityUnits: 1,
-							},
-							OnDemandThroughput: config?.OnDemandThroughput,
-							BillingMode: config?.BillingMode || BillingMode.PAY_PER_REQUEST,
-						}),
-					);
-
-					return collection;
-				default:
-					throw new EventStoreCollectionCreationException(collection, err);
-			}
+			throw new EventStoreCollectionCreationException(collection, err);
 		}
 	}
 
@@ -150,6 +137,7 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 					ExclusiveStartKey,
 					ExpressionAttributeValues,
 					ProjectionExpression: 'event, payload',
+					ConsistentRead: true,
 					...(direction === StreamReadingDirection.BACKWARD && { ScanIndexForward: false }),
 					...(limit && { Limit: Math.min(batch, leftToFetch) }),
 				}),
@@ -178,6 +166,7 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 				TableName: collection,
 				Key: marshall({ streamId, version }, { removeUndefinedValues: true }),
 				ProjectionExpression: 'event, payload',
+				ConsistentRead: true,
 			}),
 		);
 
@@ -190,6 +179,15 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 		return this.eventMap.deserializeEvent(entity.event, entity.payload);
 	}
 
+	/**
+	 * Appends events to a stream in a single DynamoDB transaction (TransactWriteItems): either all events are
+	 * stored, or none are. Every event is written with a condition on its (streamId, version) key, so an existing
+	 * version is never overwritten; losing that race to a concurrent writer raises an EventStoreVersionConflictException.
+	 *
+	 * DynamoDB limits a transaction to 100 items and 4 MB in total, so at most 100 events (of at most 400 KB each)
+	 * can be appended per call. Larger appends are rejected with an EventStorePersistenceException before anything
+	 * is written. Transactional writes consume twice the write capacity of regular writes.
+	 */
 	async appendEvents(
 		stream: EventStream,
 		aggregateVersion: number,
@@ -198,23 +196,20 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 	): Promise<EventEnvelope[]> {
 		const collection = EventCollection.get(pool);
 
-		try {
-			if (aggregateVersion > 1) {
-				const { Items } = await this.client.send(
-					new QueryCommand({
-						TableName: collection,
-						KeyConditionExpression: 'streamId = :streamId',
-						ExpressionAttributeValues: {
-							':streamId': { S: stream.streamId },
-						},
-						ScanIndexForward: false, // Sort by RANGE key in descending order (highest value first)
-						Limit: 1, // Limit to 1 item (the highest version)
-					}),
-				);
+		if (events.length > MAX_TRANSACTION_ITEMS) {
+			throw new EventStorePersistenceException(
+				collection,
+				new Error(
+					`Cannot append ${events.length} events to the ${stream.streamId} stream at once: DynamoDB transactions are limited to ${MAX_TRANSACTION_ITEMS} items. Append at most ${MAX_TRANSACTION_ITEMS} events per call.`,
+				),
+			);
+		}
 
-				if (Items?.length && unmarshall(Items[0]).version >= aggregateVersion) {
-					throw new EventStoreVersionConflictException(stream, aggregateVersion, unmarshall(Items[0]).version);
-				}
+		try {
+			const currentVersion = await this.getCurrentVersion(collection, stream);
+
+			if (currentVersion !== undefined && aggregateVersion <= currentVersion) {
+				throw new EventStoreVersionConflictException(stream, aggregateVersion, currentVersion);
 			}
 
 			let version = aggregateVersion - events.length + 1;
@@ -237,15 +232,18 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 				envelopes.push(envelope);
 			}
 
-			const params: BatchWriteItemInput = {
-				RequestItems: {
-					[collection]: envelopes.map(({ event, payload, metadata }) => ({
-						PutRequest: {
+			await this.client.send(
+				new TransactWriteItemsCommand({
+					// Makes retries of a transaction that was already applied idempotent (for 10 minutes)
+					ClientRequestToken: randomUUID(),
+					TransactItems: envelopes.map(({ event, payload, metadata }) => ({
+						Put: {
+							TableName: collection,
 							Item: marshall(
 								{
 									streamId: stream.streamId,
 									event,
-									payload,
+									payload: normalizePayload(payload),
 									version: metadata.version,
 									eventDate: metadata.eventId.yearMonth,
 									eventId: metadata.eventId.value,
@@ -256,21 +254,31 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 								},
 								{ removeUndefinedValues: true, convertClassInstanceToMap: true },
 							),
+							// Never overwrite an existing version of the stream
+							ConditionExpression: 'attribute_not_exists(streamId)',
 						},
 					})),
-				},
-			};
-
-			await this.client.send(new BatchWriteItemCommand(params));
+				}),
+			);
 
 			return envelopes;
 		} catch (error) {
-			switch (error.constructor) {
-				case EventStoreVersionConflictException:
-					throw error;
-				default:
-					throw new EventStorePersistenceException(collection, error);
+			if (error instanceof EventStoreVersionConflictException) {
+				throw error;
 			}
+
+			if (isConflictingTransaction(error)) {
+				// A concurrent transaction might not be visible yet, in which case the version we tried to write is reported
+				const currentVersion = await this.getCurrentVersion(collection, stream).catch(() => undefined);
+				throw new EventStoreVersionConflictException(
+					stream,
+					aggregateVersion,
+					currentVersion ?? aggregateVersion,
+					error,
+				);
+			}
+
+			throw new EventStorePersistenceException(collection, error);
 		}
 	}
 
@@ -281,6 +289,7 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 				TableName: collection,
 				Key: marshall({ streamId, version }, { removeUndefinedValues: true }),
 				ProjectionExpression: 'event, payload, aggregateId, eventId, occurredOn, version, correlationId, causationId',
+				ConsistentRead: true,
 			}),
 		);
 
@@ -332,6 +341,7 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 					ExclusiveStartKey,
 					ExpressionAttributeValues,
 					ProjectionExpression: 'event, payload, aggregateId, eventId, occurredOn, version, correlationId, causationId',
+					ConsistentRead: true,
 					...(direction === StreamReadingDirection.BACKWARD && { ScanIndexForward: false }),
 					...(limit && { Limit: Math.min(batch, leftToFetch) }),
 				}),
@@ -413,6 +423,30 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 				entities.length = 0;
 			}
 		} while (monthsFetched < yearMonths.length);
+	}
+
+	/**
+	 * Returns the version of the last event in a stream (strongly consistent), or undefined for an empty stream.
+	 */
+	private async getCurrentVersion(
+		collection: IEventCollection,
+		{ streamId }: EventStream,
+	): Promise<number | undefined> {
+		const { Items } = await this.client.send(
+			new QueryCommand({
+				TableName: collection,
+				KeyConditionExpression: 'streamId = :streamId',
+				ExpressionAttributeValues: {
+					':streamId': { S: streamId },
+				},
+				ProjectionExpression: 'version',
+				ConsistentRead: true,
+				ScanIndexForward: false, // Sort by RANGE key in descending order (highest value first)
+				Limit: 1, // Limit to 1 item (the highest version)
+			}),
+		);
+
+		return Items?.[0] ? this.hydrate<['version']>(Items[0]).version : undefined;
 	}
 
 	hydrate<Fields extends (keyof DynamoEventEntity)[]>(
