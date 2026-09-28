@@ -12,7 +12,7 @@
 		]
 	],
 	"access": "public",
-	"baseBranch": "master",
+	"baseBranch": "3.x",
 	"updateInternalDependencies": "patch",
 	"privatePackages": false
 }

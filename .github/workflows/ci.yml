@@ -345,10 +345,40 @@ jobs:
           advanced-security: false
           online-audits: false
 
+  changeset-guard:
+    name: 3.x changeset guard
+    if: ${{ github.event_name == 'pull_request' && github.base_ref == '3.x' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Setup job environment
+        uses: ./.github/actions/setup-job-env
+        with:
+          node-version: 24.x
+
+      - name: Only patch changesets on 3.x
+        run: |
+          pnpm exec changeset status --output=changeset-status.json || true
+          if [ -f changeset-status.json ]; then
+            jq -r '.releases[] | "\(.name) \(.type) \(.newVersion)"' changeset-status.json
+            if jq -e '[.releases[] | select(.type != "patch" and .type != "none")] | length > 0' changeset-status.json > /dev/null; then
+              echo "::error::The 3.x maintenance line only accepts patch changesets."
+              exit 1
+            fi
+          fi
+
   ci-ok:
     name: ci-ok
     if: ${{ always() }}
-    needs: [changes, lint, build, test-core, test-integration, docs, codeql, dependency-review, workflows]
+    needs: [changes, lint, build, test-core, test-integration, docs, codeql, dependency-review, workflows, changeset-guard]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
