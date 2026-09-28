@@ -4,6 +4,7 @@ import {
 	CreateTableCommand,
 	DeleteTableCommand,
 	type DynamoDBClient,
+	GetItemCommand,
 	QueryCommand,
 	TransactWriteItemsCommand,
 } from '@aws-sdk/client-dynamodb';
@@ -572,6 +573,66 @@ describe(DynamoDBSnapshotStore, () => {
 			expect(await snapshotStore.getSnapshot(stream, 1, pool)).toEqual(expectedPayload);
 			expect(await snapshotStore.getLastSnapshot(stream, pool)).toEqual(expectedPayload);
 			expect((await snapshotStore.getEnvelope(stream, 1, pool)).payload).toEqual(expectedPayload);
+		});
+
+		it('should read streams strongly consistently and send a fresh idempotency token per append', async () => {
+			const stream = newStream();
+			const drain = async <T>(generator: AsyncGenerator<T[]>) => {
+				const items: T[] = [];
+				for await (const batch of generator) {
+					items.push(...batch);
+				}
+				return items;
+			};
+			const send = jest.spyOn(client, 'send');
+
+			await snapshotStore.appendSnapshot(stream, 1, { balance: 1 }, pool);
+			await snapshotStore.appendSnapshot(stream, 10, { balance: 10 }, pool);
+			await snapshotStore.getSnapshot(stream, 1, pool);
+			await snapshotStore.getEnvelope(stream, 1, pool);
+			await snapshotStore.getLastSnapshot(stream, pool);
+			expect(await drain(snapshotStore.getSnapshots(stream, { pool }))).toHaveLength(2);
+			expect(await drain(snapshotStore.getEnvelopes(stream, { pool }))).toHaveLength(2);
+			expect((await snapshotStore.getLastEnvelope(stream, pool))?.metadata.version).toBe(10);
+			await snapshotStore.getLastSnapshots([stream], pool);
+			await snapshotStore.getManyLastSnapshotEnvelopes([stream], pool);
+			await drain(snapshotStore.getLastEnvelopesForAggregate(Ledger, { pool }));
+
+			const commands = send.mock.calls.map(([command]) => command);
+			const reads = commands
+				.filter((command) => command instanceof QueryCommand || command instanceof GetItemCommand)
+				.map(({ input }) => input as { IndexName?: string; ConsistentRead?: boolean });
+			const tableReads = reads.filter(({ IndexName }) => !IndexName);
+			const indexReads = reads.filter(({ IndexName }) => IndexName);
+
+			// 2 version checks, getSnapshot, getEnvelope, getLastSnapshot, getSnapshots and getEnvelopes
+			expect(tableReads).toHaveLength(7);
+			for (const input of tableReads) {
+				expect(input.ConsistentRead).toBe(true);
+			}
+			// Global secondary indexes don't support consistent reads
+			expect(indexReads).toHaveLength(4);
+			for (const input of indexReads) {
+				expect(input).not.toHaveProperty('ConsistentRead');
+			}
+
+			const transactions = commands
+				.filter((command): command is TransactWriteItemsCommand => command instanceof TransactWriteItemsCommand)
+				.map(({ input }) => input);
+			expect(transactions).toHaveLength(2);
+			const tokens = transactions.map(({ ClientRequestToken }) => ClientRequestToken);
+			expect(new Set(tokens).size).toBe(2);
+			for (const token of tokens) {
+				expect(token).toMatch(/^[0-9a-f-]{36}$/);
+			}
+			const [first, second] = transactions;
+			expect(first.TransactItems?.map(({ Put, Update }) => (Put ?? Update)?.ConditionExpression)).toEqual([
+				'attribute_not_exists(streamId)',
+			]);
+			expect(second.TransactItems?.map(({ Put, Update }) => (Put ?? Update)?.ConditionExpression)).toEqual([
+				'latest = :latest',
+				'attribute_not_exists(streamId)',
+			]);
 		});
 
 		it('should throw when a collection cannot be created', async () => {

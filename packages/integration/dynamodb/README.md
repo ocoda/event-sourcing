@@ -33,6 +33,7 @@ Ready to dive right in? Visit [the documentation](https://ocoda.github.io/event-
 - Reads of a single stream (and the version checks before an append) are strongly consistent, which consumes twice the read capacity of eventually consistent reads. Queries on the global secondary indexes (all events, latest snapshots of an aggregate) are eventually consistent.
 - `Date` values in event and snapshot payloads are stored as ISO-8601 strings, like the SQL stores do.
 - `ensureCollection(pool, config)` creates tables with `BillingMode: PAY_PER_REQUEST` by default. With `BillingMode: PROVISIONED`, the given `ProvisionedThroughput` (default: 1 read and 1 write capacity unit) is applied to the table and to its global secondary index. It waits until a new table is `ACTIVE`.
+- IAM permissions: `dynamodb:DescribeTable`, `dynamodb:Query`, `dynamodb:GetItem` and `dynamodb:PutItem` on the events and snapshots tables (and `dynamodb:Query` on their indexes), plus `dynamodb:UpdateItem` on the snapshots tables. `ensureCollection` also needs `dynamodb:CreateTable` for tables that don't exist yet, and `listCollections` needs `dynamodb:ListTables`. Transactional writes are authorized per item (`PutItem`, `UpdateItem`), not as `TransactWriteItems`.
 
 ## Contact
 dries@drieshooghe.com

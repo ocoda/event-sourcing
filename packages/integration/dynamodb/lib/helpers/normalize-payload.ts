@@ -51,8 +51,9 @@ export function normalizePayload(value: unknown): unknown {
 		return value;
 	}
 
-	// Plain objects and class instances: marshall() maps their enumerable properties, so walk the same properties
-	const normalized: Record<string, unknown> = {};
+	// Plain objects and class instances: marshall() maps their enumerable properties, so walk the same properties.
+	// A prototype-less object keeps a '__proto__' key an own property instead of turning it into the prototype.
+	const normalized: Record<string, unknown> = Object.create(null);
 	for (const key in value) {
 		normalized[key] = normalizePayload((value as Record<string, unknown>)[key]);
 	}

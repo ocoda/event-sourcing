@@ -5,6 +5,7 @@ import {
 	DeleteTableCommand,
 	DescribeTableCommand,
 	type DynamoDBClient,
+	GetItemCommand,
 	QueryCommand,
 	TableStatus,
 	TransactWriteItemsCommand,
@@ -554,6 +555,60 @@ describe(DynamoDBEventStore, () => {
 			const resolvedEvent = (await eventStore.getEvent(stream, 1, pool)) as PayloadRecordedEvent;
 			expect(resolvedEvent).toBeInstanceOf(PayloadRecordedEvent);
 			expect(resolvedEvent.details).toEqual(expectedPayload.details);
+		});
+
+		it('should read streams strongly consistently and send a fresh idempotency token per append', async () => {
+			const stream = newStream();
+			const drain = async <T>(generator: AsyncGenerator<T[]>) => {
+				const items: T[] = [];
+				for await (const batch of generator) {
+					items.push(...batch);
+				}
+				return items;
+			};
+			const send = jest.spyOn(client, 'send');
+
+			await eventStore.appendEvents(stream, 2, countedEvents(2), pool);
+			await eventStore.appendEvents(stream, 3, countedEvents(1, 2), pool);
+			await eventStore.getEvent(stream, 1, pool);
+			await eventStore.getEnvelope(stream, 1, pool);
+			expect(await drain(eventStore.getEvents(stream, { pool }))).toHaveLength(3);
+			expect(await drain(eventStore.getEnvelopes(stream, { pool }))).toHaveLength(3);
+			const now = new Date();
+			await drain(eventStore.getAllEnvelopes({ pool, since: { year: now.getFullYear(), month: now.getMonth() + 1 } }));
+
+			const commands = send.mock.calls.map(([command]) => command);
+			const reads = commands
+				.filter((command) => command instanceof QueryCommand || command instanceof GetItemCommand)
+				.map(({ input }) => input as { IndexName?: string; ConsistentRead?: boolean });
+			const tableReads = reads.filter(({ IndexName }) => !IndexName);
+			const indexReads = reads.filter(({ IndexName }) => IndexName);
+
+			// 2 version checks, getEvent, getEnvelope, getEvents and getEnvelopes
+			expect(tableReads).toHaveLength(6);
+			for (const input of tableReads) {
+				expect(input.ConsistentRead).toBe(true);
+			}
+			// Global secondary indexes don't support consistent reads
+			expect(indexReads.length).toBeGreaterThanOrEqual(1);
+			for (const input of indexReads) {
+				expect(input).not.toHaveProperty('ConsistentRead');
+			}
+
+			const transactions = commands
+				.filter((command): command is TransactWriteItemsCommand => command instanceof TransactWriteItemsCommand)
+				.map(({ input }) => input);
+			expect(transactions).toHaveLength(2);
+			const tokens = transactions.map(({ ClientRequestToken }) => ClientRequestToken);
+			expect(new Set(tokens).size).toBe(2);
+			for (const token of tokens) {
+				expect(token).toMatch(/^[0-9a-f-]{36}$/);
+			}
+			for (const { TransactItems } of transactions) {
+				for (const item of TransactItems || []) {
+					expect(item.Put?.ConditionExpression).toBe('attribute_not_exists(streamId)');
+				}
+			}
 		});
 	});
 

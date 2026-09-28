@@ -119,6 +119,13 @@ describe('DynamoDB helpers', () => {
 			});
 		});
 
+		it('should store the same keys as marshall for keys that are special in JavaScript', () => {
+			const options = { removeUndefinedValues: true, convertClassInstanceToMap: true };
+			const payload = JSON.parse('{"a":1,"constructor":"c","nested":{"__proto__":{"injected":true},"b":2}}');
+
+			expect(marshall({ payload: normalizePayload(payload) }, options)).toEqual(marshall({ payload }, options));
+		});
+
 		it('should not mutate the payload', () => {
 			const date = new Date(0);
 			const payload = { date, list: [date] };
