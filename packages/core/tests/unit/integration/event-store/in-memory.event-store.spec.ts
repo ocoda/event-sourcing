@@ -1,4 +1,6 @@
+import { Logger } from '@nestjs/common';
 import {
+	EventBus,
 	type EventEnvelope,
 	EventId,
 	EventNotFoundException,
@@ -279,5 +281,160 @@ describe(InMemoryEventStore, () => {
 		expect(resolvedCollections.includes('a-events')).toBe(true);
 		expect(resolvedCollections.includes('b-events')).toBe(true);
 		expect(resolvedCollections.includes('c-events')).toBe(true);
+	});
+});
+
+describe(`${InMemoryEventStore.name} lifecycle and publishing`, () => {
+	const eventMap = getEventMap();
+	const events = getEvents();
+
+	let eventStore: InMemoryEventStore;
+	let loggerWarn: jest.SpyInstance;
+	let loggerError: jest.SpyInstance;
+
+	beforeEach(async () => {
+		jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+		loggerWarn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+		loggerError = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+
+		eventStore = new InMemoryEventStore(eventMap, { driver: InMemoryEventStore });
+		await eventStore.connect();
+		await eventStore.ensureCollection();
+	});
+
+	afterEach(async () => {
+		await eventStore.disconnect();
+		jest.restoreAllMocks();
+	});
+
+	it('does not throw when disconnecting before connecting', async () => {
+		const unconnectedStore = new InMemoryEventStore(eventMap, { driver: InMemoryEventStore });
+
+		await expect(unconnectedStore.disconnect()).resolves.toBeUndefined();
+	});
+
+	it('does not wipe existing events when ensuring an existing collection', async () => {
+		eventStore.publish = jest.fn();
+		const stream = EventStream.for(Account, AccountId.generate());
+
+		await eventStore.ensureCollection('tenant-1');
+		await eventStore.appendEvents(stream, 2, events.slice(0, 2), 'tenant-1');
+		await eventStore.appendEvents(stream, 2, events.slice(0, 2));
+
+		await expect(eventStore.ensureCollection('tenant-1')).resolves.toBe('tenant-1-events');
+		await expect(eventStore.ensureCollection()).resolves.toBe('events');
+
+		expect(eventStore.collections.get('tenant-1-events')).toHaveLength(2);
+		expect(eventStore.collections.get('events')).toHaveLength(2);
+		expect(eventStore.getEvent(stream, 2, 'tenant-1')).toEqual(events[1]);
+	});
+
+	it('persists and returns the envelopes when events are appended before a publish function is set', async () => {
+		const stream = EventStream.for(Account, AccountId.generate());
+
+		const firstEnvelopes = await eventStore.appendEvents(stream, 2, events.slice(0, 2));
+		const secondEnvelopes = await eventStore.appendEvents(stream, 3, events.slice(2, 3));
+
+		expect(firstEnvelopes.map(({ metadata }) => metadata.version)).toEqual([1, 2]);
+		expect(secondEnvelopes.map(({ metadata }) => metadata.version)).toEqual([3]);
+		expect(eventStore.collections.get('events')).toHaveLength(3);
+
+		// the missing publisher is only reported once per store
+		expect(loggerWarn).toHaveBeenCalledTimes(1);
+		expect(loggerWarn).toHaveBeenCalledWith(
+			'Events were appended before a publish function was set on the event store (is the application bootstrapped?). They were persisted but not published.',
+		);
+	});
+
+	it('does not reject the append nor skip the remaining envelopes when publishing fails', async () => {
+		const publish = jest
+			.fn()
+			.mockImplementationOnce(() => {
+				throw new Error('sync publish failure');
+			})
+			.mockImplementationOnce(() => Promise.reject(new Error('async publish failure')))
+			.mockImplementation(() => undefined);
+		eventStore.publish = publish;
+		const stream = EventStream.for(Account, AccountId.generate());
+
+		const envelopes = await eventStore.appendEvents(stream, 3, events.slice(0, 3));
+
+		expect(envelopes).toHaveLength(3);
+		expect(eventStore.collections.get('events')).toHaveLength(3);
+		expect(publish.mock.calls).toEqual(envelopes.map((envelope) => [envelope]));
+
+		expect(loggerError).toHaveBeenCalledTimes(2);
+		expect(loggerError).toHaveBeenNthCalledWith(
+			1,
+			`Failed to publish event "${envelopes[0].event}" after it was appended`,
+			expect.stringContaining('sync publish failure'),
+		);
+		expect(loggerError).toHaveBeenNthCalledWith(
+			2,
+			`Failed to publish event "${envelopes[1].event}" after it was appended`,
+			expect.stringContaining('async publish failure'),
+		);
+	});
+
+	it('isolates failing event publishers when wired to the event bus', async () => {
+		const eventBus = new EventBus();
+		const rejectingPublisher = { publish: jest.fn(() => Promise.reject(new Error('broker unavailable'))) };
+		const throwingPublisher = {
+			publish: jest.fn(() => {
+				throw new Error('broker misconfigured');
+			}),
+		};
+		const healthyPublisher = { publish: jest.fn() };
+		const subscriber = { handle: jest.fn() };
+
+		eventBus.addPublisher(rejectingPublisher);
+		eventBus.addPublisher(throwingPublisher);
+		eventBus.addPublisher(healthyPublisher);
+		eventBus.bind(subscriber, '');
+		eventStore.publish = eventBus.publish;
+
+		const stream = EventStream.for(Account, AccountId.generate());
+		const envelopes = await eventStore.appendEvents(stream, 2, events.slice(0, 2));
+		await new Promise((resolve) => setTimeout(resolve, 10));
+
+		const expectedCalls = envelopes.map((envelope) => [envelope]);
+		expect(rejectingPublisher.publish.mock.calls).toEqual(expectedCalls);
+		expect(throwingPublisher.publish.mock.calls).toEqual(expectedCalls);
+		expect(healthyPublisher.publish.mock.calls).toEqual(expectedCalls);
+		expect(subscriber.handle.mock.calls).toEqual(expectedCalls);
+		expect(eventStore.collections.get('events')).toHaveLength(2);
+		// 2 envelopes x 2 failing publishers
+		expect(loggerError).toHaveBeenCalledTimes(4);
+	});
+
+	it('includes the events of the current UTC month when no until date is given', async () => {
+		// 2024-02-01T00:30Z is still January in a UTC-10 timezone (e.g. Pacific/Honolulu)
+		jest.useFakeTimers({
+			now: new Date('2024-02-01T00:30:00Z'),
+			doNotFake: ['nextTick', 'setImmediate', 'queueMicrotask'],
+		});
+		const shift = (date: Date) => new Date(date.getTime() - 10 * 60 * 60 * 1000);
+		jest.spyOn(Date.prototype, 'getFullYear').mockImplementation(function (this: Date) {
+			return shift(this).getUTCFullYear();
+		});
+		jest.spyOn(Date.prototype, 'getMonth').mockImplementation(function (this: Date) {
+			return shift(this).getUTCMonth();
+		});
+
+		try {
+			eventStore.publish = jest.fn();
+			const stream = EventStream.for(Account, AccountId.generate());
+			await eventStore.appendEvents(stream, 1, events.slice(0, 1));
+
+			const resolvedEnvelopes: EventEnvelope[] = [];
+			for await (const envelopes of eventStore.getAllEnvelopes({ since: { year: 2024, month: 1 } })) {
+				resolvedEnvelopes.push(...envelopes);
+			}
+
+			expect(resolvedEnvelopes).toHaveLength(1);
+			expect(resolvedEnvelopes[0].metadata.occurredOn).toEqual(new Date('2024-02-01T00:30:00Z'));
+		} finally {
+			jest.useRealTimers();
+		}
 	});
 });

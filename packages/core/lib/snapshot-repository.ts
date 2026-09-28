@@ -4,7 +4,28 @@ import { getAggregateMetadata, getSnapshotMetadata } from './helpers';
 import type { ISnapshotPool, ISnapshotRepository } from './interfaces';
 import type { ISnapshot } from './interfaces/aggregate/snapshot.interface';
 import { type AggregateRoot, type Id, type SnapshotEnvelope, SnapshotStream } from './models';
+import { getCommittedVersions } from './models/aggregate-commit-tracker';
 import { SnapshotStore } from './snapshot-store';
+
+/**
+ * Determine whether a snapshot should be taken for the given aggregate.
+ *
+ * When the aggregate's last `commit()` is known (and the aggregate wasn't changed since), a snapshot is taken when
+ * the committed events crossed the first version or an interval boundary, so a save that jumps over a boundary
+ * (e.g. from version 9 to 11 with an interval of 10) still produces a snapshot.
+ * Otherwise it falls back to snapshotting at the first version and at every multiple of the interval.
+ */
+const isSnapshotDue = (aggregate: AggregateRoot, interval: number): boolean => {
+	const { version } = aggregate;
+	const committed = getCommittedVersions(aggregate);
+
+	if (committed && committed.toVersion === version && committed.fromVersion < version) {
+		const { fromVersion } = committed;
+		return (fromVersion < 1 && version >= 1) || Math.floor(fromVersion / interval) < Math.floor(version / interval);
+	}
+
+	return version % interval === 0 || version === 1;
+};
 
 export abstract class SnapshotRepository<A extends AggregateRoot = AggregateRoot> implements ISnapshotRepository<A> {
 	private readonly aggregate: Type<A>;
@@ -28,7 +49,7 @@ export abstract class SnapshotRepository<A extends AggregateRoot = AggregateRoot
 	}
 
 	async save(id: Id, aggregate: A, pool?: ISnapshotPool): Promise<void> {
-		if (aggregate.version % this.interval === 0 || aggregate.version === 1) {
+		if (isSnapshotDue(aggregate, this.interval)) {
 			const snapshotStream = SnapshotStream.for(aggregate, id);
 			const payload = this.serialize(aggregate);
 			await this.snapshotStore.appendSnapshot(snapshotStream, aggregate.version, payload, pool);

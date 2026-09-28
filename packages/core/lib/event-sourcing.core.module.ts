@@ -83,6 +83,9 @@ export class EventSourcingCoreModule implements OnModuleInit, OnModuleDestroy, O
 		TEventStoreConfig extends EventStoreConfig = InMemoryEventStoreConfig,
 		TSnapshotStoreConfig extends SnapshotStoreConfig = InMemorySnapshotStoreConfig,
 	>(options: EventSourcingModuleAsyncOptions<TEventStoreConfig, TSnapshotStoreConfig>): DynamicModule {
+		// The first provider provides the options, the others (e.g. a `useClass` options factory) are internal
+		const [optionsProvider, ...optionsFactoryProviders] = createAsyncEventSourcingOptionsProvider(options);
+
 		const exportedProviders = [
 			EventBus,
 			EventMap,
@@ -90,14 +93,14 @@ export class EventSourcingCoreModule implements OnModuleInit, OnModuleDestroy, O
 			CommandBus,
 			...createEventStoreProviders(),
 			...createSnapshotStoreProviders(),
-			...createAsyncEventSourcingOptionsProvider(options),
+			optionsProvider,
 		];
 
 		return {
 			global: true,
 			module: EventSourcingCoreModule,
 			imports: [DiscoveryModule, ...(options?.imports || [])],
-			providers: [ExplorerService, ...exportedProviders],
+			providers: [ExplorerService, ...exportedProviders, ...optionsFactoryProviders],
 			exports: [...exportedProviders],
 		};
 	}

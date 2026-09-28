@@ -2,6 +2,7 @@ import type { Type } from '@nestjs/common';
 import { MissingEventHandlerException } from '../exceptions';
 import { getEventHandlerMetadata } from '../helpers';
 import type { IEvent, IEventHandlerMethod } from '../interfaces';
+import { recordCommittedVersions } from './aggregate-commit-tracker';
 
 const VERSION = Symbol();
 const EVENTS = Symbol();
@@ -44,6 +45,9 @@ export abstract class AggregateRoot {
 	commit(): IEvent[] {
 		const events = [...this[EVENTS]];
 		this[EVENTS].length = 0;
+
+		// Remember which versions were committed, so a snapshot repository can tell whether an interval was crossed
+		recordCommittedVersions(this, this[VERSION] - events.length, this[VERSION]);
 
 		return events;
 	}

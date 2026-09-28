@@ -53,7 +53,13 @@ export function createAsyncEventSourcingOptionsProvider<
 	TEventStoreConfig extends EventStoreConfig,
 	TSnapshotStoreConfig extends SnapshotStoreConfig,
 >(options: EventSourcingModuleAsyncOptions<TEventStoreConfig, TSnapshotStoreConfig>): Provider[] {
-	// If useExisting or useFactory is provided, we can directly return the provider
+	if (!options || !(options.useValue || options.useFactory || options.useExisting || options.useClass)) {
+		throw new Error(
+			'Invalid EventSourcingModule.forRootAsync() options: provide one of "useFactory", "useClass", "useExisting" or "useValue".',
+		);
+	}
+
+	// If useValue is provided, we can directly return the provider
 	if (options.useValue) {
 		return [
 			{
@@ -75,11 +81,15 @@ export function createAsyncEventSourcingOptionsProvider<
 	}
 
 	const inject: (InjectionToken | OptionalFactoryDependency)[] = [];
+	const providers: Provider[] = [];
 
 	if (options.useExisting) {
+		// useExisting resolves an options factory that is already provided (e.g. exported by one of the imports)
 		inject.push(options.useExisting);
 	} else if (options.useClass) {
+		// useClass instantiates the options factory, so it needs to be registered as a provider
 		inject.push(options.useClass);
+		providers.push({ provide: options.useClass, useClass: options.useClass });
 	}
 
 	return [
@@ -89,5 +99,6 @@ export function createAsyncEventSourcingOptionsProvider<
 				await optionsFactory.createEventSourcingOptions(),
 			inject,
 		},
+		...providers,
 	];
 }

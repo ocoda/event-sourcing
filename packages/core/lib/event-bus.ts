@@ -1,13 +1,33 @@
-import { Injectable, type OnModuleDestroy, type Type } from '@nestjs/common';
+import { Injectable, Logger, type OnModuleDestroy, type Type } from '@nestjs/common';
 import type { InstanceWrapper } from '@nestjs/core/injector/instance-wrapper';
-import { type Observable, type Subscription, from } from 'rxjs';
-import { filter, mergeMap } from 'rxjs/operators';
+import { EMPTY, type Observable, type Subscription, defer } from 'rxjs';
+import { catchError, filter, mergeMap } from 'rxjs/operators';
 
 import { MissingEventMetadataException, MissingEventSubscriberMetadataException } from './exceptions';
 import { ObservableBus, getEventMetadata, getEventSubscriberMetadata } from './helpers';
 import { DefaultEventPubSub } from './helpers/default-event-publisher';
 import type { IEventBus, IEventPublisher, IEventSubscriber } from './interfaces';
 import type { EventEnvelope } from './models';
+
+const logger = new Logger('EventBus');
+
+const describeError = (error: unknown): string =>
+	error instanceof Error ? error.stack || error.message : String(error);
+
+const isPromiseLike = (value: unknown): value is PromiseLike<unknown> =>
+	typeof (value as PromiseLike<unknown> | undefined)?.then === 'function';
+
+const logPublisherError = (publisher: IEventPublisher, envelope: EventEnvelope, error: unknown) =>
+	logger.error(
+		`Event publisher ${publisher?.constructor?.name ?? 'unknown'} failed to publish event "${envelope?.event}"`,
+		describeError(error),
+	);
+
+const logSubscriberError = (subscriber: IEventSubscriber, envelope: EventEnvelope, error: unknown) =>
+	logger.error(
+		`Event subscriber ${subscriber?.constructor?.name ?? 'unknown'} failed to handle event "${envelope?.event}"`,
+		describeError(error),
+	);
 
 @Injectable()
 export class EventBus extends ObservableBus<EventEnvelope> implements IEventBus, OnModuleDestroy {
@@ -20,21 +40,43 @@ export class EventBus extends ObservableBus<EventEnvelope> implements IEventBus,
 		}
 	}
 
+	/**
+	 * Publish an envelope to every registered publisher.
+	 * Publishers are isolated from each other: a publisher that throws or returns a rejected promise is logged and
+	 * does not prevent the remaining publishers from receiving the envelope, nor does it propagate to the caller.
+	 */
 	publish = (envelope: EventEnvelope) => {
 		for (const publisher of this.publishers) {
-			publisher.publish(envelope);
+			try {
+				const result = publisher.publish(envelope);
+				if (isPromiseLike(result)) {
+					Promise.resolve(result).catch((error) => logPublisherError(publisher, envelope, error));
+				}
+			} catch (error) {
+				logPublisherError(publisher, envelope, error);
+			}
 		}
 	};
 
+	/**
+	 * Bind a subscriber to the stream of envelopes (optionally filtered by event name).
+	 * Every invocation of the subscriber is isolated: a synchronous throw or a rejected promise is logged and the
+	 * subscription stays active for subsequent envelopes.
+	 */
 	bind(handler: IEventSubscriber, name: string) {
 		const stream$ = name ? this.ofEventName(name) : this.subject$;
 		const subscription = stream$
-			.pipe(mergeMap((envelope) => from(Promise.resolve(handler.handle(envelope)))))
-			.subscribe({
-				error: (error) => {
-					throw error;
-				},
-			});
+			.pipe(
+				mergeMap((envelope) =>
+					defer(() => Promise.resolve(handler.handle(envelope))).pipe(
+						catchError((error) => {
+							logSubscriberError(handler, envelope, error);
+							return EMPTY;
+						}),
+					),
+				),
+			)
+			.subscribe();
 		this.subscriptions.push(subscription);
 	}
 

@@ -2,6 +2,9 @@ import { Logger } from '@nestjs/common';
 import {
 	Aggregate,
 	AggregateRoot,
+	Event,
+	EventHandler,
+	type IEvent,
 	type ISnapshot,
 	type ISnapshotPool,
 	Snapshot,
@@ -125,6 +128,161 @@ describe(SnapshotRepository, () => {
 			},
 			undefined,
 		);
+	});
+
+	describe('when the committed events are known', () => {
+		@Event('snapshot-interval-wallet-credited')
+		class WalletCreditedEvent implements IEvent {
+			constructor(public readonly amount: number) {}
+		}
+
+		@Aggregate({ streamName: 'snapshot-interval-wallet' })
+		class Wallet extends AggregateRoot {
+			public balance = 0;
+
+			credit(amount: number) {
+				this.applyEvent(new WalletCreditedEvent(amount));
+			}
+
+			@EventHandler(WalletCreditedEvent)
+			onWalletCredited({ amount }: WalletCreditedEvent) {
+				this.balance += amount;
+			}
+		}
+
+		const walletInterval = 10;
+
+		@Snapshot(Wallet, { name: 'wallet', interval: walletInterval })
+		class WalletSnapshotRepository extends SnapshotRepository<Wallet> {
+			serialize({ balance }: Wallet) {
+				return { balance };
+			}
+			deserialize({ balance }: ISnapshot<Wallet>): Wallet {
+				const wallet = new Wallet();
+				wallet.balance = balance;
+				return wallet;
+			}
+		}
+
+		const walletId = UUID.generate();
+		let walletSnapshotRepository: WalletSnapshotRepository;
+
+		const walletAt = (version: number) => {
+			const wallet = new Wallet();
+			wallet.version = version;
+			return wallet;
+		};
+
+		const creditAndCommit = (wallet: Wallet, count: number) => {
+			for (let i = 0; i < count; i++) {
+				wallet.credit(1);
+			}
+			return wallet.commit();
+		};
+
+		beforeEach(() => {
+			walletSnapshotRepository = new WalletSnapshotRepository(snapshotStore);
+		});
+
+		it.each([
+			// [previous version, committed events, snapshot expected]
+			[9, 2, true], // v9 -> v11 jumps over the interval boundary
+			[8, 2, true], // v8 -> v10 lands on the interval boundary
+			[19, 12, true], // v19 -> v31 jumps over multiple interval boundaries
+			[0, 3, true], // v0 -> v3 a new aggregate is created with multiple events
+			[0, 1, true], // v0 -> v1 a new aggregate is created with a single event
+			[10, 1, false], // v10 -> v11 was snapshotted at the boundary before
+			[11, 3, false], // v11 -> v14 stays within the interval
+			[1, 8, false], // v1 -> v9 stays within the interval
+		])(
+			'from version %i with %i committed events, takes a snapshot: %s',
+			async (previousVersion, eventCount, expected) => {
+				const wallet = walletAt(previousVersion);
+				expect(creditAndCommit(wallet, eventCount)).toHaveLength(eventCount);
+				expect(wallet.version).toBe(previousVersion + eventCount);
+
+				await walletSnapshotRepository.save(walletId, wallet);
+
+				if (expected) {
+					expect(snapshotStore.appendSnapshot).toHaveBeenCalledTimes(1);
+					expect(snapshotStore.appendSnapshot).toHaveBeenCalledWith(
+						SnapshotStream.for(Wallet, walletId),
+						previousVersion + eventCount,
+						{ balance: eventCount },
+						undefined,
+					);
+				} else {
+					expect(snapshotStore.appendSnapshot).not.toHaveBeenCalled();
+				}
+			},
+		);
+
+		it('passes the pool when a snapshot is taken after crossing the interval boundary', async () => {
+			const wallet = walletAt(9);
+			creditAndCommit(wallet, 2);
+
+			await walletSnapshotRepository.save(walletId, wallet, 'tenant-1');
+
+			expect(snapshotStore.appendSnapshot).toHaveBeenCalledWith(
+				SnapshotStream.for(Wallet, walletId),
+				11,
+				{ balance: 2 },
+				'tenant-1',
+			);
+		});
+
+		it('falls back to the interval multiples when commit() was not called', async () => {
+			const wallet = walletAt(9);
+			wallet.credit(1);
+			wallet.credit(1);
+
+			await walletSnapshotRepository.save(walletId, wallet);
+			expect(snapshotStore.appendSnapshot).not.toHaveBeenCalled();
+
+			wallet.version = 20;
+			await walletSnapshotRepository.save(walletId, wallet);
+			expect(snapshotStore.appendSnapshot).toHaveBeenCalledTimes(1);
+			expect(snapshotStore.appendSnapshot).toHaveBeenCalledWith(
+				SnapshotStream.for(Wallet, walletId),
+				20,
+				{ balance: 2 },
+				undefined,
+			);
+		});
+
+		it('falls back to the interval multiples when the aggregate changed after commit()', async () => {
+			const wallet = walletAt(9);
+			creditAndCommit(wallet, 2); // v11, crossed the boundary
+			wallet.credit(1); // v12, not committed
+
+			await walletSnapshotRepository.save(walletId, wallet);
+			expect(snapshotStore.appendSnapshot).not.toHaveBeenCalled();
+		});
+
+		it('falls back to the interval multiples when commit() had no events', async () => {
+			const wallet = walletAt(9);
+			creditAndCommit(wallet, 2); // v11, crossed the boundary
+			expect(wallet.commit()).toEqual([]); // nothing new
+
+			await walletSnapshotRepository.save(walletId, wallet);
+			expect(snapshotStore.appendSnapshot).not.toHaveBeenCalled();
+
+			const walletAtBoundary = walletAt(20);
+			expect(walletAtBoundary.commit()).toEqual([]);
+			await walletSnapshotRepository.save(walletId, walletAtBoundary);
+			expect(snapshotStore.appendSnapshot).toHaveBeenCalledTimes(1);
+		});
+
+		it('does not leak the commit bookkeeping into the aggregate', () => {
+			const wallet = walletAt(9);
+			const keysBefore = Reflect.ownKeys(wallet);
+
+			creditAndCommit(wallet, 2);
+
+			expect(Reflect.ownKeys(wallet)).toEqual(keysBefore);
+			expect(JSON.parse(JSON.stringify(wallet))).toEqual({ balance: 2 });
+			expect(walletSnapshotRepository.serialize(wallet)).toEqual({ balance: 2 });
+		});
 	});
 
 	it('retrieves the latest snapshot as a snapshot-envelope', async () => {

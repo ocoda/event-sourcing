@@ -5,7 +5,9 @@ export class ObservableBus<T> extends Observable<T> {
 
 	constructor() {
 		super();
-		this.subscribe(this._subject$);
+		// Use the subject as the source of this observable, so subscribing to (or piping from) the bus itself
+		// receives the values that are pushed onto the subject.
+		this.source = this._subject$;
 	}
 
 	public get subject$() {
