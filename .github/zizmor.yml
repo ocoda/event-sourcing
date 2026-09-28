@@ -1,0 +1,4 @@
+rules:
+  # `$/` self-repository syntax is not yet understood by actionlint; keep `./` local action paths.
+  self-repository:
+    disable: true

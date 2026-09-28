@@ -7,6 +7,8 @@ on:
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
+permissions: {}
+
 jobs:
   changelog:
     name: Release
@@ -16,30 +18,23 @@ jobs:
       id-token: write
       pull-requests: write
     steps:
-      - name: Checkout the repository
-        uses: actions/checkout@v6
+      # changesets/action v1 pushes the release branch and tags with the checkout credentials.
+      - name: Checkout the repository # zizmor: ignore[artipacked]
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           fetch-depth: 0
 
-      - name: Cache turbo build setup
-        uses: actions/cache@v5
-        with:
-          path: .turbo
-          key: node-24.x-turbo-${{ github.sha }}
-          restore-keys: |
-            node-24.x-turbo-
-
       - name: Install pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
         with:
           version: 10.4.0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 24
-          cache: "pnpm"
           registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -49,7 +44,7 @@ jobs:
 
       - name: Create Release Pull Request or Publish
         id: changesets
-        uses: changesets/action@v1
+        uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
         with:
           version: pnpm exec changeset version
           publish: pnpm exec changeset publish
@@ -57,9 +52,3 @@ jobs:
           title: "[ci] release"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  merge-check:
-    name: Merge check
-    uses: ./.github/workflows/merge-check.yml
-    with:
-      conditions: true
