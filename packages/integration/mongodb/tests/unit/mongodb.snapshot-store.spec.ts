@@ -116,9 +116,9 @@ describe(MongoDBSnapshotStore, () => {
 		).rejects.toThrow(
 			new SnapshotStoreVersionConflictException(snapshotStreamAccountA, beforeLastVersion, lastVersion),
 		);
-		await expect(snapshotStore.appendSnapshot(snapshotStreamAccountA, lastVersion, lastSnapshotEnvelope)).rejects.toThrow(
-			new SnapshotStoreVersionConflictException(snapshotStreamAccountA, lastVersion, lastVersion),
-		);
+		await expect(
+			snapshotStore.appendSnapshot(snapshotStreamAccountA, lastVersion, lastSnapshotEnvelope),
+		).rejects.toThrow(new SnapshotStoreVersionConflictException(snapshotStreamAccountA, lastVersion, lastVersion));
 	});
 
 	it("should throw when a snapshot envelope can't be appended", async () => {
@@ -155,7 +155,9 @@ describe(MongoDBSnapshotStore, () => {
 
 	it("should throw when a snapshot isn't found in a specified stream", async () => {
 		const stream = SnapshotStream.for(Account, AccountId.generate());
-		await expect(snapshotStore.getSnapshot(stream, 20)).rejects.toThrow(new SnapshotNotFoundException(stream.streamId, 20));
+		await expect(snapshotStore.getSnapshot(stream, 20)).rejects.toThrow(
+			new SnapshotNotFoundException(stream.streamId, 20),
+		);
 	});
 
 	it('should retrieve snapshots backwards', async () => {
