@@ -1,11 +1,9 @@
 name: CD Docs
 
+# Deployed manually while master moves to v4, so the live docs keep describing
+# the released 3.x line. Deploy-on-stable-release comes with the docs rework.
 on:
   workflow_dispatch:
-  push:
-    branches: ["master"]
-    paths:
-      - docs/**
 
 permissions: {}
 
