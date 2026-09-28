@@ -92,7 +92,7 @@ describe(InMemorySnapshotStore, () => {
 		).rejects.toThrow(
 			new SnapshotStoreVersionConflictException(snapshotStreamAccountA, beforeLastVersion, lastVersion),
 		);
-		expect(snapshotStore.appendSnapshot(snapshotStreamAccountA, lastVersion, lastSnapshotEnvelope)).rejects.toThrow(
+		await expect(snapshotStore.appendSnapshot(snapshotStreamAccountA, lastVersion, lastSnapshotEnvelope)).rejects.toThrow(
 			new SnapshotStoreVersionConflictException(snapshotStreamAccountA, lastVersion, lastVersion),
 		);
 	});

@@ -57,13 +57,18 @@ services:
 
   dynamodb:
     container_name: es-dynamodb
-    image: amazon/dynamodb-local:latest
+    image: amazon/dynamodb-local:3.3.1
     command: '-jar DynamoDBLocal.jar -sharedDb -dbPath ./data'
     ports:
       - 8000:8000
     volumes:
       - type: tmpfs
         target: /home/dynamodblocal/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s -o /dev/null http://127.0.0.1:8000 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
 
   postgres:
     container_name: es-postgres
@@ -224,3 +229,8 @@ services:
     volumes:
       - type: tmpfs
         target: /var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
