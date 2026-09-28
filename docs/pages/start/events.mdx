@@ -18,7 +18,7 @@ To create an event using this library you will need to make your event class:
 - apply the `@Event()` decorator
 
 ```typescript {3-4} copy
-import { IEvent } from '@ocoda/event-sourcing';
+import { Event, type IEvent } from '@ocoda/event-sourcing';
 
 @Event('account-opened')
 export class AccountOpenedEvent implements IEvent {
@@ -35,23 +35,30 @@ The IEvent interface is primarily for typing purposes, while the @Event() decora
 account-opened
 ```
 
-If the event name isn't provided in the decorator, the name of the class will automatically be used in lowercase.
- 
+If the event name isn't provided in the decorator, the name of the class will be used **as is**, so it isn't converted to lowercase: `@Event()` on the `AccountOpenedEvent` class above results in the event-name `AccountOpenedEvent`.
+
 <Callout type="warning" emoji="⚠️">
   Whether the event name is provided or if it's derived from the class-name, the maximum length shouldn't exceed 80 characters.
 </Callout>
 
+<Callout type="info" emoji="ℹ️">
+  The event name is what gets stored with every event. When it's derived from the class-name, renaming the class changes the name that new events are stored with, and events that were stored earlier can no longer be matched to the class. Provide an explicit name for events that you persist.
+</Callout>
+
+### Registering events [#registering-events]
+
+Events need to be registered in the module before they can be stored and read, otherwise an `UnregisteredEventException` is thrown. List them in the `events` of `EventSourcingModule.forRoot()` or register them per feature module with `EventSourcingModule.forFeature()`. See [Module configuration](/start/module-configuration#for-feature) for more information.
+
 ## Creating an Event Handler [#creating-an-event-handler]
 
-An **EventHandler** is responsible for applying the event on the aggregate. When an event is applied to an aggregate, the aggregate looks for a method that matches the provided event. To register a method as being responsible for handling a specific event, you need to decorate the method with the `@EventHandler()` decorator.
+An **EventHandler** is responsible for applying the event on the aggregate. When an event is applied to an aggregate, the aggregate looks for a method that matches the provided event. To register a method as being responsible for handling a specific event, you need to decorate the method with the `@EventHandler()` decorator. This only works in a class that extends `AggregateRoot`, see [Aggregates](/start/aggregates).
 
-```typescript {12} copy
-import { EventHandler } from '@ocoda/event-sourcing';
+```typescript {11} copy
+import { Aggregate, AggregateRoot, EventHandler } from '@ocoda/event-sourcing';
 
-export class Account {
-  constructor() {
-    this.balance = 0;
-  }
+@Aggregate({ streamName: 'account' })
+export class Account extends AggregateRoot {
+  public balance = 0;
 
   public credit(amount: number) {
     this.applyEvent(new AccountCreditedEvent(amount));
@@ -64,7 +71,7 @@ export class Account {
 }
 ```
 
-Bear in mind this is not the same as an [`Event Subscriber`](/advanced/event_pubsub), which is a separate concept that listens for events and reacts to them.
+Bear in mind this is not the same as an [`Event Subscriber`](/advanced/event-pubsub), which is a separate concept that listens for events and reacts to them.
 
 <Callout type="info" emoji="ℹ️">
 The difference between event handlers and event subscribers is crucial. Event handlers directly modify an aggregate's state by processing events, while event subscribers are used for side effects such as notifications, logging, or integration with external systems. 
@@ -74,7 +81,7 @@ The difference between event handlers and event subscribers is crucial. Event ha
 
 By default events are serialized and deserialized using the [class-transformer](https://www.npmjs.com/package/class-transformer) library. This works well for simple events that only contain primitive types.
 If you need more advanced events, for example containing Value Objects, it's possible to provide your own serialization logic by creating an EventSerializer.
-For more information on how to create an Event Serializer, please refer to the [Event Serialization](/advanced/event_serialization) documentation.
+For more information on how to create an Event Serializer, please refer to the [Event Serialization](/advanced/event-serialization) documentation.
 
 ## Guidelines for creating events
 

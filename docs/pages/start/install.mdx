@@ -96,8 +96,8 @@ By default the core library will use an in-memory event- and snapshot-store, whi
 ### Basic setup [#basic-setup]
 For setting up the module you need to import the `EventSourcingModule` and configure it.
 
-For the basic setup you only need to provide the `events` array, an array of event classes that are used to define the events.
-While this great for testing and prototyping, you won't be able to persist the events and snapshots. If you require persistence skip to the [advanced setup](/start/install#advanced-setup).
+For the basic setup you don't need to configure a store, the module falls back to an in-memory event- and snapshot-store. The `events` array, an array of event classes that are used to define the events, is optional since 3.0.0: you can also register the events per feature module, see [Module configuration](/start/module-configuration#for-feature).
+While this is great for testing and prototyping, you won't be able to persist the events and snapshots. If you require persistence skip to the [advanced setup](/start/install#advanced-setup).
 
 ```typescript {14-19} copy
 import { Module } from '@nestjs/common';
@@ -129,6 +129,7 @@ export class AppModule {}
 
 If you want to use a specific database provider for event- and snapshot-persistence you need to provide the `eventStore` and `snapshotStore` configuration.
 Each integration library comes with a driver and interface to indicate which parameters are required for connecting to the specified store.
+For the other ways to configure the module, such as the `forRoot` and `forRootAsync` variants, see [Module configuration](/start/module-configuration).
 
 ```typescript {7,10-21} copy
 import { Events } from './app.providers';

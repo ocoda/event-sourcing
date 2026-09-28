@@ -29,34 +29,88 @@ export interface FooEventStoreConfig extends EventStoreConfig {
 Secondly you'll need to create your Event Store which extends the `EventStore` class and implements the required methods.
 If an existing integration suits your needs, but misses only a few things, you could also extend an existing integration EventStore.
 
+The module creates your store with `new driver(eventMap, config)`, where `config` is the configuration you registered without the `driver`. The base class stores both, so you don't need a constructor of your own. They are available in your class as `this.eventMap` and `this.options`.
+
+The snippet below is a skeleton, fill in the methods with the logic for your database.
+
 ```typescript
-import { EventStore } from '@ocoda/event-sourcing';
+import {
+	type EventEnvelope,
+	EventStore,
+	type EventStream,
+	type IAllEventsFilter,
+	type IEvent,
+	type IEventCollection,
+	type IEventCollectionFilter,
+	type IEventFilter,
+	type IEventPool,
+} from '@ocoda/event-sourcing';
 import type { FooEventStoreConfig } from './foo-event-store-config';
 
 export class FooEventStore extends EventStore<FooEventStoreConfig> {
 	public async connect(): Promise<void> {
-		// Connect to your Event Store
+		// Connect to your Event Store, the configuration is available as this.options
 	}
 
 	public async disconnect(): Promise<void> {
 		// Disconnect from your Event Store
 	}
 
-	public async ensureCollection(pool?: IEventPool): Promise<void> {
-		// Ensure the collection exists in your Event Store
+	public async ensureCollection(pool?: IEventPool): Promise<IEventCollection> {
+		// Ensure the collection for the pool exists in your Event Store and return its name.
+		// Use EventCollection.get(pool) to get the name: 'events' or e.g. 'tenant-1-events'
 	}
 
-	public async *listCollections(filter?: IEventCollectionFilter): AsyncGenerator<string> {
+	public async *listCollections(filter?: IEventCollectionFilter): AsyncGenerator<IEventCollection[]> {
 		// List all collections in your Event Store
+		// yield them in batches (arrays) of filter?.batch collections
 	}
 
-	async getEvent({ streamId }: EventStream, version: number, pool?: IEventPool): Promise<IEvent> {
-		// Get an event from your Event Store
+	async getEvent(eventStream: EventStream, version: number, pool?: IEventPool): Promise<IEvent> {
+		// Get a single event from your Event Store
 	}
 
-	... // The other methods
+	async *getEvents(eventStream: EventStream, filter?: IEventFilter): AsyncGenerator<IEvent[]> {
+		// Get the events of a stream from your Event Store
+		// yield them in batches (arrays) of filter?.batch events
+	}
+
+	async appendEvents(
+		eventStream: EventStream,
+		version: number,
+		events: IEvent[],
+		pool?: IEventPool,
+	): Promise<EventEnvelope[]> {
+		// Append the events to the stream of your Event Store and return their envelopes
+	}
+
+	async *getAllEnvelopes(filter: IAllEventsFilter): AsyncGenerator<EventEnvelope[]> {
+		// Get the envelopes of all the events in your Event Store
+		// yield them in batches (arrays) of filter.batch envelopes
+	}
 }
 ```
+
+The methods that are required:
+
+| Method | What it does |
+| --- | --- |
+| `connect()` and `disconnect()` | Open and close the connection to the database. |
+| `ensureCollection(pool?)` | Creates the collection (table) for a pool when it doesn't exist yet, and returns its name. |
+| `listCollections(filter?)` | Yields the existing collections as arrays. |
+| `getEvent(eventStream, version, pool?)` | Returns the event with the given version from a stream. |
+| `getEvents(eventStream, filter?)` | Yields the events of a stream as arrays, starting from `filter.fromVersion` and in the requested direction. |
+| `appendEvents(eventStream, version, events, pool?)` | Stores the events and returns their `EventEnvelope`s. |
+| `getAllEnvelopes(filter)` | Yields the envelopes of all events in the given period (`since` until `until`) as arrays. |
+
+`getEnvelopes(eventStream, filter?)` and `getEnvelope(eventStream, version, pool?)` are optional. They return the envelopes of a stream instead of just the events.
+
+A few things to keep in mind when implementing `appendEvents`:
+- The `version` is the version of the aggregate **after** the events were applied. The first of the new events gets the version `version - events.length + 1`.
+- Reject the append with an `EventStoreVersionConflictException` when the stream already contains an event with this version or a higher one. That's how concurrent changes to the same aggregate are detected.
+- Serialize the events with `this.eventMap.getName(event)` and `this.eventMap.serializeEvent(event)`, and turn stored events back into instances with `this.eventMap.deserializeEvent(name, payload)`.
+- Return the created envelopes. You don't publish them yourself, the `EventStore` base class publishes them after `appendEvents` has resolved, see [Event Pub/Sub](/advanced/event-pubsub).
+
 #### Register your Event Store
 Once you have that, you can register your EventStore in the module, while providing the configuration for it so the module knows that it's an EventStore.
 
@@ -81,7 +135,7 @@ import type { FooEventStoreConfig } from './foo-event-store-config';
 	providers: [...],
 	controllers: [...],
 })
-class AppModule {}
+export class AppModule {}
 ```
 
 ---
@@ -94,6 +148,7 @@ Creating a custom snapshot store follows the same pattern as described above.
 ```typescript
 import type { Type } from '@nestjs/common';
 import type { SnapshotStoreConfig } from '@ocoda/event-sourcing';
+import type { FooSnapshotStore } from './foo.snapshot-store';
 
 export interface FooSnapshotStoreConfig extends SnapshotStoreConfig {
 	driver: Type<FooSnapshotStore>;
@@ -103,35 +158,99 @@ export interface FooSnapshotStoreConfig extends SnapshotStoreConfig {
 ```
 
 #### Create a Snapshot Store
+The module creates your snapshot store with `new driver(config)`, where `config` is the configuration you registered without the `driver`. It's available in your class as `this.options`.
+
 ```typescript
-import { SnapshotStore } from '@ocoda/event-sourcing';
+import {
+	type AggregateRoot,
+	type ISnapshot,
+	type ISnapshotCollection,
+	type ISnapshotCollectionFilter,
+	type ISnapshotFilter,
+	type ISnapshotPool,
+	type SnapshotEnvelope,
+	SnapshotStore,
+	type SnapshotStream,
+} from '@ocoda/event-sourcing';
 import type { FooSnapshotStoreConfig } from './foo-snapshot-store-config';
 
 export class FooSnapshotStore extends SnapshotStore<FooSnapshotStoreConfig> {
 	public async connect(): Promise<void> {
-		// Connect to your Snapshot Store
+		// Connect to your Snapshot Store, the configuration is available as this.options
 	}
 
 	public async disconnect(): Promise<void> {
 		// Disconnect from your Snapshot Store
 	}
 
-	public async ensureCollection(pool?: ISnapshotPool): Promise<void> {
-		// Ensure the collection exists in your Snapshot Store
+	public async ensureCollection(pool?: ISnapshotPool): Promise<ISnapshotCollection> {
+		// Ensure the collection for the pool exists in your Snapshot Store and return its name.
+		// Use SnapshotCollection.get(pool) to get the name: 'snapshots' or e.g. 'tenant-1-snapshots'
 	}
 
-	public async *listCollections(filter?: ISnapshotCollectionFilter): AsyncGenerator<string> {
+	public async *listCollections(filter?: ISnapshotCollectionFilter): AsyncGenerator<ISnapshotCollection[]> {
 		// List all collections in your Snapshot Store
+		// yield them in batches (arrays) of filter?.batch collections
 	}
 
-	async getEvent<A extends AggregateRoot>({ streamId }: SnapshotStream, version: number, pool?: ISnapshotPool): Promise<ISnapshot<A>> {
-		// Get a snapshot from your Snapshot Store
+	async getSnapshot<A extends AggregateRoot>(
+		snapshotStream: SnapshotStream,
+		version: number,
+		pool?: ISnapshotPool,
+	): Promise<ISnapshot<A>> {
+		// Get the snapshot with the given version from your Snapshot Store
 	}
 
-	... // The other methods
+	async *getSnapshots<A extends AggregateRoot>(
+		snapshotStream: SnapshotStream,
+		filter?: ISnapshotFilter,
+	): AsyncGenerator<ISnapshot<A>[]> {
+		// Get the snapshots of a stream from your Snapshot Store
+	}
+
+	async getLastSnapshot<A extends AggregateRoot>(
+		snapshotStream: SnapshotStream,
+		pool?: ISnapshotPool,
+	): Promise<ISnapshot<A> | void> {
+		// Get the last snapshot of a stream from your Snapshot Store
+	}
+
+	async getLastSnapshots<A extends AggregateRoot>(
+		snapshotStreams: SnapshotStream[],
+		pool?: ISnapshotPool,
+	): Promise<Map<SnapshotStream, ISnapshot<A>>> {
+		// Get the last snapshot of multiple streams from your Snapshot Store
+	}
+
+	async appendSnapshot<A extends AggregateRoot>(
+		snapshotStream: SnapshotStream,
+		version: number,
+		snapshot: ISnapshot<A>,
+		pool?: ISnapshotPool,
+	): Promise<SnapshotEnvelope<A>> {
+		// Store a snapshot in your Snapshot Store and return its envelope
+	}
+
+	async getLastEnvelope<A extends AggregateRoot>(
+		snapshotStream: SnapshotStream,
+		pool?: ISnapshotPool,
+	): Promise<SnapshotEnvelope<A> | void> {
+		// Get the envelope of the last snapshot of a stream from your Snapshot Store
+	}
+
+	... // The optional methods
 }
 ```
 
+The methods above are required. A `SnapshotRepository` uses `appendSnapshot` to save snapshots and `getLastEnvelope` to load the last one.
+
+Some methods are optional, but the `SnapshotRepository` methods that need them throw a `NotImplementedException` when your store doesn't have them:
+
+| Optional method | Needed for |
+| --- | --- |
+| `getManyLastSnapshotEnvelopes(snapshotStreams, pool?)` | `SnapshotRepository.loadMany()` |
+| `getLastEnvelopesForAggregate(aggregate, filter?)` | `SnapshotRepository.loadAll()` |
+| `getEnvelopes(snapshotStream, filter?)` and `getEnvelope(snapshotStream, version, pool?)` | Reading the snapshot envelopes of a stream. |
 
 #### Register your Snapshot Store
 
@@ -139,6 +258,7 @@ export class FooSnapshotStore extends SnapshotStore<FooSnapshotStoreConfig> {
 import { Module } from '@nestjs/common';
 import { EventSourcingModule } from '@ocoda/event-sourcing';
 import { FooSnapshotStore } from './foo.snapshot-store';
+import type { FooEventStoreConfig } from './foo-event-store-config';
 import type { FooSnapshotStoreConfig } from './foo-snapshot-store-config';
 
 @Module({
@@ -157,5 +277,5 @@ import type { FooSnapshotStoreConfig } from './foo-snapshot-store-config';
 	providers: [...],
 	controllers: [...],
 })
-class AppModule {}
+export class AppModule {}
 ```

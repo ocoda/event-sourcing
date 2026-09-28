@@ -16,20 +16,20 @@ To create an aggregate using this library you will need to make your aggregate c
 ```typescript {3-4} copy
 import { Aggregate, AggregateRoot } from '@ocoda/event-sourcing';
 
-@Aggregate('account')
-class Account extends AggregateRoot {
+@Aggregate({ streamName: 'account' })
+export class Account extends AggregateRoot {
     ...
 }
 ```
 
 The `AggregateRoot` class is responsible for how the aggregate handles events (applying, committing & loading) and keeps track of the version of the aggregate.
 
-The `@Aggregate()` decorator marks the class as an aggregate and optionally specifies how the `streamId` of events and snapshots should be named.
+The `@Aggregate()` decorator marks the class as an aggregate and optionally takes an options object that specifies how the `streamId` of events and snapshots should be named.
 e.g. `@Aggregate({ streamName: 'account' })` would create the following streamId:
 ```shell
 account-<aggregateId> // e.g. account-d46fb0f9-02dc-4d11-a282-ab00f7fffeff
 ```
-If the stream name isn't provided in the decorator, the name of the class will automatically be used in lowercase.
+If the stream name isn't provided in the decorator (you can also use `@Aggregate()` without any argument), the name of the class will automatically be used in lowercase.
  
 <Callout type="warning" emoji="⚠️">
   Whether the stream name is provided or if it's derived from the class-name, the maximum length shouldn't exceed 50 characters.
@@ -54,7 +54,7 @@ public credit(amount: number) {
 }
 ```
 
-This ensures that the event is both applied to the current state and persisted to the event store.
+This ensures that the event is applied to the current state of the aggregate and recorded as a pending change. The events are persisted to the event store when the aggregate is saved through its [repository](/start/repositories).
 
 ### Ensure business invariants
 
@@ -99,6 +99,7 @@ Make sure that event handlers can safely be replayed without causing inconsisten
 
 For instance:
 ```typescript copy
+@EventHandler(AccountOwnerAddedEvent)
 onAccountOwnerAddedEvent(event: AccountOwnerAddedEvent) {
     if (!this.ownerIds.find(({ value }) => value === event.accountOwnerId)) {
         this.ownerIds.push(AccountOwnerId.from(event.accountOwnerId));
