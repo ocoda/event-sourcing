@@ -22,7 +22,7 @@ export class AccountName extends ValueObject {
     if(name.length < 3) {
       throw new Error('Account name should contain at least 3 characters');
     }
-    return new Accountname({ value: name });
+    return new AccountName({ value: name });
   }
 
   get value(): string {

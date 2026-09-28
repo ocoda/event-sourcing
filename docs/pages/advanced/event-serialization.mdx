@@ -10,32 +10,48 @@ import { Callout } from 'nextra/components'
     This page is under construction.
 </Callout>
 
-```typescript
+By default events are serialized to a plain payload, and deserialized again, using [class-transformer](https://www.npmjs.com/package/class-transformer). That works for events that only contain primitive values. When an event contains other types, such as `Date`s or value objects, create an event serializer that converts the event to a payload of plain values and back.
+
+The serializer is a class that implements the `IEventSerializer` interface and is decorated with `@EventSerializer()`, which takes the event it serializes.
+
+```typescript copy
+import {
+  Event,
+  EventSerializer,
+  type IEvent,
+  type IEventPayload,
+  type IEventSerializer,
+} from '@ocoda/event-sourcing';
+
 @Event('account-opened')
 export class AccountOpenedEvent implements IEvent {
   constructor(
     public readonly accountId: AccountId,
     public readonly openedOn: Date,
-    public readonly accountOwnerIds?: AccountOwnerId[]
+    public readonly accountOwnerIds?: AccountOwnerId[],
   ) {}
 }
 
 @EventSerializer(AccountOpenedEvent)
-export class AccountOpenedEventSerializer implements IEventSerializer {
+export class AccountOpenedEventSerializer implements IEventSerializer<AccountOpenedEvent> {
   serialize({ accountId, openedOn, accountOwnerIds }: AccountOpenedEvent): IEventPayload<AccountOpenedEvent> {
     return {
       accountId: accountId.value,
       openedOn: openedOn.toISOString(),
-      accountOwnerIds: accountOwnerIds?.map((id) => id.value)
+      accountOwnerIds: accountOwnerIds?.map((id) => id.value),
     };
   }
 
-  deserialize({ id, openedOn, accountOwnerIds }: IEventPayload<AccountOpenedEvent>): AccountOpenedEvent {
-    const accountId = AccountId.from(id);
-    const openedOnDate = openedOn && new Date(openedOn);
-    const ownerIds = accountOwnerIds?.map((id) => AccountOwnerId.from(id));
-
-    return new AccountOpenedEvent(accountId, openedOnDate, ownerIds);
+  deserialize({ accountId, openedOn, accountOwnerIds }: IEventPayload<AccountOpenedEvent>): AccountOpenedEvent {
+    return new AccountOpenedEvent(
+      AccountId.from(accountId),
+      openedOn && new Date(openedOn),
+      accountOwnerIds?.map((id) => AccountOwnerId.from(id)),
+    );
   }
 }
 ```
+
+The keys of the payload that `serialize` returns are the keys that `deserialize` receives, so read the same names back (`accountId` in the example above).
+
+Register the serializer as a provider in one of your modules and it's used for that event instead of the default one. Serializers are discovered when the application bootstraps, see [Module configuration](/start/module-configuration#discovery). The event itself still needs to be registered, either in `EventSourcingModule.forRoot()` or in a feature module with `EventSourcingModule.forFeature()`.

@@ -2,7 +2,7 @@
 title: Commands
 ---
 
-import { Steps } from 'nextra/components';
+import { Callout, Steps } from 'nextra/components';
 
 # Commands & Command Handlers
 
@@ -12,7 +12,7 @@ Commands should clearly indicate the **intent** and ideally refer to the aggrega
 
 ## Creating a Command [#creating-a-command]
 
-Commands are simple objects that typically carry the data required to perform an action. They are implemented by extending the ICommand interface from the library:
+Commands are simple objects that typically carry the data required to perform an action. They are implemented by implementing the `ICommand` interface from the library:
 
 ```typescript copy
 import { ICommand } from '@ocoda/event-sourcing';
@@ -35,10 +35,10 @@ A **CommandHandler** is responsible for executing the logic associated with a sp
 import { CommandHandler, type ICommandHandler } from '@ocoda/event-sourcing';
 
 @CommandHandler(CreditAccountCommand)
-export class CreditAccountCommandHandler implements ICommandHandler {
+export class CreditAccountCommandHandler implements ICommandHandler<CreditAccountCommand, void> {
 	constructor(private readonly accountRepository: AccountRepository) {}
 
-	async execute(command: CreditAccountCommand): Promise<boolean> {
+	async execute(command: CreditAccountCommand): Promise<void> {
 		const accountId = AccountId.from(command.accountId);
 		const account = await this.accountRepository.getById(accountId);
 
@@ -51,6 +51,32 @@ export class CreditAccountCommandHandler implements ICommandHandler {
 
 In this example, the CreditAccountCommandHandler handles the execution of the CreditAccountCommand. It retrieves the Account aggregate from the repository, applies the necessary business logic, and saves the updated account to the repository.
 
+### Returning a value [#returning-a-value]
+
+The `execute()` method of a command handler returns a promise, and whatever it resolves to is handed back to the code that executed the command. Commands usually return the identifier of what they created, so the caller knows where to find it. The second type parameter of `ICommandHandler` describes the type of that result:
+
+```typescript {8,11,17} copy
+import { CommandHandler, type ICommand, type ICommandHandler } from '@ocoda/event-sourcing';
+
+export class OpenAccountCommand implements ICommand {
+	constructor(public readonly accountOwnerIds?: string[]) {}
+}
+
+@CommandHandler(OpenAccountCommand)
+export class OpenAccountCommandHandler implements ICommandHandler<OpenAccountCommand, string> {
+	constructor(private readonly accountRepository: AccountRepository) {}
+
+	async execute(command: OpenAccountCommand): Promise<string> {
+		const accountId = AccountId.generate();
+		const account = Account.open(accountId, command.accountOwnerIds?.map(AccountOwnerId.from));
+
+		await this.accountRepository.save(account);
+
+		return accountId.value;
+	}
+}
+```
+
 ## Registering the Command Handler [#registering-a-command-handler]
 
 CommandHandlers must be registered as providers in your NestJS application’s module, so that the framework can discover and execute them. For example, in a NestJS module:
@@ -59,10 +85,47 @@ CommandHandlers must be registered as providers in your NestJS application’s m
 import { Module } from '@nestjs/common';
 
 @Module({
-    providers: [CreditAccountCommandHandler, AccountRepository],
+    providers: [OpenAccountCommandHandler, CreditAccountCommandHandler, AccountRepository],
 })
 export class AccountModule {}
 ```
+
+The handlers are discovered when the application bootstraps, no matter in which module they are provided, see [Module configuration](/start/module-configuration#discovery).
+
+## Executing a Command [#executing-a-command]
+
+Commands are executed through the `CommandBus`. It's available for injection in any provider of your application, see [Module configuration](/start/module-configuration#global-module). The bus looks up the handler that is registered for the command and returns the result of that handler.
+
+```typescript {11-13,20} copy
+import { Body, Controller, Param, Post } from '@nestjs/common';
+import { CommandBus } from '@ocoda/event-sourcing';
+
+@Controller('accounts')
+export class AccountController {
+	constructor(private readonly commandBus: CommandBus) {}
+
+	@Post()
+	async open(@Body('accountOwnerIds') accountOwnerIds?: string[]): Promise<{ accountId: string }> {
+		// The first type parameter is the command, the second one the type of the result
+		const accountId = await this.commandBus.execute<OpenAccountCommand, string>(
+			new OpenAccountCommand(accountOwnerIds),
+		);
+
+		return { accountId };
+	}
+
+	@Post(':accountId/credit')
+	async credit(@Param('accountId') accountId: string, @Body('amount') amount: number): Promise<void> {
+		await this.commandBus.execute(new CreditAccountCommand(accountId, amount));
+	}
+}
+```
+
+If there's no handler registered for a command, `execute()` throws a `CommandHandlerNotFoundException`.
+
+<Callout type="warning" emoji="⚠️">
+Inject the `CommandBus` as a regular class, so don't use `import type` for it. NestJS needs the class at runtime to be able to resolve it.
+</Callout>
 
 ## Guidelines for adding Commands & Command Handlers
 
@@ -85,20 +148,24 @@ The command handler is where the domain logic is executed, not the command itsel
 For instance, in the OpenAccountCommandHandler, the logic for opening an account is encapsulated in the Account.open() method, and the repository is used to save the resulting aggregate.
 
 ### Ensure Command Handlers are idempotent
-CommandHandlers should be idempotent where possible, meaning that executing the same command multiple times should have the same effect. This ensures robustness in distributed systems or event-driven architectures where retries may happen. For example, you may check if an account already exists before attempting to create a new one.
+CommandHandlers should be idempotent where possible, meaning that executing the same command multiple times should have the same effect. This ensures robustness in distributed systems or event-driven architectures where retries may happen. For example, closing an account that is already closed doesn't have to fail, the handler can simply stop.
 
-```typescript copy
-async execute(command: OpenAccountCommand): Promise<string> {
-  if (await this.accountRepository.exists(command.accountOwner)) {
-    throw new Error('Account already exists');
-  }
+```typescript {8-10} copy
+@CommandHandler(CloseAccountCommand)
+export class CloseAccountCommandHandler implements ICommandHandler<CloseAccountCommand, void> {
+	constructor(private readonly accountRepository: AccountRepository) {}
 
-  const accountId = AccountId.generate();
-  const account = Account.open(accountId, command.accountOwnerIds?.map(AccountOwnerId.from));
+	async execute({ accountId }: CloseAccountCommand): Promise<void> {
+		const account = await this.accountRepository.getById(AccountId.from(accountId));
 
-  await this.accountRepository.save(account);
+		if (account.closedOn) {
+			return; // Already closed, executing the command again has no further effect
+		}
 
-  return accountId.value;
+		account.close();
+
+		await this.accountRepository.save(account);
+	}
 }
 ```
 

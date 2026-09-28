@@ -1,5 +1,6 @@
 export default {
 	install: 'Installation',
+	'module-configuration': 'Module configuration',
 	aggregates: 'Aggregates',
 	'value-objects': 'Value Objects',
 	repositories: 'Repositories',
