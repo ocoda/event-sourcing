@@ -1,15 +1,21 @@
 name: PR Labeler
+
 on:
-- pull_request_target
+  # Safe: labeler only reads the changed file list via the API; it never checks out PR code.
+  pull_request_target: # zizmor: ignore[dangerous-triggers]
+
+permissions: {}
 
 jobs:
   labeler:
+    name: Label PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: read
       pull-requests: write
-    runs-on: ubuntu-latest
     steps:
-    - uses: actions/labeler@v6
-      with:
-        sync-labels: true
-        dot: true
+      - uses: actions/labeler@b8dd2d9be0f68b860e7dae5dae7d772984eacd6d # v6.2.0
+        with:
+          sync-labels: true
+          dot: true

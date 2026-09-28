@@ -1,0 +1,365 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [master, 3.x]
+  push:
+    branches: [master, 3.x]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions: {}
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      libraries: ${{ steps.scope.outputs.libraries }}
+      docs: ${{ steps.scope.outputs.docs }}
+      integrations: ${{ steps.scope.outputs.integrations }}
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Detect changed paths
+        id: filter
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: |
+            shared:
+              - package.json
+              - pnpm-lock.yaml
+              - pnpm-workspace.yaml
+              - turbo.json
+              - biome.json
+              - docker-compose.yml
+              - .github/workflows/ci.yml
+              - .github/actions/**
+            core:
+              - packages/core/**
+              - packages/testing/**
+              - packages/config/**
+            postgres:
+              - packages/integration/postgres/**
+            mongodb:
+              - packages/integration/mongodb/**
+            mariadb:
+              - packages/integration/mariadb/**
+            dynamodb:
+              - packages/integration/dynamodb/**
+            example:
+              - example/**
+            docs:
+              - docs/**
+
+      - name: Compute job scope
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          SHARED: ${{ steps.filter.outputs.shared }}
+          CORE: ${{ steps.filter.outputs.core }}
+          POSTGRES: ${{ steps.filter.outputs.postgres }}
+          MONGODB: ${{ steps.filter.outputs.mongodb }}
+          MARIADB: ${{ steps.filter.outputs.mariadb }}
+          DYNAMODB: ${{ steps.filter.outputs.dynamodb }}
+          EXAMPLE: ${{ steps.filter.outputs.example }}
+          DOCS: ${{ steps.filter.outputs.docs }}
+        run: |
+          all=false
+          if [ "$EVENT_NAME" != "pull_request" ] || [ "$SHARED" = "true" ]; then all=true; fi
+
+          libraries=false
+          if [ "$all" = "true" ] || [ "$CORE" = "true" ] || [ "$POSTGRES" = "true" ] || [ "$MONGODB" = "true" ] \
+            || [ "$MARIADB" = "true" ] || [ "$DYNAMODB" = "true" ] || [ "$EXAMPLE" = "true" ]; then
+            libraries=true
+          fi
+
+          docs=false
+          if [ "$all" = "true" ] || [ "$DOCS" = "true" ]; then docs=true; fi
+
+          # Every supported database version, as docker compose services.
+          matrix='[
+            {"database":"postgres","service":"postgres-13","version":"13"},
+            {"database":"postgres","service":"postgres-14","version":"14"},
+            {"database":"postgres","service":"postgres-15","version":"15"},
+            {"database":"postgres","service":"postgres-16","version":"16"},
+            {"database":"postgres","service":"postgres-17","version":"17"},
+            {"database":"mongodb","service":"mongodb-6","version":"6"},
+            {"database":"mongodb","service":"mongodb-7","version":"7"},
+            {"database":"mongodb","service":"mongodb-8","version":"8"},
+            {"database":"mariadb","service":"mariadb-10","version":"10"},
+            {"database":"mariadb","service":"mariadb-11","version":"11"},
+            {"database":"dynamodb","service":"dynamodb","version":"local"}
+          ]'
+
+          selected=()
+          if [ "$all" = "true" ] || [ "$CORE" = "true" ]; then
+            selected=(postgres mongodb mariadb dynamodb)
+          else
+            [ "$POSTGRES" = "true" ] && selected+=(postgres)
+            [ "$MONGODB" = "true" ] && selected+=(mongodb)
+            [ "$MARIADB" = "true" ] && selected+=(mariadb)
+            [ "$DYNAMODB" = "true" ] && selected+=(dynamodb)
+          fi
+
+          if [ "${#selected[@]}" -eq 0 ]; then
+            integrations='[]'
+          else
+            names=$(printf '%s\n' "${selected[@]}" | jq -R . | jq -cs .)
+            integrations=$(jq -c --argjson names "$names" 'map(select(.database as $d | $names | index($d)))' <<< "$matrix")
+          fi
+
+          {
+            echo "libraries=$libraries"
+            echo "docs=$docs"
+            echo "integrations=$integrations"
+          } >> "$GITHUB_OUTPUT"
+          echo "libraries=$libraries docs=$docs integrations=$integrations"
+
+  lint:
+    name: Lint and typecheck
+    needs: [changes]
+    if: ${{ needs.changes.outputs.libraries == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup job environment
+        uses: ./.github/actions/setup-job-env
+        with:
+          node-version: 24.x
+
+      - name: Lint and format (packages, example)
+        run: pnpm run ci --filter="./packages/**" --filter=@ocoda/event-sourcing-example
+
+      - name: Typecheck example
+        run: pnpm exec tsc --noEmit -p example
+
+  build:
+    name: Build [Node.js ${{ matrix.node-version }}]
+    needs: [changes]
+    if: ${{ needs.changes.outputs.libraries == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [22.x, 24.x]
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup job environment
+        uses: ./.github/actions/setup-job-env
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Build packages
+        run: pnpm build --filter="./packages/**"
+
+  test-core:
+    name: Test core [Node.js ${{ matrix.node-version }}]
+    needs: [changes]
+    if: ${{ needs.changes.outputs.libraries == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [22.x, 24.x]
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup job environment
+        uses: ./.github/actions/setup-job-env
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Test
+        run: pnpm test:cov --filter=@ocoda/event-sourcing
+
+      - name: Upload coverage
+        if: ${{ matrix.node-version == '24.x' }}
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          directory: packages/core/coverage
+          token: ${{ secrets.CODECOV_TOKEN }}
+          flags: core
+
+  test-integration:
+    name: Test ${{ matrix.database }} ${{ matrix.version }}
+    needs: [changes]
+    if: ${{ needs.changes.outputs.integrations != '[]' && needs.changes.outputs.integrations != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.changes.outputs.integrations) }}
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Start database
+        env:
+          SERVICE: ${{ matrix.service }}
+        run: docker compose up --detach --wait --wait-timeout 180 "$SERVICE"
+
+      - name: Setup job environment
+        uses: ./.github/actions/setup-job-env
+        with:
+          node-version: 24.x
+
+      - name: Test
+        env:
+          DATABASE: ${{ matrix.database }}
+        run: pnpm test:cov --filter="@ocoda/event-sourcing-$DATABASE"
+
+      - name: Database logs
+        if: ${{ failure() }}
+        env:
+          SERVICE: ${{ matrix.service }}
+        run: docker compose logs "$SERVICE"
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          directory: packages/integration/${{ matrix.database }}/coverage
+          token: ${{ secrets.CODECOV_TOKEN }}
+          flags: integrations
+
+  docs:
+    name: Build docs
+    needs: [changes]
+    if: ${{ needs.changes.outputs.docs == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup job environment
+        uses: ./.github/actions/setup-job-env
+        with:
+          node-version: 24.x
+
+      - name: Lint and format
+        run: pnpm run ci --filter=@ocoda/event-sourcing-docs
+
+      - name: Build
+        run: pnpm docs:build --filter=@ocoda/event-sourcing-docs
+
+  codeql:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [actions, javascript-typescript]
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          category: /language:${{ matrix.language }}
+
+  dependency-review:
+    name: Dependency review
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Dependency review
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: moderate
+
+  workflows:
+    name: Lint workflows
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: actionlint
+        run: docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 -color
+
+      - name: zizmor
+        uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
+        with:
+          advanced-security: false
+          online-audits: false
+
+  ci-ok:
+    name: ci-ok
+    if: ${{ always() }}
+    needs: [changes, lint, build, test-core, test-integration, docs, codeql, dependency-review, workflows]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Check required jobs
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          failed=$(echo "$RESULTS" | jq -r '[to_entries[] | select(.value.result == "failure" or .value.result == "cancelled")] | length')
+          if [ "$failed" -ne 0 ]; then
+            echo "::error::$failed required job(s) failed or were cancelled"
+            exit 1
+          fi

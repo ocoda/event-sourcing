@@ -1,33 +1,19 @@
 name: Setup job environment
-description: "Retrieve the turbo cache, install pnpm, setup Node.js, and install dependencies"
+description: "Install pnpm (version from packageManager), setup Node.js, and install dependencies"
 
 inputs:
-  cache-key:
-    description: "Input to the reusable workflow"
-    required: true
-    type: string
   node-version:
+    description: "Node.js version to use"
     required: true
-    type: string
 
 runs:
   using: "composite"
   steps:
-    - name: Cache turbo build setup
-      uses: actions/cache@v5
-      with:
-        path: .turbo
-        key: ${{ inputs.cache-key }}-turbo-${{ github.sha }}
-        restore-keys: |
-          ${{ inputs.cache-key }}-turbo-
-
     - name: Install pnpm
-      uses: pnpm/action-setup@v4
-      with:
-        version: 10.4.0
+      uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
     - name: Use Node.js ${{ inputs.node-version }}
-      uses: actions/setup-node@v6
+      uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
       with:
         node-version: ${{ inputs.node-version }}
         cache: "pnpm"
