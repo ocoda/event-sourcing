@@ -6,6 +6,7 @@ export * from './event-map';
 export * from './event-store';
 export * from './exceptions';
 export * from './helpers';
+export * from './integration';
 export * from './interfaces';
 export * from './models';
 export * from './query-bus';

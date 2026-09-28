@@ -41,13 +41,16 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 
 	public async disconnect(): Promise<void> {
 		this.logger.log('Stopping store');
-		this.collections.clear();
+		this.collections?.clear();
 	}
 
 	public async ensureCollection(pool?: ISnapshotPool): Promise<ISnapshotCollection> {
 		const collection = SnapshotCollection.get(pool);
 		try {
-			this.collections.set(collection, []);
+			// Only create the collection when it doesn't exist yet, never wipe existing snapshots
+			if (!this.collections.has(collection)) {
+				this.collections.set(collection, []);
+			}
 			return collection;
 		} catch (error) {
 			throw new SnapshotStoreCollectionCreationException(collection, error);
@@ -293,17 +296,22 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 		const limit = filter?.limit || Number.MAX_SAFE_INTEGER;
 		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
+		const sortKey = (latest: string | null) => latest?.toLowerCase() || '';
+
+		// The latest snapshot of every stream of this aggregate, ordered by their 'latest' key (descending)
 		entities = (this.collections.get(collection) || [])
 			.filter(({ aggregateName: name, latest }) => name === aggregateName && latest)
 			.sort((envelopeA, envelopeB) => {
-				const textA = envelopeA.latest?.toLowerCase() || '';
-				const textB = envelopeB.latest?.toLowerCase() || '';
+				const textA = sortKey(envelopeA.latest);
+				const textB = sortKey(envelopeB.latest);
 				return textA < textB ? -1 : textA > textB ? 1 : 0;
 			})
 			.reverse();
 
+		// The aggregateId acts as an exclusive cursor: only return the entities that come after it in the same order
 		if (aggregateId) {
-			entities = (this.collections.get(collection) || []).filter(({ latest }) => (latest || '') > aggregateId);
+			const cursor = sortKey(`latest#${aggregateName}-${aggregateId}`);
+			entities = entities.filter(({ latest }) => sortKey(latest) < cursor);
 		}
 
 		if (limit) {

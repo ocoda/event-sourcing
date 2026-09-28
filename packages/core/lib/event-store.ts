@@ -13,6 +13,12 @@ import type {
 } from './interfaces';
 import type { EventEnvelope, EventStream } from './models';
 
+/**
+ * Event stores that already logged that events were appended before a publish function was set,
+ * used to only log that warning once per store.
+ */
+const storesWithoutPublisherWarned = new WeakSet<object>();
+
 export abstract class EventStore<TOptions = Omit<EventSourcingModuleOptions['eventStore'], 'driver'>>
 	implements EventStoreDriver
 {
@@ -28,9 +34,29 @@ export abstract class EventStore<TOptions = Omit<EventSourcingModuleOptions['eve
 			get(target, propKey) {
 				if (propKey === 'appendEvents') {
 					return async function (...args: unknown[]) {
-						const envelopes = await target[propKey].apply(this, args);
+						const envelopes: EventEnvelope[] = await target[propKey].apply(this, args);
+
+						// The events are persisted at this point, publishing must never make the append fail.
+						const publish = target._publish;
+						if (typeof publish !== 'function') {
+							if (!storesWithoutPublisherWarned.has(target)) {
+								storesWithoutPublisherWarned.add(target);
+								target.logger.warn(
+									'Events were appended before a publish function was set on the event store (is the application bootstrapped?). They were persisted but not published.',
+								);
+							}
+							return envelopes;
+						}
+
 						for (const envelope of envelopes) {
-							await this._publish(envelope);
+							try {
+								await publish.call(this, envelope);
+							} catch (error) {
+								target.logger.error(
+									`Failed to publish event "${envelope?.event}" after it was appended`,
+									error instanceof Error ? error.stack || error.message : String(error),
+								);
+							}
 						}
 						return envelopes;
 					};
@@ -134,10 +160,11 @@ export abstract class EventStore<TOptions = Omit<EventSourcingModuleOptions['eve
 		sinceDate: { year: number; month: number },
 		untilDate?: { year: number; month: number },
 	): string[] {
+		// Event buckets are based on UTC dates, so the current month has to be determined in UTC as well
 		const now = new Date();
 		const [untilYear, untilMonth] = untilDate
 			? [untilDate.year, untilDate.month]
-			: [now.getFullYear(), now.getMonth() + 1];
+			: [now.getUTCFullYear(), now.getUTCMonth() + 1];
 		const since = Date.UTC(sinceDate.year, sinceDate.month - 1, 1, 0, 0, 0, 0);
 		const until = Date.UTC(untilYear, untilMonth, 0, 23, 59, 59, 999);
 

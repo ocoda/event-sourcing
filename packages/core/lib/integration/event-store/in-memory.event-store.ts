@@ -40,13 +40,16 @@ export class InMemoryEventStore extends EventStore<InMemoryEventStoreConfig> {
 
 	public async disconnect(): Promise<void> {
 		this.logger.log('Stopping store');
-		this.collections.clear();
+		this.collections?.clear();
 	}
 
 	public async ensureCollection(pool?: IEventPool): Promise<IEventCollection> {
 		const collection = EventCollection.get(pool);
 		try {
-			this.collections.set(collection, []);
+			// Only create the collection when it doesn't exist yet, never wipe existing events
+			if (!this.collections.has(collection)) {
+				this.collections.set(collection, []);
+			}
 			return collection;
 		} catch (error) {
 			throw new EventStoreCollectionCreationException(collection, error);
@@ -272,10 +275,11 @@ export class InMemoryEventStore extends EventStore<InMemoryEventStoreConfig> {
 		sinceDate: { year: number; month: number },
 		untilDate?: { year: number; month: number },
 	): { since: number; until: number } {
+		// Events are bucketed by UTC date, so the current month has to be determined in UTC as well
 		const now = new Date();
 		const [untilYear, untilMonth] = untilDate
 			? [untilDate.year, untilDate.month]
-			: [now.getFullYear(), now.getMonth() + 1];
+			: [now.getUTCFullYear(), now.getUTCMonth() + 1];
 
 		return {
 			since: Date.UTC(sinceDate.year, sinceDate.month - 1, 1, 0, 0, 0, 0),

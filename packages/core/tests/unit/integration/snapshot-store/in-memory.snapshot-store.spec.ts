@@ -1,4 +1,5 @@
 import { randomInt } from 'node:crypto';
+import { Logger } from '@nestjs/common';
 import {
 	Aggregate,
 	AggregateRoot,
@@ -249,40 +250,58 @@ describe(InMemorySnapshotStore, () => {
 
 		class FooId extends UUID {}
 
-		const fooIds = Array.from({ length: 20 })
-			.map(() => FooId.generate())
-			.sort();
-		for await (const id of fooIds) {
-			await snapshotStore.appendSnapshot(SnapshotStream.for(Foo, id), randomInt(1, 10) * 10, {
-				balance: randomInt(1000),
-			});
+		const fooIds = Array.from({ length: 20 }).map(() => FooId.generate());
+		const latestVersions = new Map<string, number>();
+		for (const id of fooIds) {
+			// multiple snapshots per stream, only the latest one should be returned
+			const latestVersion = randomInt(2, 10) * 10;
+			await snapshotStore.appendSnapshot(SnapshotStream.for(Foo, id), 10, { balance: randomInt(1000) });
+			await snapshotStore.appendSnapshot(SnapshotStream.for(Foo, id), latestVersion, { balance: randomInt(1000) });
+			latestVersions.set(id.value, latestVersion);
 		}
 
-		const fetchedAccountIds: Set<string> = new Set();
+		// the envelopes are ordered by their stream (descending)
+		const expectedIds = fooIds.map(({ value }) => value).sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));
+
 		const firstPageEnvelopes: SnapshotEnvelope<Account>[] = [];
 		for await (const envelopes of snapshotStore.getLastEnvelopesForAggregate(Foo, { limit: 15 })) {
 			firstPageEnvelopes.push(...envelopes);
 		}
 
 		expect(firstPageEnvelopes).toHaveLength(15);
-		for (const { metadata } of firstPageEnvelopes) {
-			fetchedAccountIds.add(metadata.aggregateId);
-		}
 
 		const lastPageEnvelopes: SnapshotEnvelope<Account>[] = [];
 		for await (const envelopes of snapshotStore.getLastEnvelopesForAggregate(Foo, {
-			limit: 5,
+			limit: 15,
 			aggregateId: firstPageEnvelopes[14].metadata.aggregateId,
 		})) {
 			lastPageEnvelopes.push(...envelopes);
 		}
 
+		// only the 5 remaining Foo aggregates come after the cursor
 		expect(lastPageEnvelopes).toHaveLength(5);
-		for (const { metadata } of lastPageEnvelopes) {
-			fetchedAccountIds.add(metadata.aggregateId);
+
+		const firstPageIds = firstPageEnvelopes.map(({ metadata }) => metadata.aggregateId);
+		const lastPageIds = lastPageEnvelopes.map(({ metadata }) => metadata.aggregateId);
+
+		// the pages are disjoint, in a consistent order and together contain every Foo aggregate exactly once
+		expect(firstPageIds.filter((id) => lastPageIds.includes(id))).toEqual([]);
+		expect([...firstPageIds, ...lastPageIds]).toEqual(expectedIds);
+		expect(new Set([...firstPageIds, ...lastPageIds]).size).toBe(fooIds.length);
+
+		// every envelope is the latest snapshot of its stream
+		for (const { metadata } of [...firstPageEnvelopes, ...lastPageEnvelopes]) {
+			expect(metadata.version).toBe(latestVersions.get(metadata.aggregateId));
 		}
 
-		expect(fooIds).toHaveLength(20);
+		// there is nothing after the last page
+		const emptyPageEnvelopes: SnapshotEnvelope<Account>[] = [];
+		for await (const envelopes of snapshotStore.getLastEnvelopesForAggregate(Foo, {
+			aggregateId: lastPageIds[lastPageIds.length - 1],
+		})) {
+			emptyPageEnvelopes.push(...envelopes);
+		}
+		expect(emptyPageEnvelopes).toEqual([]);
 	});
 
 	it('should retrieve the last snapshot-envelopes for an aggregate', async () => {
@@ -357,5 +376,40 @@ describe(InMemorySnapshotStore, () => {
 		expect(resolvedCollections.includes('a-snapshots')).toBe(true);
 		expect(resolvedCollections.includes('b-snapshots')).toBe(true);
 		expect(resolvedCollections.includes('c-snapshots')).toBe(true);
+	});
+});
+
+describe(`${InMemorySnapshotStore.name} lifecycle`, () => {
+	let snapshotStore: InMemorySnapshotStore;
+
+	beforeEach(async () => {
+		jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+		snapshotStore = new InMemorySnapshotStore({ driver: InMemorySnapshotStore });
+		await snapshotStore.connect();
+		await snapshotStore.ensureCollection();
+	});
+
+	afterEach(async () => {
+		await snapshotStore.disconnect();
+		jest.restoreAllMocks();
+	});
+
+	it('does not throw when disconnecting before connecting', async () => {
+		const unconnectedStore = new InMemorySnapshotStore({ driver: InMemorySnapshotStore });
+
+		await expect(unconnectedStore.disconnect()).resolves.toBeUndefined();
+	});
+
+	it('does not wipe existing snapshots when ensuring an existing collection', async () => {
+		await snapshotStore.ensureCollection('tenant-1');
+		await snapshotStore.appendSnapshot(snapshotStreamAccountA, 10, snapshotsAccountA[0], 'tenant-1');
+		await snapshotStore.appendSnapshot(snapshotStreamAccountA, 10, snapshotsAccountA[0]);
+
+		await expect(snapshotStore.ensureCollection('tenant-1')).resolves.toBe('tenant-1-snapshots');
+		await expect(snapshotStore.ensureCollection()).resolves.toBe('snapshots');
+
+		expect(snapshotStore.collections.get('tenant-1-snapshots')).toHaveLength(1);
+		expect(snapshotStore.collections.get('snapshots')).toHaveLength(1);
+		expect(snapshotStore.getLastSnapshot(snapshotStreamAccountA, 'tenant-1')).toEqual(snapshotsAccountA[0]);
 	});
 });
