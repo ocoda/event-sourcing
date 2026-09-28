@@ -9,7 +9,8 @@
 		"dev": "tsup --onSuccess \"node dist/main.js\"",
 		"ci": "biome ci",
 		"format": "biome format --write",
-		"lint": "biome check --write"
+		"lint": "biome check --write",
+		"typecheck": "tsc --noEmit -p tsconfig.json"
 	},
 	"dependencies": {
 		"@ocoda/event-sourcing": "workspace:*",

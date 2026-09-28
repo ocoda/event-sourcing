@@ -3,8 +3,14 @@
 	"version": "1.0.0",
 	"private": true,
 	"license": "MIT",
+	"scripts": {
+		"typecheck": "tsc --noEmit -p tsconfig.json"
+	},
 	"devDependencies": {
-		"@ocoda/event-sourcing-config": "workspace:*"
+		"@ocoda/event-sourcing-config": "workspace:*",
+		"@types/jest": "30.0.0",
+		"@types/node": "20.17.6",
+		"typescript": "5.9.2"
 	},
 	"peerDependencies": {
 		"@ocoda/event-sourcing": "workspace:*"

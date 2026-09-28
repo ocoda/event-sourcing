@@ -13,7 +13,8 @@
 		"test:cov:check": "jest --config jest.config.js --coverage --coverageThreshold='{'\"global\"':{'\"lines\"':90}}'",
 		"ci": "biome ci",
 		"format": "biome format --write",
-		"lint": "biome check --write"
+		"lint": "biome check --write",
+		"typecheck": "tsc --noEmit -p tsconfig.json"
 	},
 	"bugs": {
 		"url": "https://github.com/ocoda/event-sourcing/issues"

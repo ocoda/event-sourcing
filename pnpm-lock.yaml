@@ -538,6 +538,15 @@ importers:
       '@ocoda/event-sourcing-config':
         specifier: workspace:*
         version: link:../config
+      '@types/jest':
+        specifier: 30.0.0
+        version: 30.0.0
+      '@types/node':
+        specifier: 20.17.6
+        version: 20.17.6
+      typescript:
+        specifier: 5.9.2
+        version: 5.9.2
 
 packages:
 
