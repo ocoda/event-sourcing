@@ -368,7 +368,7 @@ migrate(options?: MigrationOptions): Promise<MigrationReport>; // on a connected
 
 - `migrate()` runs inspect, then a pure `plan(inspection, options)`, then execute. Each step is skipped when its postcondition already holds, so a second run reports `skip`.
 - A dry run returns the exact resolved statements. DBAs who use `ddl: 'none'` run those.
-- Numbering is `ORDER BY event_date, event_id, stream_id, version` (MongoDB: `eventDate, _id`): 3.x's order with a deterministic tiebreak.
+- Numbering follows 3.x's order `(event_date, event_id, stream_id, version)` (MongoDB: `eventDate, _id`), adjusted so each stream keeps version order: rows are numbered by `(key, version)`, where `key` is the running maximum, over the row's stream ordered by version, of the row's rank in 3.x's order ([ADR 0001 D33](./0001-v4-core-api.md#amendments-store-contract)). The `ROW_NUMBER() OVER (ORDER BY event_date, event_id, stream_id, version)` expressions below are the rank `r`, not the final position.
 - **Offline.** 3.x writers must be stopped. After the migration, a 3.x write fails loudly:
   - PostgreSQL: `event_date` is gone (`23502` / `42703`).
   - MariaDB: the column count doesn't match (`1136`).
