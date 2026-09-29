@@ -41,7 +41,9 @@ describeEventStoreConformance(
   `ensureCollection` and `listCollections`, `getAllEnvelopes` month ranges, consumers that stop early or throw, payload
   fidelity, and for snapshots the bulk reads and the latest snapshots of an aggregate.
 - The case ids are listed in `EVENT_STORE_CONFORMANCE_CASES` and `SNAPSHOT_STORE_CONFORMANCE_CASES`. Only skip a case
-  with a reason and a TODO in the spec. Run with `CONFORMANCE_RUN_SKIPPED=true` to check whether a skip is still needed.
+  with a reason and a TODO in the spec. Run with `CONFORMANCE_RUN_SKIPPED=true` to check whether a skip is still needed,
+  e.g. `CONFORMANCE_RUN_SKIPPED=true pnpm test --filter=@ocoda/event-sourcing-postgres`. `turbo.json` declares the
+  variable on the `test` and `test:cov` tasks, so turbo passes it on and doesn't replay a result cached without it.
 
 ## Banking Production Event Suite
 
