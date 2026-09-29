@@ -24,6 +24,7 @@ import type {
 	MissingSnapshotMetadataException,
 	QueryHandlerNotFoundException,
 	SnapshotNotFoundException,
+	UncommittedEventsException,
 	UnregisteredEventException,
 	UnregisteredSerializerException,
 	UnsupportedOperationException,
@@ -75,6 +76,7 @@ export const EventSourcingErrorCode = {
 	MissingSnapshotMetadata: 'ES_MISSING_SNAPSHOT_METADATA',
 	QueryHandlerNotFound: 'ES_QUERY_HANDLER_NOT_FOUND',
 	SnapshotNotFound: 'ES_SNAPSHOT_NOT_FOUND',
+	UncommittedEvents: 'ES_UNCOMMITTED_EVENTS',
 	UnregisteredEvent: 'ES_UNREGISTERED_EVENT',
 	UnregisteredSerializer: 'ES_UNREGISTERED_SERIALIZER',
 	UnsupportedOperation: 'ES_UNSUPPORTED_OPERATION',
@@ -124,6 +126,7 @@ export interface EventSourcingErrorByCode {
 	[EventSourcingErrorCode.MissingSnapshotMetadata]: MissingSnapshotMetadataException;
 	[EventSourcingErrorCode.QueryHandlerNotFound]: QueryHandlerNotFoundException;
 	[EventSourcingErrorCode.SnapshotNotFound]: SnapshotNotFoundException;
+	[EventSourcingErrorCode.UncommittedEvents]: UncommittedEventsException;
 	[EventSourcingErrorCode.UnregisteredEvent]: UnregisteredEventException;
 	[EventSourcingErrorCode.UnregisteredSerializer]: UnregisteredSerializerException;
 	[EventSourcingErrorCode.UnsupportedOperation]: UnsupportedOperationException;

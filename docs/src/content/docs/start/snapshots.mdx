@@ -82,13 +82,15 @@ The `interval` defaults to `10` when you don't provide one. The snapshot contain
 Since 3.0.1 a save that jumps over a multiple of the interval takes a snapshot. In earlier versions a snapshot was only taken when a save landed exactly on a multiple of the interval (or at version 1), so a command that applies several events at once, e.g. going from version 4 to 6 with an interval of 5, skipped the snapshot until the next exact multiple.
 </Aside>
 
-To know which versions a save covers, the snapshot repository looks at the events that the aggregate handed out with its last `commit()`. Call `commit()` on the aggregate right before saving and pass that same instance to `save()`, as the aggregate repository below does. When that information isn't available, the repository falls back to taking a snapshot at version 1 and at exact multiples of the interval.
+To know which versions a save covers, the snapshot repository looks at the events that the aggregate's last `markCommitted()` marked as committed. Append the events, call `markCommitted()`, then pass that same instance to `save()`, as the aggregate repository below does. A save that committed nothing, such as the save of an unchanged aggregate, takes no snapshot (since 4.0). While the aggregate has uncommitted events, `save()` logs a warning and takes no snapshot (since 4.0): a snapshot ahead of the stored events would make every later save of the stream conflict. When the committed versions aren't known, because the aggregate was never marked as committed, the repository falls back to taking a snapshot at version 1 and at exact multiples of the interval.
+
+`save()` never rejects (since 4.0). It runs after the events were appended, and the aggregate still loads from its events without the snapshot, so when the snapshot can't be serialized or stored the repository logs the failure instead: a version conflict, which means that the stream already has that snapshot or a newer one, as a warning, and any other failure as an error. 3.x rejected, which failed a command whose events were already stored.
 
 ## Plugging it into your aggregate repository
 
 If you created a snapshot repository and registered it as a provider, you can now plug it into your aggregate repository to optimize the loading process.
 
-```typescript {9,15,29,47}
+```typescript {9,15,29,48}
 import { Injectable } from '@nestjs/common';
 import { EventStore, EventStream } from '@ocoda/event-sourcing';
 import { Account, AccountId, AccountNotFoundException, AccountSnapshotRepository } from '../../domain/models';
@@ -129,12 +131,13 @@ export class AccountRepository {
   }
 
   async save(account: Account): Promise<void> {
-    const events = account.commit();
+    const events = account.getUncommittedEvents();
     const stream = EventStream.for<Account>(Account, account.id);
 
     // Append the events to the event store
-    await this.eventStore.appendEvents(stream, account.version, events);
-    // Save a snapshot of the account
+    await this.eventStore.appendEvents(stream, events, { expectedVersion: account.committedVersion });
+    account.markCommitted();
+    // Save a snapshot of the account, if one is due
     await this.accountSnapshotRepository.save(account.id, account);
   }
 }

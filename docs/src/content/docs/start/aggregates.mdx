@@ -33,6 +33,31 @@ If the stream name isn't provided in the decorator (you can also use `@Aggregate
 Whether the stream name is provided or if it's derived from the class-name, the maximum length shouldn't exceed 50 characters.
 </Aside>
 
+By default, applying an event that the aggregate has no [event handler](#adding-logic-to-the-aggregate) for throws a `MissingEventHandlerException` and leaves the aggregate unchanged. If the stream of an aggregate can hold events it doesn't need to handle, for example events that only an older version of the aggregate used, set `missingHandler: 'ignore'` (since 4.0):
+
+```typescript
+@Aggregate({ streamName: 'account', missingHandler: 'ignore' })
+export class Account extends AggregateRoot {}
+```
+
+The events are then applied without a handler: they still count towards the version of the aggregate.
+
+## Versions and uncommitted events [#versions]
+
+The `AggregateRoot` counts the events of the aggregate, and keeps the ones that aren't stored yet until the [repository](/start/repositories) saves them (since 4.0):
+
+| Member | |
+| --- | --- |
+| `version` | The version of the aggregate: `committedVersion` plus the number of uncommitted events. |
+| `committedVersion` | The version of the last event that was loaded from the event store or marked as committed: the version the stream is expected to have when the aggregate is saved. |
+| `getUncommittedEvents()` | A copy of the events that were applied since the aggregate was loaded or last saved. |
+| `markCommitted()` | Marks the uncommitted events as committed, once the repository appended them. |
+| `loadFromHistory(events)` | Applies stored events, as committed events: the batches of `eventStore.getEvents()` or an array of events. |
+
+`applyEvent()` runs the event handler first and only then counts the event, so a handler that throws leaves the version and the uncommitted events as they were. An event handler must not call `applyEvent()` itself: the nested event would be recorded before the event whose handler raised it, and applied a second time when the aggregate is loaded from its events. Raise follow-up events from the method that applied the first one instead. `loadFromHistory()` and the `version` setter throw an `UncommittedEventsException` while the aggregate has uncommitted events: the history would otherwise be applied after events that were raised on an older state.
+
+`commit()`, which returned the uncommitted events and cleared them before they were appended, is deprecated and will be removed in 5.0.
+
 ## Adding logic to the Aggregate [#adding-logic-to-the-aggregate]
 
 When working with aggregates in a Domain-Driven Design (DDD) context, the aggregate serves as the central point for **enforcing business rules** and **managing consistency boundaries**. Aggregates should encapsulate business logic and ensure that any changes to the aggregate are made **through domain events**.

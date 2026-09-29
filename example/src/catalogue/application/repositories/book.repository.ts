@@ -50,6 +50,7 @@ export class BookRepository {
 				const id = BookId.from(metadata.aggregateId);
 				const eventStream = EventStream.for<Book>(Book, id);
 				const book = this.bookSnapshotRepository.deserialize(payload);
+				book.version = metadata.version;
 
 				const eventCursor = this.eventStore.getEvents(eventStream, { fromVersion: metadata.version + 1 });
 				await book.loadFromHistory(eventCursor);
@@ -62,10 +63,11 @@ export class BookRepository {
 	}
 
 	async save(book: Book): Promise<void> {
-		const events = book.commit();
+		const events = book.getUncommittedEvents();
 		const stream = EventStream.for<Book>(Book, book.id);
 
-		await this.eventStore.appendEvents(stream, book.version, events);
+		await this.eventStore.appendEvents(stream, events, { expectedVersion: book.committedVersion });
+		book.markCommitted();
 		await this.bookSnapshotRepository.save(book.id, book);
 	}
 }

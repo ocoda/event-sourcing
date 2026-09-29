@@ -23,6 +23,7 @@ export * from './missing-query-metadata.exception.js';
 export * from './missing-snapshot-metadata.exception.js';
 export * from './query-handler-not-found.exception.js';
 export * from './snapshot-not-found.exception.js';
+export * from './uncommitted-events.exception.js';
 export * from './unregistered-event.exception.js';
 export * from './unregistered-serializer.exception.js';
 export * from './unsupported-operation.exception.js';

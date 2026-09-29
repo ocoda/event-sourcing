@@ -147,10 +147,14 @@ By default the event- and snapshot-store create a shared collection of streams f
    }
 
    async save(account: Account, tenantId: string): Promise<void> {
-     const events = account.commit();
+     const events = account.getUncommittedEvents();
      const stream = EventStream.for<Account>(Account, account.id);
 
-     await this.eventStore.appendEvents(stream, account.version, events, tenantId);
+     await this.eventStore.appendEvents(stream, events, {
+       expectedVersion: account.committedVersion,
+       pool: tenantId,
+     });
+     account.markCommitted();
      await this.accountSnapshotRepository.save(account.id, account, tenantId);
    }
    ```
