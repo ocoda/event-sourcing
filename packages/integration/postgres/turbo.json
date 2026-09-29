@@ -1,16 +1,18 @@
 {
-	"$schema": "https://turbo.build/schema.json",
+	"$schema": "https://turborepo.dev/schema.json",
 	"extends": ["//"],
 	"tasks": {
 		"build": {
-			"dependsOn": ["@ocoda/event-sourcing#build"],
-			"outputs": ["dist/**"]
+			"description": "Core is only a peer dependency, which turbo does not follow, so depend on its build explicitly.",
+			"dependsOn": ["$TURBO_EXTENDS$", "@ocoda/event-sourcing#build"]
 		},
-		"test": {},
+		"test": {
+			"description": "Runs against a live database, which is not part of the task hash. Never replay a cached result.",
+			"cache": false
+		},
 		"test:cov": {
-			"outputs": ["coverage/**"]
-		},
-		"lint": {},
-		"format": {}
+			"description": "Runs against a live database, which is not part of the task hash. Never replay a cached result.",
+			"cache": false
+		}
 	}
 }

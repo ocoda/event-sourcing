@@ -63,6 +63,8 @@ docker compose up -d postgres mariadb
 
    The tests run on [Vitest](https://vitest.dev), which needs Node.js 22.12 or later. The shared configuration lives in `packages/config/vitest/base.mjs` and enforces the coverage thresholds (90% lines, functions and statements, 80% branches) on `test:cov`. Tests run against the TypeScript sources, and Vite's Oxc transform applies the decorator settings from each package's `tsconfig.json`, so a package's tsconfig has to include its `tests` folder.
 
+   The root scripts run their tasks through [Turborepo](https://turborepo.dev) (`turbo.json`). Every task except `format`, `dev` and the integration tests is cached, and Turborepo replays it while its inputs are unchanged; pass `--force` to run it anyway. The integration tests always run, because the database they use is not part of the cache key.
+
 7. **Lint and format your changes**
   To make sure your changes are in accordance to the styles used in this repository and pass the CI checks, you can run the formatting (oxfmt) and linting (oxlint) steps.
     ```bash
