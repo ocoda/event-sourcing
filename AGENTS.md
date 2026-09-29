@@ -31,7 +31,7 @@ The `ci-ok` check is the only required check on `master` and `3.x`. Before openi
 - **DI imports stay value imports.** A class that Nest injects by type must be imported as a value, never with `import type`, or `design:paramtypes` loses it. That is why `typescript/consistent-type-imports` is off.
 - **Import `@nestjs/*` only from the package root.** oxlint rejects deep imports like `@nestjs/core/injector/*`, because they don't resolve through the NestJS 12 exports map.
 - **Class fields use define semantics.** `useDefineForClassFields` is true, the same as the published build; the tests assert it.
-- **Store drivers share one contract.** `EventStore` and `SnapshotStore` subclasses must map duplicate-key races to `EventStoreVersionConflictException` / `SnapshotStoreVersionConflictException` and release connections and cursors on every path, including an early `break`. A driver change needs a test that fails without it.
+- **Store drivers share one contract.** `EventStore` and `SnapshotStore` subclasses must map duplicate-key races to `EventStoreVersionConflictException` / `SnapshotStoreVersionConflictException` and release connections and cursors on every path, including an early `break`. A driver change needs a test that fails without it. The conformance suites in `packages/testing/conformance` encode the shared contract, and every store runs them from its `*.conformance.spec.ts` files. Don't weaken a conformance assertion for one store: skip that case in the store's spec with the reason and a TODO.
 - **Integration tests count rows in the default tables.** Give new tests their own pool name so parallel or leftover data can't skew the counts.
 
 ## Changesets

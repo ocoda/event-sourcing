@@ -106,9 +106,9 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 			ExclusiveStartTableName = LastEvaluatedTableName;
 			entities.push(...((TableNames || []).filter((name) => name.endsWith('snapshots')) as ISnapshotCollection[]));
 
-			if (entities.length > 0 && !ExclusiveStartTableName) {
-				yield entities;
-				entities.length = 0;
+			if (entities.length > 0) {
+				// Hand out the buffered items in a new array, so a batch the consumer holds on to never changes
+				yield entities.splice(0);
 			}
 		} while (ExclusiveStartTableName);
 	}
@@ -163,8 +163,8 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 			leftToFetch -= Items?.length || 0;
 
 			if (entities.length > 0 && (entities.length === batch || !ExclusiveStartKey || leftToFetch <= 0)) {
-				yield entities;
-				entities.length = 0;
+				// Hand out the buffered items in a new array, so a batch the consumer holds on to never changes
+				yield entities.splice(0);
 			}
 		} while (ExclusiveStartKey && leftToFetch > 0);
 	}
@@ -416,8 +416,8 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 			leftToFetch -= Items?.length || 0;
 
 			if (envelopes.length > 0 && (envelopes.length === batch || !ExclusiveStartKey || leftToFetch <= 0)) {
-				yield envelopes;
-				envelopes.length = 0;
+				// Hand out the buffered items in a new array, so a batch the consumer holds on to never changes
+				yield envelopes.splice(0);
 			}
 		} while (ExclusiveStartKey && leftToFetch > 0);
 	}
@@ -513,8 +513,8 @@ export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreCo
 			leftToFetch -= Items?.length || 0;
 
 			if (entities.length > 0 && (entities.length === batch || !ExclusiveStartKey || leftToFetch <= 0)) {
-				yield entities;
-				entities.length = 0;
+				// Hand out the buffered items in a new array, so a batch the consumer holds on to never changes
+				yield entities.splice(0);
 			}
 		} while (ExclusiveStartKey && leftToFetch > 0);
 	}

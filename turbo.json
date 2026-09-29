@@ -53,6 +53,7 @@
 				"$TURBO_ROOT$/packages/testing/**/*.ts",
 				"!$TURBO_ROOT$/packages/testing/node_modules/**"
 			],
+			"env": ["CONFORMANCE_RUN_SKIPPED"],
 			"outputs": []
 		},
 		"test:cov": {
@@ -65,6 +66,7 @@
 				"$TURBO_ROOT$/packages/testing/**/*.ts",
 				"!$TURBO_ROOT$/packages/testing/node_modules/**"
 			],
+			"env": ["CONFORMANCE_RUN_SKIPPED"],
 			"outputs": ["coverage/**"]
 		},
 		"dev": {
