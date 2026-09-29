@@ -59,17 +59,13 @@ try {
 			packageManager: rootManifest.packageManager,
 			dependencies,
 			devDependencies,
-			pnpm: {
-				// pnpm does not match a file: tarball against the integrations' semver peer range on core, so accept it
-				// here; the integrations still have to link to this core, or the instanceof checks in main.ts fail.
-				peerDependencyRules: { allowAny: ['@ocoda/event-sourcing'] },
-			},
 		};
 		writeFileSync(join(dir, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`);
 
 		console.log(`\n### ${variant}: install, compile, run`);
-		// Every peer is listed explicitly: nothing may be auto-installed from the registry, and an unmet peer range
-		// (e.g. a driver version the integrations do not accept) fails the install.
+		// Every peer is listed explicitly: nothing may be auto-installed from the registry, and an unmet peer range fails
+		// the install. That covers the drivers and the integrations' peer on core, which pnpm checks against the
+		// version inside the core tarball.
 		run(
 			'pnpm',
 			[
