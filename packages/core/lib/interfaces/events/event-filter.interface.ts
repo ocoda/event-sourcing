@@ -41,6 +41,26 @@ export interface IAllEventsFilter extends Pick<IEventFilter, 'pool' | 'batch'> {
 	until?: { year: number; month: number };
 }
 
+/**
+ * What `readAll` reads: the events of a pool, across streams, in the order of their global position.
+ */
+export interface IReadAllFilter {
+	/**
+	 * The global position to start at, inclusive (like `fromVersion`). `0n` or absent starts at the first event.
+	 */
+	fromPosition?: bigint;
+	/**
+	 * The amount of events to read at a time
+	 * @default 100
+	 */
+	batch?: number;
+	/**
+	 * The event pool to read.
+	 * @default events
+	 */
+	pool?: IEventPool;
+}
+
 export interface IEventCollectionFilter {
 	/**
 	 * The amount of collections to read at a time

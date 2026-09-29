@@ -17,6 +17,30 @@ export const brandEventSourcingError = (prototype: object): void => {
 };
 
 /**
+ * A short description of any value for a message: strings quoted, bigints with their `n`, objects by their kind.
+ * Never throws and never prints the contents of an object, which may be large or sensitive.
+ */
+export const describeValue = (value: unknown): string => {
+	switch (typeof value) {
+		case 'string':
+			return JSON.stringify(value);
+		case 'bigint':
+			return `${value}n`;
+		case 'object':
+			if (value === null) {
+				return 'null';
+			}
+			return Array.isArray(value) ? 'an array' : 'an object';
+		case 'function':
+			return 'a function';
+		case 'symbol':
+			return value.toString();
+		default:
+			return String(value);
+	}
+};
+
+/**
  * The name to show for a class, an instance of it or a name. Never throws, so a constructor given `undefined` still
  * produces an error.
  */

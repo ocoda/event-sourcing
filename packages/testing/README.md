@@ -44,6 +44,13 @@ describeEventStoreConformance(
   with a reason and a TODO in the spec. Run with `CONFORMANCE_RUN_SKIPPED=true` to check whether a skip is still needed,
   e.g. `CONFORMANCE_RUN_SKIPPED=true pnpm test --filter=@ocoda/event-sourcing-postgres`. `turbo.json` declares the
   variable on the `test` and `test:cov` tasks, so turbo passes it on and doesn't replay a result cached without it.
+- A case can also be gated on a capability of the store (`conformanceTest(...)(id, title, fn, { requires })`). It is
+  then reported as skipped with `capability: <flag>`; `CONFORMANCE_RUN_SKIPPED` doesn't lift such a gate, because a
+  store that doesn't claim a guarantee isn't expected to give it.
+- `CONFORMANCE_REPEAT=n` runs every case n times, to soak out flaky concurrency, e.g.
+  `CONFORMANCE_REPEAT=20 pnpm --filter @ocoda/event-sourcing exec vitest run tests/unit/integration/event-store/in-memory.event-store.conformance.spec.ts`.
+  `turbo.json` doesn't declare it yet, so `pnpm test` (turbo) drops it and runs every case once: run it through
+  `pnpm --filter … exec vitest` as above.
 
 ## Banking Production Event Suite
 
