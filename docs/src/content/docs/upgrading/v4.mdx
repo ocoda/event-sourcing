@@ -328,7 +328,7 @@ for await (const envelopes of eventStore.getAllEnvelopes({ since: { year: 2024, 
 for await (const envelopes of eventStore.readAll({ fromPosition: checkpoint + 1n })) { … }
 ```
 
-`getAllEnvelopes`, `IAllEventsFilter`, `EventStore.getYearMonthRange` and `ULID.yearMonth` are removed. `capabilities.globalOrder` says whether a reader that tails the store can miss an event (`'best-effort'`) or not (`'gap-safe'`); the in-memory store is gap-safe.
+`getAllEnvelopes`, `IAllEventsFilter`, `EventStore.getYearMonthRange` and `ULID.yearMonth` are removed. For `ULID.yearMonth`, also on `EventId`, use `id.date.toISOString().slice(0, 7)`. `capabilities.globalOrder` says whether a reader that tails the store can miss an event (`'best-effort'`) or not (`'gap-safe'`); the in-memory store is gap-safe.
 
 ### Snapshot store [#snapshot-store]
 

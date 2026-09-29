@@ -2,7 +2,7 @@
 '@ocoda/event-sourcing': major
 ---
 
-**The 4.0 event store contract, implemented by the in-memory store.** The `EventStore` base class now implements appends and event reads for every store. The PostgreSQL, MariaDB and MongoDB stores keep their 3.x appends (no global positions, no `readAll`, no metadata) until they move to schema v2 in a later prerelease. See the [4.0 migration guide](https://ocoda.github.io/event-sourcing/upgrading/v4#event-store-api).
+**The 4.0 event store contract, implemented by the in-memory store.** The `EventStore` base class now implements appends and event reads for every store. The PostgreSQL, MariaDB and MongoDB stores implement it with their schema v2 (see their entries). See the [4.0 migration guide](https://ocoda.github.io/event-sourcing/upgrading/v4#event-store-api).
 
 - **`appendEvents(stream, events, { expectedVersion, pool, metadata, publish })`.** `expectedVersion` is the version of the stream before the append: `ExpectedVersion.NoStream` (0) for a new stream, or `ExpectedVersion.Any`, which makes up to 16 attempts while concurrent appends take the versions, keeping the event ids. An `Any` append can still conflict under sustained contention on one stream; retry such a conflict in the application. `publish: false` stores without publishing, for imports and migrations.
 - **The positional form `appendEvents(stream, aggregateVersion, events, pool)` is deprecated** and emits a `DeprecationWarning` (`OCODA_ES_POSITIONAL_APPEND`) once per process. It will be removed in 5.0.

@@ -116,7 +116,7 @@ Every method returns a promise (or an async generator), and every read throws an
 
 The driver methods are abstract, so TypeScript reports the ones your store lacks.
 
-**Don't override `appendEvents`, `getEvent` or `getEvents`.** The base class implements them for every store, and the module refuses a store that overrides one, also as a class field, with an `InvalidEventStoreImplementationException` when it creates the store, so the application fails to bootstrap. `assertEventStoreImplementation(store)` runs the same check. To decorate appends, for tracing for instance, override `persistEvents` and call `super.persistEvents(envelopes, target)`.
+**Don't override `appendEvents`, `getEvent` or `getEvents`.** The base class implements them for every store, and the module refuses a store that overrides one, also as a class field, with an `InvalidEventStoreImplementationException` when it creates the store, so the application fails to bootstrap. `assertEventStoreImplementation(store)` runs the same check. To decorate the appends of an existing store, for tracing, extend it (`PostgresEventStore`, for instance), override `persistEvents` and call `super.persistEvents(envelopes, target)`.
 
 #### Implement `persistEvents`
 The base class calls `persistEvents` once it has validated the append, serialized the events, numbered them and checked that the stream is at `target.expectedVersion`. The first envelope has the version `target.expectedVersion + 1`. `persistEvents` checks no versions and serializes nothing:
@@ -187,11 +187,19 @@ describeEventStoreConformance('FooEventStore', async (context) => {
 		cleanup: async (collections) => {
 			// Drop the collections, then disconnect
 		},
+		faults: {
+			failInsertOf: async (collection, eventName) => {
+				// Make inserts of eventName fail inside the store's write, with a trigger for instance
+				return async () => {
+					// Remove the fault
+				};
+			},
+		},
 	};
 });
 ```
 
-Cases that need a capability your store doesn't claim are skipped. A case your store can't pass yet is skipped with a reason, in the `skip` option.
+Cases that need a capability your store doesn't claim are skipped. A store that claims `atomicAppend` (the default) provides `faults.failInsertOf`, which `append-atomic-partial-failure` uses to make an append fail halfway, or skips that case with a reason. A case your store can't pass yet is skipped with a reason, in the `skip` option.
 
 #### Migrating a 3.x store
 1. The constructor becomes `(context, options)`. Remove yours, or pass both arguments on.
