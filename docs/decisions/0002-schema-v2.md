@@ -9,7 +9,7 @@
 
 ## Context
 
-ADR 0001 §9 gives every event a store-assigned `globalPosition`, and §8 adds `headers` and `eventVersion`. The 3.x tables have neither. They have a year-month `event_date` column that only the removed `getAllEnvelopes` reads. 4.0 is the only release that may change the schema, so everything the 4.x read side needs lands in one migration.
+ADR 0001 §9 gives every event a store-assigned `globalPosition`, and §8 adds `headers` and `eventVersion`. The 3.x tables have neither. They have a year-month `event_date` column that only `getAllEnvelopes` reads, which ADR 0001 removes. 4.0 is the only release that may change the schema, so everything the 4.x read side needs lands in one migration.
 
 Facts about 3.x that shape the design:
 
@@ -63,9 +63,9 @@ A driver claims `'gap-safe'` only when the `read-all-gap-safe` conformance case 
 **Detection.** `inspectEventCollection(name)` returns `absent | v1 | v1-partial | v2`, plus `registered: boolean` (a catalog row exists). It looks at columns and fields, never at index names.
 
 - **PostgreSQL and MariaDB:**
-  - `v2`: a `NOT NULL` `global_position` column and no `event_date`.
+  - `v2`: a `NOT NULL` `global_position` column and no `event_date`, except for the MariaDB case under `v1-partial`.
   - `v1`: an `event_date` column and no `global_position`.
-  - `v1-partial`: anything else. On MariaDB this includes a v2-shaped table without a catalog row whose `<t>__es_v1` backup exists: a copy-swap that stopped after the `RENAME` (§6, MariaDB events).
+  - `v1-partial`: anything else. On MariaDB this includes a v2-shaped table without a catalog row whose `<t>__es_v1` backup exists: a copy-swap that stopped after the `RENAME` (§6, MariaDB events). This rule is checked before the `v2` rule, so the catch-up runs and the rows 3.x wrote during the swap aren't left behind in the backup.
 - **MongoDB** (the catalog document is the commit point):
   - `v2`: a catalog document with `schemaVersion: 2`.
   - `v1`: the collection exists, with no catalog document and no validator.
@@ -78,7 +78,7 @@ A driver claims `'gap-safe'` only when the `read-all-gap-safe` conformance case 
 | catalog missing | create it | `EventStoreSchemaException { found: 'missing', remedy: <DDL> }` |
 | `absent` | create the v2 table, indexes and validator, then register | `EventStoreSchemaException { found: 'missing', remedy: <DDL> }` |
 | `v2` | register, or heal the counter (`GREATEST`) | same |
-| `v2`, unregistered and empty (creation crashed) | finish the creation, register | register |
+| `v2`, unregistered and empty (creation crashed; on MariaDB, no `<t>__es_v1` backup) | finish the creation, register | register |
 | `v1` / `v1-partial` | `EventStoreSchemaException { found, remedy: 'run XEventStore.migrate(config, { dryRun: true }), then migrate()' }`. **Never migrates.** | same |
 
 The core module's `onModuleInit` calls `ensureCollection()` for the default pool, so a v1 default pool fails bootstrap with that message. Tenant pools fail on their first `ensureCollection`.
@@ -473,7 +473,7 @@ The dry run warns that on servers created before 10.10, 3.x may already have ove
 2. **Fence:** `collMod` with the v2 validator. Every 3.x insert now fails with `121`. Nothing updates existing documents until step 3, whose updates make them valid.
 3. **Numbering:** a client-side keyset over `find({}, { projection: { _id: 1 } }).sort({ eventDate: 1, _id: 1 }).allowDiskUse(true)` (with the hint `{ eventDate: 1, _id: 1 }` if that index exists) assigns `++p`, in unordered `bulkWrite` batches of 1,000 `updateOne({ _id }, { $set: { globalPosition: Long(p) } })`, reporting `onProgress`.
    - It is deterministic, so a rerun computes identical positions.
-   - If the timing evidence shows more than 10 minutes for 10 million documents, it switches to a server-side pipeline: `$project` a key `$concat(eventDate, '#', _id)`, then `$setWindowFields` with `sortBy: { key: 1 }` and `$documentNumber`, then `$merge` into the same collection.
+   - If S2 (see [Evidence](#evidence)) shows more than 10 minutes for 10 million documents, the MongoDB schema v2 PR implements the server-side pipeline instead: `$project` a key `$concat(eventDate, '#', _id)`, then `$setWindowFields` with `sortBy: { key: 1 }` and `$documentNumber`, then `$merge` into the same collection.
 4. `createIndex({ globalPosition: 1 }, { unique: true })`.
 5. Upsert the catalog document (`schemaVersion: 2`, `$max` of `lastPosition`). **This is the commit point: 4.0 can run from here.**
 6. Clean up: drop the indexes whose key contains `eventDate` (found by key pattern), then `updateMany({ eventDate: { $exists: true } }, { $unset: { eventDate: '' } })`. Resumable.
@@ -547,7 +547,7 @@ Each driver's schema v2 PR fills its subsection. Until then a driver claims noth
 
 **Positive**
 
-- Every built-in store has a per-pool global order. It is gap-safe on the SQL stores and on MongoDB replica sets, so 4.x subscriptions, projections and the outbox can checkpoint it, and each claim is backed by a conformance case.
+- Every built-in store has a per-pool global order. It is gap-safe on the SQL stores and on MongoDB replica sets where the [evidence](#evidence) holds (MariaDB: InnoDB, not Galera), so 4.x subscriptions, projections and the outbox can checkpoint it, and each claim is backed by a conformance case.
 - One catalog lists collections, registers schema versions and counts positions, and `ensureCollection` heals counter drift.
 - 3.x writers that are still running after the migration fail loudly instead of writing rows without positions.
 - MariaDB `occurred_on` values that 3.x truncated to the second or shifted by a time zone are restored to the millisecond where the ULID proves the value.

@@ -6,7 +6,7 @@ import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
 
 4.0 is the next major release. It is published as prereleases (`4.0.0-next.N`) under the npm `next` tag, while 3.x stays on `latest` and keeps receiving fixes. See [Versioning and support](/upgrading/versioning) for what each release line gets.
 
-This guide covers the changes that have been released so far, up to `4.0.0-next.1`. More breaking changes are planned before 4.0.0. They are listed under [Coming in later 4.0 prereleases](#coming-next), and move into this guide as they ship.
+This guide covers the changes that have been released so far, up to `4.0.0-next.1`. More breaking changes are planned before 4.0.0. They are listed under [Event store, snapshots and schema v2](#store-and-schema) and [Coming in later 4.0 prereleases](#coming-next), and are described in full as they ship.
 
 <Aside type="caution" title="Prerelease">
 There is no stability or support guarantee until 4.0.0 is released, and a later prerelease can break things again. Pin the exact version, and read the [changelog](https://github.com/ocoda/event-sourcing/blob/master/packages/core/CHANGELOG.md) before you move to the next prerelease.
@@ -158,11 +158,12 @@ The same applies to the integrations: import from `@ocoda/event-sourcing-postgre
 
 ## Errors have a code and fields [#errors]
 
-Since `4.0.0-next.1`, every exception class the library exports extends the new abstract `EventSourcingError`. Each one has a stable `code`, the fields that describe the failure, and the original error as its `cause`.
+Since `4.0.0-next.1`, every exception class the library exports, except `DomainException` (the base class for your own errors), is an `EventSourcingError`: it extends the new abstract class, or, for `InvalidIdException`, is branded as one. Each one has a stable `code`, the fields that describe the failure, and the original error as its `cause`.
 
 - **Codes.** Each class has a literal `name`, which survives minification, and a unique `code` from `EventSourcingErrorCode`, for example `EventSourcingErrorCode.EventStoreVersionConflict` (`'ES_EVENT_STORE_VERSION_CONFLICT'`). The class names are unchanged, so `instanceof` checks keep working.
 - **`isEventSourcingError(error, code?)`** narrows an unknown error, to the class of the code when you pass one. It recognises errors from a second copy of the package, and so does `error instanceof EventSourcingError`.
-- **Fields.** `EventStoreVersionConflictException` has `streamId`, `aggregateId`, `pool`, `expectedVersion` (the version the stream had to have before the append) and `actualVersion` (absent when the append lost a race on the unique key). `EventStorePersistenceException` has `collection` and an `outcome`: `'not-persisted'` when nothing was written, `'unknown'` when the events may have been stored. The not-found and metadata exceptions name the class or stream they concern.
+- **Fields.** `EventStoreVersionConflictException` has `streamId`, `aggregateId`, `pool`, `expectedVersion` (the version the stream had to have before the append) and `actualVersion` (absent when the append lost a race on the unique key). `EventStorePersistenceException` has `collection` and an `outcome`: `'not-persisted'` when nothing was written, `'unknown'` when the events may have been stored. Retrying with the same expected version is safe in both cases, because a duplicate append conflicts. The not-found and metadata exceptions name the class or stream they concern, and `CommandHandlerNotFoundException` names the command class instead of an internal id.
+- **Stores.** A version conflict from the PostgreSQL, MariaDB and MongoDB stores carries the pool and the version the stream was at, and leaves `actualVersion` out when the append lost a race on the unique key. MongoDB throws an `EventStorePersistenceException` with `outcome: 'unknown'` (its `cause` is an `AggregateError`) instead of a version conflict when an append that lost a race can't remove the events it already stored. Not-found exceptions name the pool they searched.
 - **Messages changed**, for version conflicts in particular.
 - **The stack is kept.** A wrapping exception no longer replaces its own stack with the stack of the driver error. The driver error is its `cause`.
 - **`UnsupportedOperationException` replaces `NotImplementedException`.** `SnapshotRepository.loadMany()` and `loadAll()` threw the `NotImplementedException` of `@nestjs/common` when the snapshot store lacks the method they need. They now throw `UnsupportedOperationException`, with the method name in `operation`. An HTTP exception filter that relied on the 501 status of the Nest exception should map the new code.
@@ -187,10 +188,17 @@ To migrate:
 
    ```ts
    // 3.x
+   throw new EventStoreVersionConflictException(stream, aggregateVersion, currentVersion, error);
    throw new EventStorePersistenceException(collection, error);
    // 4.0
+   throw new EventStoreVersionConflictException(
+   	{ stream, expectedVersion: aggregateVersion - events.length, actualVersion: currentVersion, pool },
+   	{ cause: error },
+   );
    throw new EventStorePersistenceException({ collection, outcome: 'unknown' }, { cause: error });
    ```
+
+   The `expectedVersion` of a conflict is the version the stream had to have **before** the append, not the aggregate version after it.
 
 3. Where you catch the errors of `SnapshotRepository.loadMany()` and `loadAll()`, replace `NotImplementedException` with `UnsupportedOperationException`, or match `EventSourcingErrorCode.UnsupportedOperation`.
 4. Read the underlying error of a wrapping exception from `error.cause` instead of from its stack.
@@ -209,7 +217,7 @@ The changes in this section are planned for later prereleases. Each subsection d
 
 ### Event store API [#event-store-api]
 
-*Planned.* `appendEvents(stream, events, { expectedVersion, pool })` replaces the positional form, which stays as a deprecated shim until 5.0. An empty append does nothing, and an append that leaves a gap in the versions conflicts.
+*Planned.* `appendEvents(stream, events, { expectedVersion, pool })` replaces the positional form, which stays as a deprecated shim until 5.0. An empty append does nothing, and an append that leaves a gap in the versions conflicts. Custom stores implement a new contract, which conformance test suites check.
 
 ### Metadata and headers [#metadata-headers]
 
@@ -229,7 +237,7 @@ The changes in this section are planned for later prereleases. Each subsection d
 
 ### MariaDB schema v2 [#mariadb-schema-v2]
 
-*Planned.* The event tables gain `global_position`, `headers` and `event_version` columns and lose `event_date`, and timestamps keep their milliseconds. See [MariaDB](/integrations/mariadb).
+*Planned.* The event tables gain `global_position`, `headers` and `event_version` columns and lose `event_date`. Timestamps store milliseconds (3.x truncates them to the second), and stream ids become case-sensitive (pending an owner decision). See [MariaDB](/integrations/mariadb).
 
 ### MongoDB schema v2 [#mongodb-schema-v2]
 
@@ -252,11 +260,11 @@ The DynamoDB store (`@ocoda/event-sourcing-dynamodb`) is not released for 4.0. D
 Nothing in this section is released yet. The changes are planned in [ADR 0001: v4 core API](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0001-v4-core-api.md), which is still a proposal, so the details can change before they ship. This guide will be extended with each prerelease.
 </Aside>
 
-- **Saving aggregates.** `commit()` gives way to `getUncommittedEvents()` and `markCommitted()`, and `appendEvents` takes an options object with an `expectedVersion`. Saving an unchanged aggregate becomes a no-op, and an append that leaves a gap in the versions conflicts. The 3.x methods stay as deprecated shims until 5.0.
+- **Event store, snapshots and schema v2.** See [Event store, snapshots and schema v2](#store-and-schema).
+- **Saving aggregates.** `commit()` gives way to `getUncommittedEvents()` and `markCommitted()`, and saving an unchanged aggregate becomes a no-op. `commit()` stays as a deprecated shim until 5.0.
 - **Publishing.** `eventBus.publish()` returns a promise and async publishers are awaited. In tests, `await eventBus.whenIdle()` replaces waiting for a fixed time.
 - **Bootstrap checks.** Duplicate registrations, and request-scoped subscribers, publishers and serializers, fail the bootstrap. Request-scoped command and query handlers start to work.
 - **Serialization.** A JSON serializer replaces class-transformer as the default. Events that use class-transformer decorators opt back in with `defaultEventSerializer: ClassTransformerEventSerializer`.
-- **Reading all events.** `readAll({ fromPosition })`, over a new global position, replaces `getAllEnvelopes({ since, until })`. This comes with a one-time schema migration of the event tables, designed in [ADR 0002: Schema v2](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0002-schema-v2.md).
-- **Ids and custom stores.** `generate()` on an id class returns that class, so `AccountId.generate()` returns an `AccountId`, and ids of different classes are no longer equal. Custom stores implement a new contract that is checked by conformance test suites.
+- **Ids.** `generate()` on an id class returns that class, so `AccountId.generate()` returns an `AccountId`, and ids of different classes are no longer equal.
 
 See the ADR's [migration guide](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0001-v4-core-api.md#migration-guide) for the planned steps, including those for custom store authors.
