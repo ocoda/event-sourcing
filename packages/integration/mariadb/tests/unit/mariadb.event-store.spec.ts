@@ -478,8 +478,9 @@ describe(MariaDBEventStore, () => {
 					result.then(settle, settle);
 				} else if (
 					reads.firstBatch === undefined &&
-					sql.includes(target.escapeId(collection)) &&
-					!sql.includes('<= ?')
+					sql.includes('e.global_position >= ?') &&
+					!sql.includes('<= ?') &&
+					sql.includes(target.escapeId(collection))
 				) {
 					result.then(
 						(rows) => {
@@ -536,15 +537,21 @@ describe(MariaDBEventStore, () => {
 			const inFlight = await appendInFlight();
 			const { reads, restore } = followReads(inFlight.collection);
 			try {
-				const reading = drain(store.readAll({ pool: inFlight.eventPool, fromPosition: 3n, batch: 10 }));
+				let finished = false;
+				const reading = drain(store.readAll({ pool: inFlight.eventPool, fromPosition: 3n, batch: 10 })).finally(() => {
+					finished = true;
+				});
 				// Awaited below: this only keeps a rejection during the polls from going unhandled
 				reading.catch(() => undefined);
 				// The first batch shows 4 without 3: the reader reads the counter with a shared lock, and waits
 				const sentBy = Date.now() + 10_000;
-				while (!reads.highWaterMarkSent && Date.now() < sentBy) {
+				while (!reads.highWaterMarkSent && !finished && Date.now() < sentBy) {
 					await sleep(10);
 				}
-				const wait = await counterReadWaits(inFlight.collection, () => !reads.highWaterMarkSettled);
+				const wait = await counterReadWaits(
+					inFlight.collection,
+					() => reads.highWaterMarkSent && !reads.highWaterMarkSettled,
+				);
 				const sent = reads.highWaterMarkSent;
 				const pendingAtCommit = !reads.highWaterMarkSettled;
 				await inFlight.commit();
@@ -554,7 +561,7 @@ describe(MariaDBEventStore, () => {
 				expect(sent, 'the reader sent its high-water mark read while the append was in flight').toBe(true);
 				expect(
 					wait.waited,
-					`INNODB_TRX shows the high-water mark read waiting for the counter; its last rows: ${JSON.stringify(wait.rows)}`,
+					`INNODB_TRX shows the high-water mark read waiting for the counter; its last rows: ${JSON.stringify(wait.rows)} (InnoDB refreshes INNODB_TRX only after 100 ms without a read: a client that polls INNODB_TRX, INNODB_LOCKS or INNODB_LOCK_WAITS more often keeps these rows stale)`,
 				).toBe(true);
 				expect(pendingAtCommit, 'the high-water mark read was still waiting when the append committed').toBe(true);
 			} finally {
