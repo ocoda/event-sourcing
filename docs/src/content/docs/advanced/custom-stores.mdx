@@ -237,7 +237,9 @@ export class FooSnapshotStore extends SnapshotStore<FooSnapshotStoreConfig> {
 		snapshot: ISnapshot<A>,
 		pool?: ISnapshotPool,
 	): Promise<SnapshotEnvelope<A>> {
-		// Store a snapshot in your Snapshot Store and return its envelope
+		// Store a snapshot in your Snapshot Store and return its envelope. Reject with a
+		// SnapshotStoreVersionConflictException unless version is higher than the stream's last one, so that racing
+		// appends leave a single latest snapshot
 	}
 
 	async getLastEnvelope<A extends AggregateRoot>(

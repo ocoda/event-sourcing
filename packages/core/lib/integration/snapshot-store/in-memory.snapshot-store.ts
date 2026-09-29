@@ -292,7 +292,7 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 		aggregate: Type<A>,
 		filter?: ILatestSnapshotFilter,
 	): AsyncGenerator<SnapshotEnvelope<A>[]> {
-		let entities: InMemorySnapshotEntity<any>[] = [];
+		let entities: (InMemorySnapshotEntity<any> & { latest: string })[] = [];
 		const { streamName: aggregateName } = getAggregateMetadata(aggregate);
 
 		const collection = SnapshotCollection.get(filter?.pool);
@@ -312,7 +312,7 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 		// The aggregateId is an exclusive cursor: only the streams that come after it in that order are read
 		if (aggregateId) {
 			const cursor = `latest#${aggregateName}-${aggregateId}`;
-			entities = entities.filter(({ latest }) => latest !== null && latest < cursor);
+			entities = entities.filter(({ latest }) => latest < cursor);
 		}
 
 		if (limit) {

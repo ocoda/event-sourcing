@@ -733,6 +733,13 @@ export const describeSnapshotStoreConformance = (
 							await call(() => store.appendSnapshot(stream, version, snapshotAt(version, { id }), cursorPool));
 						}
 					}
+					// Streams of other aggregates in the same pool, which no page may hold, with or without a cursor. Their
+					// 'latest' keys sort before ('conformance-audit') and after ('conformance-ledger') the keys of the cursor
+					// streams, and their id sorts between the cursor ids
+					for (const aggregate of [ConformanceAudit, ConformanceLedger]) {
+						const stream = SnapshotStream.for(aggregate, ConformanceId.from(`c${suffix}`));
+						await call(() => store.appendSnapshot(stream, 1, snapshotAt(1), cursorPool));
+					}
 					const idsDescending = descendingBinary(ids);
 					expect(idsDescending.map((id) => id[0])).toEqual(['f', 'b', 'a', 'F', 'B', 'A', '0']);
 
