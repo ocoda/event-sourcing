@@ -16,6 +16,7 @@ import {
 	type EventCollectionInspection,
 	type Lease,
 	type MigrationEnvironment,
+	type Privilege,
 	type SnapshotCollectionInspection,
 	latestRepairPipeline,
 	leaseIdOf,
@@ -32,13 +33,36 @@ export interface MigrationContext {
 /** The size of the sample of gapped streams in a report. */
 const GAPPED_SAMPLE_SIZE = 1000;
 
-export const readEnvironment = async ({ client, topology }: MigrationContext): Promise<MigrationEnvironment> => {
+export const readEnvironment = async ({ client, db, topology }: MigrationContext): Promise<MigrationEnvironment> => {
 	const info = await client.db('admin').command({ buildInfo: 1 });
 	const serverVersion = String(info.version);
 	const serverMajor = Array.isArray(info.versionArray)
 		? Number(info.versionArray[0])
 		: Number.parseInt(serverVersion, 10);
-	return { serverVersion, serverMajor, topology, now: new Date() };
+	return {
+		serverVersion,
+		serverMajor,
+		topology,
+		now: new Date(),
+		database: db.databaseName,
+		privileges: await readPrivileges(db),
+	};
+};
+
+/**
+ * The privileges of the authenticated users, or `undefined` when nobody is authenticated (a server without access
+ * control, where every action is allowed) or the server doesn't say.
+ */
+const readPrivileges = async (db: Db): Promise<Privilege[] | undefined> => {
+	try {
+		const { authInfo } = await db.command({ connectionStatus: 1, showPrivileges: true });
+		const users = (authInfo as { authenticatedUsers?: unknown[] } | undefined)?.authenticatedUsers ?? [];
+		const privileges = (authInfo as { authenticatedUserPrivileges?: Privilege[] } | undefined)
+			?.authenticatedUserPrivileges;
+		return users.length > 0 && Array.isArray(privileges) ? privileges : undefined;
+	} catch {
+		return undefined;
+	}
 };
 
 /**

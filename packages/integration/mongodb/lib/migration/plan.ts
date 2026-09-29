@@ -38,13 +38,79 @@ export interface Lease {
 	expiresAt: Date;
 }
 
+/** A privilege as `connectionStatus` with `showPrivileges` reports it. */
+export interface Privilege {
+	resource: { db?: string; collection?: string; anyResource?: boolean; cluster?: boolean };
+	actions: string[];
+}
+
 /** The server a migration runs against. */
 export interface MigrationEnvironment {
 	serverVersion: string;
 	serverMajor: number;
 	topology: MongoDBTopology;
 	now: Date;
+	/** The database of the stores. */
+	database: string;
+	/**
+	 * The privileges of the authenticated users; `undefined` when nobody is authenticated (a server without access
+	 * control), so there is nothing to check.
+	 */
+	privileges?: Privilege[];
 }
+
+/**
+ * The actions a migration needs on the collection it migrates (the numbering's `$merge` inserts and updates), and on
+ * the catalog (registration and lease).
+ */
+export const MIGRATION_ACTIONS = {
+	events: ['find', 'insert', 'update', 'collMod', 'createIndex', 'dropIndex', 'listIndexes'],
+	snapshots: ['find', 'update', 'createIndex', 'dropIndex', 'listIndexes'],
+	catalog: ['find', 'insert', 'update', 'remove'],
+} as const;
+
+const covers = (resource: Privilege['resource'], database: string, collection: string): boolean =>
+	resource.anyResource === true ||
+	((resource.db === '' || resource.db === database) &&
+		(resource.collection === '' ? !collection.startsWith('system.') : resource.collection === collection));
+
+/**
+ * The actions of `actions` that no privilege grants on `<database>.<collection>`. Nothing is missing when the
+ * privileges are unknown (`undefined`: no access control).
+ */
+export const missingActions = (
+	privileges: readonly Privilege[] | undefined,
+	database: string,
+	collection: string,
+	actions: readonly string[],
+): string[] =>
+	privileges === undefined
+		? []
+		: actions.filter(
+				(action) =>
+					!privileges.some(
+						({ resource, actions: granted }) => granted.includes(action) && covers(resource, database, collection),
+					),
+			);
+
+/** Why the privileges block the migration of a collection, if they do. */
+const privilegeBlock = (
+	environment: MigrationEnvironment,
+	collection: string,
+	actions: readonly string[],
+): string | undefined => {
+	const missing = [
+		...missingActions(environment.privileges, environment.database, collection, actions).map(
+			(action) => `${action} on ${environment.database}.${collection}`,
+		),
+		...missingActions(environment.privileges, environment.database, CATALOG_COLLECTION, MIGRATION_ACTIONS.catalog).map(
+			(action) => `${action} on ${environment.database}.${CATALOG_COLLECTION}`,
+		),
+	];
+	return missing.length > 0
+		? `the user lacks privileges the migration needs: ${missing.join(', ')} (the dbAdmin and readWrite roles on the database grant them)`
+		: undefined;
+};
 
 /** What `migrate()` found in an event collection. */
 export interface EventCollectionInspection {
@@ -400,6 +466,10 @@ export const planEventCollection = (
 			blocking.push('the unique { streamId: 1, version: 1 } index is missing; create it, then migrate');
 		}
 	}
+	const privileges = privilegeBlock(environment, name, MIGRATION_ACTIONS.events);
+	if (privileges && (!registered || inspection.eventDateLeft || eventDateIndexes(inspection.indexes).length > 0)) {
+		blocking.push(privileges);
+	}
 	const leaseBlocking = leaseBlock(inspection.lease, options, environment.now);
 	if (leaseBlocking) {
 		blocking.push(leaseBlocking);
@@ -492,6 +562,10 @@ export const planSnapshotCollection = (
 	const blocking: string[] = [];
 	if (inspection.sharded && !registered) {
 		blocking.push('the collection is sharded: migrating sharded snapshot collections is not supported');
+	}
+	const privileges = privilegeBlock(environment, name, MIGRATION_ACTIONS.snapshots);
+	if (privileges && !(registered && unique)) {
+		blocking.push(privileges);
 	}
 	const leaseBlocking = leaseBlock(inspection.lease, options, environment.now);
 	if (leaseBlocking) {
