@@ -21,7 +21,7 @@
 			{
 				"patterns": [
 					{
-						"group": ["@nestjs/*/*"],
+						"group": ["@nestjs/*/**"],
 						"message": "Import from the package root (e.g. '@nestjs/common', '@nestjs/core'): deep imports reach into NestJS internals that are not part of the public API and do not resolve through the NestJS 12 exports map."
 					}
 				]

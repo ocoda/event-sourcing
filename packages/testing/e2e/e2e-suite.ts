@@ -231,6 +231,10 @@ export const runAccountLifecycleE2E = async <
 			commandBus.execute(new TransferBetweenAccountsCommand(accountId.value, account2Id.value, balance + 999)),
 		).rejects.toThrow('Insufficient funds');
 
+		// The rejected command must leave the source account loadable and unchanged
+		const account = await accountRepository.getById(accountId);
+		expect(account.balance).toBe(balance);
+
 		expect(customEventPublisher.publish).toHaveBeenCalled();
 	});
 
