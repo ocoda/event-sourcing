@@ -1,6 +1,6 @@
 {
 	"name": "@ocoda/event-sourcing-postgres",
-	"version": "3.0.1",
+	"version": "4.0.0-next.0",
 	"description": "NestJS Event Sourcing Library (@postgres)",
 	"keywords": [
 		"nestjs",
