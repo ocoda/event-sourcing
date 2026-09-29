@@ -2,5 +2,10 @@
 	"name": "@ocoda/event-sourcing-config",
 	"version": "1.0.0",
 	"private": true,
-	"license": "MIT"
+	"license": "MIT",
+	"scripts": {
+		"ci": "oxlint --deny-warnings && oxfmt --check",
+		"format": "oxfmt",
+		"lint": "oxlint"
+	}
 }

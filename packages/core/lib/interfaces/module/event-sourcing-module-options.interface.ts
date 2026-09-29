@@ -35,11 +35,8 @@ export interface EventSourcingModuleAsyncOptions<
 		TEventStoreConfig,
 		TSnapshotStoreConfig
 	>,
-	TFactory extends EventSourcingOptionsFactory<
-		TEventStoreConfig,
-		TSnapshotStoreConfig,
-		TOptions
-	> = EventSourcingOptionsFactory<TEventStoreConfig, TSnapshotStoreConfig, TOptions>,
+	TFactory extends EventSourcingOptionsFactory<TEventStoreConfig, TSnapshotStoreConfig, TOptions> =
+		EventSourcingOptionsFactory<TEventStoreConfig, TSnapshotStoreConfig, TOptions>,
 > extends Pick<ModuleMetadata, 'imports'> {
 	useExisting?: Type<TFactory>;
 	useClass?: Type<TFactory>;

@@ -42,7 +42,8 @@ jobs:
               - pnpm-lock.yaml
               - pnpm-workspace.yaml
               - turbo.json
-              - biome.json
+              - .oxlintrc.json
+              - .oxfmtrc.json
               - docker-compose.yml
               - .github/workflows/ci.yml
               - .github/actions/**

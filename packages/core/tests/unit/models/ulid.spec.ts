@@ -22,7 +22,7 @@ describe(ULID, () => {
 	});
 
 	it('should throw when trying to create a ULID from an undefined variable', () => {
-		let value: string | undefined;
+		const value: string | undefined = undefined;
 		expect(() => ULID.from(value as unknown as string)).toThrow(InvalidIdException.becauseEmpty());
 	});
 

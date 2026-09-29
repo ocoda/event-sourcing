@@ -1,0 +1,64 @@
+{
+	"$schema": "./node_modules/oxlint/configuration_schema.json",
+	"plugins": ["typescript", "import", "unicorn", "promise", "node", "jest", "oxc"],
+	"categories": {
+		"correctness": "error"
+	},
+	"env": {
+		"builtin": true,
+		"node": true,
+		"es2024": true
+	},
+	// benchmarks/ is not maintained and has never been linted.
+	"ignorePatterns": ["dist", "coverage", ".next", ".turbo", "benchmarks"],
+	"rules": {
+		"no-unused-vars": [
+			"error",
+			{ "args": "none", "caughtErrors": "none", "ignoreRestSiblings": true, "varsIgnorePattern": "^_" }
+		],
+		"no-restricted-imports": [
+			"error",
+			{
+				"patterns": [
+					{
+						"group": ["@nestjs/*/**"],
+						"message": "Import from the package root (e.g. '@nestjs/common', '@nestjs/core'): deep imports reach into NestJS internals that are not part of the public API and do not resolve through the NestJS 12 exports map."
+					}
+				]
+			}
+		],
+		"import/no-cycle": "warn",
+		// Nest resolves constructor dependencies from design:paramtypes, which needs value imports.
+		"typescript/consistent-type-imports": "off",
+		"typescript/no-extraneous-class": ["error", { "allowWithDecorator": true, "allowStaticOnly": true }],
+		// False positive on Nest's ExceptionFilter#catch(exception, host).
+		"promise/valid-params": "off",
+		"jest/expect-expect": ["error", { "assertFunctionNames": ["expect", "expect*"] }],
+		"jest/no-conditional-expect": "off",
+		"jest/require-to-throw-message": "off",
+		"jest/valid-title": ["error", { "ignoreTypeOfDescribeName": true }]
+	},
+	"overrides": [
+		{
+			// Known cycle (decorators -> providers -> integration -> helpers) through the core barrels, to be fixed
+			// separately. Remove this override once that cycle is broken.
+			"files": ["packages/core/lib/**"],
+			"rules": {
+				"import/no-cycle": "off"
+			}
+		},
+		{
+			"files": ["**/tests/**", "packages/testing/**"],
+			"env": {
+				"jest": true
+			},
+			"rules": {
+				// Empty classes are the usual fixture for commands, queries, events and handlers.
+				"typescript/no-extraneous-class": [
+					"error",
+					{ "allowWithDecorator": true, "allowStaticOnly": true, "allowEmpty": true }
+				]
+			}
+		}
+	]
+}

@@ -1,5 +1,4 @@
 import { Logger } from '@nestjs/common';
-// biome-ignore lint/style/useImportType: DI
 import { EventMap } from './event-map';
 import type {
 	EventSourcingModuleOptions,
@@ -19,9 +18,9 @@ import type { EventEnvelope, EventStream } from './models';
  */
 const storesWithoutPublisherWarned = new WeakSet<object>();
 
-export abstract class EventStore<TOptions = Omit<EventSourcingModuleOptions['eventStore'], 'driver'>>
-	implements EventStoreDriver
-{
+export abstract class EventStore<
+	TOptions = Omit<EventSourcingModuleOptions['eventStore'], 'driver'>,
+> implements EventStoreDriver {
 	protected readonly logger = new Logger(this.constructor.name);
 	protected _publish: (envelope: EventEnvelope<IEvent>) => any;
 
@@ -29,7 +28,6 @@ export abstract class EventStore<TOptions = Omit<EventSourcingModuleOptions['eve
 		protected readonly eventMap: EventMap,
 		protected readonly options: TOptions,
 	) {
-		// biome-ignore lint/correctness/noConstructorReturn:
 		return new Proxy(this, {
 			get(target, propKey) {
 				if (propKey === 'appendEvents') {

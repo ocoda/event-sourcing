@@ -9,7 +9,6 @@ tests
 .github
 .vscode
 .turbo
-biome.json
 docker-compose.yml
 jest.config.js
 pnpm-lock.yaml

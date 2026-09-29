@@ -107,7 +107,6 @@ describe(`${MariaDBSnapshotStore.name} resilience`, () => {
 		snapshotStore = new MariaDBSnapshotStore(config({ connectionLimit: POOL_SIZE, acquireTimeout: 3_000 }));
 		await snapshotStore.connect();
 
-		// biome-ignore lint/complexity/useLiteralKeys: Needed to check the internal workings of the snapshot store
 		pool = snapshotStore['pool'];
 	});
 
@@ -313,7 +312,6 @@ describe(`${MariaDBSnapshotStore.name} resilience`, () => {
 			it('should report a version conflict when the race is lost after the version check passed', async () => {
 				const concurrentStore = await newConcurrentStore();
 
-				// biome-ignore lint/complexity/useLiteralKeys: Needed to check the internal workings of the snapshot store
 				const concurrentPool: Pool = concurrentStore['pool'];
 				const getConnection = concurrentPool.getConnection.bind(concurrentPool);
 

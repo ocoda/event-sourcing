@@ -6,8 +6,10 @@ describe(eventFilter, () => {
 	@Event('A')
 	class A implements IEvent {}
 	@Event('B')
+	// oxlint-disable-next-line no-unused-vars -- only declared to run its decorators
 	class B implements IEvent {}
 	@Event('C')
+	// oxlint-disable-next-line no-unused-vars -- only declared to run its decorators
 	class C implements IEvent {}
 
 	let stream: Subject<any>;

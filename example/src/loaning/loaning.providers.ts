@@ -1,5 +1,4 @@
 import type { Type } from '@nestjs/common';
-import type { Controller } from '@nestjs/common/interfaces';
 import type { ICommandHandler, IEvent, IQueryHandler, SnapshotRepository } from '@ocoda/event-sourcing';
 import { BookLoanController } from './application/book-loan.controller';
 import {
@@ -25,4 +24,4 @@ export const Events: Type<IEvent>[] = [BookLoanCreatedEvent, BookLoanExtendedEve
 
 export const AggregateRepositories = [BookLoanRepository];
 
-export const Controllers: Type<Controller>[] = [BookLoanController];
+export const Controllers: Type<object>[] = [BookLoanController];

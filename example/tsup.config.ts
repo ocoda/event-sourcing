@@ -6,8 +6,5 @@ export default defineConfig({
 	target: 'es2023',
 	noExternal: ['@ocoda/event-sourcing'],
 	sourcemap: true,
-	watch: [
-		'./src/**/*',
-		'../packages/core/lib/**/*',
-	],
+	watch: ['./src/**/*', '../packages/core/lib/**/*'],
 });

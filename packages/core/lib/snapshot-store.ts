@@ -11,9 +11,9 @@ import type {
 } from './interfaces';
 import type { AggregateRoot, SnapshotEnvelope, SnapshotStream } from './models';
 
-export abstract class SnapshotStore<TOptions = Omit<EventSourcingModuleOptions['snapshotStore'], 'driver'>>
-	implements SnapshotStoreDriver
-{
+export abstract class SnapshotStore<
+	TOptions = Omit<EventSourcingModuleOptions['snapshotStore'], 'driver'>,
+> implements SnapshotStoreDriver {
 	protected readonly logger = new Logger(this.constructor.name);
 
 	constructor(protected readonly options: TOptions) {}

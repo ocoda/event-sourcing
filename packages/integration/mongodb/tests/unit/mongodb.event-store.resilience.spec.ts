@@ -79,9 +79,7 @@ describe(`${MongoDBEventStore.name} resilience`, () => {
 	beforeAll(async () => {
 		eventStore = await newStore();
 
-		// biome-ignore lint/complexity/useLiteralKeys: Needed to check the internal workings of the event store
 		client = eventStore['client'];
-		// biome-ignore lint/complexity/useLiteralKeys: Needed to check the internal workings of the event store
 		database = eventStore['database'];
 	});
 
@@ -212,7 +210,6 @@ describe(`${MongoDBEventStore.name} resilience`, () => {
 				const otherStore = await newStore();
 
 				try {
-					// biome-ignore lint/complexity/useLiteralKeys: Needed to check the internal workings of the event store
 					const listCollections = jest.spyOn(otherStore['database'], 'listCollections');
 
 					const stream = newStream();

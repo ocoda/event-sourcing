@@ -56,7 +56,6 @@ describe(DynamoDBSnapshotStore, () => {
 		await snapshotStore.connect();
 		await snapshotStore.ensureCollection();
 
-		// biome-ignore lint/complexity/useLiteralKeys: Needed to check the internal workings of the event store
 		client = snapshotStore['client'];
 	});
 

@@ -23,12 +23,6 @@ describe(CommandBus, () => {
 		}
 	}
 
-	class CommandHandlerMissingCommandMetadata {
-		execute() {
-			return 'ok';
-		}
-	}
-
 	class CommandHandlerForCommandWithMetadata {
 		execute() {
 			return 'ok';

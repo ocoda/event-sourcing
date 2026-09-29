@@ -2,7 +2,6 @@ import { CommandHandler, type ICommand, type ICommandHandler } from '@ocoda/even
 
 import { BookNotFoundException } from '../../domain/exceptions';
 import { AuthorId, BookId } from '../../domain/models';
-// biome-ignore lint/style/useImportType: DI
 import { BookRepository } from '../repositories';
 
 export class RemoveBookAuthorCommand implements ICommand {

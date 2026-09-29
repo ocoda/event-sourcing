@@ -2,7 +2,6 @@ import { type IQuery, type IQueryHandler, QueryHandler } from '@ocoda/event-sour
 import { BookNotFoundException } from '../../domain/exceptions';
 import { BookId } from '../../domain/models';
 import { BookDto } from '../book.dtos';
-// biome-ignore lint/style/useImportType: DI
 import { BookRepository } from '../repositories';
 
 export class GetBookByIdQuery implements IQuery {

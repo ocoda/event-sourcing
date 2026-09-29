@@ -7,9 +7,9 @@
 	},
 	"scripts": {
 		"dev": "tsup --onSuccess \"node dist/main.js\"",
-		"ci": "biome ci",
-		"format": "biome format --write",
-		"lint": "biome check --write",
+		"ci": "oxlint --deny-warnings && oxfmt --check",
+		"format": "oxfmt",
+		"lint": "oxlint",
 		"typecheck": "tsc --noEmit -p tsconfig.json"
 	},
 	"dependencies": {

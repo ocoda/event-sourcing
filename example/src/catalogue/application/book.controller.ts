@@ -1,5 +1,4 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
-// biome-ignore lint/style/useImportType: DI
 import { CommandBus, QueryBus } from '@ocoda/event-sourcing';
 import type { BookId } from '../domain/models';
 import type { AddBookAuthorDto, AddBookDto, RemoveBookAuthorDto, RemoveBookDto } from './book.dtos';

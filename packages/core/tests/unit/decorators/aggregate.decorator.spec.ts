@@ -27,6 +27,7 @@ describe('@Aggregate', () => {
 	it('should throw when an aggregate name exceeds 50 characters', () => {
 		const decorate = (length: number) => {
 			@Aggregate({ streamName: 'a'.repeat(length) })
+			// oxlint-disable-next-line no-unused-vars -- only declared to run its decorators
 			class Account extends AggregateRoot {}
 		};
 

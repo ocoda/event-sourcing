@@ -51,7 +51,6 @@ describe(PostgresSnapshotStore, () => {
 		await snapshotStore.connect();
 		await snapshotStore.ensureCollection();
 
-		// biome-ignore lint/complexity/useLiteralKeys: Needed to check the internal workings of the event store
 		pool = snapshotStore['pool'];
 	});
 
@@ -385,7 +384,6 @@ describe(PostgresSnapshotStore, () => {
 		});
 
 		it('should discard idle connections that fail instead of crashing', async () => {
-			// biome-ignore lint/complexity/useLiteralKeys: Needed to check the logged error
 			const error = jest.spyOn(snapshotStore['logger'], 'error').mockImplementation(() => undefined);
 
 			// Make sure the pool holds more than the connection that terminates the others
@@ -603,7 +601,6 @@ describe(PostgresSnapshotStore, () => {
 			beforeEach(async () => {
 				smallStore = new PostgresSnapshotStore({ driver: undefined as never, ...connectionOptions, max: 2 });
 				await smallStore.connect();
-				// biome-ignore lint/complexity/useLiteralKeys: Needed to check the connections of the store
 				smallPool = smallStore['pool'];
 			});
 
@@ -869,7 +866,6 @@ describe(PostgresSnapshotStore, () => {
 		});
 
 		it('should not build a missing index on an existing collection but log how to create it', async () => {
-			// biome-ignore lint/complexity/useLiteralKeys: Needed to check the logged warning
 			const warn = jest.spyOn(snapshotStore['logger'], 'warn').mockImplementation(() => undefined);
 			const table = SnapshotCollection.get('postgres-existing');
 			const statement =

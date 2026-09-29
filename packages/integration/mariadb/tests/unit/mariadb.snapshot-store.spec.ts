@@ -48,7 +48,6 @@ describe(MariaDBSnapshotStore, () => {
 		await snapshotStore.connect();
 		await snapshotStore.ensureCollection();
 
-		// biome-ignore lint/complexity/useLiteralKeys: Needed to check the internal workings of the event store
 		pool = snapshotStore['pool'];
 	});
 
@@ -110,7 +109,7 @@ describe(MariaDBSnapshotStore, () => {
 		const lastSnapshotEnvelope = snapshotEnvelopesAccountA[snapshotEnvelopesAccountA.length - 1];
 		const lastVersion = lastSnapshotEnvelope.metadata.version;
 		const beforeLastVersion = lastVersion - 10;
-		expect(
+		await expect(
 			snapshotStore.appendSnapshot(snapshotStreamAccountA, beforeLastVersion, lastSnapshotEnvelope),
 		).rejects.toThrow(
 			new SnapshotStoreVersionConflictException(snapshotStreamAccountA, beforeLastVersion, lastVersion),

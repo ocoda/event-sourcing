@@ -62,9 +62,9 @@ docker compose up -d postgres mariadb
    **Testing expectations:** keep minimum coverage at 90% for core and integration packages, keep patch coverage at 90% for new or changed code, run targeted suites locally when possible (`pnpm test --filter=@ocoda/event-sourcing` and `pnpm test:cov --filter=@ocoda/event-sourcing`), and start the matching Docker service from `docker-compose.yml` for integration tests.
 
 7. **Lint and format your changes**
-  To make sure your changes are in accordance to the styles used in this repository and pass the CI checks, you can run the linting and formatting steps.
+  To make sure your changes are in accordance to the styles used in this repository and pass the CI checks, you can run the formatting (oxfmt) and linting (oxlint) steps.
     ```bash
-    pnpm lint format
+    pnpm format && pnpm lint
     ```
 
 8. **Commit Your Changes**

@@ -18,6 +18,7 @@ describe('@Event', () => {
 	it('should throw when an event name exceeds 80 characters', () => {
 		const decorate = (length: number) => {
 			@Event('a'.repeat(length))
+			// oxlint-disable-next-line no-unused-vars -- only declared to run its decorators
 			class InvalidEvent implements IEvent {}
 		};
 

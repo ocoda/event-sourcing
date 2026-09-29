@@ -7,12 +7,18 @@
 		},
 		"test": {},
 		"test:cov": {},
-		"ci": {},
-		"lint": {},
+		"ci": {
+			"inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/.oxlintrc.json", "$TURBO_ROOT$/.oxfmtrc.json"]
+		},
+		"lint": {
+			"inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/.oxlintrc.json"]
+		},
 		"typecheck": {
 			"cache": false
 		},
-		"format": {},
+		"format": {
+			"cache": false
+		},
 		"benchmark": {},
 		"benchmark:report": {}
 	}

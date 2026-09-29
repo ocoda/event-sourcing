@@ -102,7 +102,6 @@ describe(`${MariaDBEventStore.name} resilience`, () => {
 		eventStore.publish = jest.fn(async () => Promise.resolve());
 		await eventStore.connect();
 
-		// biome-ignore lint/complexity/useLiteralKeys: Needed to check the internal workings of the event store
 		pool = eventStore['pool'];
 	});
 
@@ -319,7 +318,6 @@ describe(`${MariaDBEventStore.name} resilience`, () => {
 				concurrentStore.publish = jest.fn(async () => Promise.resolve());
 				await concurrentStore.connect();
 
-				// biome-ignore lint/complexity/useLiteralKeys: Needed to check the internal workings of the event store
 				const concurrentPool: Pool = concurrentStore['pool'];
 				const getConnection = concurrentPool.getConnection.bind(concurrentPool);
 
