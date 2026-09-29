@@ -526,7 +526,43 @@ Each driver's schema v2 PR fills its subsection. Until then a driver claims noth
 
 ### MariaDB
 
-*Pending.* S1 and S2 results; `read-all-gap-safe` on 10.11, 11.4 and 11.8; the InnoDB source citation (MariaDB 10.11 `trx0trx.cc`, `trx_t::commit_in_memory`) showing that a committing transaction leaves the read-view set before its locks are released; the `occurred_on` repair counts of the cross-version fixture.
+**Verdict: `globalOrder: 'gap-safe'` on InnoDB, with the hybrid reader below; `'best-effort'` on Galera (`wsrep_on`).** The plain keyset reader of §3 is **not** gap-safe on MariaDB.
+
+**InnoDB source citation** (MariaDB 10.11.15, commit `cb0d6dd`; the same order in 11.4.8 and 11.8.3):
+
+- `trx_t::commit_in_memory` ([trx0trx.cc l.1375–1442](https://github.com/MariaDB/server/blob/cb0d6dd835023a7162ace471cd047161f205dd58/storage/innobase/trx/trx0trx.cc#L1375-L1442)) calls `trx_sys.deregister_rw(this)` (l.1420), which removes the transaction from `rw_trx_hash`, the set every new read view copies, **before** `release_locks()` (l.1442) releases the counter row's lock.
+- That is not enough for a plain reader: `ReadViewBase::snapshot` copies the set with `rw_trx_hash.iterate` ([trx0sys.h l.1071–1086](https://github.com/MariaDB/server/blob/cb0d6dd835023a7162ace471cd047161f205dd58/storage/innobase/include/trx0sys.h#L1071-L1086)), a lock-free traversal ([lf_hash.cc l.517–537](https://github.com/MariaDB/server/blob/cb0d6dd835023a7162ace471cd047161f205dd58/mysys/lf_hash.cc#L517-L537)) that is not atomic against commits. The walk can pass T1 while it is active, then find the slot of T2 (which took the counter after T1 committed) already empty: the view shows T2's position without T1's lower one.
+- **The hybrid reader closes it.** `readAll` hands out a batch only as far as its positions follow on from `fromPosition`. At the first gap it hands out the prefix; with an empty prefix it reads `H = last_position` of the catalog row `LOCK IN SHARE MODE` (autocommit), which returns only after the counter's holder passed `release_locks()`, so every transaction with a position ≤ `H` has left `rw_trx_hash`; it re-reads with `global_position <= H` and hands out everything (a gap below `H` is permanent). Positions have no holes (a rollback reverts the counter), so a contiguous batch is a committed prefix.
+
+**S1, position stress** (spike, 10.11.15, 8 writers × 200 appends of 1–3 events, ~10% on two hot streams for conflicts):
+
+- Writers: 15 runs, every event exactly once, contiguous positions `1..N`, counter = `MAX` after each run, conflicts roll the counter back, `insertId` = `LAST_INSERT_ID()` on every check. `innodb_snapshot_isolation=ON` with a consistent read before the counter `UPDATE` fails with 1020 under `REPEATABLE READ` and passes under `READ COMMITTED`.
+- Plain readers without amplification: 0 misses in ~630k reader queries (5 base runs, 2 soak runs of 16 writers × 500).
+- **Amplified** (16,277 prepared XA transactions, ~5 ms per read view): the plain reader missed 1–22 events per reader in 3 of 3 runs with correct writers; the HWM and hybrid readers had 0 misses in 6 of 6 runs.
+- The broken reserve → sleep → commit writer was caught every time: plain readers 1,700–1,818 missing, HWM reader 1,687, hybrid readers under amplification 65 and 32.
+- Throughput, one pool, 8 writers: 620–685 appends/s on tmpfs (p50 ≈ 10 ms, p99 16–18 ms); on disk 101/s with the binary log, 212/s without; 1 writer 339/s (tmpfs), 75/s (disk); 8 pools with 1 writer each 1,182/s in total (tmpfs), 438/s (disk). Always reading the HWM cost ~30% of writer throughput (476/s), hence the hybrid reader.
+
+**G-maria measurements** (Docker on a macOS host, data on tmpfs, 128 MB buffer pool; the host had < 15 GiB free, so no run exceeded 100k rows):
+
+- Append throughput with the driver, 8 writers × 200 appends and a tailing `readAll` per pool: 10.11.15: 665 appends/s on one pool (p50 11.7 ms, p99 17.9 ms), 1,421/s over 8 pools, 342/s for one writer; 11.8.9: 555/s, 1,559/s, 345/s. Every event read exactly once.
+- Amplified `read-all-gap-safe` (driver spec `mariadb.read-all-gap-safe.spec.ts`, 12,000 prepared XA transactions, 5 rounds × 8 writers × 100 appends): 11.4.13, 3 runs: the plain keyset reader missed 6, 0 and 0 events; the store's `readAll` missed none and settled 1 torn batch under the high-water mark. 11.8.9, 1 run: 0 and 0.
+- Migration of a synthetic 3.x table of 100,000 events (91.5 MB, 10 per stream, 5% written an hour off, 0.1% unrepairable): 10.11.15: dry run 2.1 s (the `occurred_on` counts 1.9 s), migration 2.5 s (copy 1.97 s, catch-up 0.17 s), 104,846 rows S-locked by the copy in 0.52 MB of lock memory, 56 MB of redo, 99 MB of page writes; 11.8.9: dry run 3.5 s, migration 2.7 s (copy 2.2 s). Positions `1..100000`, no stream out of version order, 99,900 `occurred_on` values restored from the event ids, the next append at 100,001.
+
+**S2, migration timing** (spike, 1M events, 10.11.15 on tmpfs, 128 MB buffer pool): as written in §6, 307.5 s (copy 295.8 s, 26.2 GB of page writes); with `unique_checks=0, foreign_key_checks=0` for the copy into the empty table, **74.9 s** (copy 68.2 s, catch-up 6.4 s, 0.39 GB of page writes, 397 MB of redo), same result. The copy S-locks every source row (1,032,688 rows, 3.4 MB of lock memory), so a 3.x insert during the copy waits and fails with 1205 while reads continue. Peak extra disk ≤ 0.93 × the v1 table plus a temporary table in `tmpdir`. Dry run: gapped streams 1.8 s, case variants 5.9 s, `occurred_on` counts 35–37 s. 10M rows were not run (tmpfs too small; a disk-backed attempt filled the host disk). Runbook figures: ~1.5 min per million events for the migration, ~0.75 min per million for the dry run, free space 1.5 × the table plus 0.6 × in `tmpdir`.
+
+**CI** ([#571](https://github.com/ocoda/event-sourcing/pull/571)): the conformance suite with no skips beyond the capability gates (`headers-unsupported-rejects`, `read-all-best-effort`), including `read-all-gap-safe`, `append-atomic-partial-failure` (a `SIGNAL` trigger), `occurred-on-milliseconds`, `latest-unique-concurrent`, `aggregate-cursor-paging` and `registered-on-milliseconds`; the amplified spec with 1,000 prepared XA transactions; the migration specs with crash injection after every step; and the cross-version fixture, green on MariaDB 10.11.19, 11.4.13 and 11.8.9.
+
+**Cross-version fixture** (3.0.2 writer in `America/New_York`, 200 events in 4 pools, 37 snapshots): every pool is refused before the migration; the dry run changes no table or checksum and reports, per pool, `from: 'v1'`, the duplicate event id, the gapped stream plus the lower-case twin that the binary collation splits off (`caseVariantStreams: 1`), and `occurredOnRepair` with `tzShifted` = every row and `kept: 0` (119, 56, 16 and 9 events); after `migrate()` positions are `1..N` in 3.x order with every stream in version order (D33, including the inverted and out-of-order streams), `occurredOn` equals what 3.0.2 appended, to the millisecond (3.x read it an hour off in the repeated hour of the end of daylight saving time), the next appends continue at `N + 1`, the gapped stream conflicts with its `actualVersion`, every snapshot stream has exactly one flag on its highest version, the legacy pool's `registered_on` values survive (the `ON UPDATE` attribute never fires), and a 3.0.2 append afterwards fails with 1136 in every pool.
+
+**Amendments to §3 and §6 (MariaDB) from this evidence** (addendum M1–M8):
+
+- `readAll` is the hybrid reader above, not a plain keyset.
+- An append runs `SET TRANSACTION ISOLATION LEVEL READ COMMITTED` before `START TRANSACTION` (`innodb_snapshot_isolation=ON`, the default from 11.6.2, fails a `REPEATABLE READ` transaction with 1020); a 1020 is `not-persisted`. `appendSnapshot` also runs in `READ COMMITTED`.
+- The catch-up joins on `n.stream_id = CONVERT(o.stream_id USING utf8mb4) COLLATE utf8mb4_bin` (a plain `COLLATE` fails with 1253 on latin1 and utf8mb3 tables), and numbers by the D33 key, like the copy.
+- The copy runs with `unique_checks = 0, foreign_key_checks = 0`, listed as steps of the dry run; `ER_LOCK_TABLE_FULL` at the copy suggests a bigger buffer pool or a `READ COMMITTED` copy by hand.
+- The named lock is `CONCAT('ocoda:migrate:', SHA1(CONCAT(DATABASE(), '.', <t>)))` (10.11 rejects names over 192 characters).
+- The `occurred_on` counts of the dry run compute the decoded event id time in a derived table, and are documented at ~0.75 min per million rows (35–37 s per million in S2, 1.9–4.0 s per 100,000 here).
+- Snapshots: the conversion (`ALTER … ALGORITHM=COPY, LOCK=SHARED`) runs first, so the flag repairs compare stream ids in binary and the `ON UPDATE` attribute is gone before any `UPDATE`; then the superseded flags are cleared, the highest versions flagged, and `ux_latest` added (`ALGORITHM=INPLACE, LOCK=SHARED`).
 
 ### MongoDB
 

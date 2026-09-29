@@ -15,6 +15,8 @@ export const MariaDBErrorNumber = {
 	UnknownSystemVariable: 1193,
 	/** `ER_LOCK_WAIT_TIMEOUT`. */
 	LockWaitTimeout: 1205,
+	/** `ER_LOCK_TABLE_FULL`: the row locks of a transaction outgrew the buffer pool. */
+	LockTableFull: 1206,
 	/** `ER_LOCK_DEADLOCK`. */
 	Deadlock: 1213,
 } as const;

@@ -4,8 +4,196 @@ title: MariaDB
 
 import { Aside } from '@astrojs/starlight/components';
 
-`@ocoda/event-sourcing-mariadb` provides the `MariaDBEventStore` and the `MariaDBSnapshotStore`. It needs the `mariadb` driver, which is a peer dependency: see [Installation](/start/install) and [Database drivers are peer dependencies](/upgrading/v4#drivers).
+`@ocoda/event-sourcing-mariadb` provides the `MariaDBEventStore` and the `MariaDBSnapshotStore`, on InnoDB. It needs the `mariadb` driver, which is a peer dependency: see [Installation](/start/install) and [Database drivers are peer dependencies](/upgrading/v4#drivers). It is tested on MariaDB 10.11, 11.4 and 11.8.
 
-<Aside type="note" title="Schema v2 lands in a later prerelease">
-This page will describe the 4.0 schema, its limits and capabilities, the privileges the store needs, and how to migrate 3.x tables. Until then, see [MariaDB schema v2](/upgrading/v4#mariadb-schema-v2) in the 4.0 migration guide.
-</Aside>
+This page describes schema v2, the schema of 4.0. Tables that 3.x created must be migrated once with `migrate()`: see [Migrating 3.x tables](#migration).
+
+## Configuration [#configuration]
+
+The store options are the options of a `mariadb` pool ([`PoolConfig`](https://github.com/mariadb-corporation/mariadb-connector-nodejs/blob/master/documentation/promise-api.md#pool-options)), plus `ddl`:
+
+```ts
+import { EventSourcingModule } from '@ocoda/event-sourcing';
+import {
+	MariaDBEventStore,
+	type MariaDBEventStoreConfig,
+	MariaDBSnapshotStore,
+	type MariaDBSnapshotStoreConfig,
+} from '@ocoda/event-sourcing-mariadb';
+
+const connection = { host: 'localhost', port: 3306, user: 'app', password: process.env.DB_PASSWORD, database: 'app' };
+
+EventSourcingModule.forRoot<MariaDBEventStoreConfig, MariaDBSnapshotStoreConfig>({
+	eventStore: { driver: MariaDBEventStore, ...connection, connectionLimit: 20 },
+	snapshotStore: { driver: MariaDBSnapshotStore, ...connection },
+});
+```
+
+- **`ddl: 'auto'`** (the default) lets `ensureCollection()` create the tables of a pool. **`ddl: 'none'`** only checks them and registers them in the catalog: see [Creating the tables yourself](#ddl-none).
+- `connect()` checks the connection, so a wrong host or password fails the application's bootstrap. `disconnect()` can be called more than once, and before `connect()`.
+- The store reads and writes times as UTC text, so the connector's `timezone` and the session's `time_zone` don't change them. Positions are read as text too, so `bigIntAsNumber` and `insertIdAsNumber` don't change them either.
+
+## Schema [#schema]
+
+Every pool has an event table, `events` for the default pool and `<pool>-events` for the others, and a snapshot table, `snapshots` or `<pool>-snapshots`. `ensureCollection()` registers every table in the catalog, `event_sourcing_collections`, one table per database:
+
+```sql
+CREATE TABLE IF NOT EXISTS `event_sourcing_collections` (
+  name VARCHAR(64) NOT NULL PRIMARY KEY,
+  kind ENUM('events', 'snapshots') NOT NULL,
+  schema_version SMALLINT NOT NULL,
+  last_position BIGINT NOT NULL DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE IF NOT EXISTS `events` (
+  stream_id VARCHAR(255) NOT NULL,
+  version INT NOT NULL,
+  event VARCHAR(255) NOT NULL,
+  payload JSON NOT NULL,
+  event_id VARCHAR(40) NOT NULL,
+  aggregate_id VARCHAR(255) NOT NULL,
+  occurred_on DATETIME(3) NOT NULL,
+  correlation_id VARCHAR(255) NULL,
+  causation_id VARCHAR(255) NULL,
+  global_position BIGINT NOT NULL,
+  headers JSON NULL,
+  event_version INT NULL,
+  PRIMARY KEY (stream_id, version),
+  UNIQUE KEY ux_global_position (global_position)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE IF NOT EXISTS `snapshots` (
+  stream_id VARCHAR(255) NOT NULL,
+  version INT NOT NULL,
+  payload JSON NOT NULL,
+  snapshot_id VARCHAR(40) NOT NULL,
+  aggregate_id VARCHAR(255) NOT NULL,
+  registered_on DATETIME(3) NOT NULL,
+  aggregate_name VARCHAR(255) NOT NULL,
+  latest VARCHAR(270) NULL,
+  PRIMARY KEY (stream_id, version),
+  UNIQUE KEY ux_latest (aggregate_name, latest)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+```
+
+- **The catalog** lists the collections (`listCollections()` reads it, so 3.x tables aren't listed until they are migrated), and its `last_position` is the counter of each event pool's global positions.
+- **Times** are `DATETIME(3)`: the UTC wall time, to the millisecond. 3.x stored a `TIMESTAMP` to the second.
+- **Stream ids are case-sensitive**: the tables compare text in binary (`utf8mb4_bin`), like the PostgreSQL, MongoDB and in-memory stores. `Acc-1` and `acc-1` are two streams. The 3.x tables used the database's default collation, which usually ignores case.
+- **Limits.** Stream ids, aggregate ids, event names, correlation ids and causation ids are at most 255 characters (the core checks them before any I/O), and the headers of an event at most 8 KiB of JSON. A table name is at most 64 characters, so a pool name is at most 57 characters (54 for a pool that also has snapshots); `ensureCollection()` rejects a longer one with an `EventStoreCollectionCreationException` or a `SnapshotStoreCollectionCreationException`.
+- **Payloads are JSON.** A `bigint` in a payload can't be stored: the append fails with `outcome: 'not-persisted'` before any I/O. Store big integers as strings.
+
+## Capabilities [#capabilities]
+
+| Capability | `MariaDBEventStore` |
+| --- | --- |
+| `atomicAppend` | `true`: an append is one transaction. |
+| `headers` | `true`: stored in the `headers` column. |
+| `globalOrder` | `'gap-safe'` on InnoDB; `'best-effort'` on a Galera cluster (`wsrep_on`), where row locks are not cluster-wide. |
+
+**Global positions.** An append takes its positions from its pool's row in the catalog, `UPDATE … SET last_position = LAST_INSERT_ID(last_position + n)`, as the first write of its transaction. The row lock is held until the append commits or rolls back, so the appends to a pool commit in the order of their positions, and a rolled-back append gives its positions back: a pool's positions have no holes. The counter never goes down: a pool whose table is dropped and created again continues after its last position, and `ensureCollection()` raises a counter that is behind the stored positions.
+
+**Why `readAll` is gap-safe.** InnoDB builds the read view of a statement from a walk over the active transactions that is not atomic against commits, so, rarely, a statement sees an append without the one that committed just before it. `readAll` therefore hands out a batch only as far as its positions follow on from where it is. At a gap, it reads the pool's counter with a shared lock, which waits for the append that holds it; every position up to that value has committed and is visible then, and a gap below it is permanent (a deleted event, or a pool that was dropped and created again). A reader that tails the store and resumes at `lastPosition + 1n` therefore never skips an event. Each batch is one statement; no transaction, cursor or connection is held between batches.
+
+## Appends [#appends]
+
+An append runs on a connection of its own, in a `READ COMMITTED` transaction (set explicitly: with `innodb_snapshot_isolation`, the default from MariaDB 11.6.2, a `REPEATABLE READ` transaction could fail with error 1020):
+
+1. the version check, outside the transaction (`SELECT MAX(version)`);
+2. the counter update, which takes the pool's row lock and the positions;
+3. one multi-row `INSERT` with explicit columns;
+4. `COMMIT`.
+
+- A duplicate on the primary key (`stream_id`, `version`) is a version conflict: another append took the version. A duplicate on `ux_global_position` means the counter is behind the stored positions; the append fails with `outcome: 'not-persisted'`, and `ensureCollection()` heals the counter.
+- Every failure before the `COMMIT` rolls back (explicitly, also after a lock wait timeout, which InnoDB doesn't roll back) and throws an `EventStorePersistenceException` with `outcome: 'not-persisted'`. Only a failure while committing, such as a lost connection, is `'unknown'`.
+- An append to a pool without a catalog row (never ensured, or not migrated) fails with `outcome: 'not-persisted'` and an `EventCollectionNotFoundException` as its cause, and creates nothing.
+- `ExpectedVersion.Any` makes up to 16 attempts while concurrent appends take the versions, and can still conflict under sustained contention on one stream: retry such a conflict in your application.
+
+**Throughput.** The counter's row lock is held through the commit, so the appends to one pool are serialized, and each one costs a commit flush (`innodb_flush_log_at_trx_commit=1`), plus the binary log's when it is on. Pools are the unit of scale: appends to different pools don't wait for each other. Measured with 8 writers, 1 to 3 events per append:
+
+| Server | One pool | 8 pools, one writer each |
+| --- | --- | --- |
+| MariaDB 10.11 and 11.8 in Docker, data in memory (tmpfs) | 555 to 685 appends/s | 1,180 to 1,560 appends/s in total |
+| MariaDB 10.11 in Docker, data on disk, binary log on | 101 appends/s (212 without the binary log) | 438 appends/s in total |
+
+These are small machines under other load; measure your own. A single writer that waits for each append does 75 (on disk) to 345 (in memory) appends per second.
+
+## Snapshots [#snapshots]
+
+- The last snapshot of a stream is the one with the highest version. The store flags it as the latest (`latest = 'latest#<streamId>'`), and the unique key `ux_latest` allows one flagged snapshot per stream (unflagged snapshots have a `NULL` flag, and `NULL`s are distinct).
+- `appendSnapshot` locks the stream's flagged snapshot, checks that the new version is higher, unflags it and inserts the new snapshot, in one `READ COMMITTED` transaction. Concurrent appends to a stream wait for each other there; appends that race on a new stream end on the unique keys, with a `SnapshotStoreVersionConflictException` for all but one.
+- `getLastEnvelopesForAggregate` (`SnapshotRepository.loadAll()`) reads the flagged snapshots in descending binary order of the aggregate ids, with `aggregateId` as an exclusive cursor.
+- A 3.x snapshot table keeps working until it is migrated: `ensureCollection()` logs a warning and registers it as schema version 1, and the store reads and writes `registered_on` the 3.x way, to the second, without the unique flag. The store decides this when it first uses the table, so restart the instances that use a 3.x snapshot table after you migrate it.
+
+## Creating the tables yourself [#ddl-none]
+
+With `ddl: 'none'`, the stores never run `CREATE`, `ALTER` or `DROP`. `ensureCollection()` checks the tables and registers them in the catalog, and throws when something is missing, with the statements to run in the error (`EventStoreSchemaException` with `found: 'missing'` and a `remedy` for events, `SnapshotStoreCollectionCreationException` whose cause has the statements for snapshots). The statements are the ones in [Schema](#schema) and the registration:
+
+```sql
+INSERT INTO `event_sourcing_collections` (name, kind, schema_version, last_position)
+  SELECT 'events', 'events', 2, COALESCE(MAX(global_position), 0) FROM `events`
+  ON DUPLICATE KEY UPDATE schema_version = 2, last_position = GREATEST(last_position, VALUES(last_position));
+INSERT INTO `event_sourcing_collections` (name, kind, schema_version, last_position)
+  VALUES ('snapshots', 'snapshots', 2, 0)
+  ON DUPLICATE KEY UPDATE schema_version = 2;
+```
+
+**Privileges.** With `ddl: 'none'`, the application's user needs `SELECT` and `INSERT` on the event tables, `SELECT`, `INSERT` and `UPDATE` on the snapshot tables, and `SELECT`, `INSERT` and `UPDATE` on `event_sourcing_collections`. With `ddl: 'auto'` it also needs `CREATE` on the database. `migrate()` needs `SELECT`, `INSERT`, `UPDATE`, `CREATE`, `ALTER` and `DROP` on the database (the event migration creates, renames and, with `keepBackup: false`, drops tables).
+
+## Migrating 3.x tables [#migration]
+
+3.x tables can't be used as they are: they have no global positions, their inserts are positional, and they store times to the second. `ensureCollection()` refuses a 3.x event table with an `EventStoreSchemaException` (`found: 'v1'`), so an application whose default pool has a 3.x table fails its bootstrap, with a message that points here. The migration is **offline**: no 3.x instance may write while it runs, and every 3.x write fails afterwards.
+
+### Runbook [#runbook]
+
+1. **Take a backup.**
+2. Deploy nothing yet. **Run the dry runs** with the 4.0 package, from a script or a REPL (no NestJS application is needed):
+
+   ```ts
+   import { MariaDBEventStore, MariaDBSnapshotStore } from '@ocoda/event-sourcing-mariadb';
+
+   const config = { host: 'db', user: 'admin', password: '…', database: 'app' };
+   console.dir(await MariaDBEventStore.migrate(config, { dryRun: true }), { depth: null });
+   console.dir(await MariaDBSnapshotStore.migrate(config, { dryRun: true }), { depth: null });
+   ```
+
+   A dry run writes nothing. For every table it reports the rows, the exact statements of each step and the locks they take, what blocks the migration (`blocking`: a trigger or foreign key on the table, a leftover `__es_v1` backup), the streams with gaps in their versions (`gappedStreams`), the stream ids that differ in case only (`caseVariantStreams`), and how `occurred_on` will be repaired (`occurredOnRepair`). The report's `environment` shows the server's version and time zones.
+3. **Stop every 3.x instance.**
+4. **Migrate** the events, then the snapshots: `MariaDBEventStore.migrate(config)`, then `MariaDBSnapshotStore.migrate(config)`. `options.pools` limits a run to some pools (`undefined` is the default pool); by default every table with the name and columns of a store table is migrated, one at a time. `onProgress` reports each step. A second run reports `skip` for the tables that are done.
+5. **Deploy 4.0.**
+6. When you are satisfied, **drop the backups** that the event migration kept, `DROP TABLE \`events__es_v1\``, one per event table (the report lists the statement). `keepBackup: false` drops them right away.
+
+A migration that fails (a crash, a lost connection, a lock timeout) leaves each table either untouched or in a state the next run continues from: run it again. Two migrations of the same table don't run at once: each table is migrated under a named lock (`GET_LOCK`), and a table whose lock is taken is reported as `blocked`.
+
+For DBAs who run the migration by hand, [`migrations/4.0.sql`](https://github.com/ocoda/event-sourcing/blob/master/packages/integration/mariadb/migrations/4.0.sql) (also in the npm package) holds the statements for the default pool's tables as 3.x creates them. For other pools, or tables that were changed, use the statements of a dry run.
+
+### What the event migration does [#event-migration]
+
+The event migration copies each table into a new schema v2 table and swaps the two, so it never updates a 3.x row:
+
+1. It creates `<table>__es_v2` and copies every row into it, in one `INSERT … SELECT`, with unique and foreign key checks off for the bulk load into the empty table. The copy numbers the events in 3.x's order, `(event_date, event_id, stream_id, version)`, except that the events of a stream keep their version order: `readAll` returns the events the way 3.x's `getAllEnvelopes` did.
+2. It repairs `occurred_on`: 3.x stored a `TIMESTAMP` to the second, as the wall time of the Node.js process, so an application in another time zone than the database server stored times that are hours off. When `occurred_on` differs from the time in the event id (a ULID) by a whole number of quarter hours, at most 14 hours, the migration takes the event id's time, to the millisecond. Otherwise it keeps the stored value. `repairOccurredOn: false` keeps every stored value.
+3. `RENAME TABLE` swaps the copy in and keeps the 3.x table as `<table>__es_v1` (the name is shortened with a hash when it exceeds 64 characters). From here on, a 3.x insert fails with error 1136 (the column count doesn't match).
+4. It copies the rows that 3.x wrote to the old table during the copy, if any, after the others, and warns about them.
+5. It registers the table in the catalog, with the counter at the last position. The first 4.0 append continues at the next position.
+
+**Locks.** The copy runs in `REPEATABLE READ`, which takes a shared lock on every row of the 3.x table until it ends: reads continue, and a 3.x write waits and then fails with a lock wait timeout (1205). That's a fence, not a way to run 3.x during the migration. The locks take about 3.5 to 5 MB of the buffer pool per million rows. If a copy fails with `ER_LOCK_TABLE_FULL` (1206), increase `innodb_buffer_pool_size`, or run the dry run's statements by hand with `SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED` before the copy (no shared locks; the catch-up step copies what was written meanwhile, and a binary log in `MIXED` format logs the copy by row). The swap takes exclusive metadata locks for an instant. `lockTimeoutMs` (default 10 s) bounds every lock wait: a table that a session still uses fails the step instead of hanging.
+
+**Time and space**, measured on MariaDB 10.11 and 11.8 in Docker with the default 128 MB buffer pool:
+
+| | 100,000 events (93 MB) | 1,000,000 events (615 MB) |
+| --- | --- | --- |
+| Dry run | 2 to 3.5 s | about 45 s, most of it for the `occurred_on` counts |
+| Migration | 2.5 to 2.7 s | 75 s |
+
+Plan for **about 1.5 minutes per million events** for the migration and 0.75 minutes per million for the dry run, more when the table is much bigger than the buffer pool, and **free space of 1.5 times the table** in the data directory plus 0.6 times in `tmpdir` (the copy and the backup, and the temporary table of the numbering). The migration writes the copy to the redo log and, when the binary log is on, to it too: in `ROW` format that is about the size of the table, in `MIXED` format one statement.
+
+**Case-sensitive stream ids.** Stream ids that 3.x's case-insensitive tables treated as one stream (`Acc-1` and `acc-1`) become separate streams, each with the events it was written with. The dry run counts them (`caseVariantStreams`) and lists the ones that are gapped then.
+
+**Gapped streams.** 3.x accepted appends that left a gap in a stream's versions. In 4.0, the next append to such a stream conflicts: its expected version is the number of events the application read, the stream's version is higher. The conflict's `actualVersion` is the version to append after.
+
+### What the snapshot migration does [#snapshot-migration]
+
+The snapshot migration converts each table in place (`ALTER TABLE … ALGORITHM=COPY, LOCK=SHARED`: reads continue, writes wait): binary collation, the 4.0 column sizes, `registered_on` as `DATETIME(3)` (the conversion also drops the `ON UPDATE` attribute of tables created by servers before MariaDB 10.10), then flags exactly the highest version of every stream as the latest, adds the unique key and registers the table.
+
+- 3.x stored `registered_on` as the wall time of its process, and snapshot ids carry no time to repair it from: when 3.x ran in another time zone than the server, the migrated `registered_on` is off by that offset. The dry run warns about it.
+- On servers created before MariaDB 10.10, 3.x's own updates may already have overwritten the `registered_on` of superseded snapshots (the `ON UPDATE` attribute). The migration can't repair that; it never lets the attribute fire itself. The dry run warns when a table has it.

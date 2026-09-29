@@ -22,6 +22,7 @@ import {
 	snapshotColumnsAreV2,
 	tableIndexes,
 } from '../mariadb.schema.js';
+import { MariaDBErrorNumber, errorNumberOf } from '../mariadb.utils.js';
 import {
 	type MigrationPlan,
 	type PlanOptions,
@@ -322,7 +323,7 @@ const runStep = async (
 		result = await connection.query(planned.statement);
 	} catch (error) {
 		throw new Error(
-			`The migration of ${table} failed at step ${planned.name}: ${(error as Error)?.message ?? String(error)}. Run the migration again: it continues where it stopped.`,
+			`The migration of ${table} failed at step ${planned.name}: ${(error as Error)?.message ?? String(error)}. ${failureHint(planned.name, error)}`,
 			{ cause: error },
 		);
 	}
@@ -330,6 +331,22 @@ const runStep = async (
 	if (note) {
 		warnings.push(note);
 	}
+};
+
+/**
+ * What to do about a failed step. Every step can run again. The copy locks every row of the 3.x table (REPEATABLE
+ * READ), which can outgrow the lock memory of a small buffer pool: then the copy can run in READ COMMITTED instead,
+ * by hand, and the catch-up after the swap copies the rows 3.x wrote meanwhile.
+ */
+export const failureHint = (step: string, error: unknown): string => {
+	const rerun = 'Run the migration again: it continues where it stopped.';
+	if (step === 'copy' && errorNumberOf(error) === MariaDBErrorNumber.LockTableFull) {
+		return `The copy locks every row of the 3.x table and ran out of lock memory: increase innodb_buffer_pool_size and ${rerun.charAt(0).toLowerCase()}${rerun.slice(1)} Or run the statements of a dry run by hand, with SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED before the copy, while no 3.x instance runs: the catch-up step copies what 3.x wrote during the copy.`;
+	}
+	if (errorNumberOf(error) === MariaDBErrorNumber.LockWaitTimeout) {
+		return `A session still uses the table (a 3.x instance?): stop it. ${rerun}`;
+	}
+	return rerun;
 };
 
 const countOf = async (db: Queryable, sql: string): Promise<number> => {

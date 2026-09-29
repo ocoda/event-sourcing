@@ -16,7 +16,9 @@ import { createEventStore, createTestDatabase, poolOf, rootConnection } from '..
  * - a plain keyset reader runs alongside, and the misses it has are reported (it can miss events; how often depends on
  *   the server and its load, so it is not asserted here; the deterministic negative control is in the event store spec).
  *
- * `ES_TEST_MARIADB_XA_TRANSACTIONS` sets the number of prepared transactions (default 1000).
+ * `ES_TEST_MARIADB_XA_TRANSACTIONS` sets the number of prepared transactions (default 1000),
+ * `ES_TEST_MARIADB_GAP_SAFE_ROUNDS` and `ES_TEST_MARIADB_GAP_SAFE_APPENDS` the rounds (default 3) and the appends of
+ * every writer per round (default 25), for longer local runs.
  */
 
 vi.setConfig({ testTimeout: 180_000, hookTimeout: 180_000 });
@@ -24,8 +26,8 @@ vi.setConfig({ testTimeout: 180_000, hookTimeout: 180_000 });
 const XA_PREFIX = 'ocoda-gap-safe-';
 const XA_TRANSACTIONS = Number(process.env.ES_TEST_MARIADB_XA_TRANSACTIONS || 1000);
 const WRITERS = 8;
-const APPENDS_PER_WRITER = 25;
-const ROUNDS = 3;
+const APPENDS_PER_WRITER = Number(process.env.ES_TEST_MARIADB_GAP_SAFE_APPENDS || 25);
+const ROUNDS = Number(process.env.ES_TEST_MARIADB_GAP_SAFE_ROUNDS || 3);
 
 /** Rolls back the prepared XA transactions this spec created, including those of an earlier run that crashed. */
 const rollBackPrepared = async (root: Connection): Promise<number> => {

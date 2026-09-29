@@ -14,7 +14,7 @@ import {
 import { MariaDBEventStore, MariaDBSnapshotStore } from '@ocoda/event-sourcing-mariadb';
 import { Account, AccountId, getEventMap, getEvents } from '@ocoda/event-sourcing-testing/unit';
 import type { Connection } from 'mariadb';
-import { type MigrationHooks, runMigration } from '../../lib/migration/migrate.js';
+import { type MigrationHooks, failureHint, runMigration } from '../../lib/migration/migrate.js';
 import {
 	LEGACY_TIMESTAMP_SESSION,
 	type V1EventRow,
@@ -443,7 +443,7 @@ describe('MariaDB migration from 3.x to schema v2', () => {
 				await insertV1Events(writer, table, [lateV1Event()]);
 
 				await expect(migrateEvents({ pools: [pool], lockTimeoutMs: 1000 })).rejects.toThrow(
-					/failed at step copy.*Lock wait timeout/s,
+					/failed at step copy.*Lock wait timeout.*a 3\.x instance\?\): stop it/s,
 				);
 				expect(only(await migrateEvents({ pools: [pool], dryRun: true }), table).from).toBe('v1');
 			} finally {
@@ -699,6 +699,16 @@ describe('MariaDB migration from 3.x to schema v2', () => {
 			expect(only(report, table).blocking).toEqual([expect.stringMatching(/trigger/)]);
 			expect(report.collections.every(({ kind }) => kind === 'snapshots')).toBe(true);
 			expect(report.collections.map(({ name }) => name)).not.toContain(CATALOG);
+		});
+	});
+	describe('failed steps', () => {
+		it('tells how to continue: rerun, stop 3.x, or copy in READ COMMITTED when the locks outgrow the buffer pool', () => {
+			expect(failureHint('swap', new Error('boom'))).toBe('Run the migration again: it continues where it stopped.');
+			expect(failureHint('copy', { errno: 1205 })).toMatch(/^A session still uses the table/);
+			const full = failureHint('copy', { errno: 1206 });
+			expect(full).toMatch(/increase innodb_buffer_pool_size and run the migration again/);
+			expect(full).toMatch(/READ COMMITTED before the copy/);
+			expect(failureHint('convert', { errno: 1206 })).toBe('Run the migration again: it continues where it stopped.');
 		});
 	});
 });

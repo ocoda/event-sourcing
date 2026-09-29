@@ -197,6 +197,7 @@ describe('MariaDB migrates the 3.0.2 corpus to schema v2 and reads it as 3.0.2 d
 	it('refuses every 3.x event table until it is migrated', async () => {
 		// The writer created the legacy pool's tables with the pre-10.10 DDL: the migration must not let it fire
 		expect(Object.values(manifest.legacyDdl ?? {}).join('\n')).toMatch(/ON UPDATE current_timestamp/i);
+		expect(manifest.snapshotPools.some(({ registeredOnShiftDays }) => Boolean(registeredOnShiftDays))).toBe(true);
 		for (const pool of manifest.eventPools) {
 			await expect(eventStore.ensureCollection(poolOf(pool.pool)), `${pool.collection}`).rejects.toMatchObject({
 				name: EventStoreSchemaException.name,
@@ -441,6 +442,12 @@ describe('MariaDB migrates the 3.0.2 corpus to schema v2 and reads it as 3.0.2 d
 					expect
 						.soft(metadata.registeredOn.getTime(), `${stream.streamId}@${metadata.version}`)
 						.toBe(asStoredWallTime(dateOf(fieldOf(legacy?.metadata ?? null, 'registeredOn'))));
+					if (pool.registeredOnShiftDays) {
+						// The writer moved every registered_on of the legacy pool away from now: a clobbered one would be recent
+						expect
+							.soft(Math.abs(Date.now() - metadata.registeredOn.getTime()), `${stream.streamId}@${metadata.version}`)
+							.toBeGreaterThan(12 * 60 * 60 * 1000);
+					}
 				}
 
 				const last = await snapshotStore.getLastEnvelope(snapshotStream, poolOf(pool.pool));
