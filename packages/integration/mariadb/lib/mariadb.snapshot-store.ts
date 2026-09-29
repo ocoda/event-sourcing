@@ -350,6 +350,7 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 	        FROM ${this.pool.escapeId(collection)}
 	        WHERE aggregate_name = ?
 	        AND ${aggregateId ? 'latest >= ?' : "latest LIKE 'latest%'"}
+	        ORDER BY latest DESC
 	        LIMIT ?
 	    `;
 
@@ -416,6 +417,11 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 		fields: Fields,
 		connection?: Connection,
 	): Promise<Pick<MariaDBSnapshotEntity<A>, Fields[number]>[]> {
+		// `IN ()` is invalid SQL, and an empty list of streams has no snapshots anyway
+		if (streams.length === 0) {
+			return [];
+		}
+
 		const latestIds = streams.map(({ streamId }) => `latest#${streamId}`);
 		return (connection || this.pool).query<Pick<MariaDBSnapshotEntity<A>, Fields[number]>[]>(
 			`SELECT ${fields.join(', ')} 
