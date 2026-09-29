@@ -4,8 +4,136 @@ title: MongoDB
 
 import { Aside } from '@astrojs/starlight/components';
 
-`@ocoda/event-sourcing-mongodb` provides the `MongoDBEventStore` and the `MongoDBSnapshotStore`. It needs the `mongodb` driver, which is a peer dependency: see [Installation](/start/install) and [Database drivers are peer dependencies](/upgrading/v4#drivers).
+`@ocoda/event-sourcing-mongodb` provides the `MongoDBEventStore` and the `MongoDBSnapshotStore`. It needs the `mongodb` driver (`^6.10` or `^7`), which is a peer dependency: see [Installation](/start/install) and [Database drivers are peer dependencies](/upgrading/v4#drivers). It is tested on MongoDB 6, 7 and 8, each as a standalone server and as a replica set.
 
-<Aside type="note" title="Schema v2 lands in a later prerelease">
-This page will describe the 4.0 schema, its limits, the capabilities of each MongoDB topology, the privileges the store needs, and how to migrate 3.x collections. Until then, see [MongoDB schema v2](/upgrading/v4#mongodb-schema-v2) in the 4.0 migration guide.
+<Aside type="note" title="4.0 prerelease">
+This page describes schema v2, which the MongoDB stores use from this prerelease on. Collections that 3.x created must be migrated once, offline: see [Migrating from 3.x](#migrating-from-3x). The design is in [ADR 0002](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0002-schema-v2.md).
 </Aside>
+
+## Configuration [#configuration]
+
+```ts
+EventSourcingModule.forRootAsync({
+	useFactory: () => ({
+		events: [...],
+		eventStore: { driver: MongoDBEventStore, url: 'mongodb://db-1,db-2,db-3/app?replicaSet=rs0' },
+		snapshotStore: { driver: MongoDBSnapshotStore, url: 'mongodb://db-1,db-2,db-3/app?replicaSet=rs0' },
+	}),
+});
+```
+
+- **`url`** is the connection string. Its database holds the collections of every pool and their catalog.
+- **Every other option** is passed to the `MongoClient`, such as `serverSelectionTimeoutMS`, which bounds how long `connect()` waits for a server before the bootstrap fails.
+- **`ddl`**: `'auto'` (the default) lets `ensureCollection` create missing collections, indexes and catalog entries. With `'none'`, the store only checks and registers them, and a missing collection throws an error that lists the mongosh statements that create it; see [Privileges](#privileges).
+
+## Topologies and capabilities [#capabilities]
+
+`connect()` asks the server what it is (`hello`) and sets the event store's `capabilities` accordingly:
+
+| Deployment | `atomicAppend` | `globalOrder` | `headers` |
+| --- | --- | --- | --- |
+| Replica set (also a single-node one) | `true` | `'gap-safe'` | `true` |
+| Sharded cluster (`mongos`) | `true` | `'best-effort'` | `true` |
+| Standalone server | `false` | `'best-effort'` | `true` |
+
+**Run MongoDB as a replica set.** A single-node replica set is enough. On a replica set an append is one transaction, and `readAll` never skips an event that commits late, so a projection that tails the store with `readAll({ fromPosition: checkpoint + 1n })` sees every event exactly once.
+
+A standalone server has no transactions. The store warns once when it connects to one, and:
+
+- appends are not atomic: when an insert fails halfway, the store removes the events it inserted; if that fails too, the append throws an `EventStorePersistenceException` with `outcome: 'unknown'`;
+- a failed or conflicting append burns the positions it reserved, which leaves holes that never fill;
+- a reader that tails the store can miss events for good, because an append can commit below a position the reader already passed. `readAll` over events that are no longer being written returns every event, in order.
+
+On a sharded cluster, appends are transactions, but the visibility of positions across shards is unproven, so the global order is `'best-effort'`.
+
+## Schema v2 [#schema]
+
+**Event collections.** Each pool is a collection: `events` for the default pool, `<pool>-events` for the others. A document:
+
+```ts
+{
+	_id: '01J9…',                    // the event id
+	streamId: 'account-42',
+	version: 3,
+	event: 'account-credited',
+	payload: { … },
+	aggregateId: '42',
+	occurredOn: ISODate('…'),
+	correlationId: '…',              // optional
+	causationId: '…',                // optional
+	globalPosition: NumberLong('17'),
+	headers: { tenant: 'acme' },     // optional
+	eventVersion: 2,                 // optional, from pre-built envelopes
+}
+```
+
+Absent fields are left out, never stored as `null`. The collection has a unique index on `{ streamId: 1, version: 1 }`, a unique index on `{ globalPosition: 1 }`, and a validator (`validationLevel: 'strict'`) that requires a 64-bit `globalPosition`, a `streamId` and a `version`. The validator also fences off 3.x writers after a migration: their inserts fail with code 121.
+
+**Snapshot collections**: `snapshots` and `<pool>-snapshots`. The latest snapshot of a stream carries `latest: 'latest#<streamId>'`; the others have no `latest` field. A unique partial index (`latest_unique`, on `{ aggregateName: 1, latest: 1 }` where `latest` is a string) keeps a single latest snapshot per stream, also when appends race. `getLastSnapshot` and `getLastEnvelope` read the snapshot with the highest version. `getLastEnvelopesForAggregate` (and `SnapshotRepository.loadAll`) pages the streams in descending binary order of their aggregate ids, with `aggregateId` as an exclusive cursor.
+
+**The catalog**, `event_sourcing_collections`, has one document per collection of the stores: `{ _id: 'events', kind: 'events', schemaVersion: 2, lastPosition: NumberLong('17') }`. It is the position counter of each event pool, the registry of the schema versions, and the source of `listCollections()`, which therefore no longer lists collections that were never registered, such as 3.x collections that weren't migrated. Running migrations hold leases in it (`kind: 'lock'`). Don't drop it.
+
+**Payloads** are BSON documents: a `Date` in a payload comes back as a `Date` (the SQL stores return an ISO string), and a `bigint` is stored as an Int64 and comes back as a number, unless the client runs with `useBigInt64: true`. Global positions are always `bigint`s, whatever the client options.
+
+## Appends and global positions [#appends]
+
+On a replica set, an append is one transaction (`readConcern: 'snapshot'`, `writeConcern: 'majority'`) whose first write increments the pool's counter in the catalog; then it inserts the events. Two appends to the same pool conflict on the counter, so they commit in the order of their positions, and a rolled-back append also rolls back its positions: no holes. The store retries a transaction that fails with a transient error (a write conflict, a failover) with a short random backoff for up to 30 seconds, then throws an `EventStorePersistenceException` with `outcome: 'not-persisted'`. A commit whose result is unknown is retried up to three times, then reported as `outcome: 'unknown'`.
+
+`readAll` reads with `readConcern: 'majority'` on replica sets and sharded clusters, so a failover can't take back a position a reader already saw.
+
+**Throughput.** The appends of one pool serialize on its counter: each waits for the previous commit. On a single-node MongoDB 8.2 replica set in Docker on a laptop, one pool took about 300 appends per second with 8 concurrent writers (266 with one writer, 195 with 16), with about 1.8 retried write conflicts per append and a worst case of 1.7 seconds. Four pools took about 510 appends per second together. Pools are the unit of write scale: spread tenants or bounded contexts over pools. See the [evidence](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0002-schema-v2.md#mongodb).
+
+`ExpectedVersion.Any` makes up to 16 attempts when concurrent appends take the versions of a stream, and can still end in a conflict under sustained contention on one stream: retry such a conflict in your application.
+
+## Privileges [#privileges]
+
+- **Running the stores** with `ddl: 'auto'`: the `readWrite` role on the database.
+- **Running them with `ddl: 'none'`**: `find`, `insert`, `update`, `remove`, `listCollections` and `listIndexes` on the database. Create the collections, indexes and validators from the statements that `ensureCollection` names, or from a dry run of `migrate()`.
+- **`migrate()`**: also `collMod` for the fence, as in the `dbAdmin` role. A dry run reports missing privileges as `blocking`, before any write.
+
+## Migrating from 3.x [#migrating-from-3x]
+
+The 3.x collections have no global positions, and 4.0 refuses them: `ensureCollection` throws an `EventStoreSchemaException` with `found: 'v1'` for a 3.x event collection, so the bootstrap fails on a 3.x default pool. 3.x snapshot collections keep working with a warning until you migrate them. The migration is offline: stop every 3.x instance first.
+
+1. **Take a backup**, and check the room it needs (below).
+2. **Dry run**, without deploying anything. It inspects and plans, and writes nothing:
+
+   ```ts
+   import { MongoDBEventStore, MongoDBSnapshotStore } from '@ocoda/event-sourcing-mongodb';
+
+   const config = { url: process.env.MONGODB_URL };
+   const events = await MongoDBEventStore.migrate(config, { dryRun: true });
+   const snapshots = await MongoDBSnapshotStore.migrate(config, { dryRun: true });
+   console.dir({ events, snapshots }, { depth: null });
+   ```
+
+   Review, per collection, `blocking` (the migration leaves such a collection untouched), `gappedStreams`, `nonCrockfordEventIds` (event ids that are not canonical ULIDs, which choose the slower numbering key), `warnings` and `steps`, which hold the exact mongosh statements and the locks they take.
+3. **Stop every 3.x instance.**
+4. **Migrate** the events, then the snapshots: `await MongoDBEventStore.migrate(config)`, then `await MongoDBSnapshotStore.migrate(config)`. Both need no Nest application; a connected store also has an instance `migrate()`.
+5. **Deploy 4.0.**
+
+By default `migrate()` finds every collection named `events` or `<pool>-events` (`snapshots`, `<pool>-snapshots`) with the unique `{ streamId, version }` index; `pools: [undefined, 'tenant-a']` limits it to those pools. A second run reports `skip`. `onProgress` reports each step.
+
+**What happens to an event collection**, in order, under a lease in the catalog:
+
+1. **Fence**: `collMod` adds the 4.0 validator. From here on, a 3.x insert fails with code 121.
+2. **Number**: one aggregation numbers the events 1…N in 3.x's order, `(eventDate, _id)`, and writes the positions with `$merge`. Where two versions of a stream sort the other way round in that order (two appends in one millisecond, or non-canonical event ids), the stream keeps its version order ([ADR 0001 D33](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0001-v4-core-api.md#amendments-store-contract)). When every event id is a canonical ULID, the aggregation sorts by `_id` alone, which is the same order and uses the `_id` index; otherwise it sorts by a concatenated key, on disk.
+3. **Index**: the unique `{ globalPosition: 1 }` index.
+4. **Register**: the catalog document, with the counter at the highest position. **This is the commit point**: 4.0 can run from here, and appends continue at N + 1.
+5. **Clean up**: drop the 3.x indexes on `eventDate`, and remove the `eventDate` field in batches. 4.0 ignores the field, so `unsetEventDate: false` defers this, for instance to spread the oplog volume; a later `migrate()` finishes it.
+
+A snapshot collection loses its `latest: null` fields, gets exactly one latest flag per stream, on its highest version, then the unique `latest_unique` index, which replaces the 3.x index on the flag, and is registered.
+
+**Interruptions.** Every step checks the state first, so a run that stopped (a crash, a lost connection) resumes where it stopped: run `migrate()` again. The lease of a crashed run expires after 10 minutes; `force: true` takes it over sooner, when you are sure the other run is gone. Until the commit point, `ensureCollection` refuses a partly migrated collection (`found: 'v1-partial'`).
+
+**What blocks a collection**: a sharded collection, a MongoDB server before 5.0, event ids that aren't strings, a validator of your own, a missing unique `{ streamId, version }` index, missing [privileges](#privileges), or another migration's lease.
+
+**Streams with gaps** in their versions (a stream at versions 1, 2, 3 and 5) keep them. Their next append in 4.0 conflicts with the actual version: load such an aggregate from its envelopes, or append with the version of its last event as the expected version.
+
+**Room it needs.**
+
+- **Time**: about one minute per million events on a single-node replica set, of which the numbering takes about 0.6 and the `eventDate` clean-up 0.25; the dry run takes about 4 seconds per million. Measured on MongoDB 8.2 in Docker on a busy laptop; plan for more on a large collection whose data and indexes exceed the WiredTiger cache.
+- **Oplog**: each event is updated twice, the numbering and the clean-up, which writes about 0.45 to 0.6 GB of oplog per million events. Change streams see both updates of every event. Size the oplog window for it (`replSetResizeOplog`), or a secondary that falls behind needs a full resync.
+- **Disk**: at least 2.5 times the collection's storage size, plus the oplog, plus about 40 MB of sort spill per million events when the ids aren't canonical.
+
+**Without the Node.js API**, for instance for a DBA who runs the stores with `ddl: 'none'`: the package ships `migrations/4.0.mongosh.js`, which migrates the default pools the same way (`mongosh "mongodb://host/app" node_modules/@ocoda/event-sourcing-mongodb/migrations/4.0.mongosh.js`). It doesn't check the state before each step, so run it once, on 3.x collections; `migrate()` resumes a run of it that stopped.

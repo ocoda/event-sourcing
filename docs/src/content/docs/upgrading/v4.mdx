@@ -306,11 +306,22 @@ For custom snapshot stores:
 
 ### MongoDB schema v2 [#mongodb-schema-v2]
 
-*Planned.* The event documents gain a `globalPosition` and lose `eventDate`. See [MongoDB](/integrations/mongodb).
+*In this prerelease.* See [MongoDB](/integrations/mongodb) for the schema, the capabilities per topology and the privileges.
+
+- **The MongoDB event store implements the store contract.** Everything in [Event store API](#event-store-api), [Metadata and headers](#metadata-headers) and [Reading all events](#read-all) applies to it: the options form of `appendEvents` with `ExpectedVersion.Any` and metadata, `readAll` instead of `getAllEnvelopes`, which is gone from it, and `EventCollectionNotFoundException` for every read of a pool that was never ensured. On a variable typed as `MongoDBEventStore`, the options form now type-checks.
+- **Event documents** gain a 64-bit `globalPosition`, `headers` and `eventVersion`, and lose `eventDate`. Absent metadata is left out instead of stored as `null`. A validator requires the position, so 3.x writers fail loudly on a migrated collection.
+- **Capabilities depend on the topology**, which `connect()` detects: a replica set (a single-node one is enough) is `{ atomicAppend: true, globalOrder: 'gap-safe' }`, a sharded cluster is atomic but `'best-effort'`, and a standalone server is `{ atomicAppend: false, globalOrder: 'best-effort' }`, with a warning when the store connects. Run MongoDB as a replica set.
+- **A catalog**, the `event_sourcing_collections` collection, holds the position counter of each pool and the schema version of each collection. `listCollections()` reads it, so it lists only collections that `ensureCollection` or `migrate()` registered.
+- **`ensureCollection` never migrates.** A 3.x event collection throws an `EventStoreSchemaException` (`found: 'v1'`), so an application whose default pool is a 3.x collection fails its bootstrap until you run `MongoDBEventStore.migrate()`. A 3.x snapshot collection keeps working, with a warning, until you migrate it. See [Data migration](#data-migration).
+- **`ddl: 'none'`** is a new option of both stores: `ensureCollection` then only checks and registers collections, and names the mongosh statements that create a missing one.
+- **Snapshots.** A unique index keeps a single latest snapshot per stream, also when appends race; `getLastSnapshot` and `getLastEnvelope` read the highest version; `getLastEnvelopesForAggregate` pages in descending binary order of the aggregate ids, with `aggregateId` as an exclusive cursor. An unflagged snapshot has no `latest` field (3.x stored `null`).
+- **`disconnect()`** can be called more than once, and before `connect()`.
 
 ### Data migration [#data-migration]
 
 *Planned.* A one-time, offline migration of the event and snapshot tables, run with the store's `migrate()` after a dry run, while no 3.x instance is running.
+
+**MongoDB** (in this prerelease): take a backup, run `MongoDBEventStore.migrate(config, { dryRun: true })` and `MongoDBSnapshotStore.migrate(config, { dryRun: true })` and review the reports, stop every 3.x instance, run `MongoDBEventStore.migrate(config)`, then `MongoDBSnapshotStore.migrate(config)`, and deploy 4.0. The events keep 3.x's order, `(eventDate, _id)`, as their global positions `1n…`, with every stream in version order; a stream with gaps in its versions conflicts on its next append until you append with its actual version. The migration takes about a minute per million events and about half a GB of oplog per million; a run that stopped resumes. See [Migrating from 3.x](/integrations/mongodb#migrating-from-3x) for the steps, the room it needs and what blocks a collection.
 
 ## DynamoDB is not part of 4.0 [#dynamodb]
 
