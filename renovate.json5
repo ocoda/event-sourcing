@@ -25,6 +25,7 @@
 			rangeStrategy: 'widen',
 		},
 		{ groupName: 'nestjs', matchPackageNames: ['@nestjs/**'] },
+		// 3.x only now: the DynamoDB store, the only direct @aws-sdk dependant, was dropped from master (v4).
 		{ groupName: 'aws-sdk', matchPackageNames: ['@aws-sdk/**'] },
 		{ groupName: 'postgres driver', matchPackageNames: ['pg', 'pg-cursor', '@types/pg', '@types/pg-cursor'] },
 		{ groupName: 'mongodb driver', matchPackageNames: ['mongodb'] },

@@ -5,7 +5,6 @@
 	"fixed": [
 		[
 			"@ocoda/event-sourcing",
-			"@ocoda/event-sourcing-dynamodb",
 			"@ocoda/event-sourcing-mariadb",
 			"@ocoda/event-sourcing-mongodb",
 			"@ocoda/event-sourcing-postgres"

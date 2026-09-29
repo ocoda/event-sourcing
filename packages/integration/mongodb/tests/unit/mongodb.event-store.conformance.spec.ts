@@ -25,7 +25,7 @@ describeEventStoreConformance(
 			// getAllEnvelopes yield nothing and getEvent/getEnvelope throw an EventNotFoundException.
 			'unknown-pool-read': 'reads from a collection that does not exist yield nothing instead of failing',
 			// TODO: payloads are stored as BSON documents, so a Date is stored and returned as a Date instead of the
-			// ISO-8601 string the SQL and DynamoDB stores return. Changing it changes what existing documents hold.
+			// ISO-8601 string the SQL stores return. Changing it changes what existing documents hold.
 			'payload-dates-as-iso-strings': 'dates are stored as BSON dates and come back as Date instances',
 		},
 	},

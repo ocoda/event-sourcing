@@ -14,7 +14,6 @@
 		"@nestjs/common": "^11.1.6",
 		"@nestjs/core": "^11.1.6",
 		"@ocoda/event-sourcing": "workspace:*",
-		"@ocoda/event-sourcing-dynamodb": "workspace:*",
 		"@ocoda/event-sourcing-example": "workspace:*",
 		"@ocoda/event-sourcing-mariadb": "workspace:*",
 		"@ocoda/event-sourcing-mongodb": "workspace:*",

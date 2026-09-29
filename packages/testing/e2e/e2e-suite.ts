@@ -268,12 +268,6 @@ export const runAccountLifecycleE2E = async <
 	});
 };
 
-export interface DynamoDBCleanupContext {
-	eventStoreClient: { send: (command: unknown) => Promise<unknown> };
-	snapshotStoreClient: { send: (command: unknown) => Promise<unknown> };
-	deleteTable: (tableName: string) => unknown;
-}
-
 export const defaultCleanup = {
 	async postgres(
 		eventStoreClient: { query: (query: string) => Promise<unknown> },
@@ -304,12 +298,6 @@ export const defaultCleanup = {
 		await Promise.all([
 			eventStoreClient.db().dropCollection(EventCollection.get('e2e')),
 			snapshotStoreClient.db().dropCollection(SnapshotCollection.get('e2e')),
-		]);
-	},
-	async dynamodb({ eventStoreClient, snapshotStoreClient, deleteTable }: DynamoDBCleanupContext) {
-		await Promise.all([
-			eventStoreClient.send(deleteTable(EventCollection.get('e2e'))),
-			snapshotStoreClient.send(deleteTable(SnapshotCollection.get('e2e'))),
 		]);
 	},
 };

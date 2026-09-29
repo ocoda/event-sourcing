@@ -12,10 +12,10 @@ describeEventStoreConformance(
 	{
 		skip: {
 			// TODO: reads from an unknown pool yield nothing (getEvents, getEnvelopes, getAllEnvelopes) or throw an
-			// EventNotFoundException (getEvent, getEnvelope) instead of failing like the SQL and DynamoDB stores do.
+			// EventNotFoundException (getEvent, getEnvelope) instead of failing like the SQL stores do.
 			'unknown-pool-read': 'reads from a collection that does not exist yield nothing instead of failing',
 			// TODO: events are kept as serialized, so a Date in a payload is returned as the same Date instead of the
-			// ISO-8601 string the SQL and DynamoDB stores return.
+			// ISO-8601 string the SQL stores return.
 			'payload-dates-as-iso-strings': 'payloads are kept in memory as is, so dates stay Date instances',
 		},
 	},

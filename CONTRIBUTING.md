@@ -34,7 +34,7 @@ The repository is a pnpm + turbo monorepo:
 | Path                     | What it is                                                                   |
 | ------------------------ | ---------------------------------------------------------------------------- |
 | `packages/core`          | `@ocoda/event-sourcing`, the library                                         |
-| `packages/integration/*` | store drivers: `postgres`, `mongodb`, `mariadb`, `dynamodb`                  |
+| `packages/integration/*` | store drivers: `postgres`, `mongodb`, `mariadb`                              |
 | `packages/testing`       | shared test fixtures and the end-to-end suite every store runs (private)     |
 | `packages/config`        | shared TypeScript and Vitest configuration (private)                         |
 | `docs/`                  | the documentation site                                                       |
@@ -49,7 +49,6 @@ Core tests need no database. Integration tests run against the services in `dock
 | `postgres`           | `postgres-13` … `postgres-17` (`postgres` is 14) |
 | `mongodb`            | `mongodb-6`, `mongodb-7`, `mongodb-8` (`mongodb` is 8) |
 | `mariadb`            | `mariadb-10` (10.11), `mariadb-11` (11.4)        |
-| `dynamodb`           | DynamoDB Local 3.3.1                             |
 
 Start one and wait until it is healthy:
 
