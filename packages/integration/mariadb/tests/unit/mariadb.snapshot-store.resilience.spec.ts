@@ -11,7 +11,7 @@ import { type MariaDBSnapshotEntity, MariaDBSnapshotStore } from '@ocoda/event-s
 import { Account, AccountId } from '@ocoda/event-sourcing-testing/unit';
 import type { Pool, PoolConnection } from 'mariadb';
 import type { MockInstance } from 'vitest';
-import { createSnapshotStore } from '../support/stores.js';
+import { createSnapshotStore, poolOf } from '../support/stores.js';
 
 // Pool exhaustion and concurrency scenarios: allow slow tests and setup/teardown hooks.
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
@@ -97,7 +97,7 @@ describe(`${MariaDBSnapshotStore.name} resilience`, () => {
 		snapshotStore = createSnapshotStore({ connectionLimit: POOL_SIZE, acquireTimeout: 3_000 });
 		await snapshotStore.connect();
 
-		pool = snapshotStore['pool'];
+		pool = poolOf(snapshotStore);
 	});
 
 	afterAll(async () => {
@@ -305,14 +305,14 @@ describe(`${MariaDBSnapshotStore.name} resilience`, () => {
 				}
 			});
 
-			it('should report a version conflict when the race is lost after the version check passed', async () => {
+			it('should report a version conflict when racing appends to a new stream all passed the version check', async () => {
 				const concurrentStore = await newConcurrentStore();
 
-				const concurrentPool: Pool = concurrentStore['pool'];
+				const concurrentPool: Pool = poolOf(concurrentStore);
 				const getConnection = concurrentPool.getConnection.bind(concurrentPool);
 
-				// Hold every writer right after its version check until all of them have passed it, so that none of
-				// them can be stopped by the check and the unique constraint of the table has to decide.
+				// Hold every writer right after its version check until all of them have passed it. A new stream has no
+				// flagged snapshot to lock, so none of them waits there, and the unique keys of the table have to decide.
 				let versionChecks = 0;
 				let releaseWriters: () => void;
 				const allChecked = new Promise<void>((resolve) => {
@@ -323,7 +323,7 @@ describe(`${MariaDBSnapshotStore.name} resilience`, () => {
 					const query = connection.query.bind(connection);
 					vi.spyOn(connection, 'query').mockImplementation(async (sql: unknown, values?: unknown) => {
 						const result = await query(sql as string, values);
-						if (typeof sql === 'string' && sql.includes('WHERE latest IN (?)')) {
+						if (typeof sql === 'string' && sql.includes('FOR UPDATE')) {
 							versionChecks++;
 							if (versionChecks === WRITERS) {
 								releaseWriters();
@@ -340,19 +340,114 @@ describe(`${MariaDBSnapshotStore.name} resilience`, () => {
 				try {
 					const snapshotPool = await newPool('concurrent-check');
 					const stream = newStream();
-					await snapshotStore.appendSnapshot(stream, 1, { balance: 0 }, snapshotPool);
 
 					await expectExactlyOneWinner(
-						await append(concurrentStore, stream, 2, snapshotPool),
+						await append(concurrentStore, stream, 1, snapshotPool),
 						stream,
-						2,
-						[1, 2],
+						1,
+						[1],
 						snapshotPool,
 					);
 					expect(versionChecks).toBe(WRITERS);
 				} finally {
 					getConnectionSpy.mockRestore();
 					await concurrentStore.disconnect();
+				}
+			});
+
+			it('should run an append again when InnoDB picks it as the victim of a deadlock, up to 10 times', async () => {
+				const snapshotPool = await newPool('deadlock');
+				const getConnection = pool.getConnection.bind(pool);
+				let deadlocks = 0;
+				let failInserts = 2;
+				const getConnectionSpy = vi.spyOn(pool, 'getConnection').mockImplementation(async () => {
+					const connection: PoolConnection = await getConnection();
+					const query = connection.query.bind(connection);
+					vi.spyOn(connection, 'query').mockImplementation(async (sql: unknown, values?: unknown) => {
+						if (typeof sql === 'string' && sql.startsWith('INSERT INTO') && deadlocks < failInserts) {
+							deadlocks++;
+							throw Object.assign(new Error('Deadlock found when trying to get lock'), {
+								errno: 1213,
+								code: 'ER_LOCK_DEADLOCK',
+							});
+						}
+						return query(sql as string, values);
+					});
+					return connection;
+				});
+
+				try {
+					const stream = newStream();
+					await expect(snapshotStore.appendSnapshot(stream, 1, { balance: 1 }, snapshotPool)).resolves.toMatchObject({
+						metadata: { version: 1 },
+					});
+					expect(deadlocks).toBe(2);
+					await expect(snapshotStore.getLastEnvelope(stream, snapshotPool)).resolves.toMatchObject({
+						metadata: { version: 1 },
+					});
+
+					deadlocks = 0;
+					failInserts = Number.POSITIVE_INFINITY;
+					const error = await snapshotStore
+						.appendSnapshot(stream, 2, { balance: 2 }, snapshotPool)
+						.catch((caught: unknown) => caught);
+					expect(error).toBeInstanceOf(SnapshotStorePersistenceException);
+					expect((error as Error).cause).toMatchObject({ errno: 1213 });
+					expect(deadlocks).toBe(10);
+					// Every attempt was rolled back: the snapshot at version 1 is still the latest
+					await expect(snapshotStore.getLastEnvelope(stream, snapshotPool)).resolves.toMatchObject({
+						metadata: { version: 1 },
+					});
+				} finally {
+					getConnectionSpy.mockRestore();
+				}
+				expect(pool.activeConnections()).toBe(0);
+			});
+
+			it('should keep one latest snapshot per stream while the streams of an aggregate race each other', async () => {
+				// Few connections for many appends: the appends to different streams deadlock on the unique latest index,
+				// and InnoDB's victims run again
+				const racingStore = createSnapshotStore({ connectionLimit: 10 });
+				await racingStore.connect();
+				try {
+					const snapshotPool = await newPool('streams');
+					const failures: string[] = [];
+					for (let round = 0; round < 12; round++) {
+						await Promise.all(
+							Array.from({ length: WRITERS }, async (_, index) => {
+								const stream = newStream();
+								const seeded = (round + index) % 2;
+								if (seeded) {
+									await racingStore.appendSnapshot(stream, 1, { balance: 1 }, snapshotPool);
+								}
+								const versions = [3, 7, 2, 8, 5, 4, 6, 9].map((version) => version + seeded);
+								const results = await Promise.allSettled(
+									versions.map((version) =>
+										racingStore.appendSnapshot(stream, version, { balance: version }, snapshotPool),
+									),
+								);
+								for (const result of results) {
+									if (
+										result.status === 'rejected' &&
+										!(result.reason instanceof SnapshotStoreVersionConflictException)
+									) {
+										failures.push(String(result.reason?.cause ?? result.reason));
+									}
+								}
+								const appended = versions.filter((_, writer) => results[writer].status === 'fulfilled');
+								const last = await racingStore.getLastEnvelope(stream, snapshotPool);
+								expect(last?.metadata.version).toBe(Math.max(...appended));
+								const flagged = await pool.query<{ version: number }[]>(
+									`SELECT version FROM ${pool.escapeId(SnapshotCollection.get(snapshotPool))} WHERE stream_id = ? AND latest IS NOT NULL`,
+									[stream.streamId],
+								);
+								expect(flagged.map(({ version }) => version)).toEqual([Math.max(...appended)]);
+							}),
+						);
+					}
+					expect(failures).toEqual([]);
+				} finally {
+					await racingStore.disconnect();
 				}
 			});
 		});

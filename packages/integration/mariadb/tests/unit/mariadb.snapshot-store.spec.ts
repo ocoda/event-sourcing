@@ -7,6 +7,7 @@ import {
 	SnapshotCollection,
 	type SnapshotEnvelope,
 	SnapshotNotFoundException,
+	SnapshotStoreCollectionCreationException,
 	SnapshotStorePersistenceException,
 	SnapshotStoreVersionConflictException,
 	SnapshotStream,
@@ -27,7 +28,7 @@ import {
 	snapshotsAccountB,
 } from '@ocoda/event-sourcing-testing/unit';
 import type { Pool } from 'mariadb';
-import { createSnapshotStore } from '../support/stores.js';
+import { CATALOG, createSnapshotStore, createTestDatabase, dropTables, poolOf } from '../support/stores.js';
 
 describe(MariaDBSnapshotStore, () => {
 	let snapshotStore: MariaDBSnapshotStore;
@@ -42,17 +43,15 @@ describe(MariaDBSnapshotStore, () => {
 		await snapshotStore.connect();
 		await snapshotStore.ensureCollection();
 
-		pool = snapshotStore['pool'];
+		pool = poolOf(snapshotStore);
 	});
 
 	afterAll(async () => {
-		await Promise.all([
-			pool.query(`DROP TABLE IF EXISTS \`${SnapshotCollection.get()}\``),
-			pool.query(`DROP TABLE IF EXISTS \`${SnapshotCollection.get('a')}\``),
-			pool.query(`DROP TABLE IF EXISTS \`${SnapshotCollection.get('b')}\``),
-			pool.query(`DROP TABLE IF EXISTS \`${SnapshotCollection.get('c')}\``),
-		]);
-		await pool.end();
+		await dropTables(
+			pool,
+			[undefined, 'a', 'b', 'c', 'highest'].map((name) => SnapshotCollection.get(name)),
+		);
+		await snapshotStore.disconnect();
 	});
 
 	it('should append snapshot envelopes', async () => {
@@ -372,5 +371,95 @@ describe(MariaDBSnapshotStore, () => {
 		expect(resolvedCollections.includes('a-snapshots')).toBe(true);
 		expect(resolvedCollections.includes('b-snapshots')).toBe(true);
 		expect(resolvedCollections.includes('c-snapshots')).toBe(true);
+	});
+	describe('schema v2', () => {
+		it('creates the table with millisecond times, binary ids and a unique latest flag, and registers it', async () => {
+			const [{ 'Create Table': ddl }] = await pool.query<{ 'Create Table': string }[]>(
+				`SHOW CREATE TABLE ${pool.escapeId(SnapshotCollection.get())}`,
+			);
+			expect(ddl).toMatch(/`registered_on` datetime\(3\) NOT NULL/);
+			expect(ddl).toMatch(/UNIQUE KEY `ux_latest` \(`aggregate_name`,`latest`\)/);
+			expect(ddl).toMatch(/COLLATE=utf8mb4_bin/);
+			expect(ddl).not.toMatch(/ON UPDATE/i);
+			expect(
+				await pool.query(`SELECT kind, schema_version FROM ${CATALOG} WHERE name = ?`, [SnapshotCollection.get()]),
+			).toEqual([{ kind: 'snapshots', schema_version: 2 }]);
+		});
+
+		it('reads in READ COMMITTED sessions, whatever the isolation level the pool sessions start with', async () => {
+			const uncommitted = createSnapshotStore({
+				initSql: 'SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED',
+				connectionLimit: 1,
+			});
+			await uncommitted.connect();
+			try {
+				await expect(poolOf(uncommitted).query('SELECT @@tx_isolation AS isolation')).resolves.toEqual([
+					{ isolation: 'READ-COMMITTED' },
+				]);
+			} finally {
+				await uncommitted.disconnect();
+			}
+		});
+
+		it('reads the snapshot with the highest version as the last one, whatever the latest flag says', async () => {
+			await snapshotStore.ensureCollection('highest');
+			const stream = SnapshotStream.for(Account, AccountId.generate());
+			await snapshotStore.appendSnapshot(stream, 1, snapshotsAccountA[0], 'highest');
+			// A higher version without the flag, as a 3.x table can have it
+			await pool.query(
+				`INSERT INTO ${pool.escapeId(SnapshotCollection.get('highest'))}
+				 (stream_id, version, payload, snapshot_id, aggregate_id, registered_on, aggregate_name, latest)
+				 VALUES (?, 2, ?, 'snapshot-2', ?, '2024-01-02 03:04:05.678', ?, NULL)`,
+				[stream.streamId, JSON.stringify(snapshotsAccountA[1]), stream.aggregateId, stream.aggregate],
+			);
+
+			const last = await snapshotStore.getLastEnvelope(stream, 'highest');
+			expect(last?.metadata).toMatchObject({
+				version: 2,
+				snapshotId: 'snapshot-2',
+				registeredOn: new Date('2024-01-02T03:04:05.678Z'),
+			});
+			await expect(snapshotStore.getLastSnapshot(stream, 'highest')).resolves.toEqual(snapshotsAccountA[1]);
+			expect((await snapshotStore.getLastSnapshots([stream], 'highest')).get(stream)).toEqual(snapshotsAccountA[1]);
+			expect(
+				(await snapshotStore.getManyLastSnapshotEnvelopes([stream], 'highest')).get(stream)?.metadata.version,
+			).toBe(2);
+			await expect(snapshotStore.getManyLastSnapshotEnvelopes([], 'highest')).resolves.toEqual(new Map());
+		});
+
+		it("with ddl: 'none', checks and registers the tables and creates nothing", async () => {
+			const database = await createTestDatabase('sddl');
+			const auto = createSnapshotStore({ ...database.config });
+			const none = createSnapshotStore({ ...database.config, ddl: 'none' });
+			await Promise.all([auto.connect(), none.connect()]);
+			const logged = vi.spyOn(none['logger'], 'error').mockImplementation(() => undefined);
+			try {
+				const noCatalog = await none.ensureCollection('tenant').catch((error: unknown) => error);
+				expect(noCatalog).toBeInstanceOf(SnapshotStoreCollectionCreationException);
+				expect(((noCatalog as Error).cause as Error).message).toMatch(
+					/CREATE TABLE IF NOT EXISTS `event_sourcing_collections`/,
+				);
+				// The exception has no message of its own: the statements to run reach the logs too
+				expect(logged).toHaveBeenCalledWith(((noCatalog as Error).cause as Error).message);
+
+				await auto.ensureCollection('other');
+				const noTable = await none.ensureCollection('tenant').catch((error: unknown) => error);
+				expect(((noTable as Error).cause as Error).message).toMatch(/CREATE TABLE IF NOT EXISTS `tenant-snapshots`/);
+
+				// Created from the remedy by a DBA
+				const [, table] = ((noTable as Error).cause as Error).message.split('run:\n')[1].split(';\n');
+				await poolOf(auto).query(table);
+				await expect(none.ensureCollection('tenant')).resolves.toBe('tenant-snapshots');
+				const listed: string[] = [];
+				for await (const batch of none.listCollections()) {
+					listed.push(...batch);
+				}
+				expect(listed).toEqual(['other-snapshots', 'tenant-snapshots']);
+			} finally {
+				logged.mockRestore();
+				await Promise.all([auto.disconnect(), none.disconnect()]);
+				await database.drop();
+			}
+		});
 	});
 });
