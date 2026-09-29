@@ -126,8 +126,9 @@ describe('EventBus on a Nest application (ADR 0001 §2)', () => {
 		expect(timeline).toEqual([
 			'handling shutdown-account-opened',
 			'handled shutdown-account-opened',
-			'disconnect InMemoryEventStore',
+			// The snapshot store starts after the event store, which it injects, so Nest shuts it down first
 			'disconnect InMemorySnapshotStore',
+			'disconnect InMemoryEventStore',
 		]);
 		for (const disconnect of disconnects) {
 			expect(disconnect).toHaveBeenCalledTimes(1);
@@ -152,8 +153,9 @@ describe('EventBus on a Nest application (ADR 0001 §2)', () => {
 		expect(timeline).toEqual([
 			'publishing shutdown-account-opened',
 			'published shutdown-account-opened',
-			'disconnect InMemoryEventStore',
+			// The snapshot store starts after the event store, which it injects, so Nest shuts it down first
 			'disconnect InMemorySnapshotStore',
+			'disconnect InMemoryEventStore',
 		]);
 		for (const disconnect of disconnects) {
 			expect(disconnect).toHaveBeenCalledTimes(1);
@@ -172,7 +174,7 @@ describe('EventBus on a Nest application (ADR 0001 §2)', () => {
 		await context.close();
 		app = undefined;
 
-		expect(timeline).toEqual(['hanging', 'disconnect InMemoryEventStore', 'disconnect InMemorySnapshotStore']);
+		expect(timeline).toEqual(['hanging', 'disconnect InMemorySnapshotStore', 'disconnect InMemoryEventStore']);
 		expect(loggerWarn).toHaveBeenCalledWith(
 			'The event bus is not idle after 20 ms: 0 publication(s) and 1 subscriber call(s) are still running; shutting down anyway',
 		);
