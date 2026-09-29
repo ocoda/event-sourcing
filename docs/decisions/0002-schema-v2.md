@@ -562,6 +562,8 @@ Each driver's schema v2 PR fills its subsection. Until then a driver claims noth
 - The copy runs with `unique_checks = 0, foreign_key_checks = 0`, listed as steps of the dry run; `ER_LOCK_TABLE_FULL` at the copy suggests a bigger buffer pool or a `READ COMMITTED` copy by hand.
 - The named lock is `CONCAT('ocoda:migrate:', SHA1(CONCAT(DATABASE(), '.', <t>)))` (10.11 rejects names over 192 characters).
 - The `occurred_on` counts of the dry run compute the decoded event id time in a derived table, and are documented at ~0.75 min per million rows (35–37 s per million in S2, 1.9–4.0 s per 100,000 here).
+- Registration (`ensureCollection`) reads `MAX(global_position)` without locks, then upserts the catalog row with `GREATEST`. The `INSERT … SELECT` of §3 locks the table's last row under `REPEATABLE READ` and deadlocked with every concurrent append (0 of ~960 registrations succeeded while 6 writers appended), so an instance could not start while others wrote. The `INSERT … SELECT` stays in the `ddl: 'none'` remedy and the offline migration.
+- `appendSnapshot` runs again, up to 10 times, when InnoDB picks it as a deadlock victim: the duplicate checks of `ux_latest` lock neighbouring keys, so appends to different streams of one aggregate deadlock under load (921 failures in 6,400 racing appends without the retry, 0 with it; once in CI on 11.8).
 - Snapshots: the conversion (`ALTER … ALGORITHM=COPY, LOCK=SHARED`) runs first, so the flag repairs compare stream ids in binary and the `ON UPDATE` attribute is gone before any `UPDATE`; then the superseded flags are cleared, the highest versions flagged, and `ux_latest` added (`ALGORITHM=INPLACE, LOCK=SHARED`).
 
 ### MongoDB
