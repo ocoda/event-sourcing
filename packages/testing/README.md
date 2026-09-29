@@ -40,9 +40,9 @@ describeEventStoreConformance(
 - The event store suite covers the v4 store contract (ADR 0001 §1, §8 and §9): expected versions, `ExpectedVersion.Any`,
   pre-built envelopes, validation without I/O, publishing, metadata and headers, global positions and `readAll`. It reads
   the capabilities of the store once the factory resolved, and skips the cases of a capability the store doesn't claim.
-- `LEGACY_DRIVER_SKIPS` (interim, removed with the finalize PR) lists the cases that a store which still overrides
-  `appendEvents` can't pass; the database stores spread it into their `skip` until they move to schema v2. The readAll
-  parts of `envelope-metadata-round-trip` and `conflict-concurrent-appends` are skipped along with `read-all-order`.
+- The cases append in the options form. `append-deprecated-positional` covers the deprecated positional form, which
+  the `EventStore` base class maps onto the options form. When a store skips `read-all-order`, the readAll parts of
+  `envelope-metadata-round-trip` and `conflict-concurrent-appends` are skipped with it.
 - `{ only, expectFailure: true }` registers selected cases as tests that must fail, for negative controls: deliberately
   broken stores that prove a case detects its defect (`packages/core/tests/unit/conformance/negative-controls.spec.ts`).
 
@@ -75,7 +75,7 @@ back in a manifest, then runs the specs with `vitest.cross-version.mts` (they ar
 - `domain.ts` mirrors the writer's events and aggregates, `createCrossVersionEventMap()` registers them.
 - `encodeValue` turns a value into JSON that keeps classes, `Date`s and `undefined`, the same way the writer does, so
   a read compares with `toEqual` against the manifest.
-- `expectCompleteCorpus` fails on an empty or hollow manifest. `expectEventStreamReads`, `expectLegacyAllOrder`,
+- `expectCompleteCorpus` fails on an empty or hollow manifest. `expectEventStreamReads`,
   `expectSnapshotStreamReads`, `expectListedCollections` and `expectEveryListedCollection` are the read assertions;
   each driver's spec composes them and can replace one when its schema changes.
 - `tests/cross-version/cross-version.json` says whether a 3.0.2 append after the read must succeed (the 3.x schema) or

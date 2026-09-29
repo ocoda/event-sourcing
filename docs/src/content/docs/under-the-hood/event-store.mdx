@@ -75,7 +75,7 @@ What a position guarantees depends on the store's `capabilities.globalOrder`:
 - **`'gap-safe'`**: once `readAll` yielded a position, no event at or below it commits later. A reader that resumes after its last position never misses an event, even while other appends are running. The in-memory store, PostgreSQL, MariaDB on InnoDB and MongoDB replica sets are gap-safe.
 - **`'best-effort'`**: positions strictly increase, but an event can still commit below a position that was already read, while appends run. Read again from an older position, or wait until the writers are done, to be sure to see every event.
 
-Every built-in store implements `readAll`. It replaces `getAllEnvelopes({ since, until })`: to read a period, filter the envelopes on `metadata.occurredOn`.
+Every built-in store implements `readAll`. It replaces `getAllEnvelopes({ since, until })`, which is removed: to read a period, filter the envelopes on `metadata.occurredOn`.
 
 ## Capabilities [#capabilities]
 
@@ -107,7 +107,7 @@ The MariaDB store detects a Galera cluster (`wsrep_on`) and the MongoDB store it
 
 ## The base class and the driver methods [#template]
 
-`EventStore` implements the store contract once, for every store. Its **template methods**, `appendEvents`, `getEvent` and `getEvents`, validate, serialize, check the version, retry `ExpectedVersion.Any`, stamp the global positions and publish. A store implements the **driver methods**, which do the I/O:
+`EventStore` implements the store contract once, for every store. Its **template methods**, `appendEvents`, `getEvent` and `getEvents`, validate, serialize, check the version, retry `ExpectedVersion.Any`, stamp the global positions and publish. A store implements the **driver methods**, which do the I/O. They are abstract, so TypeScript reports the ones a store lacks:
 
 | Method | Does |
 | --- | --- |
@@ -132,7 +132,7 @@ An append runs these steps:
    Any other failure is thrown. An `EventStorePersistenceException` passes through with the outcome the store gave it; any other error becomes one with `outcome: 'unknown'`, because the commit may have happened.
 5. Publish the envelopes with the context's publisher, unless `publish: false`. A failure is logged, never thrown.
 
-A store must not override the template methods: the module checks it when it creates the store, and an override (a method of a subclass, or a class field) fails the bootstrap with an `InvalidEventStoreImplementationException` that names the methods. Until 4.0.0 there is one exception: a store class that overrides `appendEvents` the 3.x way runs on a deprecated path, see [Migrating a 3.x store](/advanced/custom-stores#migrating-a-3x-store). To decorate appends, for tracing for instance, override `persistEvents` and call `super`.
+A store must not override the template methods: the module checks it when it creates the store, and an override (a method of a subclass, or a class field) fails the bootstrap with an `InvalidEventStoreImplementationException` that names the methods. This includes a 3.x store that overrides `appendEvents`: see [Migrating a 3.x store](/advanced/custom-stores#migrating-a-3x-store). To decorate the appends of a store, for tracing for instance, extend it, override `persistEvents` and call `super`.
 
 ## Custom stores [#custom-stores]
 

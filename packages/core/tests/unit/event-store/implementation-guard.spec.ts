@@ -17,7 +17,6 @@ import {
 import { createTestContext, eventStreamAccountA, getEvents } from '@ocoda/event-sourcing-testing/unit';
 import { EventStoreProvider } from '../../../lib/event-sourcing.providers.js';
 import { EVENT_STORE_BASE } from '../../../lib/stores/implementation-guard.js';
-import { isLegacyEventStore } from '../../../lib/stores/legacy-event-store.js';
 import { StubEventStore } from './stub-event-store.js';
 
 class OverridesGetEvent extends StubEventStore {
@@ -32,6 +31,19 @@ class OverridesGetEventsFurtherDown extends OverridesGetEvent {
 
 class OverridesWithAField extends StubEventStore {
 	getEvents = async function* (): AsyncGenerator<IEvent[]> {};
+}
+
+/** A store in the 3.x shape, which overrides appendEvents. */
+class OverridesAppendEvents extends StubEventStore {
+	override async appendEvents(): Promise<EventEnvelope[]> {
+		return [];
+	}
+}
+
+class ExtendsInMemoryAndOverridesAppendEvents extends InMemoryEventStore {
+	override async appendEvents(): Promise<EventEnvelope[]> {
+		return [];
+	}
 }
 
 class DecoratesPersistEvents extends StubEventStore {
@@ -59,6 +71,7 @@ describe(assertEventStoreImplementation, () => {
 	});
 
 	it.each([
+		[OverridesAppendEvents, ['appendEvents']],
 		[OverridesGetEvent, ['getEvent']],
 		[OverridesGetEventsFurtherDown, ['getEvent', 'getEvents']],
 		[OverridesWithAField, ['getEvents']],
@@ -124,39 +137,28 @@ describe('EventStoreProvider', () => {
 		expect(EventStoreProvider.inject).toEqual([EventMap, EventBus, expect.any(String)]);
 	});
 
-	it('uses the in-memory store by default, which does not run on the legacy path', async () => {
+	it('uses the in-memory store by default, with the template methods of the base class', async () => {
 		const store = await EventStoreProvider.useFactory(eventMap, eventBus, {});
 
 		expect(store).toBeInstanceOf(InMemoryEventStore);
-		expect(isLegacyEventStore(store)).toBe(false);
+		expect(store.appendEvents).toBe(EventStore.prototype.appendEvents);
 	});
 
-	it('fails for a store that overrides a template method', async () => {
+	it.each([
+		[OverridesGetEvent, ['getEvent']],
+		[OverridesAppendEvents, ['appendEvents']],
+		[ExtendsInMemoryAndOverridesAppendEvents, ['appendEvents']],
+	])('fails for %o, which overrides %o', async (Store, methods) => {
 		await expect(
-			EventStoreProvider.useFactory(eventMap, eventBus, { eventStore: { driver: OverridesGetEvent as never } }),
-		).rejects.toBeInstanceOf(InvalidEventStoreImplementationException);
+			EventStoreProvider.useFactory(eventMap, eventBus, { eventStore: { driver: Store as never } }),
+		).rejects.toThrow(expect.objectContaining({ name: 'InvalidEventStoreImplementationException', methods }));
 	});
 
-	it('fails the bootstrap of a module with such a store', async () => {
+	it.each([OverridesWithAField, OverridesAppendEvents])('fails the bootstrap of a module with %o', async (Store) => {
 		const bootstrap = Test.createTestingModule({
-			imports: [EventSourcingModule.forRoot({ eventStore: { driver: OverridesWithAField as never } })],
+			imports: [EventSourcingModule.forRoot({ eventStore: { driver: Store as never } })],
 		}).compile();
 
 		await expect(bootstrap).rejects.toBeInstanceOf(InvalidEventStoreImplementationException);
-	});
-
-	// INTERIM(H): until the database stores implement the contract
-	it('accepts a store that overrides appendEvents, on the legacy path', async () => {
-		class LegacyStore extends StubEventStore {
-			override async appendEvents(): Promise<EventEnvelope[]> {
-				return [];
-			}
-		}
-
-		const store = await EventStoreProvider.useFactory(eventMap, eventBus, {
-			eventStore: { driver: LegacyStore as never },
-		});
-
-		expect(isLegacyEventStore(store)).toBe(true);
 	});
 });

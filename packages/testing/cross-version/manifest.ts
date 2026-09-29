@@ -13,7 +13,7 @@ export interface CrossVersionManifest {
 	/** The writer's process time zone; 3.x reads of MariaDB and PostgreSQL snapshot `TIMESTAMP`s depend on it. */
 	writerTimeZone: string;
 	writer: { node: string; packages: Record<string, string>; server: string };
-	/** The `since` of the `getAllEnvelopes` calls behind `legacyAllOrder`. */
+	/** The `since` (year and month) of the 3.x reads of all events behind `legacyAllOrder`. */
 	allEnvelopesSince: { year: number; month: number };
 	/** 3.x `listCollections()` of the event store and the snapshot store, as returned. */
 	eventCollections: string[];
@@ -36,7 +36,7 @@ export interface ManifestEventPool {
 	/** Every event the writer appended, as `appendEvents` returned it (`occurredOn` with milliseconds). */
 	written: WrittenEvent[];
 	streams: ManifestEventStream[];
-	/** 3.x `getAllEnvelopes` over every month since `allEnvelopesSince`: `ORDER BY event_date, event_id`. */
+	/** What 3.x read of all events of the pool, over every month since `allEnvelopesSince`: `ORDER BY event_date, event_id`. */
 	legacyAllOrder: LegacyOrderEntry[];
 	gappedStreams: string[];
 	/** MariaDB: stream ids that differ in case only (the 3.x tables compare them case-insensitively). */

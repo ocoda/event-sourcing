@@ -15,7 +15,6 @@ import type {
 } from './interfaces/index.js';
 import { SnapshotStore } from './snapshot-store.js';
 import { assertEventStoreImplementation } from './stores/implementation-guard.js';
-import { isLegacyEventStore } from './stores/legacy-event-store.js';
 
 export const EventStoreProvider = {
 	provide: EventStore,
@@ -23,10 +22,8 @@ export const EventStoreProvider = {
 		// The driver options are the rest of the config: the module handles useDefaultPool
 		const { driver, useDefaultPool: _, ...options } = eventStore ?? { driver: InMemoryEventStore };
 		const store = new driver({ eventMap, publisher: eventBus }, options);
-		// INTERIM(H): stores that still override appendEvents run on the legacy path; from 4.0 every store is checked
-		if (!isLegacyEventStore(store)) {
-			assertEventStoreImplementation(store);
-		}
+		// A store that overrides appendEvents, getEvent or getEvents fails the bootstrap
+		assertEventStoreImplementation(store);
 		return store;
 	},
 	inject: [EventMap, EventBus, EVENT_SOURCING_OPTIONS],

@@ -80,8 +80,7 @@ describe('decorator metadata', () => {
 
 // The shared tsconfig keeps define semantics for class fields (useDefineForClassFields: true), matching the
 // published build, and Oxc mirrors it for the tests. The event store's implementation guard relies on it: a template
-// method that a store overrides with a class field is an own property of the store. (The 3.x publishing proxy that
-// these tests used to cover is the interim legacy path now: tests/unit/event-store/legacy-path.spec.ts.)
+// method that a store overrides with a class field is an own property of the store.
 describe('class fields (define semantics)', () => {
 	it('defines class fields without an initializer, like the published build', () => {
 		const store = new InMemoryEventStore(createTestContext(), { driver: InMemoryEventStore });
