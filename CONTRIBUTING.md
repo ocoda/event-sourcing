@@ -17,8 +17,8 @@ Base your pull request on the branch your change targets.
 
 ## Prerequisites
 
-- **Node.js ≥ 22.12**, which the test and build tooling requires.
-- **pnpm**: use the version pinned in the root `package.json` (`packageManager`); `corepack enable` picks it up.
+- **Node.js ≥ 22.12**, which the test and build tooling requires. `.node-version` names 24 for version managers.
+- **pnpm 12**: use the exact version pinned in the root `package.json` (`packageManager`); `corepack enable` picks it up. pnpm doesn't switch to that version on its own in this repository (`pmOnFail: ignore` in `pnpm-workspace.yaml`), so with another pnpm, run `pnpm self-update <version>` first.
 - **Docker**, if you touch a database integration.
 
 ## Setup
@@ -28,6 +28,8 @@ git clone https://github.com/ocoda/event-sourcing.git
 cd event-sourcing
 pnpm install
 ```
+
+`pnpm-workspace.yaml` sets the dependency policy: versions that several packages share come from its `catalog` (write `catalog:` in `package.json`), pnpm installs only versions that are at least a day old, and dependency install scripts run only for the packages `allowBuilds` lists.
 
 The repository is a pnpm + turbo monorepo:
 
@@ -106,7 +108,7 @@ pnpm exec changeset
 
 - Write the text for library users and call out behaviour changes.
 - Pick the bump as usual: `major` for a breaking change (with a migration note), `minor` for a feature, `patch` for a fix.
-- Name only the published packages: `@ocoda/event-sourcing` and the four `@ocoda/event-sourcing-<db>` integrations.
+- Name only the published packages: `@ocoda/event-sourcing` and the three `@ocoda/event-sourcing-<db>` integrations (`postgres`, `mongodb`, `mariadb`).
 - On `3.x`, only `patch` changesets are accepted.
 
 Docs, examples, CI and test-only changes don't need a changeset.
