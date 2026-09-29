@@ -1,6 +1,8 @@
 import type { MigrationGappedStream } from '@ocoda/event-sourcing';
 import { escapeIdentifier } from 'pg';
+import { MAX_IDENTIFIER_BYTES } from '../postgres.helpers.js';
 import {
+	CATALOG,
 	type CollectionState,
 	type Queryable,
 	type TableInfo,
@@ -19,6 +21,22 @@ export type CollectionKind = 'events' | 'snapshots';
 export interface DependentRewrite {
 	name: string;
 	columns: (string | null)[];
+}
+
+/**
+ * An object that depends on a column of a table, other than a view or rule (`rewrites`) and a foreign key of another
+ * table (`referencingForeignKeys`).
+ */
+export interface ColumnDependent {
+	/** The object, as `pg_describe_object` names it (in the server's `lc_messages`). */
+	object: string;
+	kind: 'index' | 'constraint' | 'generated column' | 'policy' | 'trigger' | 'publication' | 'statistics' | 'other';
+	/** The name of the index, when the object is one. */
+	index?: string;
+	/** The column it depends on. */
+	column: string;
+	/** A normal dependency, which keeps the column from being dropped; an automatic one is dropped with it. */
+	normal: boolean;
 }
 
 export interface TriggerInfo {
@@ -45,7 +63,14 @@ export interface CollectionInspection {
 	publications: string[];
 	/** Foreign keys of other tables that reference this one. */
 	referencingForeignKeys: string[];
-	privileges: { owner: boolean; createInSchema: boolean; temporary: boolean };
+	columnDependents: ColumnDependent[];
+	privileges: {
+		owner: boolean;
+		createInSchema: boolean;
+		temporary: boolean;
+		/** Whether the role may read, insert and update the rows of the catalog; `true` when there is no catalog yet. */
+		catalog: boolean;
+	};
 }
 
 /**
@@ -67,7 +92,9 @@ const SHAPES: Record<CollectionKind, string[]> = {
 
 /**
  * The tables of the current schema that have the name and the columns of a collection of the given kind (`events` or
- * `<pool>-events`, `snapshots` or `<pool>-snapshots`), in binary order of their names.
+ * `<pool>-events`, `snapshots` or `<pool>-snapshots`), in binary order of their names. Tables with the columns and a
+ * name of exactly 63 bytes are included too: 3.x created them for pools whose table name PostgreSQL truncated, and the
+ * migration reports them as blocked.
  */
 export const discoverCollections = async (connection: Queryable, kind: CollectionKind): Promise<string[]> => {
 	const { rows } = await connection.query<{ name: string }>(
@@ -75,13 +102,13 @@ export const discoverCollections = async (connection: Queryable, kind: Collectio
 		FROM pg_class c
 		JOIN pg_namespace n ON n.oid = c.relnamespace
 		WHERE n.nspname = current_schema() AND c.relkind IN ('r', 'p')
-			AND (c.relname = $1 OR right(c.relname, length($1) + 1) = '-' || $1)
+			AND (c.relname = $1 OR right(c.relname, length($1) + 1) = '-' || $1 OR octet_length(c.relname) = $3)
 			AND (
 				SELECT count(*) FROM pg_attribute a
 				WHERE a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped AND a.attname = ANY ($2::text[])
 			) = cardinality($2::text[])
 		ORDER BY c.relname COLLATE "C"`,
-		[kind, SHAPES[kind]],
+		[kind, SHAPES[kind], MAX_IDENTIFIER_BYTES],
 	);
 	return rows.map(({ name }) => name);
 };
@@ -102,7 +129,19 @@ export const inspectCollection = async (
 	kind: CollectionKind,
 	name: string,
 ): Promise<CollectionInspection> => {
-	const table = await describeTable(connection, name);
+	// The catalog row is only read when the role may read the catalog: otherwise the plan is blocked
+	const {
+		rows: [privileges],
+	} = await connection.query<{ create_in_schema: boolean; temporary: boolean; catalog: boolean }>(
+		`SELECT has_schema_privilege(current_schema(), 'CREATE') AS create_in_schema,
+			has_database_privilege(current_database(), 'TEMPORARY') AS temporary,
+			(SELECT r IS NULL OR (has_table_privilege(r, 'SELECT') AND has_table_privilege(r, 'INSERT')
+				AND has_table_privilege(r, 'UPDATE'))
+			FROM to_regclass(format('%I.%I', current_schema(), $1::text)) AS r) AS catalog`,
+		[CATALOG],
+	);
+
+	const table = await describeTable(connection, name, { entry: privileges.catalog });
 	const state = kind === 'events' ? eventTableState(table) : snapshotTableState(table);
 	const inspection: CollectionInspection = {
 		kind,
@@ -115,17 +154,14 @@ export const inspectCollection = async (
 		triggers: [],
 		publications: [],
 		referencingForeignKeys: [],
-		privileges: { owner: false, createInSchema: false, temporary: false },
+		columnDependents: [],
+		privileges: {
+			owner: false,
+			createInSchema: privileges.create_in_schema,
+			temporary: privileges.temporary,
+			catalog: privileges.catalog,
+		},
 	};
-
-	const {
-		rows: [privileges],
-	} = await connection.query<{ create_in_schema: boolean; temporary: boolean }>(
-		`SELECT has_schema_privilege(current_schema(), 'CREATE') AS create_in_schema,
-			has_database_privilege(current_database(), 'TEMPORARY') AS temporary`,
-	);
-	inspection.privileges.createInSchema = privileges.create_in_schema;
-	inspection.privileges.temporary = privileges.temporary;
 
 	if (table.oid === null) {
 		return inspection;
@@ -183,6 +219,47 @@ export const inspectCollection = async (
 		[oid],
 	);
 	inspection.referencingForeignKeys = foreignKeys.map(({ name: foreignKey }) => foreignKey);
+
+	// The objects of the table itself that depend on its columns internally (the primary key index on its constraint, the
+	// default of a column) aren't listed
+	const { rows: columnDependents } = await connection.query<{
+		object: string;
+		kind: ColumnDependent['kind'];
+		index: string | null;
+		column: string;
+		normal: boolean;
+	}>(
+		`SELECT pg_describe_object(d.classid, d.objid, d.objsubid) AS object,
+			CASE
+				WHEN d.classid = 'pg_class'::regclass AND d.objsubid > 0 THEN 'generated column'
+				WHEN d.classid = 'pg_class'::regclass AND c.relkind IN ('i', 'I') THEN 'index'
+				WHEN d.classid = 'pg_constraint'::regclass THEN 'constraint'
+				WHEN d.classid = 'pg_policy'::regclass THEN 'policy'
+				WHEN d.classid = 'pg_trigger'::regclass THEN 'trigger'
+				WHEN d.classid = 'pg_publication_rel'::regclass THEN 'publication'
+				WHEN d.classid = 'pg_statistic_ext'::regclass THEN 'statistics'
+				ELSE 'other'
+			END AS kind,
+			CASE WHEN c.relkind IN ('i', 'I') THEN c.relname::text END AS index,
+			a.attname::text AS column, bool_or(d.deptype = 'n') AS normal
+		FROM pg_depend d
+		JOIN pg_attribute a ON a.attrelid = d.refobjid AND a.attnum = d.refobjsubid
+		LEFT JOIN pg_class c ON d.classid = 'pg_class'::regclass AND c.oid = d.objid
+		LEFT JOIN pg_constraint con ON d.classid = 'pg_constraint'::regclass AND con.oid = d.objid
+		WHERE d.refclassid = 'pg_class'::regclass AND d.refobjid = $1::oid AND d.refobjsubid > 0 AND d.deptype IN ('n', 'a')
+			AND d.classid NOT IN ('pg_rewrite'::regclass, 'pg_attrdef'::regclass)
+			AND (con.oid IS NULL OR con.conrelid = $1::oid)
+		GROUP BY 1, 2, 3, 4
+		ORDER BY 1, 4`,
+		[oid],
+	);
+	inspection.columnDependents = columnDependents.map(({ object, kind: dependentKind, index, column, normal }) => ({
+		object,
+		kind: dependentKind,
+		...(index === null ? {} : { index }),
+		column,
+		normal,
+	}));
 
 	if (kind === 'events') {
 		await inspectEvents(connection, inspection);

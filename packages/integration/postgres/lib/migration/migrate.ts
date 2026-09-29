@@ -31,6 +31,11 @@ export interface MigrationHooks {
 const DEFAULT_LOCK_TIMEOUT_MS = 10_000;
 
 /**
+ * Work memory of the migration's connection outside its transactions: the inspection groups whole tables.
+ */
+const INSPECTION_WORK_MEM = '64MB';
+
+/**
  * Runs `migrate()` for the event or snapshot tables of the current schema: for each table, inspects it, plans the steps
  * and (unless it's a dry run) runs them, on one dedicated connection. A table whose migration is blocked is reported
  * and left as it is; an error in a step rolls its transaction back and is thrown.
@@ -57,7 +62,13 @@ export const runMigration = async (
 	};
 	client.on('error', onError);
 
+	let configured = false;
 	try {
+		// The inspection counts and groups whole tables, and VACUUM runs outside the transaction: a statement_timeout of
+		// the role or the pool config would stop them. Reset before the connection goes back to the pool.
+		await client.query(`SET statement_timeout = 0; SET work_mem = '${INSPECTION_WORK_MEM}'`);
+		configured = true;
+
 		const {
 			rows: [environment],
 		} = await client.query<{ server_version: string; session: string; server: string | null; zone_known: boolean }>(
@@ -127,6 +138,9 @@ export const runMigration = async (
 		}
 		throw error instanceof MigrationStopped ? error.cause : error;
 	} finally {
+		if (configured && !broken) {
+			await client.query('RESET statement_timeout; RESET work_mem').catch(onError);
+		}
 		client.removeListener('error', onError);
 		client.release(broken);
 	}
@@ -158,7 +172,6 @@ const execute = async (
 	};
 
 	let locked = false;
-	let inTransaction = false;
 	try {
 		for (const step of plan.steps) {
 			options.onProgress?.({
@@ -179,7 +192,6 @@ const execute = async (
 				}
 				case 'begin':
 					await client.query(step.statement);
-					inTransaction = true;
 					break;
 				case 'lock': {
 					try {
@@ -189,7 +201,6 @@ const execute = async (
 							throw error;
 						}
 						await client.query('ROLLBACK');
-						inTransaction = false;
 						block(
 							'Other sessions still use the table (is a 3.x instance still running?): the lock was not granted within lockTimeoutMs.',
 						);
@@ -200,7 +211,6 @@ const execute = async (
 					const state = plan.kind === 'events' ? eventTableState(table) : snapshotTableState(table);
 					if (state !== plan.from) {
 						await client.query('ROLLBACK');
-						inTransaction = false;
 						block(
 							`The table changed from ${plan.from} to ${state} while the migration waited for it: run migrate() again.`,
 						);
@@ -210,7 +220,6 @@ const execute = async (
 				}
 				case 'commit':
 					await client.query(step.statement);
-					inTransaction = false;
 					break;
 				case 'vacuum':
 					// The migration committed: a failing VACUUM leaves nothing to undo
@@ -236,9 +245,8 @@ const execute = async (
 			}
 		}
 	} catch (error) {
-		if (inTransaction) {
-			await client.query('ROLLBACK').catch(() => undefined);
-		}
+		// Also after a failed create-catalog step, which runs a transaction of its own in one query
+		await client.query('ROLLBACK').catch(() => undefined);
 		throw error;
 	} finally {
 		if (locked) {

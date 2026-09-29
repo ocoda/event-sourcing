@@ -89,17 +89,32 @@ const legacyInspection = (kind: CollectionKind): CollectionInspection => ({
 	triggers: [],
 	publications: [],
 	referencingForeignKeys: [],
-	privileges: { owner: true, createInSchema: true, temporary: true },
+	columnDependents: [],
+	privileges: { owner: true, createInSchema: true, temporary: true, catalog: true },
 });
 
 /**
  * The steps a DBA runs: without the session lock, which only keeps two migrate() runs apart.
  */
 const statementsOf = (steps: PlannedStep[]): string =>
-	steps
-		.filter(({ name }) => name !== 'migration-lock')
-		.map(({ name, statement }) => `-- ${name}\n${statement};`)
-		.join('\n\n');
+	steps.map(({ name, statement }) => `-- ${name}\n${statement};`).join('\n\n');
+
+/**
+ * The steps of a table's migration, run only while the table still has the 3.x shape (`guard`), so that the file can
+ * run again after a failure or a partial run.
+ */
+const guarded = (
+	table: string,
+	guard: string,
+	steps: PlannedStep[],
+): string => `SELECT ${guard} AS migrate_${table} \\gset
+\\if :migrate_${table}
+
+${statementsOf(steps.filter(({ name }) => name !== 'migration-lock' && name !== 'create-catalog'))}
+
+\\else
+\\echo '${table}: no 3.x table to migrate, skipped'
+\\endif`;
 
 /**
  * The content of migrations/4.0.sql.
@@ -118,21 +133,32 @@ export const renderMigrationSql = (): string => {
 -- names) or other column types need other statements: run migrate({ dryRun: true }), which prints the exact
 -- statements for your database, and use this file as a reference only.
 --
--- Stop every 3.x instance and take a backup first. Run it as the owner of the tables:
+-- Stop every 3.x instance and take a backup first. Run it with psql (10 or later), as the owner of the tables:
 --
 --   psql -v legacy_time_zone='Europe/Brussels' -f migrations/4.0.sql
 --
 -- legacy_time_zone is the time zone your 3.x instances ran in: 3.x stored the snapshots' registered_on as the wall
--- time of the process. Each table is migrated in one transaction.
+-- time of the process. Each table is migrated in one transaction, and only while it still has its 3.x shape, so the
+-- file can run again after a failure.
 
 \\set ON_ERROR_STOP on
 
+\\if :{?legacy_time_zone}
+\\else
+\\echo 'Set legacy_time_zone to the time zone your 3.x instances ran in: psql -v legacy_time_zone=<IANA zone> -f migrations/4.0.sql'
+\\quit
+\\endif
+
+-- The catalog of the collections, unless it exists.
+
+${statementsOf(events.steps.filter(({ name }) => name === 'create-catalog'))}
+
 -- Events: numbered in 3.x's order (event_date, event_id, stream_id, version), keeping each stream in version order.
 
-${statementsOf(events.steps)}
+${guarded('events', "EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = to_regclass('events') AND attname = 'event_date' AND NOT attisdropped)", events.steps)}
 
 -- Snapshots: one latest flag per stream, on its highest version.
 
-${statementsOf(snapshots.steps)}
+${guarded('snapshots', "EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = to_regclass('snapshots') AND attname = 'registered_on' AND atttypid = 'timestamp'::regtype AND NOT attisdropped)", snapshots.steps)}
 `;
 };

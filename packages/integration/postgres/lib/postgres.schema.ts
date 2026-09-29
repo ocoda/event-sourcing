@@ -169,6 +169,10 @@ export interface ColumnInfo {
 	notNull: boolean;
 	/** The collation of a text column: `default`, `C`, ... */
 	collation: string | null;
+	/** A generated column (`GENERATED ALWAYS AS (…) STORED`), whose values can't be inserted. */
+	generated?: boolean;
+	/** An identity column (`GENERATED … AS IDENTITY`). */
+	identity?: boolean;
 }
 
 export interface IndexInfo {
@@ -201,9 +205,14 @@ export interface TableInfo {
 }
 
 /**
- * Reads the columns, the indexes and the catalog row of a table of the current schema.
+ * Reads the columns, the indexes and the catalog row of a table of the current schema. With `entry: false`, doesn't
+ * read the catalog row (for a role that may not read the catalog).
  */
-export const describeTable = async (connection: Queryable, table: string): Promise<TableInfo> => {
+export const describeTable = async (
+	connection: Queryable,
+	table: string,
+	{ entry: readEntry = true }: { entry?: boolean } = {},
+): Promise<TableInfo> => {
 	const {
 		rows: [{ oid, catalog }],
 	} = await connection.query<{ oid: number | null; catalog: boolean }>(
@@ -214,7 +223,7 @@ export const describeTable = async (connection: Queryable, table: string): Promi
 	);
 
 	let entry: CatalogEntry | undefined;
-	if (catalog) {
+	if (catalog && readEntry) {
 		const { rows } = await connection.query<{
 			kind: CatalogEntry['kind'];
 			schema_version: number;
@@ -238,9 +247,11 @@ export const describeTable = async (connection: Queryable, table: string): Promi
 		type: string;
 		not_null: boolean;
 		collation: string | null;
+		generated: boolean;
+		identity: boolean;
 	}>(
 		`SELECT a.attname AS name, format_type(a.atttypid, a.atttypmod) AS type, a.attnotnull AS not_null,
-			co.collname AS collation
+			co.collname AS collation, a.attgenerated <> '' AS generated, a.attidentity <> '' AS identity
 		FROM pg_attribute a
 		LEFT JOIN pg_collation co ON co.oid = a.attcollation
 		WHERE a.attrelid = $1 AND a.attnum > 0 AND NOT a.attisdropped
@@ -277,7 +288,10 @@ export const describeTable = async (connection: Queryable, table: string): Promi
 	return {
 		oid,
 		columns: Object.fromEntries(
-			columnRows.map(({ name, type, not_null, collation }) => [name, { name, type, notNull: not_null, collation }]),
+			columnRows.map(({ name, type, not_null, collation, generated, identity }) => [
+				name,
+				{ name, type, notNull: not_null, collation, generated, identity },
+			]),
 		),
 		indexes: indexRows,
 		entry,

@@ -1,7 +1,8 @@
-import type { CollectionInspection } from '../../lib/migration/inspect.js';
+import type { CollectionInspection, ColumnDependent } from '../../lib/migration/inspect.js';
 import {
 	type CollectionPlan,
 	type PlanSettings,
+	copyTableName,
 	planEventMigration,
 	planSnapshotMigration,
 } from '../../lib/migration/plan.js';
@@ -33,6 +34,13 @@ const index = (name: string, columns: string[], options: Partial<IndexInfo> = {}
 	columns,
 	...options,
 });
+
+const dependent = (
+	kind: ColumnDependent['kind'],
+	object: string,
+	column: string,
+	options: Partial<ColumnDependent> = {},
+): ColumnDependent => ({ kind, object, column, normal: false, ...options });
 
 const columnsOf = (...columns: ColumnInfo[]): Record<string, ColumnInfo> =>
 	Object.fromEntries(columns.map((info) => [info.name, info]));
@@ -111,7 +119,8 @@ const inspection = (
 	triggers: [],
 	publications: [],
 	referencingForeignKeys: [],
-	privileges: { owner: true, createInSchema: true, temporary: true },
+	columnDependents: [],
+	privileges: { owner: true, createInSchema: true, temporary: true, catalog: true },
 	...extra,
 });
 
@@ -174,9 +183,13 @@ describe('planEventMigration', () => {
 		expect(stepNames(plan)).toEqual(action === 'skip' ? [] : ['register']);
 	});
 
-	it('creates the catalog before registering a v2 table in a schema without one', () => {
+	it('creates the catalog in a transaction of its own before registering a v2 table in a schema without one', () => {
 		const plan = planEventMigration(inspection('events', table(V2_EVENT_COLUMNS, [], { catalog: false })), settings);
 		expect(stepNames(plan)).toEqual(['create-catalog', 'register']);
+		// psql sends the statements one by one: the explicit transaction keeps the advisory lock until the table exists
+		expect(statementOf(plan, 'create-catalog')).toMatch(
+			/^BEGIN; SELECT pg_advisory_xact_lock\(hashtext\('ocoda:event_sourcing_collections'\)\); CREATE TABLE IF NOT EXISTS event_sourcing_collections \([^;]+\) WITH \(fillfactor = 50\); COMMIT$/,
+		);
 	});
 
 	it('rewrites a 3.x table in one transaction', () => {
@@ -221,7 +234,134 @@ describe('planEventMigration', () => {
 			'ALTER TABLE "events" ADD COLUMN IF NOT EXISTS global_position BIGINT, ADD COLUMN IF NOT EXISTS headers JSONB, ADD COLUMN IF NOT EXISTS event_version INTEGER, ALTER COLUMN stream_id TYPE TEXT, ALTER COLUMN event TYPE TEXT, ALTER COLUMN event_id TYPE TEXT, ALTER COLUMN aggregate_id TYPE TEXT, ALTER COLUMN correlation_id TYPE TEXT, ALTER COLUMN causation_id TYPE TEXT',
 		);
 		expect(statementOf(plan, 'vacuum')).toBe('VACUUM (ANALYZE, PARALLEL 0) "events"');
-		expect(plan.warnings).toEqual([expect.stringContaining('about 2.2 MB of free disk')]);
+		expect(plan.warnings).toEqual([expect.stringContaining('Keep about 3.0 MB of disk free')]);
+	});
+
+	it('empties the table only in the transaction of the numbered copy, and reinserts without a sort', () => {
+		const plan = planEventMigration(inspection('events', table(V1_EVENT_COLUMNS)), settings);
+		const copy = copyTableName('events');
+
+		expect(statementOf(plan, 'truncate')).toBe(`DO $migrate$
+BEGIN
+	IF to_regclass('pg_temp.${copy}') IS NULL THEN
+		RAISE EXCEPTION 'The numbered copy ${copy} is missing: run the steps from begin to commit in one transaction';
+	END IF;
+	TRUNCATE "events";
+END $migrate$`);
+		expect(statementOf(plan, 'reinsert')).not.toContain('ORDER BY');
+		expect(statementOf(plan, 'migration-lock')).toBe(
+			`SELECT pg_try_advisory_lock(hashtext('ocoda:migrate'), hashtext(format('%I.%I', current_schema(), 'events'::text))) AS locked`,
+		);
+	});
+
+	it('keeps the columns a user added, computes generated columns again and keeps identity values', () => {
+		const plan = planEventMigration(
+			inspection(
+				'events',
+				table([
+					...V1_EVENT_COLUMNS,
+					column('tenant', 'text', false),
+					column('order', 'integer', false),
+					{ ...column('sequence', 'bigint'), identity: true },
+					{ ...column('month', 'text', false), generated: true },
+				]),
+			),
+			settings,
+		);
+		const copied =
+			'stream_id, version, event, payload, event_id, aggregate_id, occurred_on, correlation_id, causation_id, "tenant", "order", "sequence"';
+
+		expect(statementOf(plan, 'number')).toContain(
+			`SELECT ${copied}, row_number() OVER (ORDER BY stream_key, version) AS global_position`,
+		);
+		expect(statementOf(plan, 'reinsert')).toBe(
+			`INSERT INTO "events" (${copied}, global_position) OVERRIDING SYSTEM VALUE\nSELECT ${copied}, global_position FROM "${copyTableName('events')}"`,
+		);
+	});
+
+	it.each([
+		['a name PostgreSQL truncated', `${'p'.repeat(60)}-events`, 'is 67 bytes long'],
+		['a table found with a truncated name', `${'p'.repeat(60)}-ev`, 'a name that PostgreSQL truncated to 63 bytes'],
+	])('blocks %s, without steps', (_, name, reason) => {
+		const plan = planEventMigration({ ...inspection('events', table(V1_EVENT_COLUMNS)), name }, settings);
+
+		expect(plan).toMatchObject({ action: 'blocked', steps: [] });
+		expect(plan.blocking).toEqual([expect.stringContaining(reason)]);
+		expect(plan.blocking[0]).toContain('a pool name of at most 56 bytes');
+	});
+
+	it('reports the indexes, constraints and statistics that dropping event_date drops', () => {
+		const plan = planEventMigration(
+			inspection('events', table(V1_EVENT_COLUMNS, [index('idx_events_event_date_id', ['event_date', 'event_id'])]), {
+				columnDependents: [
+					dependent('index', 'index idx_events_event_date_id', 'event_date', { index: 'idx_events_event_date_id' }),
+					dependent('index', 'index events_month', 'event_date', { index: 'events_month' }),
+					dependent('index', 'index events_recent', 'event_date', { index: 'events_recent' }),
+					dependent('constraint', 'constraint dated on table events', 'event_date', { normal: true }),
+					dependent('statistics', 'statistics object events_stats', 'event_date'),
+					dependent('constraint', 'constraint events_pkey on table events', 'stream_id'),
+					dependent('index', 'index events_ids', 'event_id', { index: 'events_ids' }),
+				],
+			}),
+			settings,
+		);
+
+		expect(plan).toMatchObject({ action: 'migrate', blocking: [] });
+		expect(plan.droppedIndexes).toEqual(['events_month', 'events_recent', 'idx_events_event_date_id']);
+		expect(plan.warnings).toEqual(
+			expect.arrayContaining([
+				'The migration drops constraint dated on table events, which uses event_date.',
+				'The migration drops statistics object events_stats, which uses event_date.',
+			]),
+		);
+	});
+
+	it.each<[string, ColumnDependent, string]>([
+		[
+			'a policy on event_date',
+			dependent('policy', 'policy dates on table events', 'event_date', { normal: true }),
+			'The policy dates on table events uses event_date, which the migration drops',
+		],
+		[
+			'a generated column of event_date',
+			dependent('generated column', 'column month of table events', 'event_date'),
+			'The column month of table events uses event_date, which the migration drops',
+		],
+		[
+			'a trigger on a widened column',
+			dependent('trigger', 'trigger audit on table events', 'stream_id', { normal: true }),
+			'The trigger audit on table events uses stream_id, which the migration converts to another type',
+		],
+		[
+			'a publication row filter on event_date',
+			dependent('publication', 'publication of table events in publication cdc', 'event_date', { normal: true }),
+			'publication cdc uses event_date',
+		],
+		[
+			'an unknown object that event_date keeps',
+			dependent('other', 'something else', 'event_date', { normal: true }),
+			'The something else uses event_date',
+		],
+	])('blocks %s', (_, columnDependent, reason) => {
+		const plan = planEventMigration(
+			inspection('events', table(V1_EVENT_COLUMNS), { columnDependents: [columnDependent] }),
+			settings,
+		);
+		expect(plan.action).toBe('blocked');
+		expect(plan.blocking).toEqual([expect.stringContaining(reason)]);
+	});
+
+	it('does not block on objects of columns it keeps', () => {
+		const plan = planEventMigration(
+			inspection('events', table(V1_EVENT_COLUMNS), {
+				columnDependents: [
+					dependent('policy', 'policy tenants on table events', 'payload', { normal: true }),
+					dependent('trigger', 'trigger audit on table events', 'version', { normal: true }),
+				],
+			}),
+			settings,
+		);
+		expect(plan).toMatchObject({ action: 'migrate', blocking: [] });
 	});
 
 	it('only widens the columns that are not text yet', () => {
@@ -243,19 +383,19 @@ describe('planEventMigration', () => {
 		['a partly migrated table without event_date', {}, table(V2_EVENT_COLUMNS.slice(0, 9)), 'without event_date'],
 		[
 			'a table the role does not own',
-			{ privileges: { owner: false, createInSchema: true, temporary: true } },
+			{ privileges: { owner: false, createInSchema: true, temporary: true, catalog: true } },
 			table(V1_EVENT_COLUMNS),
 			"doesn't own",
 		],
 		[
 			'a role without temporary tables',
-			{ privileges: { owner: true, createInSchema: true, temporary: false } },
+			{ privileges: { owner: true, createInSchema: true, temporary: false, catalog: true } },
 			table(V1_EVENT_COLUMNS),
 			'temporary tables',
 		],
 		[
 			'a schema without catalog where the role may not create it',
-			{ privileges: { owner: true, createInSchema: false, temporary: true } },
+			{ privileges: { owner: true, createInSchema: false, temporary: true, catalog: true } },
 			table(V1_EVENT_COLUMNS, [], { catalog: false }),
 			'may not create tables',
 		],
@@ -282,6 +422,12 @@ describe('planEventMigration', () => {
 			{ referencingForeignKeys: ['refs.refs_fkey'] },
 			table(V1_EVENT_COLUMNS),
 			'refs.refs_fkey reference',
+		],
+		[
+			'a role that may not write the catalog',
+			{ privileges: { owner: true, createInSchema: true, temporary: true, catalog: false } },
+			table(V1_EVENT_COLUMNS),
+			'grant it SELECT, INSERT and UPDATE on the catalog',
 		],
 	])('blocks %s', (_, extra, info, reason) => {
 		const plan = planEventMigration(inspection('events', info, extra), settings);
@@ -394,6 +540,7 @@ describe('planSnapshotMigration', () => {
 		expect(plan.warnings).toEqual([
 			expect.stringContaining('1 stream(s) have several snapshots flagged'),
 			expect.stringContaining('read in Europe/Brussels'),
+			expect.stringContaining('rewrites the table and its indexes under the lock: keep about 1.0 MB of disk free'),
 		]);
 	});
 
@@ -435,12 +582,39 @@ describe('planSnapshotMigration', () => {
 		['a referencing foreign key', { referencingForeignKeys: ['refs.fk'] }, 'refs.fk reference'],
 		[
 			'a table the role does not own',
-			{ privileges: { owner: false, createInSchema: true, temporary: true } },
+			{ privileges: { owner: false, createInSchema: true, temporary: true, catalog: true } },
 			"doesn't own",
+		],
+		[
+			'a policy on a converted column',
+			{
+				columnDependents: [dependent('policy', 'policy recent on table snapshots', 'registered_on', { normal: true })],
+			},
+			'The policy recent on table snapshots uses registered_on, which the migration converts to another type',
 		],
 	])('blocks %s', (_, extra, reason) => {
 		const plan = planSnapshotMigration(inspection('snapshots', table(V1_SNAPSHOT_COLUMNS), extra), settings);
 		expect(plan.action).toBe('blocked');
 		expect(plan.blocking.join('\n')).toContain(reason);
+	});
+
+	it('blocks a table found with a truncated name, without steps', () => {
+		const name = `${'p'.repeat(60)}-sn`;
+		const plan = planSnapshotMigration({ ...inspection('snapshots', table(V1_SNAPSHOT_COLUMNS)), name }, settings);
+		expect(plan).toMatchObject({ action: 'blocked', steps: [] });
+		expect(plan.blocking).toEqual([expect.stringContaining('a pool name of at most 53 bytes')]);
+	});
+
+	it('keeps the indexes and constraints on the converted columns, which PostgreSQL rebuilds', () => {
+		const plan = planSnapshotMigration(
+			inspection('snapshots', table(V1_SNAPSHOT_COLUMNS), {
+				columnDependents: [
+					dependent('index', 'index snapshots_names', 'aggregate_name', { index: 'snapshots_names' }),
+					dependent('constraint', 'constraint named on table snapshots', 'aggregate_name', { normal: true }),
+				],
+			}),
+			settings,
+		);
+		expect(plan).toMatchObject({ action: 'migrate', blocking: [] });
 	});
 });

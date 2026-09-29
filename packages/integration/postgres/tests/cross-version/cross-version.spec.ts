@@ -277,6 +277,20 @@ describe('PostgreSQL migrates the 3.0.2 corpus to schema v2 and reads it as 3.0.
 		);
 	});
 
+	it('has every case of the fixture in the corpus', () => {
+		// D33 (W1): without these, the checks of the event pools below would pass on empty lists
+		for (const field of ['invertedStreams', 'outOfOrderStreams', 'nonCanonicalEventIds', 'gappedStreams'] as const) {
+			expect
+				.soft(
+					manifest.eventPools.some((pool) => pool[field].length > 0),
+					field,
+				)
+				.toBe(true);
+		}
+		expect.soft(manifest.snapshotPools.some(({ duplicateLatest }) => duplicateLatest.length > 0)).toBe(true);
+		expect.soft(manifest.snapshotPools.some(({ missingLatest }) => missingLatest.length > 0)).toBe(true);
+	});
+
 	it('lists the corpus collections from the catalog', async () => {
 		await Promise.all(manifest.eventPools.map(({ pool }) => eventStore.ensureCollection(poolOf(pool))));
 		await Promise.all(manifest.snapshotPools.map(({ pool }) => snapshotStore.ensureCollection(poolOf(pool))));
@@ -393,10 +407,15 @@ describe('PostgreSQL migrates the 3.0.2 corpus to schema v2 and reads it as 3.0.
 	});
 
 	describe.each(manifest.snapshotPools)('$collection', (pool) => {
-		it('reads the highest version as the last snapshot, with the registeredOn 3.x wrote', async () => {
+		it('reads every snapshot as 3.0.2 did, with the registeredOn 3.x wrote, and the highest version as the last', async () => {
 			for (const stream of pool.streams) {
 				const snapshotStream = crossVersionSnapshotStream(stream);
 				const envelopes = await collect(snapshotStore.getEnvelopes(snapshotStream, { pool: poolOf(pool.pool) }));
+				// Payloads and every metadata field, as 3.0.2 read them
+				expect
+					.soft(envelopes.map(encodeSnapshotEnvelope), `getEnvelopes(${stream.streamId})`)
+					.toEqual(stream.envelopes);
+
 				const written = pool.written.filter(({ streamId }) => streamId === stream.streamId);
 				expect
 					.soft(
@@ -413,10 +432,16 @@ describe('PostgreSQL migrates the 3.0.2 corpus to schema v2 and reads it as 3.0.
 					expect.soft(metadata.snapshotId).toBe(row?.snapshotId);
 				}
 
-				const last = await snapshotStore.getLastEnvelope(snapshotStream, poolOf(pool.pool));
+				// 3.x read the last snapshot through the flags: a stream with several flags or none now reads its highest
+				// version (ADR 0001 D15), every other stream what 3.0.2 read
+				const damaged =
+					pool.duplicateLatest.some(({ streamId }) => streamId === stream.streamId) ||
+					pool.missingLatest.includes(stream.streamId);
+				const last = encodeSnapshotEnvelope(await snapshotStore.getLastEnvelope(snapshotStream, poolOf(pool.pool)));
 				expect
-					.soft(encodeSnapshotEnvelope(last), `getLastEnvelope(${stream.streamId})`)
-					.toEqual(encodeSnapshotEnvelope(envelopes.at(-1)));
+					.soft(last, `getLastEnvelope(${stream.streamId})`)
+					.toEqual(damaged ? stream.envelopes.at(-1) : stream.last);
+				expect.soft(last, `getLastEnvelope(${stream.streamId})`).toEqual(encodeSnapshotEnvelope(envelopes.at(-1)));
 			}
 		});
 

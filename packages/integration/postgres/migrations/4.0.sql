@@ -7,24 +7,36 @@
 -- names) or other column types need other statements: run migrate({ dryRun: true }), which prints the exact
 -- statements for your database, and use this file as a reference only.
 --
--- Stop every 3.x instance and take a backup first. Run it as the owner of the tables:
+-- Stop every 3.x instance and take a backup first. Run it with psql (10 or later), as the owner of the tables:
 --
 --   psql -v legacy_time_zone='Europe/Brussels' -f migrations/4.0.sql
 --
 -- legacy_time_zone is the time zone your 3.x instances ran in: 3.x stored the snapshots' registered_on as the wall
--- time of the process. Each table is migrated in one transaction.
+-- time of the process. Each table is migrated in one transaction, and only while it still has its 3.x shape, so the
+-- file can run again after a failure.
 
 \set ON_ERROR_STOP on
 
--- Events: numbered in 3.x's order (event_date, event_id, stream_id, version), keeping each stream in version order.
+\if :{?legacy_time_zone}
+\else
+\echo 'Set legacy_time_zone to the time zone your 3.x instances ran in: psql -v legacy_time_zone=<IANA zone> -f migrations/4.0.sql'
+\quit
+\endif
+
+-- The catalog of the collections, unless it exists.
 
 -- create-catalog
-SELECT pg_advisory_xact_lock(hashtext('ocoda:event_sourcing_collections')); CREATE TABLE IF NOT EXISTS event_sourcing_collections (
+BEGIN; SELECT pg_advisory_xact_lock(hashtext('ocoda:event_sourcing_collections')); CREATE TABLE IF NOT EXISTS event_sourcing_collections (
 	name TEXT PRIMARY KEY,
 	kind TEXT NOT NULL CHECK (kind IN ('events', 'snapshots')),
 	schema_version INTEGER NOT NULL,
 	last_position BIGINT NOT NULL DEFAULT 0 CHECK (last_position >= 0)
-) WITH (fillfactor = 50);
+) WITH (fillfactor = 50); COMMIT;
+
+-- Events: numbered in 3.x's order (event_date, event_id, stream_id, version), keeping each stream in version order.
+
+SELECT EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = to_regclass('events') AND attname = 'event_date' AND NOT attisdropped) AS migrate_events \gset
+\if :migrate_events
 
 -- begin
 BEGIN ISOLATION LEVEL READ COMMITTED; SET LOCAL lock_timeout = '10000ms'; SET LOCAL statement_timeout = 0; SET LOCAL work_mem = '64MB'; SET LOCAL maintenance_work_mem = '256MB';
@@ -48,14 +60,20 @@ FROM (
 ALTER TABLE "events" ADD COLUMN IF NOT EXISTS global_position BIGINT, ADD COLUMN IF NOT EXISTS headers JSONB, ADD COLUMN IF NOT EXISTS event_version INTEGER, ALTER COLUMN stream_id TYPE TEXT, ALTER COLUMN event TYPE TEXT, ALTER COLUMN event_id TYPE TEXT, ALTER COLUMN aggregate_id TYPE TEXT, ALTER COLUMN correlation_id TYPE TEXT, ALTER COLUMN causation_id TYPE TEXT;
 
 -- truncate
-TRUNCATE "events";
+DO $migrate$
+BEGIN
+	IF to_regclass('pg_temp.es_migrate_862417b9e7c3') IS NULL THEN
+		RAISE EXCEPTION 'The numbered copy es_migrate_862417b9e7c3 is missing: run the steps from begin to commit in one transaction';
+	END IF;
+	TRUNCATE "events";
+END $migrate$;
 
 -- drop-event-date
 ALTER TABLE "events" ALTER COLUMN global_position SET NOT NULL, DROP COLUMN event_date;
 
 -- reinsert
 INSERT INTO "events" (stream_id, version, event, payload, event_id, aggregate_id, occurred_on, correlation_id, causation_id, global_position)
-SELECT stream_id, version, event, payload, event_id, aggregate_id, occurred_on, correlation_id, causation_id, global_position FROM "es_migrate_862417b9e7c3" ORDER BY global_position;
+SELECT stream_id, version, event, payload, event_id, aggregate_id, occurred_on, correlation_id, causation_id, global_position FROM "es_migrate_862417b9e7c3";
 
 -- index-positions
 CREATE UNIQUE INDEX IF NOT EXISTS "idx_events_global_position" ON "events" (global_position);
@@ -74,7 +92,14 @@ COMMIT;
 -- vacuum
 VACUUM (ANALYZE, PARALLEL 0) "events";
 
+\else
+\echo 'events: no 3.x table to migrate, skipped'
+\endif
+
 -- Snapshots: one latest flag per stream, on its highest version.
+
+SELECT EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = to_regclass('snapshots') AND attname = 'registered_on' AND atttypid = 'timestamp'::regtype AND NOT attisdropped) AS migrate_snapshots \gset
+\if :migrate_snapshots
 
 -- begin
 BEGIN ISOLATION LEVEL READ COMMITTED; SET LOCAL lock_timeout = '10000ms'; SET LOCAL statement_timeout = 0; SET LOCAL work_mem = '64MB'; SET LOCAL maintenance_work_mem = '256MB';
@@ -111,3 +136,7 @@ COMMIT;
 
 -- vacuum
 VACUUM (ANALYZE, PARALLEL 0) "snapshots";
+
+\else
+\echo 'snapshots: no 3.x table to migrate, skipped'
+\endif
