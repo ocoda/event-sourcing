@@ -532,84 +532,36 @@ describe(MariaDBEventStore, () => {
 			}
 		};
 
-		// TEMPORARY (deflake PR, removed before it is finished): the root cause, the INNODB_TRX rows stay those of the
-		// first read while the reads come less than 100 ms apart
-		for (let round = 0; round < 5; round++) {
-			it(`TEMP: INNODB_TRX keeps the rows of its first read while it is read every 10 ms #${round}`, async () => {
-				const inFlight = await appendInFlight();
-				const root = await rootConnection();
-				const { reads, restore } = followReads(inFlight.collection);
-				const waiting = async () =>
-					Number(
-						(
-							await root.query<{ n: bigint }[]>(
-								`SELECT COUNT(*) AS n FROM information_schema.INNODB_TRX WHERE trx_state = 'LOCK WAIT' AND LOCATE(?, trx_query) > 0`,
-								[inFlight.collection],
-							)
-						)[0].n,
-					);
-				try {
-					await sleep(150);
-					const first = await waiting();
-					const reading = drain(store.readAll({ pool: inFlight.eventPool, fromPosition: 3n, batch: 10 }));
-					reading.catch(() => undefined);
-					let fast = 0;
-					let gaps = 0;
-					let last = Date.now();
-					for (let poll = 0; poll < 100; poll++) {
-						await sleep(10);
-						const now = Date.now();
-						gaps = Math.max(gaps, now - last);
-						last = now;
-						fast = Math.max(fast, await waiting());
-					}
-					await sleep(150);
-					const idle = await waiting();
-					const sent = reads.highWaterMarkSent;
-					await inFlight.commit();
-					await reading;
-					console.log(`TEMP root cause: first=${first} fast=${fast} idle=${idle} maxGap=${gaps}ms sent=${sent}`);
-					expect({ first, fast, idle, sent }).toEqual({ first: 0, fast: 0, idle: 1, sent: true });
-				} finally {
-					restore();
-					await root.end();
-					await inFlight.release();
+		it('waits at a gap for the append that holds the counter, then delivers what it wrote', async () => {
+			const inFlight = await appendInFlight();
+			const { reads, restore } = followReads(inFlight.collection);
+			try {
+				const reading = drain(store.readAll({ pool: inFlight.eventPool, fromPosition: 3n, batch: 10 }));
+				// Awaited below: this only keeps a rejection during the polls from going unhandled
+				reading.catch(() => undefined);
+				// The first batch shows 4 without 3: the reader reads the counter with a shared lock, and waits
+				const sentBy = Date.now() + 10_000;
+				while (!reads.highWaterMarkSent && Date.now() < sentBy) {
+					await sleep(10);
 				}
-			});
-		}
+				const wait = await counterReadWaits(inFlight.collection, () => !reads.highWaterMarkSettled);
+				const sent = reads.highWaterMarkSent;
+				const pendingAtCommit = !reads.highWaterMarkSettled;
+				await inFlight.commit();
 
-		// TEMPORARY (deflake PR): repeated, reverted to one run before it is finished
-		for (let round = 0; round < 100; round++)
-			it(`waits at a gap for the append that holds the counter, then delivers what it wrote #${round}`, async () => {
-				const inFlight = await appendInFlight();
-				const { reads, restore } = followReads(inFlight.collection);
-				try {
-					const reading = drain(store.readAll({ pool: inFlight.eventPool, fromPosition: 3n, batch: 10 }));
-					// Awaited below: this only keeps a rejection during the polls from going unhandled
-					reading.catch(() => undefined);
-					// The first batch shows 4 without 3: the reader reads the counter with a shared lock, and waits
-					const sentBy = Date.now() + 10_000;
-					while (!reads.highWaterMarkSent && Date.now() < sentBy) {
-						await sleep(10);
-					}
-					const wait = await counterReadWaits(inFlight.collection, () => !reads.highWaterMarkSettled);
-					const sent = reads.highWaterMarkSent;
-					const pendingAtCommit = !reads.highWaterMarkSettled;
-					await inFlight.commit();
-
-					expect((await reading).map(({ metadata }) => metadata.globalPosition)).toEqual([3n, 4n]);
-					expect(reads.firstBatch, 'the first batch shows 4 without 3').toEqual([4n]);
-					expect(sent, 'the reader sent its high-water mark read while the append was in flight').toBe(true);
-					expect(
-						wait.waited,
-						`INNODB_TRX shows the high-water mark read waiting for the counter; its last rows: ${JSON.stringify(wait.rows)}`,
-					).toBe(true);
-					expect(pendingAtCommit, 'the high-water mark read was still waiting when the append committed').toBe(true);
-				} finally {
-					restore();
-					await inFlight.release();
-				}
-			});
+				expect((await reading).map(({ metadata }) => metadata.globalPosition)).toEqual([3n, 4n]);
+				expect(reads.firstBatch, 'the first batch shows 4 without 3').toEqual([4n]);
+				expect(sent, 'the reader sent its high-water mark read while the append was in flight').toBe(true);
+				expect(
+					wait.waited,
+					`INNODB_TRX shows the high-water mark read waiting for the counter; its last rows: ${JSON.stringify(wait.rows)}`,
+				).toBe(true);
+				expect(pendingAtCommit, 'the high-water mark read was still waiting when the append committed').toBe(true);
+			} finally {
+				restore();
+				await inFlight.release();
+			}
+		});
 
 		it('negative control: a plain keyset reader skips the position of an append in flight', async () => {
 			const inFlight = await appendInFlight();
