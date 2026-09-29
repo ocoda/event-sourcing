@@ -8,7 +8,7 @@
 	// switched off for the dependency-freshness pass before 4.0.0 GA.
 	dependencyDashboard: true,
 	dependencyDashboardApproval: true,
-	// Matches pnpm's own minimumReleaseAge so frozen-lockfile installs never reject a fresh release.
+	// Longer than pnpm's minimumReleaseAge (1 day, pnpm-workspace.yaml), so pnpm never rejects a proposed version.
 	minimumReleaseAge: '3 days',
 	osvVulnerabilityAlerts: true,
 	vulnerabilityAlerts: {
@@ -35,15 +35,15 @@
 		{ groupName: 'docs site', matchFileNames: ['docs/package.json'] },
 		{
 			description: "astro check (@astrojs/check) type-checks through the TypeScript JS API, which TypeScript 7 doesn't ship: keep docs on 6",
-			matchFileNames: ['docs/package.json'],
+			matchDepTypes: ['pnpm.catalog.ts6'],
 			matchPackageNames: ['typescript'],
 			allowedVersions: '<7',
 		},
 		{ groupName: 'github actions', matchManagers: ['github-actions'] },
 		{ groupName: 'database images', matchManagers: ['docker-compose'] },
 		{
-			description: 'Tooling updates merge on their own once ci-ok is green',
-			matchDepTypes: ['devDependencies'],
+			description: 'Tooling updates merge on their own once ci-ok is green. The catalogs only hold devDependencies of the published packages.',
+			matchDepTypes: ['devDependencies', 'pnpm.catalog.default', 'pnpm.catalog.ts6'],
 			matchUpdateTypes: ['minor', 'patch'],
 			automerge: true,
 		},
