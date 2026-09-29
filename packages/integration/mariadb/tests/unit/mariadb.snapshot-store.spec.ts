@@ -27,6 +27,7 @@ import {
 	snapshotsAccountB,
 } from '@ocoda/event-sourcing-testing/unit';
 import type { Pool } from 'mariadb';
+import { createSnapshotStore } from '../support/stores.js';
 
 describe(MariaDBSnapshotStore, () => {
 	let snapshotStore: MariaDBSnapshotStore;
@@ -36,14 +37,7 @@ describe(MariaDBSnapshotStore, () => {
 	let pool: Pool;
 
 	beforeAll(async () => {
-		snapshotStore = new MariaDBSnapshotStore({
-			driver: undefined as never,
-			host: '127.0.0.1',
-			port: 3306,
-			user: 'mariadb',
-			password: 'mariadb',
-			database: 'mariadb',
-		});
+		snapshotStore = createSnapshotStore();
 
 		await snapshotStore.connect();
 		await snapshotStore.ensureCollection();

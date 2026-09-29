@@ -11,22 +11,10 @@ import { type MariaDBSnapshotEntity, MariaDBSnapshotStore } from '@ocoda/event-s
 import { Account, AccountId } from '@ocoda/event-sourcing-testing/unit';
 import type { Pool, PoolConnection } from 'mariadb';
 import type { MockInstance } from 'vitest';
+import { createSnapshotStore } from '../support/stores.js';
 
 // Pool exhaustion and concurrency scenarios: allow slow tests and setup/teardown hooks.
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
-
-type Config = ConstructorParameters<typeof MariaDBSnapshotStore>[0];
-
-const config = (overrides: Record<string, unknown> = {}) =>
-	({
-		driver: undefined,
-		host: '127.0.0.1',
-		port: 3306,
-		user: 'mariadb',
-		password: 'mariadb',
-		database: 'mariadb',
-		...overrides,
-	}) as unknown as Config;
 
 const uniquePool = (name: string): ISnapshotPool => `mdbfix-${name}-${randomBytes(4).toString('hex')}`;
 
@@ -106,7 +94,7 @@ describe(`${MariaDBSnapshotStore.name} resilience`, () => {
 	};
 
 	beforeAll(async () => {
-		snapshotStore = new MariaDBSnapshotStore(config({ connectionLimit: POOL_SIZE, acquireTimeout: 3_000 }));
+		snapshotStore = createSnapshotStore({ connectionLimit: POOL_SIZE, acquireTimeout: 3_000 });
 		await snapshotStore.connect();
 
 		pool = snapshotStore['pool'];
@@ -238,7 +226,7 @@ describe(`${MariaDBSnapshotStore.name} resilience`, () => {
 			const WRITERS = 8;
 
 			const newConcurrentStore = async () => {
-				const store = new MariaDBSnapshotStore(config({ connectionLimit: WRITERS + 2 }));
+				const store = createSnapshotStore({ connectionLimit: WRITERS + 2 });
 				await store.connect();
 				return store;
 			};

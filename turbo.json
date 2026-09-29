@@ -39,7 +39,7 @@
 			"cache": false
 		},
 		"test": {
-			"description": "vitest run. Specs alias core and the shared suite to their sources. DB-backed packages disable caching in their own turbo.json.",
+			"description": "vitest run. Specs alias core and the shared suite to their sources. DB-backed packages disable caching in their own turbo.json. ES_TEST_* set the test databases (packages/testing/unit/db.ts).",
 			"inputs": [
 				"$TURBO_DEFAULT$",
 				"$TURBO_ROOT$/packages/config/typescript/**",
@@ -48,7 +48,22 @@
 				"$TURBO_ROOT$/packages/testing/**/*.ts",
 				"!$TURBO_ROOT$/packages/testing/node_modules/**"
 			],
-			"env": ["CONFORMANCE_RUN_SKIPPED"],
+			"env": [
+				"CONFORMANCE_RUN_SKIPPED",
+				"ES_TEST_PG_HOST",
+				"ES_TEST_PG_PORT",
+				"ES_TEST_PG_USER",
+				"ES_TEST_PG_PASSWORD",
+				"ES_TEST_PG_DATABASE",
+				"ES_TEST_MARIADB_HOST",
+				"ES_TEST_MARIADB_PORT",
+				"ES_TEST_MARIADB_USER",
+				"ES_TEST_MARIADB_PASSWORD",
+				"ES_TEST_MARIADB_DATABASE",
+				"ES_TEST_MARIADB_ROOT_PASSWORD",
+				"ES_TEST_MONGODB_URL",
+				"ES_TEST_MONGODB_RS_URL"
+			],
 			"outputs": []
 		},
 		"test:cov": {
@@ -61,7 +76,22 @@
 				"$TURBO_ROOT$/packages/testing/**/*.ts",
 				"!$TURBO_ROOT$/packages/testing/node_modules/**"
 			],
-			"env": ["CONFORMANCE_RUN_SKIPPED"],
+			"env": [
+				"CONFORMANCE_RUN_SKIPPED",
+				"ES_TEST_PG_HOST",
+				"ES_TEST_PG_PORT",
+				"ES_TEST_PG_USER",
+				"ES_TEST_PG_PASSWORD",
+				"ES_TEST_PG_DATABASE",
+				"ES_TEST_MARIADB_HOST",
+				"ES_TEST_MARIADB_PORT",
+				"ES_TEST_MARIADB_USER",
+				"ES_TEST_MARIADB_PASSWORD",
+				"ES_TEST_MARIADB_DATABASE",
+				"ES_TEST_MARIADB_ROOT_PASSWORD",
+				"ES_TEST_MONGODB_URL",
+				"ES_TEST_MONGODB_RS_URL"
+			],
 			"outputs": ["coverage/**"]
 		},
 		"dev": {

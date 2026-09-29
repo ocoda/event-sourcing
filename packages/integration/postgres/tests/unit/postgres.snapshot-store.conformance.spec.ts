@@ -1,19 +1,12 @@
 import { PostgresSnapshotStore } from '@ocoda/event-sourcing-postgres';
 import { describeSnapshotStoreConformance } from '@ocoda/event-sourcing-testing/conformance';
 import { escapeIdentifier } from 'pg';
+import { createSnapshotStore } from '../support/stores.js';
 
 describeSnapshotStoreConformance(
 	PostgresSnapshotStore.name,
 	async () => {
-		const store = new PostgresSnapshotStore({
-			driver: undefined as never,
-			host: '127.0.0.1',
-			port: 5432,
-			user: 'postgres',
-			password: 'postgres',
-			database: 'postgres',
-			application_name: 'postgres-snapshot-store-conformance',
-		});
+		const store = createSnapshotStore({ application_name: 'postgres-snapshot-store-conformance' });
 		await store.connect();
 
 		return {

@@ -25,16 +25,14 @@ import {
 	snapshotStreamAccountB,
 	snapshotStreamCustomer,
 	snapshotsAccountA,
+	postgresTestConfig,
 	snapshotsAccountB,
 } from '@ocoda/event-sourcing-testing/unit';
 import { Client, type Pool, escapeIdentifier } from 'pg';
+import { createSnapshotStore } from '../support/stores.js';
 
 const connectionOptions = {
-	host: '127.0.0.1',
-	port: 5432,
-	user: 'postgres',
-	password: 'postgres',
-	database: 'postgres',
+	...postgresTestConfig(),
 	application_name: 'postgres-snapshot-store-spec',
 };
 
@@ -46,7 +44,7 @@ describe(PostgresSnapshotStore, () => {
 	let pool: Pool;
 
 	beforeAll(async () => {
-		snapshotStore = new PostgresSnapshotStore({ driver: undefined as never, ...connectionOptions });
+		snapshotStore = createSnapshotStore(connectionOptions);
 
 		await snapshotStore.connect();
 		await snapshotStore.ensureCollection();
@@ -387,7 +385,7 @@ describe(PostgresSnapshotStore, () => {
 		afterEach(() => vi.restoreAllMocks());
 
 		it('should fail to connect when the database is unreachable', async () => {
-			const unreachableStore = new PostgresSnapshotStore({ driver: undefined as never, ...connectionOptions, port: 1 });
+			const unreachableStore = createSnapshotStore({ ...connectionOptions, port: 1 });
 
 			await expect(unreachableStore.connect()).rejects.toMatchObject({ code: 'ECONNREFUSED' });
 			await unreachableStore.disconnect();
@@ -400,7 +398,7 @@ describe(PostgresSnapshotStore, () => {
 			await Promise.all([pool.query('SELECT pg_sleep(0.05)'), pool.query('SELECT pg_sleep(0.05)')]);
 			const { rows } = await pool.query<{ terminated: boolean }>(
 				`SELECT pg_terminate_backend(pid) AS terminated FROM pg_stat_activity
-				WHERE application_name = $1 AND state = 'idle' AND pid <> pg_backend_pid()`,
+				WHERE datname = current_database() AND application_name = $1 AND state = 'idle' AND pid <> pg_backend_pid()`,
 				[connectionOptions.application_name],
 			);
 			expect(rows.length).toBeGreaterThan(0);
@@ -609,7 +607,7 @@ describe(PostgresSnapshotStore, () => {
 			let smallPool: Pool;
 
 			beforeEach(async () => {
-				smallStore = new PostgresSnapshotStore({ driver: undefined as never, ...connectionOptions, max: 2 });
+				smallStore = createSnapshotStore({ ...connectionOptions, max: 2 });
 				await smallStore.connect();
 				smallPool = smallStore['pool'];
 			});

@@ -16,19 +16,17 @@ import {
 	getAccountEventEnvelopes,
 	getEventMap,
 	getEvents,
+	mongodbTestTopologies,
 } from '@ocoda/event-sourcing-testing/unit';
 import { AbstractCursor, Collection, type Db, type MongoClient } from 'mongodb';
+import { createEventStore } from '../support/stores.js';
 
 // Pool exhaustion and concurrency scenarios: allow slow tests and setup/teardown hooks.
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
-type Config = ConstructorParameters<typeof MongoDBEventStore>[1];
-
-const config = () => ({ url: 'mongodb://localhost:27017' }) as unknown as Config;
-
 const uniquePool = (name: string): IEventPool => `mongofix-${name}-${randomBytes(4).toString('hex')}`;
 
-describe(`${MongoDBEventStore.name} resilience`, () => {
+describe.each(mongodbTestTopologies())(`${MongoDBEventStore.name} resilience ($name)`, ({ url }) => {
 	const eventMap = getEventMap();
 	const events = getEvents();
 	const credited = events[1];
@@ -39,8 +37,7 @@ describe(`${MongoDBEventStore.name} resilience`, () => {
 	const pools: IEventPool[] = [];
 
 	const newStore = async () => {
-		const store = new MongoDBEventStore(eventMap, config());
-		store.publish = vi.fn(async () => Promise.resolve());
+		const { store } = createEventStore({ url }, eventMap);
 		await store.connect();
 		return store;
 	};

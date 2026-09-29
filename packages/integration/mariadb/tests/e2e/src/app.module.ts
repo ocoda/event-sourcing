@@ -7,6 +7,7 @@ import {
 	type MariaDBSnapshotStoreConfig,
 } from '@ocoda/event-sourcing-mariadb';
 import { Events, testProviders } from '@ocoda/event-sourcing-testing/e2e';
+import { mariadbTestConfig } from '@ocoda/event-sourcing-testing/unit';
 
 @Module({
 	imports: [
@@ -15,20 +16,12 @@ import { Events, testProviders } from '@ocoda/event-sourcing-testing/e2e';
 				events: Events,
 				eventStore: {
 					driver: MariaDBEventStore,
-					host: '127.0.0.1',
-					port: 3306,
-					user: 'mariadb',
-					password: 'mariadb',
-					database: 'mariadb',
+					...mariadbTestConfig(),
 					useDefaultPool: false,
 				},
 				snapshotStore: {
 					driver: MariaDBSnapshotStore,
-					host: '127.0.0.1',
-					port: 3306,
-					user: 'mariadb',
-					password: 'mariadb',
-					database: 'mariadb',
+					...mariadbTestConfig(),
 					useDefaultPool: false,
 				},
 			}),

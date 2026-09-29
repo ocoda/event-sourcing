@@ -1,17 +1,11 @@
 import { MariaDBEventStore } from '@ocoda/event-sourcing-mariadb';
 import { describeEventStoreConformance } from '@ocoda/event-sourcing-testing/conformance';
+import { createEventStore } from '../support/stores.js';
 
 describeEventStoreConformance(
 	MariaDBEventStore.name,
 	async (eventMap) => {
-		const store = new MariaDBEventStore(eventMap, {
-			driver: undefined as never,
-			host: '127.0.0.1',
-			port: 3306,
-			user: 'mariadb',
-			password: 'mariadb',
-			database: 'mariadb',
-		});
+		const { store } = createEventStore({}, eventMap);
 		await store.connect();
 
 		return {

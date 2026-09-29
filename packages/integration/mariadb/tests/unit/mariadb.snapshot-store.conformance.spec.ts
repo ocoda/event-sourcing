@@ -1,17 +1,11 @@
 import { MariaDBSnapshotStore } from '@ocoda/event-sourcing-mariadb';
 import { describeSnapshotStoreConformance } from '@ocoda/event-sourcing-testing/conformance';
+import { createSnapshotStore } from '../support/stores.js';
 
 describeSnapshotStoreConformance(
 	MariaDBSnapshotStore.name,
 	async () => {
-		const store = new MariaDBSnapshotStore({
-			driver: undefined as never,
-			host: '127.0.0.1',
-			port: 3306,
-			user: 'mariadb',
-			password: 'mariadb',
-			database: 'mariadb',
-		});
+		const store = createSnapshotStore();
 		await store.connect();
 
 		return {

@@ -7,6 +7,10 @@ import {
 	type MongoDBSnapshotStoreConfig,
 } from '@ocoda/event-sourcing-mongodb';
 import { Events, testProviders } from '@ocoda/event-sourcing-testing/e2e';
+import { mongodbTestTopologies } from '@ocoda/event-sourcing-testing/unit';
+
+// The e2e suite runs on the standalone server, which mongodbTestTopologies() lists first.
+const [{ url }] = mongodbTestTopologies();
 
 @Module({
 	imports: [
@@ -15,12 +19,12 @@ import { Events, testProviders } from '@ocoda/event-sourcing-testing/e2e';
 				events: Events,
 				eventStore: {
 					driver: MongoDBEventStore,
-					url: 'mongodb://localhost:27017',
+					url,
 					useDefaultPool: false,
 				},
 				snapshotStore: {
 					driver: MongoDBSnapshotStore,
-					url: 'mongodb://localhost:27017',
+					url,
 					useDefaultPool: false,
 				},
 			}),

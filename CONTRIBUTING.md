@@ -50,6 +50,7 @@ Core tests need no database. Integration tests run against the services in `dock
 | -------------------- | ----------------------------------------------- |
 | `postgres`           | `postgres-13` … `postgres-17` (`postgres` is 14) |
 | `mongodb`            | `mongodb-6`, `mongodb-7`, `mongodb-8` (`mongodb` is 8) |
+| MongoDB replica sets | `mongodb-6-rs`, `mongodb-7-rs`, `mongodb-8-rs` (port 27018) |
 | `mariadb`            | `mariadb-10` (10.11), `mariadb-11` (11.4)        |
 
 Start one and wait until it is healthy:
@@ -59,6 +60,15 @@ docker compose up -d --wait postgres
 ```
 
 Versions of the same database share a port, so run one version at a time.
+
+The specs connect with the settings in `packages/testing/unit/db.ts`, whose defaults match these services. Override them with `ES_TEST_PG_*`, `ES_TEST_MARIADB_*` and `ES_TEST_MONGODB_URL`, for example to use a database of your own on a shared server (the specs use fixed table names, so two runs must not share a database).
+
+The MongoDB specs run on a standalone server and, when `ES_TEST_MONGODB_RS_URL` is set, on a replica set too. CI runs both in every MongoDB job:
+
+```bash
+docker compose up -d --wait mongodb mongodb-8-rs
+ES_TEST_MONGODB_RS_URL='mongodb://localhost:27018/?replicaSet=rs0' pnpm test:cov --filter=@ocoda/event-sourcing-mongodb
+```
 
 ## Before you open a pull request
 

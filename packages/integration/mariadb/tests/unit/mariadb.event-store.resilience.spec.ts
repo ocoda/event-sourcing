@@ -20,22 +20,10 @@ import {
 } from '@ocoda/event-sourcing-testing/unit';
 import type { Pool, PoolConnection } from 'mariadb';
 import type { MockInstance } from 'vitest';
+import { createEventStore } from '../support/stores.js';
 
 // Pool exhaustion and concurrency scenarios: allow slow tests and setup/teardown hooks.
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
-
-type Config = ConstructorParameters<typeof MariaDBEventStore>[1];
-
-const config = (overrides: Record<string, unknown> = {}) =>
-	({
-		driver: undefined,
-		host: '127.0.0.1',
-		port: 3306,
-		user: 'mariadb',
-		password: 'mariadb',
-		database: 'mariadb',
-		...overrides,
-	}) as unknown as Config;
 
 const uniquePool = (name: string): IEventPool => `mdbfix-${name}-${randomBytes(4).toString('hex')}`;
 
@@ -101,8 +89,7 @@ describe(`${MariaDBEventStore.name} resilience`, () => {
 	};
 
 	beforeAll(async () => {
-		eventStore = new MariaDBEventStore(eventMap, config({ connectionLimit: POOL_SIZE, acquireTimeout: 3_000 }));
-		eventStore.publish = vi.fn(async () => Promise.resolve());
+		({ store: eventStore } = createEventStore({ connectionLimit: POOL_SIZE, acquireTimeout: 3_000 }, eventMap));
 		await eventStore.connect();
 
 		pool = eventStore['pool'];
@@ -373,8 +360,7 @@ describe(`${MariaDBEventStore.name} resilience`, () => {
 			};
 
 			it('should let exactly one writer win and report a version conflict to the others', async () => {
-				const concurrentStore = new MariaDBEventStore(eventMap, config({ connectionLimit: WRITERS + 2 }));
-				concurrentStore.publish = vi.fn(async () => Promise.resolve());
+				const { store: concurrentStore } = createEventStore({ connectionLimit: WRITERS + 2 }, eventMap);
 				await concurrentStore.connect();
 
 				try {
@@ -389,8 +375,7 @@ describe(`${MariaDBEventStore.name} resilience`, () => {
 			});
 
 			it('should report a version conflict when the race is lost after the version check passed', async () => {
-				const concurrentStore = new MariaDBEventStore(eventMap, config({ connectionLimit: WRITERS + 2 }));
-				concurrentStore.publish = vi.fn(async () => Promise.resolve());
+				const { store: concurrentStore } = createEventStore({ connectionLimit: WRITERS + 2 }, eventMap);
 				await concurrentStore.connect();
 
 				const concurrentPool: Pool = concurrentStore['pool'];
