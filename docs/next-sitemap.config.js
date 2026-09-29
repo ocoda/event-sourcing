@@ -2,5 +2,5 @@
 module.exports = {
 	siteUrl: 'https://ocoda.github.io/event-sourcing/',
 	generateRobotsTxt: true,
-	exclude: ['*/_meta']
-  }
+	exclude: ['*/_meta'],
+};

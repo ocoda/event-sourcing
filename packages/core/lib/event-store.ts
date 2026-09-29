@@ -18,9 +18,9 @@ import type { EventEnvelope, EventStream } from './models';
  */
 const storesWithoutPublisherWarned = new WeakSet<object>();
 
-export abstract class EventStore<TOptions = Omit<EventSourcingModuleOptions['eventStore'], 'driver'>>
-	implements EventStoreDriver
-{
+export abstract class EventStore<
+	TOptions = Omit<EventSourcingModuleOptions['eventStore'], 'driver'>,
+> implements EventStoreDriver {
 	protected readonly logger = new Logger(this.constructor.name);
 	protected _publish: (envelope: EventEnvelope<IEvent>) => any;
 

@@ -15,7 +15,7 @@ const config: DocsThemeConfig = {
 		content: (
 			<span>
 				MIT {new Date().getFullYear()} ©{' '}
-        <a href="https://www.ocoda.be/en" target="_blank">
+				<a href="https://www.ocoda.be/en" target="_blank">
 					Ocoda
 				</a>
 				.
@@ -28,7 +28,7 @@ const config: DocsThemeConfig = {
 		return (
 			<>
 				<title>{title}</title>
-        <meta name="google-site-verification" content="IJJJM6mYKx0BG_eTPjp5Eudq2d4p3aH3hEB9jDVJh1U" />
+				<meta name="google-site-verification" content="IJJJM6mYKx0BG_eTPjp5Eudq2d4p3aH3hEB9jDVJh1U" />
 			</>
 		);
 	},
