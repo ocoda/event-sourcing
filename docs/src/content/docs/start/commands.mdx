@@ -1,0 +1,179 @@
+---
+title: Commands & Command Handlers
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+A **Command** represents a user or system's intent to perform a specific action within your domain. Commands are part of the **CQRS** pattern, where they express actions that change the state of the system. Each command is handled by a **CommandHandler**, which contains the logic for executing the command, such as interacting with the domain's aggregates and repositories.
+
+Commands should clearly indicate the **intent** and ideally refer to the aggregate they operate on. The name of a command should use imperative language to describe the action, such as `OpenAccountCommand` or `CreditAccountCommand`.
+
+## Creating a Command [#creating-a-command]
+
+Commands are simple objects that typically carry the data required to perform an action. They are implemented by implementing the `ICommand` interface from the library:
+
+```typescript
+import { ICommand } from '@ocoda/event-sourcing';
+
+export class CreditAccountCommand implements ICommand {
+	constructor(
+		public readonly accountId: string,
+		public readonly amount: number,
+	) {}
+}
+```
+
+In this example, the CreditAccountCommand represents the intent to credit an account with a specific amount.
+
+## Creating a Command Handler [#creating-a-command-handler]
+
+A **CommandHandler** is responsible for executing the logic associated with a specific command. In a typical flow, a CommandHandler interacts with aggregates, invokes business logic, and persists the results.
+
+```typescript {3,9,11,13}
+import { CommandHandler, type ICommandHandler } from '@ocoda/event-sourcing';
+
+@CommandHandler(CreditAccountCommand)
+export class CreditAccountCommandHandler implements ICommandHandler<CreditAccountCommand, void> {
+	constructor(private readonly accountRepository: AccountRepository) {}
+
+	async execute(command: CreditAccountCommand): Promise<void> {
+		const accountId = AccountId.from(command.accountId);
+		const account = await this.accountRepository.getById(accountId);
+
+		account.credit(command.amount);
+
+		await this.accountRepository.save(account);
+	}
+}
+```
+
+In this example, the CreditAccountCommandHandler handles the execution of the CreditAccountCommand. It retrieves the Account aggregate from the repository, applies the necessary business logic, and saves the updated account to the repository.
+
+### Returning a value [#returning-a-value]
+
+The `execute()` method of a command handler returns a promise, and whatever it resolves to is handed back to the code that executed the command. Commands usually return the identifier of what they created, so the caller knows where to find it. The second type parameter of `ICommandHandler` describes the type of that result:
+
+```typescript {8,11,17}
+import { CommandHandler, type ICommand, type ICommandHandler } from '@ocoda/event-sourcing';
+
+export class OpenAccountCommand implements ICommand {
+	constructor(public readonly accountOwnerIds?: string[]) {}
+}
+
+@CommandHandler(OpenAccountCommand)
+export class OpenAccountCommandHandler implements ICommandHandler<OpenAccountCommand, string> {
+	constructor(private readonly accountRepository: AccountRepository) {}
+
+	async execute(command: OpenAccountCommand): Promise<string> {
+		const accountId = AccountId.generate();
+		const account = Account.open(accountId, command.accountOwnerIds?.map(AccountOwnerId.from));
+
+		await this.accountRepository.save(account);
+
+		return accountId.value;
+	}
+}
+```
+
+## Registering the Command Handler [#registering-a-command-handler]
+
+CommandHandlers must be registered as providers in your NestJS application’s module, so that the framework can discover and execute them. For example, in a NestJS module:
+
+```typescript
+import { Module } from '@nestjs/common';
+
+@Module({
+    providers: [OpenAccountCommandHandler, CreditAccountCommandHandler, AccountRepository],
+})
+export class AccountModule {}
+```
+
+The handlers are discovered when the application bootstraps, no matter in which module they are provided, see [Module configuration](/start/module-configuration#discovery).
+
+## Executing a Command [#executing-a-command]
+
+Commands are executed through the `CommandBus`. It's available for injection in any provider of your application, see [Module configuration](/start/module-configuration#global-module). The bus looks up the handler that is registered for the command and returns the result of that handler.
+
+```typescript {11-13,20}
+import { Body, Controller, Param, Post } from '@nestjs/common';
+import { CommandBus } from '@ocoda/event-sourcing';
+
+@Controller('accounts')
+export class AccountController {
+	constructor(private readonly commandBus: CommandBus) {}
+
+	@Post()
+	async open(@Body('accountOwnerIds') accountOwnerIds?: string[]): Promise<{ accountId: string }> {
+		// The first type parameter is the command, the second one the type of the result
+		const accountId = await this.commandBus.execute<OpenAccountCommand, string>(
+			new OpenAccountCommand(accountOwnerIds),
+		);
+
+		return { accountId };
+	}
+
+	@Post(':accountId/credit')
+	async credit(@Param('accountId') accountId: string, @Body('amount') amount: number): Promise<void> {
+		await this.commandBus.execute(new CreditAccountCommand(accountId, amount));
+	}
+}
+```
+
+If there's no handler registered for a command, `execute()` throws a `CommandHandlerNotFoundException`.
+
+<Aside type="caution">
+Inject the `CommandBus` as a regular class, so don't use `import type` for it. NestJS needs the class at runtime to be able to resolve it.
+</Aside>
+
+## Guidelines for adding Commands & Command Handlers
+
+<Steps>
+
+1. ### Commands represent actions, not queries
+
+   Commands should focus solely on actions that change the state of the system. Avoid putting query logic inside commands, queries are handled separately in the CQRS pattern. Commands should be named imperatively, like `OpenAccountCommand` or `CreditAccountCommand`, to reflect the change they trigger.
+
+2. ### Keep Commands simple
+
+   Commands are simply data carriers. They should contain only the properties needed to perform the action, without any additional logic or behavior. For instance, the `OpenAccountCommand` contains only the information required to open an account.
+
+3. ### Isolate business logic in the Command Handler
+
+   The command handler is where the domain logic is executed, not the command itself. `CommandHandlers` should:
+   - Interact with the appropriate aggregate(s).
+   - Perform any necessary validations.
+   - Apply the business logic.
+   - Persist the changes to the repository.
+   For instance, in the OpenAccountCommandHandler, the logic for opening an account is encapsulated in the Account.open() method, and the repository is used to save the resulting aggregate.
+
+4. ### Ensure Command Handlers are idempotent
+   CommandHandlers should be idempotent where possible, meaning that executing the same command multiple times should have the same effect. This ensures robustness in distributed systems or event-driven architectures where retries may happen. For example, closing an account that is already closed doesn't have to fail, the handler can simply stop.
+
+   ```typescript {8-10}
+   @CommandHandler(CloseAccountCommand)
+   export class CloseAccountCommandHandler implements ICommandHandler<CloseAccountCommand, void> {
+   	constructor(private readonly accountRepository: AccountRepository) {}
+
+   	async execute({ accountId }: CloseAccountCommand): Promise<void> {
+   		const account = await this.accountRepository.getById(AccountId.from(accountId));
+
+   		if (account.closedOn) {
+   			return; // Already closed, executing the command again has no further effect
+   		}
+
+   		account.close();
+
+   		await this.accountRepository.save(account);
+   	}
+   }
+   ```
+
+5. ### Command Handlers Should Focus on One Aggregate
+
+   Each CommandHandler should typically interact with a single aggregate. If your command handler needs to interact with multiple aggregates, consider splitting the command into multiple commands or revisiting your design to ensure each aggregate is responsible for its own behavior.
+
+6. ### Commands don't return data beyond identifiers
+
+   The goal of a command is to make a change, not to return detailed information. Commands usually return the identifier of the entity they modified or created. In the example above, the OpenAccountCommandHandler returns the accountId as confirmation of the action.
+
+</Steps>

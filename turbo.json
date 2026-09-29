@@ -75,15 +75,8 @@
 			"persistent": true
 		},
 		"docs:build": {
-			"description": "Static Next.js export into dist/. postdocs:build regenerates the sitemap and robots.txt in public/.",
-			"inputs": [
-				"$TURBO_DEFAULT$",
-				"$TURBO_ROOT$/packages/config/typescript/**",
-				"!public/robots.txt",
-				"!public/sitemap*.xml"
-			],
-			"outputs": ["dist/**", "public/robots.txt", "public/sitemap*.xml"],
-			"env": ["GITHUB_PAGES"]
+			"description": "Static Astro (Starlight) build into dist/, including the sitemap, llms.txt and the Pagefind index. Fails on broken internal links.",
+			"outputs": ["dist/**"]
 		},
 		"benchmark": {
 			"cache": false
