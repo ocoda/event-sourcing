@@ -1,0 +1,43 @@
+name: Documentation problem
+description: A docs page or README is wrong, unclear or missing something.
+title: "[docs]: "
+labels: ["documentation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for problems in the [documentation](https://ocoda.github.io/event-sourcing) or a README. For help using the library, ask in [Discussions Q&A](https://github.com/ocoda/event-sourcing/discussions/categories/q-a).
+
+  - type: input
+    id: location
+    attributes:
+      label: Page or file
+      description: The URL of the docs page, or the README or file path.
+      placeholder: "https://ocoda.github.io/event-sourcing/start/module-configuration"
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is wrong or missing
+      description: Quote the part that is wrong or unclear, or describe what you looked for and couldn't find. For a broken snippet, include the error it gives.
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested change
+      description: How it could read instead, if you have an idea.
+    validations:
+      required: false
+
+  - type: input
+    id: package-versions
+    attributes:
+      label: Package versions
+      description: The @ocoda versions you use, if the problem is about how the code behaves.
+      placeholder: "@ocoda/event-sourcing 3.0.2"
+    validations:
+      required: false

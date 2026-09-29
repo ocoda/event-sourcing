@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or usage help
+    url: https://github.com/ocoda/event-sourcing/discussions/categories/q-a
+    about: Ask in Discussions Q&A. Issues are for bugs, feature requests and documentation problems.
+  - name: Idea to discuss
+    url: https://github.com/ocoda/event-sourcing/discussions/categories/ideas
+    about: Talk through an idea in Discussions before it becomes a feature request.
+  - name: Security vulnerability
+    url: https://github.com/ocoda/event-sourcing/security/advisories/new
+    about: Report it privately. Never open a public issue for a vulnerability.
+  - name: Documentation site
+    url: https://ocoda.github.io/event-sourcing
+    about: Guides and configuration reference.
