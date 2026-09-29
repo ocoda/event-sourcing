@@ -229,7 +229,20 @@ The changes in this section are planned for later prereleases. Each subsection d
 
 ### Snapshot store [#snapshot-store]
 
-*Planned.* The snapshot store API returns promises only, `loadAll` pages in the same binary, case-sensitive order in every store, and each stream has exactly one latest snapshot.
+*Released, except for the parts that name the PostgreSQL, MariaDB and MongoDB stores: those come with each store's schema v2.* See [Snapshot store](/under-the-hood/snapshot-store) for the whole contract.
+
+- **Promises only.** Every method of a snapshot store returns a promise (or an async generator), and fails by rejecting. The in-memory store's `getSnapshot`, `getLastSnapshot`, `getLastSnapshots`, `getLastEnvelope`, `getEnvelope` and `getManyLastSnapshotEnvelopes` returned their result directly in 3.x: `await` them. A failure, such as the `SnapshotNotFoundException` of `getSnapshot`, is now a rejection instead of a synchronous throw. `SnapshotRepository` already awaited them, so repositories need no change.
+- **`SnapshotStoreDriver` is the class of a store**, `new (options) => SnapshotStore`, and `SnapshotStoreConfig.driver` has that type. In 3.x it was an interface for the store instance, with `connect`, `disconnect` and `ensureCollection`. Type a store instance as `SnapshotStore` instead.
+- **Base defaults.** `getManyLastSnapshotEnvelopes` has a default in the base class, which reads the streams one by one with `getLastEnvelope`, so `SnapshotRepository.loadMany()` works with every store. `getLastEnvelopesForAggregate` has a default that rejects with an `UnsupportedOperationException` when it's read, which `loadAll()` passes on. The repository no longer checks whether the store has these methods.
+- **The last snapshot is the highest version.** The in-memory store's `getLastSnapshot`, `getLastEnvelope` and their bulk forms read the snapshot with the highest version of the stream, and appends to one stream keep a single latest snapshot even when they race. The PostgreSQL, MariaDB and MongoDB stores follow with their schema v2, which enforces a single latest snapshot per stream with a unique index.
+- **`loadAll` pages in binary order.** `getLastEnvelopesForAggregate`, and so `loadAll`, reads the streams in descending binary order of their aggregate ids, which is case-sensitive: uppercase letters come before lowercase ones. The `aggregateId` of the filter is an exclusive cursor: pass the aggregate id of the last envelope of a page to read the next page. The in-memory store ordered the ids ignoring case in 3.x; the PostgreSQL, MariaDB and MongoDB stores ignore the cursor in 3.x and get it, in binary order, with their schema v2.
+
+For custom snapshot stores:
+
+1. Make every method `async`. `getEnvelope` and `getEnvelopes` are required now.
+2. Drop your `getManyLastSnapshotEnvelopes` if it only looped over `getLastEnvelope`: the base class does that.
+3. If you implement `getLastEnvelopesForAggregate`, order by the aggregate id in binary, descending order, and treat `filter.aggregateId` as an exclusive cursor.
+4. Replace uses of the `SnapshotStoreDriver` interface with `SnapshotStore`.
 
 ### PostgreSQL schema v2 [#postgres-schema-v2]
 
