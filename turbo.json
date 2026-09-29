@@ -72,10 +72,6 @@
 		"docs:build": {
 			"description": "Static Astro (Starlight) build into dist/, including the sitemap, llms.txt and the Pagefind index. Fails on broken internal links.",
 			"outputs": ["dist/**"]
-		},
-		"benchmark": {
-			"cache": false
-		},
-		"benchmark:report": {}
+		}
 	}
 }

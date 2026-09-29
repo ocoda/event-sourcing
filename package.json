@@ -16,9 +16,7 @@
 		"typecheck": "turbo typecheck",
 		"check:packages": "turbo build --filter=\"./packages/**\" --output-logs=errors-only && node scripts/check-packages.mjs",
 		"format": "oxfmt",
-		"format:check": "oxfmt --check",
-		"benchmark": "turbo benchmark --",
-		"benchmark:report": "turbo benchmark:report"
+		"format:check": "oxfmt --check"
 	},
 	"engines": {
 		"node": ">=22.12"

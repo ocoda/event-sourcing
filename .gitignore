@@ -4,7 +4,6 @@
 **/node_modules
 **/.astro
 **/coverage
-benchmarks/report/**
 
 # Logs
 logs

@@ -1,5 +1,4 @@
 packages:
-  - 'benchmarks'
   - 'docs'
   - 'example'
   - 'packages/*'
