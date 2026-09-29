@@ -52,6 +52,23 @@ describeEventStoreConformance(
   `turbo.json` doesn't declare it yet, so `pnpm test` (turbo) drops it and runs every case once: run it through
   `pnpm --filter … exec vitest` as above.
 
+## Cross-Version Suite
+
+`@ocoda/event-sourcing-testing/cross-version` holds what the drivers' `tests/cross-version` specs need to check that
+they read data the published 3.0.2 packages wrote. `pnpm test:cross-version --database <db>`
+(`scripts/test-cross-version.mjs`) runs the 3.0.2 writer in `fixtures/cross-version/v3`, which records what 3.0.2 read
+back in a manifest, then runs the specs with `vitest.cross-version.mts` (they are excluded from `test` and `test:cov`).
+
+- `loadCrossVersionManifest()` reads the manifest (`XV_MANIFEST`); `CrossVersionManifest` documents it.
+- `domain.ts` mirrors the writer's events and aggregates, `createCrossVersionEventMap()` registers them.
+- `encodeValue` turns a value into JSON that keeps classes, `Date`s and `undefined`, the same way the writer does, so
+  a read compares with `toEqual` against the manifest.
+- `expectCompleteCorpus` fails on an empty or hollow manifest. `expectEventStreamReads`, `expectLegacyAllOrder`,
+  `expectSnapshotStreamReads`, `expectListedCollections` and `expectEveryListedCollection` are the read assertions;
+  each driver's spec composes them and can replace one when its schema changes.
+- `tests/cross-version/cross-version.json` says whether a 3.0.2 append after the read must succeed (the 3.x schema) or
+  fail (schema v2 fences 3.x writers).
+
 ## Banking Production Event Suite
 
 `@ocoda/event-sourcing-testing` exposes a production-style banking event suite that models a realistic
