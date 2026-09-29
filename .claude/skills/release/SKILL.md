@@ -3,7 +3,7 @@ name: release
 description: Maintainer preflight for cutting an @ocoda/event-sourcing release. Checks CI, changesets, pre mode, the version PR, smoke and upgrade runs, and npm provenance and dist-tags afterwards. Never publishes.
 disable-model-invocation: true
 argument-hint: "[master | 3.x]"
-allowed-tools: Bash(git fetch *) Bash(git show *) Bash(git ls-tree *) Bash(git ls-remote *) Bash(git rev-parse *) Bash(gh run list *) Bash(gh run view *) Bash(gh pr list *) Bash(gh pr view *) Bash(gh pr diff *) Bash(gh release list *) Bash(npm view *) Bash(pnpm exec changeset status *)
+allowed-tools: Bash(git fetch -q origin) Bash(gh run list *) Bash(gh run view *) Bash(gh pr list *) Bash(gh pr view *) Bash(gh pr diff *) Bash(gh release list *) Bash(npm view *) Bash(pnpm exec changeset status --verbose)
 ---
 
 # Release preflight
@@ -31,7 +31,7 @@ Work through the checklist top to bottom for the release line in $ARGUMENTS (def
    - List them with `git ls-tree --name-only origin/<line> .changeset/`. Ignore `README.md` and `config.json`. No changesets means nothing to release: n/a, stop.
    - From a clean checkout of `origin/<line>`, run `pnpm exec changeset status --verbose` and record the packages and their computed versions.
    - **`3.x`:** every release must be `patch`, and every new version must start with `3.`.
-   - **`master`:** a computed major must be intended. A major computed from a `minor` changeset is the changesets-2.x amplification with `workspace:*` peers: confirm it with the maintainer.
+   - **`master`:** every new version must start with `4.` or higher. A `3.x` version computed on master is red unless the maintainer confirms it: it would publish v4-line code as a 3.x release, and the `3.x` branch needs those version numbers. A computed major must be intended. A major computed from a `minor` changeset is the changesets-2.x amplification with `workspace:*` peers: confirm it with the maintainer.
    - Read every changeset: it must be user-facing text (see the `changeset` skill). This check must print nothing:
 
      ```sh

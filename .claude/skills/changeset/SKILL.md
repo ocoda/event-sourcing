@@ -2,7 +2,7 @@
 name: changeset
 description: Changeset drafting for the current branch or a PR. Maps the diff to the affected @ocoda packages, picks the semver bump per this repo's branch policy, writes user-facing text with migration notes, and saves it as a .changeset markdown file. Use when a change to packages/core or packages/integration needs a changeset, when asked to write, fix or review a changeset or CHANGELOG entry, or before opening a PR that touches a published package.
 argument-hint: "[pr-number]"
-allowed-tools: Bash(git fetch *) Bash(git rev-list *) Bash(git rev-parse *) Bash(git diff *) Bash(git log *) Bash(git show *) Bash(gh pr view *) Bash(gh pr diff *) Bash(pnpm exec changeset status *)
+allowed-tools: Bash(git fetch -q origin) Bash(gh pr view *) Bash(gh pr diff *) Bash(pnpm exec changeset status --since=origin/master --verbose) Bash(pnpm exec changeset status --since=origin/3.x --verbose)
 ---
 
 # Changeset
@@ -83,10 +83,11 @@ Save the file as `.changeset/<slug>.md`, where the slug is a kebab-case summary 
 **Bold one-line effect.** What changed for users, and what they should do.
 ```
 
-Then check it:
+Then check it. `changeset status --since` finds changesets through `git diff`, so it skips an untracked file and reports "NO packages". Register the path first with `git add -N`, which records the path but stages no content:
 
 ```sh
 grep -n '[$]`' .changeset/<slug>.md            # must print nothing
+git add -N .changeset/<slug>.md
 pnpm exec changeset status --since=origin/<base> --verbose
 ```
 
@@ -94,6 +95,7 @@ Read the computed versions in the `changeset status` output. Two known effects:
 
 - **Amplification.** With changesets 2.x, the fixed group and the integrations' `workspace:*` peer on core, any `minor` computes as the next `major` for all five packages. Keep the semver-correct bump in the file and report the computed version next to it. Before 4.0.0 GA this lands in the planned major. After GA it would publish an accidental major, so flag it for the maintainer.
 - **Pre mode.** If `.changeset/pre.json` exists, report its `tag`. Merging then produces a prerelease (for example `4.0.0-next.N`) instead of a stable version.
+- **A `3.x` version computed on master.** Without pre mode or a pending major, a `patch` on master computes as the next `3.0.x`. Releasing it would ship v4-line code under a 3.x number that the `3.x` branch also needs. Keep the bump and flag this for the maintainer.
 
 ## Report
 

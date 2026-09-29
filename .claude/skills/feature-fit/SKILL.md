@@ -19,7 +19,7 @@ If the input is an issue number, read it with `gh issue view <n> --json title,bo
 
 2. **Charter.** Read the charter. Match the need to its in-scope, roadmap, store-adapter, out-of-scope and undecided sections.
 
-3. **Prior art.** Look for existing APIs that already meet the need: grep `packages/core/lib` and `docs/pages`. Then look for related work with `gh search issues --repo ocoda/event-sourcing --state all "<keywords>"` and `gh pr list --state all --search "<keywords>"`. If the library already does it, the answer is a docs pointer, not a feature.
+3. **Prior art.** Look for existing APIs that already meet the need: grep `packages/core/lib` and `docs/pages`. Then look for related work with `gh search issues --repo ocoda/event-sourcing "<keywords>"` (open and closed) and `gh pr list --state all --search "<keywords>"`. If the library already does it, the answer is a docs pointer, not a feature.
 
 4. **Verdict.** Pick one:
 
