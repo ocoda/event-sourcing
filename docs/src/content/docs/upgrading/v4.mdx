@@ -357,7 +357,9 @@ For custom snapshot stores:
 
 *In the next prerelease.* See [Test your Event Store](/advanced/custom-stores#test-your-event-store).
 
-The conformance suites that every built-in store runs are published as `@ocoda/event-sourcing/testing`. They register [Vitest](https://vitest.dev) tests, so `vitest` 5 is an optional peer dependency of `@ocoda/event-sourcing`: install it next to the prerelease to use the subpath. The suites import Vitest's API, so they need no `globals: true`, and the root entry point never loads Vitest.
+The conformance suites that every built-in store runs are published as `@ocoda/event-sourcing/testing`. They register [Vitest](https://vitest.dev) tests, so `vitest` (4 or 5) is an optional peer dependency of `@ocoda/event-sourcing`: install it next to the prerelease to use the subpath. The suites import Vitest's API, so they need no `globals: true`, and the root entry point never loads Vitest.
+
+npm checks an optional peer whenever the project has that package: a project on another major of Vitest gets `ERESOLVE` from `npm install @ocoda/event-sourcing@next`, even if it never imports the subpath, until it moves to Vitest 4 or 5 or installs with `--legacy-peer-deps`. pnpm and Yarn only warn.
 
 As the last step of moving a custom store to 4.0, run the suites against it:
 

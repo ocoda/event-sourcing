@@ -39,7 +39,7 @@ import {
 	uniquePoolName,
 	withinTimeout,
 } from './fixtures.js';
-import type { ConformanceStoreHandle } from './types.js';
+import type { SnapshotStoreConformanceHandle } from './types.js';
 
 /**
  * The snapshot store under test. Every method of a snapshot store is required, or has a default in the base class.
@@ -50,8 +50,8 @@ export type ConformanceSnapshotStore = SnapshotStore<unknown>;
  * Creates a connected snapshot store.
  */
 export type SnapshotStoreConformanceFactory = () =>
-	| ConformanceStoreHandle<ConformanceSnapshotStore>
-	| Promise<ConformanceStoreHandle<ConformanceSnapshotStore>>;
+	| SnapshotStoreConformanceHandle<ConformanceSnapshotStore>
+	| Promise<SnapshotStoreConformanceHandle<ConformanceSnapshotStore>>;
 
 export const SNAPSHOT_STORE_CONFORMANCE_CASES = [
 	'append-returns-envelope',
@@ -151,10 +151,10 @@ export interface SnapshotStoreConformanceFeatures {
 }
 
 /**
- * What a case that reads the latest snapshots of an aggregate requires, reported as `capability: <this>` when it's
- * skipped.
+ * What a case that reads the latest snapshots of an aggregate requires: a store that keeps the `SnapshotStore`
+ * default of `getLastEnvelopesForAggregate` lacks it, and the case is skipped with `capability: <this>`.
  */
-const AGGREGATE_READS = 'getLastEnvelopesForAggregate (the store keeps the SnapshotStore default)';
+const AGGREGATE_READS = 'getLastEnvelopesForAggregate';
 
 /**
  * Whether the store keeps the `SnapshotStore` default of a method: it inherits the base class's implementation, or
@@ -230,7 +230,7 @@ export const describeSnapshotStoreConformance = (
 		const collection = SnapshotCollection.get(pool);
 		const listingCollection = SnapshotCollection.get(listingPool);
 
-		let handle: ConformanceStoreHandle<ConformanceSnapshotStore> | undefined;
+		let handle: SnapshotStoreConformanceHandle<ConformanceSnapshotStore> | undefined;
 		let store: ConformanceSnapshotStore;
 
 		// A stream with a snapshot at every version of REFERENCE_VERSIONS

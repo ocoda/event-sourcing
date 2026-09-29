@@ -176,7 +176,9 @@ export class AppModule {}
 ```
 
 #### Test your Event Store
-The conformance suite that every built-in store runs encodes the contract, and `@ocoda/event-sourcing/testing` publishes it. It registers [Vitest](https://vitest.dev) tests, so add `vitest` 5 to your dev dependencies: it's an optional peer dependency of `@ocoda/event-sourcing`, which only this subpath loads. The suite imports Vitest's API itself, so it needs no `globals: true`.
+The conformance suite that every built-in store runs encodes the contract, and `@ocoda/event-sourcing/testing` publishes it. It registers [Vitest](https://vitest.dev) tests, so add Vitest 4 or 5 to your dev dependencies: `vitest` is an optional peer dependency of `@ocoda/event-sourcing`, which only this subpath loads. The suite imports Vitest's API itself, so it needs no `globals: true`. TypeScript finds the subpath in the package's `exports`, so your tsconfig needs the `node16`, `nodenext` or `bundler` `moduleResolution`.
+
+npm checks an optional peer dependency whenever the project has that package, so with another major of Vitest, `npm install` fails with `ERESOLVE` until you move to Vitest 4 or 5, or install with `--legacy-peer-deps`. pnpm and Yarn only warn.
 
 In a spec file, the suite hands your factory the store context (the suite's event map and a `RecordingPublisher`), and your factory returns the connected store:
 
