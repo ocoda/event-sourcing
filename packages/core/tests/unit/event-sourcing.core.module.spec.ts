@@ -84,10 +84,17 @@ describe(EventSourcingCoreModule, () => {
 			{} as any,
 		);
 
-		const loggerSpy = vi.spyOn((moduleRef as any)._logger, 'error');
+		const loggerSpy = vi.spyOn((moduleRef as any)._logger, 'error').mockImplementation(() => undefined);
 
-		await moduleRef.onModuleDestroy();
+		await moduleRef.onApplicationShutdown();
 
 		expect(loggerSpy).toHaveBeenCalled();
+		expect(snapshotStore.disconnect).toHaveBeenCalledTimes(1);
+	});
+
+	it('disconnects the stores once the application has shut down, not when its modules are destroyed', () => {
+		// Nest runs onModuleDestroy before beforeApplicationShutdown, where the EventBus drains
+		expect('onModuleDestroy' in EventSourcingCoreModule.prototype).toBe(false);
+		expect(EventSourcingCoreModule.prototype.onApplicationShutdown).toEqual(expect.any(Function));
 	});
 });

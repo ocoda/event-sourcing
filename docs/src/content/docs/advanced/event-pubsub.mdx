@@ -40,6 +40,8 @@ Don't mix up event subscribers with the [event handlers](/start/events#creating-
 
 A default publisher takes care of publishing the envelopes inside your application, which is what makes the subscribers above work. To push your envelopes to an external system, create an additional publisher by decorating a class with `@EventPublisher()` and implementing the `IEventPublisher` interface. Register it as a provider, and it's used next to the default publisher, it doesn't replace it.
 
+When `publish` returns a promise, the bus awaits it before it passes the publisher the next envelope, and `appendEvents` resolves once every publisher is done (see [delivery semantics](#delivery-semantics)). Whatever else `publish` returns is ignored.
+
 ```typescript {1,6}
 @EventPublisher()
 export class CustomEventPublisher implements IEventPublisher {
@@ -59,6 +61,23 @@ export class CustomEventPublisher implements IEventPublisher {
 }
 ```
 
+A publisher that sends a whole append at once, for example as one batch or one transaction of your broker, implements `publishAll(envelopes)` as well. The bus then calls `publishAll` once per append, with the envelopes in commit order, instead of calling `publish` for each of them:
+
+```typescript
+@EventPublisher()
+export class BatchEventPublisher implements IEventPublisher {
+	constructor(private readonly broker: MessageBroker) {}
+
+	async publish(envelope: EventEnvelope): Promise<void> {
+		await this.publishAll([envelope]);
+	}
+
+	async publishAll(envelopes: readonly EventEnvelope[]): Promise<void> {
+		await this.broker.sendBatch('account-events', envelopes.map((envelope) => envelope.toJSON()));
+	}
+}
+```
+
 ## Delivery semantics [#delivery-semantics]
 
 Knowing how events are delivered matters, especially when you publish them to other systems.
@@ -66,14 +85,51 @@ Knowing how events are delivered matters, especially when you publish them to ot
 - **In-process:** the envelopes are published in the process that appended the events. Subscribers in other instances of your application don't receive them, and neither do consumers outside your application unless you add an event publisher that sends them there.
 - **After the events are persisted:** the event store publishes the envelopes once `appendEvents` has successfully stored the events, through the `EventBus` the module hands it when it creates the store. When the append fails, for example because of a version conflict, nothing is published, and `appendEvents(stream, events, { expectedVersion, publish: false })` stores without publishing. The publishers and subscribers are registered when the application bootstraps, so they don't receive events appended before that. (3.x didn't publish those events at all and logged a warning; 4.0 no longer sets the bus on the store with `eventStore.publish = …`.)
 - **At-most-once:** there's no outbox, no acknowledgement, no retry and no checkpoint. When the process stops between storing and publishing the events, or when a subscriber or publisher fails, that envelope is not delivered again. A subscriber that wasn't running when an event was published never receives it afterwards.
-- **Not awaited:** publishers and subscribers are started while the events are being published, in the order in which the envelopes were appended. `appendEvents` doesn't wait for the promises that asynchronous subscribers or publishers return, so they can still be running when it resolves. They can overlap and finish in any order, so make them idempotent and don't depend on the order in which they complete.
-- **Failures are isolated (since 3.0.1):** an error thrown by a subscriber, or a promise it rejects, is logged (logger context `EventBus`, with the name of the event and the subscriber) and doesn't affect anything else. The subscriber keeps receiving later events and the other subscribers still get theirs. A failing publisher is logged as well, the remaining publishers and envelopes are still published, and `appendEvents` still resolves, because the events are already stored.
+- **Publishers are awaited, in order:** each publisher gets the envelopes of an append in commit order, one call at a time: the bus awaits the promise that `publish` returns before it passes the next envelope. The publishers run concurrently, and `appendEvents` resolves once every publisher is done, so a slow publisher slows down your commands. Each publisher also gets the appends of a stream one after the other, in the order in which they were stored, even when they run concurrently: while a publisher still handles an append, the next append to the same stream waits for it. That holds back that publisher only, for that stream only, and the commands that wait for it; appends to other streams don't wait. For one order across all streams, read the events with [`readAll`](/under-the-hood/event-store#reading-all-events).
+- **Publisher timeout:** a call to `publish` or `publishAll` may take at most `publishing.publisherTimeout` milliseconds, 30 s by default. After that the bus reports a timeout and moves on to the next envelope; set it to `0` to wait as long as a publisher takes. An append waits up to that timeout for each call to each publisher, and for the calls of earlier appends to the same stream that the publisher still handles.
+- **Publishers that publish:** a publisher may append events, or call `eventBus.publish()`, from inside its `publish`. It gets those envelopes at once, instead of after the call that waits for them. The other publishers and the subscribers get them as usual. The subscribers are fed after the other publishers, so what a subscriber appends to a stream in reaction to an event reaches the publishers after that event.
+- **Subscribers are not awaited:** they are started while the envelopes are being published, in the order in which the envelopes were appended, and run in parallel. `appendEvents` doesn't wait for the promises they return, so they can still be running when it resolves. They can overlap and finish in any order, so make them idempotent and don't depend on the order in which they complete.
+- **Failures are isolated (since 3.0.1):** an error thrown by a subscriber, or a promise it rejects, is logged (logger context `EventBus`, with the name of the event and the subscriber) and doesn't affect anything else. The subscriber keeps receiving later events and the other subscribers still get theirs. A publisher that fails or times out is logged as well, it still gets the later envelopes, the other publishers aren't affected, and `appendEvents` still resolves, because the events are already stored. Every failure is also reported on [`deliveryErrors$`](#delivery-errors).
 
 <Aside type="caution">
 Before 3.0.1 a subscriber that threw, or returned a rejected promise, was unsubscribed for good and its error was rethrown as an uncaught exception, which stops the Node.js process by default. Rejections from asynchronous publishers were unhandled, and a publisher that threw synchronously made `appendEvents` fail after the events had been stored. Upgrade to 3.0.1 or handle errors inside your subscribers and publishers.
 </Aside>
 
-Since a failure is only logged, handle errors that matter inside your subscriber or publisher, for example by retrying or by storing what failed. If you can't afford to lose an envelope, use the outbox pattern below.
+Since a failure is only logged and reported, handle errors that matter inside your subscriber or publisher, for example by retrying or by storing what failed. If you can't afford to lose an envelope, use the outbox pattern below.
+
+## Delivery errors [#delivery-errors]
+
+`EventBus.deliveryErrors$` is an observable of every publisher and subscriber failure, one per envelope, for example to count them in your metrics or to keep the envelopes for a retry:
+
+```typescript
+eventBus.deliveryErrors$.subscribe(({ kind, handler, envelope, error }) => {
+	// kind: 'publisher' | 'subscriber'; handler: the class name of the publisher or subscriber
+	metrics.increment('event_delivery_errors', { kind, handler, event: envelope.event });
+});
+```
+
+`error` is what the publisher or subscriber threw or rejected with. A publisher that ran into its timeout reports a `DOMException` named `TimeoutError`, like `AbortSignal.timeout()` does. A `publishAll` call that fails reports each of its envelopes.
+
+## Waiting for the bus, and shutting down [#when-idle]
+
+`await eventBus.whenIdle()` resolves once no publisher or subscriber is running, which is at once when none is. In tests, use it instead of waiting for a fixed time:
+
+```typescript
+await commandBus.execute(new OpenAccountCommand(ownerId));
+await eventBus.whenIdle();
+expect(await projection.get(ownerId)).toBeDefined();
+```
+
+`whenIdle({ timeout })` rejects with a `DOMException` named `TimeoutError` when the bus is still busy after `timeout` milliseconds; without a timeout, or with `0`, it waits as long as it takes. A publisher call that ran into `publishing.publisherTimeout` no longer counts as running, even when the publisher is still busy with it. Don't await it inside a publisher or a subscriber: it would wait for itself.
+
+When the application shuts down (`app.close()`, or a signal with `enableShutdownHooks()`), the bus waits in `beforeApplicationShutdown` until the publishers and subscribers that are still running are done, for at most `publishing.shutdownTimeout` milliseconds (10 s by default, `0` waits as long as it takes; after the timeout it logs a warning). Then, in `onApplicationShutdown`, it unsubscribes the subscribers and the event and snapshot stores disconnect. NestJS runs `onModuleDestroy` before that, so a subscriber that is still running can find a provider of yours that has already cleaned up in `onModuleDestroy`: call `await eventBus.whenIdle()` before `app.close()` if yours do.
+
+```typescript
+EventSourcingModule.forRoot({
+	events: [AccountOpenedEvent],
+	publishing: { publisherTimeout: 5_000, shutdownTimeout: 30_000 },
+});
+```
 
 ## Outbox pattern [#outbox-pattern]
 

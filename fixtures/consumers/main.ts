@@ -12,6 +12,8 @@ import {
 	CommandBus,
 	CommandHandler,
 	Event,
+	EventBus,
+	type EventDeliveryError,
 	type EventEnvelope,
 	EventHandler,
 	EventSourcingModule,
@@ -214,6 +216,9 @@ async function scenario(variant: string, root: DynamicModule): Promise<void> {
 	const commandBus = app.get(CommandBus);
 	const queryBus = app.get(QueryBus);
 	const eventStore = app.get(EventStore);
+	const eventBus = app.get(EventBus);
+	const deliveryErrors: EventDeliveryError[] = [];
+	eventBus.deliveryErrors$.subscribe((error) => deliveryErrors.push(error));
 
 	const accountId: string = await commandBus.execute(new OpenAccountCommand());
 	await commandBus.execute(new CreditAccountCommand(accountId, [10, 20, 30]));
@@ -226,7 +231,8 @@ async function scenario(variant: string, root: DynamicModule): Promise<void> {
 	const snapshot = await app.get(AccountSnapshotRepository).load(AccountId.from(accountId));
 	check(snapshot.version >= 2, `${variant}: snapshot taken (v${snapshot.version})`);
 
-	await new Promise((resolve) => setTimeout(resolve, 50));
+	// The subscribers run after the append resolved: wait for them instead of for a fixed time
+	await eventBus.whenIdle({ timeout: 5_000 });
 	check(
 		received.join() ===
 			'consumer-account-opened,consumer-account-credited,consumer-account-credited,consumer-account-credited',
@@ -263,6 +269,7 @@ async function scenario(variant: string, root: DynamicModule): Promise<void> {
 	);
 
 	await app.close();
+	check(deliveryErrors.length === 0, `${variant}: no delivery errors (${deliveryErrors.length})`);
 }
 
 async function main(): Promise<void> {

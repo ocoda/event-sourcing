@@ -26,15 +26,23 @@ describe(EventBus, () => {
 		expect(publisher.publish).toHaveBeenCalledWith(envelope);
 	});
 
-	it('cleans up subscriptions on module destroy', () => {
+	it('cleans up subscriptions once the application has shut down', () => {
 		const bus = new EventBus();
 		const handler = { handle: vi.fn() };
 		const unsubscribe = vi.fn();
 
 		bus.bind(handler, '');
 		(bus as any).subscriptions.push({ unsubscribe } as any);
-		bus.onModuleDestroy();
+		bus.onApplicationShutdown();
 
 		expect(unsubscribe).toHaveBeenCalled();
+		expect((bus as any).subscriptions).toEqual([]);
+		void bus.publish({ event: 'test', payload: {}, metadata: {} } as EventEnvelope);
+		expect(handler.handle).not.toHaveBeenCalled();
+	});
+
+	it('keeps the subscriptions until the application has shut down', () => {
+		// 3.x unsubscribed in onModuleDestroy, which Nest runs before the bus drains in beforeApplicationShutdown
+		expect('onModuleDestroy' in new EventBus()).toBe(false);
 	});
 });

@@ -15,8 +15,6 @@ import {
 import { config } from 'rxjs';
 import type { Mock, MockInstance } from 'vitest';
 
-const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 10));
-
 describe('EventBus isolation', () => {
 	@Event('isolation-account-opened')
 	class AccountOpenedEvent implements IEvent {}
@@ -83,11 +81,11 @@ describe('EventBus isolation', () => {
 				const second = envelopeFor('isolation-account-opened', 2);
 				const third = envelopeFor('isolation-account-closed', 3);
 
-				expect(() => bus.publish(first)).not.toThrow();
-				await flush();
-				expect(() => bus.publish(second)).not.toThrow();
-				expect(() => bus.publish(third)).not.toThrow();
-				await flush();
+				await expect(bus.publish(first)).resolves.toBeUndefined();
+				await bus.whenIdle({ timeout: 1_000 });
+				await expect(bus.publish(second)).resolves.toBeUndefined();
+				await expect(bus.publish(third)).resolves.toBeUndefined();
+				await bus.whenIdle({ timeout: 1_000 });
 
 				// the failing subscriber stays subscribed and receives every matching event
 				expect(failing.handle).toHaveBeenCalledTimes(2);
@@ -157,9 +155,9 @@ describe('EventBus isolation', () => {
 			const first = envelopeFor('isolation-account-opened', 1);
 			const second = envelopeFor('isolation-account-opened', 2);
 
-			expect(bus.publish(first)).toBeUndefined();
-			expect(bus.publish(second)).toBeUndefined();
-			await flush();
+			// publish never rejects, and resolves once the publishers settled
+			await expect(bus.publish(first)).resolves.toBeUndefined();
+			await expect(bus.publish(second)).resolves.toBeUndefined();
 
 			for (const publisher of [throwing, rejecting, healthy]) {
 				expect(publisher.publish.mock.calls).toEqual([[first], [second]]);
@@ -195,8 +193,7 @@ describe('EventBus isolation', () => {
 			const bus = new EventBus();
 			bus.addPublisher({ publish: () => Promise.reject('plain reason') });
 
-			bus.publish(envelopeFor('isolation-account-opened'));
-			await flush();
+			await bus.publish(envelopeFor('isolation-account-opened'));
 
 			expect(loggerError).toHaveBeenCalledWith(
 				'Event publisher Object failed to publish event "isolation-account-opened"',

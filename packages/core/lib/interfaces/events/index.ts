@@ -1,6 +1,7 @@
 export type * from './append-options.interface.js';
 export type * from './event-bus.interface.js';
 export type * from './event-collection.type.js';
+export type * from './event-delivery-error.interface.js';
 export type * from './event-envelope-metadata.interface.js';
 export type * from './event-filter.interface.js';
 export type * from './event-handler-metadata.interface.js';
