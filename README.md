@@ -14,9 +14,9 @@
   </a>
 </p>
 <p align="center">
-    <a href="https://github.com/ocoda/event-sourcing/issues/new?labels=bug&template=bug_report.md">Report a bug</a>
+    <a href="https://github.com/ocoda/event-sourcing/issues/new?template=bug_report.yml">Report a bug</a>
     &nbsp;|&nbsp;
-    <a href="https://github.com/ocoda/event-sourcing/issues/new?labels=enhancement&template=feature_request.md">Request a feature</a>
+    <a href="https://github.com/ocoda/event-sourcing/issues/new?template=feature_request.yml">Request a feature</a>
 </p>
 
 ## About this library
