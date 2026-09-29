@@ -1,94 +1,101 @@
 # Contributing to @ocoda/event-sourcing
 
-Thank you for considering contributing to this project! We appreciate your help in improving it. To make the process smooth, please follow these guidelines.
+Thanks for helping improve this project!
 
-## How to Contribute
+- Found a bug or have a feature request? Open an issue.
+- Have a question? Discussions is the place.
+- Found a vulnerability? Report it privately, see [SECURITY.md](SECURITY.md).
 
-### Prerequisites
-```shell
-node: "^>=20.0.0"
-pnpm: "^10.4.0"
-# otherwise, your build will fail
-```
+## Branches
 
-### Supported database versions
-The repository uses Docker Compose to spin up local database services for integration tests. To keep CI and local runs stable we pin the images used in `docker-compose.yml`. Supported versions:
+| Branch   | Line                                           | What goes here                                         |
+| -------- | ---------------------------------------------- | ------------------------------------------------------ |
+| `master` | v4 (NestJS 12, ESM-only, Node ≥ 22.12; in progress) | new features, breaking changes (with a migration note) |
+| `3.x`    | 3.x maintenance (NestJS 11, CommonJS)          | bug fixes only, released as patch versions             |
 
-```text
-Postgres: postgres:14
-MongoDB: mongo:8
-MariaDB: mariadb:10.11
-DynamoDB Local: amazon/dynamodb-local:1.15.0
-```
+Base your pull request on the branch your change targets.
 
-To start one or more of the pinned services locally:
+## Prerequisites
+
+- **Node.js ≥ 22.12**, which the test and build tooling requires.
+- **pnpm**: use the version pinned in the root `package.json` (`packageManager`); `corepack enable` picks it up.
+- **Docker**, if you touch a database integration.
+
+## Setup
 
 ```bash
-docker compose up -d postgres mariadb
+git clone https://github.com/ocoda/event-sourcing.git
+cd event-sourcing
+pnpm install
 ```
 
+The repository is a pnpm + turbo monorepo:
 
-### Steps
+| Path                     | What it is                                                                   |
+| ------------------------ | ---------------------------------------------------------------------------- |
+| `packages/core`          | `@ocoda/event-sourcing`, the library                                         |
+| `packages/integration/*` | store drivers: `postgres`, `mongodb`, `mariadb`, `dynamodb`                  |
+| `packages/testing`       | shared test fixtures and the end-to-end suite every store runs (private)     |
+| `packages/config`        | shared TypeScript and Vitest configuration (private)                         |
+| `docs/`                  | the documentation site                                                       |
+| `example/`               | an example NestJS application                                                |
 
-1. **Fork the Repository**  
-  Create a personal fork of the repository by clicking the “Fork” button.
+## Databases for integration tests
 
-2. **Clone your Fork**  
-  Clone your forked repository locally:
-    ```bash
-    git clone https://github.com/@ocoda/event-sourcing.git
-    ```
+Core tests need no database. Integration tests run against the services in `docker-compose.yml`, whose images are pinned:
 
-3. **Create a branch**
-    ```bash
-    git checkout -b feature/your-feature-name
-    ```
+| Service              | Versions                                        |
+| -------------------- | ----------------------------------------------- |
+| `postgres`           | `postgres-13` … `postgres-17` (`postgres` is 14) |
+| `mongodb`            | `mongodb-6`, `mongodb-7`, `mongodb-8` (`mongodb` is 8) |
+| `mariadb`            | `mariadb-10` (10.11), `mariadb-11` (11.4)        |
+| `dynamodb`           | DynamoDB Local 3.3.1                             |
 
-4. **Install the dependencies**
-  @ocoda/event-sourcing uses pnpm workspaces, so the dependencies need to be installed from the project root directory.
-    ```bash
-    pnpm install
-    ```
+Start one and wait until it is healthy:
 
-5. **Start the docker container(s)**
-  When making changes to the core library situated under */packages/core* there are no dependencies on any of the docker containers. However, if changing one of the integration packages situated under */packages/integration*, so will need to spin up one of the databases in order to test your changes. For example:
-    ```bash
-    docker compose up -d mariadb
-    ```
+```bash
+docker compose up -d --wait postgres
+```
 
-6. **Make Your Changes**
-  Ensure your code follows the project’s coding standards and passes tests.
+Versions of the same database share a port, so run one version at a time.
 
-   **Testing expectations:** keep minimum coverage at 90% for core and integration packages, keep patch coverage at 90% for new or changed code, run targeted suites locally when possible (`pnpm test --filter=@ocoda/event-sourcing` and `pnpm test:cov --filter=@ocoda/event-sourcing`), and start the matching Docker service from `docker-compose.yml` for integration tests.
+## Before you open a pull request
 
-   The tests run on [Vitest](https://vitest.dev), which needs Node.js 22.12 or later. The shared configuration lives in `packages/config/vitest/base.mjs` and enforces the coverage thresholds (90% lines, functions and statements, 80% branches) on `test:cov`. Tests run against the TypeScript sources, and Vite's Oxc transform applies the decorator settings from each package's `tsconfig.json`, so a package's tsconfig has to include its `tests` folder.
+CI's `ci-ok` check is required to merge. Run the same checks locally:
 
-   The root scripts run their tasks through [Turborepo](https://turborepo.dev) (`turbo.json`). Every task except `format`, `dev` and the integration tests is cached, and Turborepo replays it while its inputs are unchanged; pass `--force` to run it anyway. The integration tests always run, because the database they use is not part of the cache key.
+```bash
+pnpm run ci --filter="./packages/**"   # oxlint + oxfmt --check (pnpm format fixes formatting)
+pnpm typecheck
+pnpm build --filter="./packages/**"
+pnpm test:cov --filter=@ocoda/event-sourcing   # coverage thresholds are enforced
+```
 
-7. **Lint and format your changes**
-  To make sure your changes are in accordance to the styles used in this repository and pass the CI checks, you can run the formatting (oxfmt) and linting (oxlint) steps.
-    ```bash
-    pnpm format && pnpm lint
-    ```
+For every integration you changed (all of them if you changed `packages/core` or `packages/testing`), start its database and run:
 
-8. **Commit Your Changes**
-  Write clear and concise commit messages:
-    ```bash
-    git commit -m "Add description of your changes"
-    ```
+```bash
+pnpm test:cov --filter=@ocoda/event-sourcing-postgres
+```
 
-    > [!IMPORTANT]  
-    > When making changes to the core library or one of the integrations, make sure to include a changeset.
-    ```bash
-    pnpm exec changeset
-    ```
+Tests run on [Vitest](https://vitest.dev). Vite's Oxc transform applies each package's `tsconfig.json`, including the legacy decorator and `emitDecoratorMetadata` settings Nest needs. A package's tsconfig must therefore include its `tests` folder.
 
-9. **Push to Your Fork**
-  Push your changes to your forked repository:
-    ```bash
-    git push origin feature/your-feature-name
-    ```
+## Changesets
 
-10. **Create a Pull Request**
-    Go to the original repository, and click the “New Pull Request” button. Fill in details about the changes and submit.
-  
+Every change to a published package needs a changeset, which becomes the CHANGELOG entry:
+
+```bash
+pnpm exec changeset
+```
+
+- Write the text for library users and call out behaviour changes.
+- On `3.x`, only `patch` changesets are accepted.
+
+Docs, examples, CI and test-only changes don't need a changeset.
+
+## Conventions
+
+The conventions that no linter enforces are in [AGENTS.md](AGENTS.md), and they apply to humans too. For example:
+- keep DI-injected classes as value imports
+- never deep-import from `@nestjs/*`
+- store drivers must map concurrency conflicts to the core exceptions and release connections on every path
+
+[REVIEW.md](REVIEW.md) describes how pull requests are reviewed.
