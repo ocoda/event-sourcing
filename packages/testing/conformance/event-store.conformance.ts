@@ -354,26 +354,10 @@ export const describeEventStoreConformance = (
 		};
 
 		/**
-		 * INTERIM(H): spies on the `appendEvents` of a store that overrides it (the interim legacy path), where its class
-		 * defines it. The legacy wrapper calls it for every append that passed the checks, instead of the driver methods.
-		 */
-		const spyOnOverriddenAppend = (): MockInstance[] => {
-			let owner: object | null = Object.getPrototypeOf(store);
-			while (owner && owner !== EventStore.prototype) {
-				if (Object.hasOwn(owner, 'appendEvents')) {
-					return [vi.spyOn(owner as Record<string, never>, 'appendEvents' as never)];
-				}
-				owner = Object.getPrototypeOf(owner);
-			}
-			return [];
-		};
-
-		/**
-		 * Runs `fn` and asserts that it called neither getStreamVersion nor persistEvents (nor the store's own
-		 * appendEvents), nor the publisher.
+		 * Runs `fn` and asserts that it called neither getStreamVersion nor persistEvents, nor the publisher.
 		 */
 		const expectNoIo = async (description: string, fn: () => Promise<void>) => {
-			const spies = [spyOnStore('getStreamVersion'), spyOnStore('persistEvents'), ...spyOnOverriddenAppend()];
+			const spies = [spyOnStore('getStreamVersion'), spyOnStore('persistEvents')];
 			const mark = publisher.mark();
 			try {
 				await fn();
@@ -433,7 +417,7 @@ export const describeEventStoreConformance = (
 				(async () => {
 					await expect(call(() => store.getEvent(reference, 7, pool))).resolves.toEqual(referenceEvents[6]);
 					expect((await drain(readEvents(reference))).map(seqOf)).toEqual(range(1, 7));
-					await expect(store.appendEvents(newEventStream(), 1, recordedEvents(1), pool)).resolves.toHaveLength(1);
+					await expect(append(newEventStream(), recordedEvents(1), ExpectedVersion.NoStream)).resolves.toHaveLength(1);
 				})(),
 				`Store calls ${description}`,
 			);
@@ -479,8 +463,8 @@ export const describeEventStoreConformance = (
 			await store.ensureCollection(pool);
 
 			referenceEnvelopes = [
-				...(await store.appendEvents(reference, 4, referenceEvents.slice(0, 4), pool)),
-				...(await store.appendEvents(reference, 7, referenceEvents.slice(4), pool)),
+				...(await append(reference, referenceEvents.slice(0, 4), ExpectedVersion.NoStream)),
+				...(await append(reference, referenceEvents.slice(4), 4)),
 			];
 		}, timeout);
 
@@ -501,7 +485,7 @@ export const describeEventStoreConformance = (
 				const stream = newEventStream();
 				const events = recordedEvents(3);
 
-				const envelopes = await store.appendEvents(stream, 3, events, pool);
+				const envelopes = await append(stream, events, ExpectedVersion.NoStream);
 
 				expect(envelopes).toHaveLength(3);
 				for (const [index, envelope] of envelopes.entries()) {
@@ -523,7 +507,7 @@ export const describeEventStoreConformance = (
 				test('append-sizes', `appends ${count} event(s) at once`, async () => {
 					const stream = newEventStream();
 
-					const envelopes = await store.appendEvents(stream, count, recordedEvents(count), pool);
+					const envelopes = await append(stream, recordedEvents(count), ExpectedVersion.NoStream);
 
 					expect(versionsOf(envelopes)).toEqual(range(1, count));
 					expect((await drain(readEvents(stream))).map(seqOf)).toEqual(range(1, count));
@@ -655,6 +639,22 @@ export const describeEventStoreConformance = (
 						EventStoreVersionConflictException,
 						{ expectedVersion: 4, actualVersion: 3 },
 					);
+					expect(versionsOf(await drain(readEnvelopes(positional)))).toEqual([1, 2, 3]);
+
+					// Its arguments are checked before any I/O: an aggregate version below the number of events, or an
+					// empty pool name, is an InvalidAppendOptionsException
+					await expectNoIo('invalid positional arguments', async () => {
+						await expectRejectionOfClass(
+							store.appendEvents(positional, 1, recordedEvents(2), pool),
+							InvalidAppendOptionsException,
+							{ option: 'aggregateVersion' },
+						);
+						await expectRejectionOfClass(
+							store.appendEvents(positional, 4, recordedEvents(1, 4), ''),
+							InvalidAppendOptionsException,
+							{ option: 'pool' },
+						);
+					});
 					expect(versionsOf(await drain(readEnvelopes(positional)))).toEqual([1, 2, 3]);
 				},
 			);
@@ -788,11 +788,6 @@ export const describeEventStoreConformance = (
 								{ option: 'expectedVersion' },
 							);
 						}
-						// The positional form: the aggregate version after the append is below the number of events
-						await expectRejectionOfClass(
-							store.appendEvents(stream, 1, recordedEvents(2), pool),
-							InvalidAppendOptionsException,
-						);
 						await expectRejectionOfClass(
 							store.appendEvents(stream, recordedEvents(1), { expectedVersion: 0, pool: '' }),
 							InvalidAppendOptionsException,
@@ -808,7 +803,7 @@ export const describeEventStoreConformance = (
 			test('read-round-trip', 'reads back what was appended, in version order', async () => {
 				const stream = newEventStream();
 				const events = recordedEvents(3);
-				const appended = await store.appendEvents(stream, 3, events, pool);
+				const appended = await append(stream, events, ExpectedVersion.NoStream);
 
 				const read = await drain(readEvents(stream));
 				expect(read).toEqual(events);
@@ -851,7 +846,7 @@ export const describeEventStoreConformance = (
 						}),
 					);
 
-					const appended = await store.appendEvents(stream, 3, envelopes, pool);
+					const appended = await append(stream, envelopes, ExpectedVersion.NoStream);
 
 					const expected = envelopes.map(describeEnvelope);
 					expect((await drain(readEnvelopes(stream))).map(describeEnvelope)).toEqual(expected);
@@ -871,7 +866,7 @@ export const describeEventStoreConformance = (
 				const occurredOn = new Date('2024-06-15T10:20:30.123Z');
 				const envelope = envelopeFor(stream, new ConformanceRecorded(1), 1, EventId.generate(occurredOn));
 
-				await store.appendEvents(stream, 1, [envelope], pool);
+				await append(stream, [envelope], ExpectedVersion.NoStream);
 
 				const single = await call(() => store.getEnvelope(stream, 1, pool));
 				const [fromStream] = await drain(readEnvelopes(stream));
@@ -953,33 +948,32 @@ export const describeEventStoreConformance = (
 				'rejects an append at or below the current version with an EventStoreVersionConflictException',
 				async () => {
 					const stream = newEventStream();
-					await store.appendEvents(stream, 3, recordedEvents(3), pool);
+					await append(stream, recordedEvents(3), ExpectedVersion.NoStream);
 
-					for (const version of [3, 2, 1]) {
+					for (const expectedVersion of [2, 1, 0]) {
 						await expectRejectionOfClass(
-							store.appendEvents(stream, version, [new ConformanceRecorded(99)], pool),
+							append(stream, [new ConformanceRecorded(99)], expectedVersion),
 							EventStoreVersionConflictException,
 							{
 								code: EventSourcingErrorCode.EventStoreVersionConflict,
 								streamId: stream.streamId,
 								aggregateId: stream.aggregateId,
 								pool,
-								expectedVersion: version - 1,
+								expectedVersion,
 								actualVersion: 3,
 							},
 						);
 					}
-					await expectRejectionOfClass(
-						store.appendEvents(stream, 3, recordedEvents(2, 98), pool),
-						EventStoreVersionConflictException,
-						{ expectedVersion: 1, actualVersion: 3 },
-					);
+					await expectRejectionOfClass(append(stream, recordedEvents(2, 98), 1), EventStoreVersionConflictException, {
+						expectedVersion: 1,
+						actualVersion: 3,
+					});
 
 					// Nothing was written
 					expect((await drain(readEvents(stream))).map(seqOf)).toEqual(range(1, 3));
 
 					// The next version is still accepted
-					await expect(store.appendEvents(stream, 4, recordedEvents(1, 4), pool)).resolves.toHaveLength(1);
+					await expect(append(stream, recordedEvents(1, 4), 3)).resolves.toHaveLength(1);
 				},
 			);
 
@@ -988,11 +982,11 @@ export const describeEventStoreConformance = (
 				'rejects an append whose first version is already taken with an EventStoreVersionConflictException',
 				async () => {
 					const stream = newEventStream();
-					await store.appendEvents(stream, 3, recordedEvents(3), pool);
+					await append(stream, recordedEvents(3), ExpectedVersion.NoStream);
 
 					// Versions 3 and 4, of which 3 exists
 					await expectRejectionOfClass(
-						store.appendEvents(stream, 4, recordedEvents(2, 3, 'overlap'), pool),
+						append(stream, recordedEvents(2, 3, 'overlap'), 2),
 						EventStoreVersionConflictException,
 					);
 
@@ -1009,7 +1003,7 @@ export const describeEventStoreConformance = (
 					async (context) => {
 						const stream = newEventStream();
 						if (seeded) {
-							await store.appendEvents(stream, seeded, recordedEvents(seeded), pool);
+							await append(stream, recordedEvents(seeded), ExpectedVersion.NoStream);
 						}
 						const target = seeded + 2;
 						// Atomic stores burn no position for the appends that lose
@@ -1020,7 +1014,7 @@ export const describeEventStoreConformance = (
 						const results = await withinTimeout(
 							Promise.allSettled(
 								Array.from({ length: CONCURRENT_WRITERS }, (_, writer) =>
-									store.appendEvents(stream, target, recordedEvents(2, seeded + 1, `writer-${writer}`), pool),
+									append(stream, recordedEvents(2, seeded + 1, `writer-${writer}`), seeded),
 								),
 							),
 							'Concurrent appends',
@@ -1132,7 +1126,9 @@ export const describeEventStoreConformance = (
 				'unknown-pool-append',
 				'rejects an append to a pool whose collection was never created, without creating it',
 				async () => {
-					const error = await rejectionOf(store.appendEvents(newEventStream(), 1, recordedEvents(1), unknownPool));
+					const error = await rejectionOf(
+						append(newEventStream(), recordedEvents(1), ExpectedVersion.NoStream, unknownPool),
+					);
 					expect(isEventSourcingError(error, EventSourcingErrorCode.EventStorePersistence)).toBe(true);
 					expect(error).toMatchObject({
 						code: EventSourcingErrorCode.EventStorePersistence,
@@ -1186,7 +1182,7 @@ export const describeEventStoreConformance = (
 				);
 
 				const stream = newEventStream();
-				await expect(store.appendEvents(stream, 2, recordedEvents(2), pool)).resolves.toHaveLength(2);
+				await expect(append(stream, recordedEvents(2), ExpectedVersion.NoStream)).resolves.toHaveLength(2);
 				expect((await drain(readEvents(stream))).map(seqOf)).toEqual([1, 2]);
 			});
 
@@ -1254,10 +1250,7 @@ export const describeEventStoreConformance = (
 					append(stream, recordedEvents(1, 3), ExpectedVersion.NoStream),
 					EventStoreVersionConflictException,
 				);
-				await expectRejectionOfClass(
-					store.appendEvents(stream, 2, recordedEvents(1, 2), pool),
-					EventStoreVersionConflictException,
-				);
+				await expectRejectionOfClass(append(stream, recordedEvents(1, 2), 1), EventStoreVersionConflictException);
 				expect(publisher.callsSince(mark)).toEqual([]);
 			});
 
@@ -1714,9 +1707,8 @@ export const describeEventStoreConformance = (
 				async () => {
 					const stream = newEventStream();
 					const nextEventId = EventId.factory();
-					await store.appendEvents(
+					await append(
 						stream,
-						3,
 						[
 							envelopeFor(stream, new ConformanceRecorded(1), 1, nextEventId()),
 							EventEnvelope.create(
@@ -1730,7 +1722,7 @@ export const describeEventStoreConformance = (
 							),
 							envelopeFor(stream, new ConformanceRecorded(3), 3, nextEventId()),
 						],
-						pool,
+						ExpectedVersion.NoStream,
 					);
 
 					for (let iteration = 0; iteration < LEAK_PROBE_ITERATIONS; iteration++) {
@@ -1769,7 +1761,7 @@ export const describeEventStoreConformance = (
 							expect((await drain(readEnvelopes(reference, { fromVersion: 7 }))).map(describeEnvelope)).toEqual([
 								describeEnvelope(referenceEnvelopes[6]),
 							]);
-							await store.appendEvents(stream, versions.length, recordedEvents(1, versions.length), pool);
+							await append(stream, recordedEvents(1, versions.length), versions.length - 1);
 						}
 					})(),
 					'Store calls made while reading',
@@ -1786,7 +1778,7 @@ export const describeEventStoreConformance = (
 				const stream = newEventStream();
 				const data = createJsonPayloadProbe();
 
-				await store.appendEvents(stream, 1, [new ConformancePayloadProbed(data)], pool);
+				await append(stream, [new ConformancePayloadProbed(data)], ExpectedVersion.NoStream);
 
 				const event = await call(() => store.getEvent(stream, 1, pool));
 				expect(event).toBeInstanceOf(ConformancePayloadProbed);
@@ -1804,7 +1796,7 @@ export const describeEventStoreConformance = (
 				const stream = newEventStream();
 				const { payload, expected } = createDatePayloadProbe();
 
-				await store.appendEvents(stream, 1, [new ConformancePayloadProbed(payload)], pool);
+				await append(stream, [new ConformancePayloadProbed(payload)], ExpectedVersion.NoStream);
 
 				expect((await call(() => store.getEnvelope(stream, 1, pool))).payload).toStrictEqual({ data: expected });
 				expect((await drain(readEnvelopes(stream)))[0].payload).toStrictEqual({ data: expected });

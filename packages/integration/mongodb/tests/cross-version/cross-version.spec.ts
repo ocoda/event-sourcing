@@ -76,7 +76,7 @@ const rowKey = ({ eventId, aggregateId, version }: { eventId: string; aggregateI
 	`${eventId} ${aggregateId} ${version}`;
 
 /**
- * The order the migration numbers a pool in (ADR 0001 D33): the rank `r` in 3.x's order (`getAllEnvelopes`, by
+ * The order the migration numbers a pool in (ADR 0001 D33): the rank `r` in the order 3.x read all events in (by
  * `eventDate, _id`; `_id` is unique, so there are no ties), and per stream the running maximum `key` of `r` by version;
  * the positions follow `(key, version)`.
  */

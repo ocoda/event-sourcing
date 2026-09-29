@@ -42,7 +42,8 @@ export interface EventStoreConformanceHandle<TStore extends EventStore<unknown> 
 	 */
 	cleanup(collections: IEventCollection[]): void | Promise<void>;
 	/**
-	 * Fault injection, for the cases that need it. Without it, those cases are skipped.
+	 * Fault injection, for the cases that need it. Without it, `append-atomic-partial-failure` fails for a store that
+	 * claims `atomicAppend` (the default): provide it, or skip that case with a reason.
 	 */
 	faults?: EventStoreFaults;
 }

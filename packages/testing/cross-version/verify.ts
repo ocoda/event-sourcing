@@ -1,4 +1,4 @@
-import type { EventEnvelope, EventStore, SnapshotStore } from '@ocoda/event-sourcing';
+import type { EventStore, SnapshotStore } from '@ocoda/event-sourcing';
 import { crossVersionEventStream, crossVersionSnapshotStream } from './domain.js';
 import {
 	type CrossVersionManifest,
@@ -7,7 +7,6 @@ import {
 	encodeEventEnvelope,
 	encodeSnapshotEnvelope,
 	encodeValue,
-	type LegacyOrderEntry,
 	type ManifestEventStream,
 	type ManifestSnapshotPool,
 	type ManifestSnapshotStream,
@@ -48,9 +47,10 @@ export const expectCompleteCorpus = (manifest: CrossVersionManifest): void => {
 	expect(manifest.snapshotPools.length, 'snapshot pools').toBeGreaterThanOrEqual(3);
 	for (const pool of manifest.eventPools) {
 		expect(pool.streams.length, `${pool.collection}: streams`).toBeGreaterThan(0);
-		expect(pool.legacyAllOrder, `${pool.collection}: getAllEnvelopes covered every written event`).toHaveLength(
-			pool.written.length,
-		);
+		expect(
+			pool.legacyAllOrder,
+			`${pool.collection}: the 3.x read of all events covered every written event`,
+		).toHaveLength(pool.written.length);
 		for (const stream of pool.streams) {
 			if (pool.caseVariantStreams.includes(stream.streamId)) continue;
 			const written = pool.written.filter(({ streamId }) => streamId === stream.streamId).length;
@@ -81,28 +81,6 @@ export const expectEventStreamReads = async (
 	expect.soft(envelopes.map(encodeEventEnvelope), `getEnvelopes(${stream.streamId})`).toEqual(stream.envelopes);
 	const events = await collect(store.getEvents(eventStream, { pool }));
 	expect.soft(events.map(encodeValue), `getEvents(${stream.streamId})`).toEqual(stream.events);
-};
-
-/**
- * `getAllEnvelopes` returns the pool in the order 3.x did (`event_date, event_id`). Entries that share an event id
- * (`tie`) may come in any order among themselves.
- */
-export const expectLegacyAllOrder = (envelopes: EventEnvelope[], expected: LegacyOrderEntry[]): void => {
-	const actual = envelopes.map(({ metadata }) => ({
-		eventId: metadata.eventId.value,
-		aggregateId: metadata.aggregateId,
-		version: metadata.version,
-	}));
-	const key = ({ eventId, aggregateId, version }: LegacyOrderEntry) => `${eventId} ${aggregateId} ${version}`;
-
-	expect(
-		actual.map(({ eventId }) => eventId),
-		'event ids in order',
-	).toEqual(expected.map(({ eventId }) => eventId));
-	expect(actual.map(key).sort(), 'the same rows').toEqual(expected.map(key).sort());
-	expect(actual.filter((_, index) => !expected[index].tie).map(key), 'the rows without ties in order').toEqual(
-		expected.filter(({ tie }) => !tie).map(key),
-	);
 };
 
 const versionOf = (envelope: EncodedSnapshotEnvelope | null): EncodedValue | undefined => {

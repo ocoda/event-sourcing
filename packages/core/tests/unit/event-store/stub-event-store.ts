@@ -8,6 +8,7 @@ import {
 	type IEventCollection,
 	type IEventFilter,
 	type IEventPool,
+	type IReadAllFilter,
 	type PersistOutcome,
 	type PersistTarget,
 } from '@ocoda/event-sourcing';
@@ -64,6 +65,15 @@ export class StubEventStore extends EventStore<unknown> {
 
 	async *getEnvelopes(stream: EventStream, filter?: IEventFilter): AsyncGenerator<EventEnvelope[]> {
 		const envelopes = this.stored.filter(({ metadata }) => metadata.aggregateId === stream.aggregateId);
+		const batch = filter?.batch || 100;
+		for (let index = 0; index < envelopes.length; index += batch) {
+			yield envelopes.slice(index, index + batch);
+		}
+	}
+
+	async *readAll(filter?: IReadAllFilter): AsyncGenerator<EventEnvelope[]> {
+		const from = filter?.fromPosition ?? 0n;
+		const envelopes = this.stored.filter(({ metadata }) => (metadata.globalPosition ?? 0n) >= from);
 		const batch = filter?.batch || 100;
 		for (let index = 0; index < envelopes.length; index += batch) {
 			yield envelopes.slice(index, index + batch);
