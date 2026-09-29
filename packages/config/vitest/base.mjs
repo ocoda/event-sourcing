@@ -12,6 +12,7 @@ export default {
 	// The options are repeated here (and take precedence over the tsconfig) so that a file no tsconfig covers
 	// still gets legacy decorators with the `design:paramtypes` metadata Nest DI needs, rather than TC39
 	// decorators, and TypeScript's useDefineForClassFields: false class-field semantics.
+	// packages/core/tests/unit/decorator-metadata.spec.ts guards this.
 	oxc: {
 		decorator: {
 			legacy: true,
