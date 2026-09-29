@@ -1,9 +1,9 @@
 import type { Type } from '@nestjs/common';
 import 'reflect-metadata';
-import { InvalidAggregateStreamNameException } from '../exceptions';
-import type { AggregateMetadata } from '../interfaces';
-import type { AggregateRoot } from '../models';
-import { AGGREGATE_METADATA } from './constants';
+import { InvalidAggregateStreamNameException } from '../exceptions/index.js';
+import type { AggregateMetadata } from '../interfaces/index.js';
+import type { AggregateRoot } from '../models/index.js';
+import { AGGREGATE_METADATA } from './constants.js';
 
 /**
  * Decorator that provides an aggregate with metadata.

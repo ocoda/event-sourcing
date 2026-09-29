@@ -1,5 +1,5 @@
 import { DomainException } from '@ocoda/event-sourcing';
-import type { BookId } from '../models';
+import type { BookId } from '../models/index.js';
 
 export class BookNotFoundException extends DomainException {
 	static withId(id: BookId): BookNotFoundException {

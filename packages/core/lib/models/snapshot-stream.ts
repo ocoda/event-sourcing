@@ -1,8 +1,8 @@
 import type { Type } from '@nestjs/common';
-import { MissingAggregateMetadataException } from '../exceptions';
-import { getAggregateMetadata } from '../helpers';
-import type { AggregateRoot } from './aggregate-root';
-import type { Id } from './id';
+import { MissingAggregateMetadataException } from '../exceptions/index.js';
+import { getAggregateMetadata } from '../helpers/index.js';
+import type { AggregateRoot } from './aggregate-root.js';
+import type { Id } from './id.js';
 
 export class SnapshotStream {
 	private constructor(

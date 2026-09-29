@@ -1,7 +1,7 @@
 import { type IQuery, type IQueryHandler, QueryHandler } from '@ocoda/event-sourcing';
-import { AccountId } from '../../domain/models';
-import { AccountDto } from '../account.dtos';
-import { AccountRepository } from '../repositories';
+import { AccountId } from '../../domain/models/index.js';
+import { AccountDto } from '../account.dtos.js';
+import { AccountRepository } from '../repositories/index.js';
 
 export class GetAccountsByIdsQuery implements IQuery {
 	constructor(public readonly accountIds: string[]) {}

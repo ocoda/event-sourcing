@@ -1,4 +1,4 @@
-import type { Id } from '../../models';
+import type { Id } from '../../models/index.js';
 
 export class IdNotFoundException extends Error {
 	/**

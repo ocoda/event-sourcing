@@ -1,3 +1,3 @@
-export type * from './interfaces';
-export * from './mongodb.event-store';
-export * from './mongodb.snapshot-store';
+export type * from './interfaces/index.js';
+export * from './mongodb.event-store.js';
+export * from './mongodb.snapshot-store.js';

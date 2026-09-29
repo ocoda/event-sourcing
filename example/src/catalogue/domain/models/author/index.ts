@@ -1,1 +1,1 @@
-export * from './author-id.vo';
+export * from './author-id.vo.js';

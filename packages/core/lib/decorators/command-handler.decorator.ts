@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import 'reflect-metadata';
-import type { CommandMetadata, ICommand } from '../interfaces';
-import { COMMAND_HANDLER_METADATA, COMMAND_METADATA } from './constants';
+import type { CommandMetadata, ICommand } from '../interfaces/index.js';
+import { COMMAND_HANDLER_METADATA, COMMAND_METADATA } from './constants.js';
 
 /**
  * Decorator that marks a class as a command handler. A command handler handles commands (actions) executed by your application code.

@@ -18,8 +18,8 @@ import {
 	StreamReadingDirection,
 } from '@ocoda/event-sourcing';
 import { type Collection, type Db, MongoClient } from 'mongodb';
-import type { MongoDBEventEntity, MongoDBEventStoreConfig } from './interfaces';
-import { batchCursor, isDuplicateKeyError } from './mongodb.utils';
+import type { MongoDBEventEntity, MongoDBEventStoreConfig } from './interfaces/index.js';
+import { batchCursor, isDuplicateKeyError } from './mongodb.utils.js';
 
 export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 	private client: MongoClient;

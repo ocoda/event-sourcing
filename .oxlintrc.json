@@ -51,7 +51,7 @@
 			}
 		},
 		{
-			"files": ["**/tests/**", "packages/testing/**"],
+			"files": ["**/tests/**", "packages/testing/**", "fixtures/**"],
 			"env": {
 				"vitest": true
 			},

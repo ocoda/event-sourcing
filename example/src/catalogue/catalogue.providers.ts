@@ -6,16 +6,16 @@ import type {
 	IQueryHandler,
 	SnapshotRepository,
 } from '@ocoda/event-sourcing';
-import { BookController } from './application/book.controller';
+import { BookController } from './application/book.controller.js';
 import {
 	AddBookAuthorCommandHandler,
 	AddBookCommandHandler,
 	RemoveBookAuthorCommandHandler,
 	RemoveBookCommandHandler,
-} from './application/commands';
-import { CustomEventPublisher } from './application/publishers';
-import { GetBookByIdQueryHandler } from './application/queries';
-import { BookRepository, BookSnapshotRepository } from './application/repositories';
+} from './application/commands/index.js';
+import { CustomEventPublisher } from './application/publishers/index.js';
+import { GetBookByIdQueryHandler } from './application/queries/index.js';
+import { BookRepository, BookSnapshotRepository } from './application/repositories/index.js';
 import {
 	BookAddedEvent,
 	BookAddedEventSubscriber,
@@ -23,7 +23,7 @@ import {
 	BookAuthorRemovedEvent,
 	BookRemovedEvent,
 	BookRemovedEventSubscriber,
-} from './domain/events';
+} from './domain/events/index.js';
 
 export const CommandHandlers: Type<ICommandHandler>[] = [
 	AddBookCommandHandler,

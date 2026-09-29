@@ -28,6 +28,13 @@ This core module needs to be implemented in conjunction with a store-driver such
 - `@ocoda/event-sourcing-mongodb`
 - `@ocoda/event-sourcing-postgres`
 
+## Installation
+```bash
+npm install @ocoda/event-sourcing
+```
+
+Requires Node.js 22.12 or later and NestJS 12. The package is ESM-only; CommonJS applications load it through `require()`, which Node.js supports for ES modules since 22.12.
+
 ## Documentation 📗
 Ready to dive right in? Visit [the documentation](https://ocoda.github.io/event-sourcing) to find out how to get started.
 

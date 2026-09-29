@@ -1,1 +1,1 @@
-export { DomainExceptionsFilter } from './loaning/application/exceptions/exception.filter';
+export { DomainExceptionsFilter } from './loaning/application/exceptions/exception.filter.js';

@@ -1,8 +1,8 @@
 import { type IQuery, type IQueryHandler, QueryHandler } from '@ocoda/event-sourcing';
-import { BookNotFoundException } from '../../domain/exceptions';
-import { BookId } from '../../domain/models';
-import { BookDto } from '../book.dtos';
-import { BookRepository } from '../repositories';
+import { BookNotFoundException } from '../../domain/exceptions/index.js';
+import { BookId } from '../../domain/models/index.js';
+import { BookDto } from '../book.dtos.js';
+import { BookRepository } from '../repositories/index.js';
 
 export class GetBookByIdQuery implements IQuery {
 	constructor(public readonly bookId: string) {}

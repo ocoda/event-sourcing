@@ -11,8 +11,8 @@
 		"benchmark:report": "node report-benchmark.js"
 	},
 	"dependencies": {
-		"@nestjs/common": "^11.1.6",
-		"@nestjs/core": "^11.1.6",
+		"@nestjs/common": "^12.1.1",
+		"@nestjs/core": "^12.1.1",
 		"@ocoda/event-sourcing": "workspace:*",
 		"@ocoda/event-sourcing-example": "workspace:*",
 		"@ocoda/event-sourcing-mariadb": "workspace:*",
@@ -24,7 +24,7 @@
 	"devDependencies": {
 		"@codechecks/client": "^0.1.12",
 		"@ocoda/event-sourcing-config": "workspace:*",
-		"@types/node": "20.17.6",
+		"@types/node": "22.20.4",
 		"artillery": "^2.0.24",
 		"tsup": "^8.5.0",
 		"typescript": "5.9.2"

@@ -1,6 +1,6 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
 import type { DomainException } from '@ocoda/event-sourcing';
-import { BookLoanNotFoundException } from '../../domain/exceptions';
+import { BookLoanNotFoundException } from '../../domain/exceptions/index.js';
 
 export class DomainHttpException extends HttpException {
 	static fromDomainException(error: DomainException): DomainHttpException {

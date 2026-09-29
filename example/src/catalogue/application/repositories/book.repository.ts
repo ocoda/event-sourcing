@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { EventStore, EventStream } from '@ocoda/event-sourcing';
-import { Book, BookId } from '../../domain/models';
-import { BookSnapshotRepository } from './book.snapshot-repository';
+import { Book, BookId } from '../../domain/models/index.js';
+import { BookSnapshotRepository } from './book.snapshot-repository.js';
 
 @Injectable()
 export class BookRepository {

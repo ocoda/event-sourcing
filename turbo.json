@@ -3,15 +3,9 @@
 	"agentGuidance": false,
 	"tasks": {
 		"build": {
-			"description": "Bundle lib/ into dist/ with tsup.",
+			"description": "Compile lib/ (src/ for the example) into per-file ESM in dist/ with tsc -p tsconfig.build.json.",
 			"dependsOn": ["^build"],
-			"inputs": [
-				"lib/**",
-				"tsconfig*.json",
-				"package.json",
-				"tsup.config.*",
-				"$TURBO_ROOT$/packages/config/typescript/**"
-			],
+			"inputs": ["lib/**", "src/**", "tsconfig*.json", "package.json", "$TURBO_ROOT$/packages/config/typescript/**"],
 			"outputs": ["dist/**"]
 		},
 		"typecheck": {

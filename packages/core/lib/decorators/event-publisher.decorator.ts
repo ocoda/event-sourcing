@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import 'reflect-metadata';
-import { EVENT_PUBLISHER_METADATA } from './constants';
+import { EVENT_PUBLISHER_METADATA } from './constants.js';
 
 /**
  * Decorator that marks a class as an event publisher. An event publisher is responsible for pushing events to topics, queues, etc.

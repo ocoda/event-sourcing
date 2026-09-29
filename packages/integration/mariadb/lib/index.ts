@@ -1,3 +1,3 @@
-export type * from './interfaces';
-export * from './mariadb.event-store';
-export * from './mariadb.snapshot-store';
+export type * from './interfaces/index.js';
+export * from './mariadb.event-store.js';
+export * from './mariadb.snapshot-store.js';

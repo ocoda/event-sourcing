@@ -1,5 +1,5 @@
 import type { Type } from '@nestjs/common';
-import type { IEvent } from '../interfaces';
+import type { IEvent } from '../interfaces/index.js';
 
 export class EventRegistry {
 	private static readonly events: Type<IEvent>[] = [];

@@ -1,5 +1,5 @@
-import type { StreamReadingDirection } from '../../constants';
-import type { IEventPool } from './event-pool.type';
+import type { StreamReadingDirection } from '../../constants.js';
+import type { IEventPool } from './event-pool.type.js';
 
 export interface IEventFilter {
 	/**

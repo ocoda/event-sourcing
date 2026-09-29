@@ -34,8 +34,8 @@ import {
 	recordedEvents,
 	uniquePoolName,
 	withinTimeout,
-} from './fixtures';
-import type { ConformanceStoreHandle } from './types';
+} from './fixtures.js';
+import type { ConformanceStoreHandle } from './types.js';
 
 /**
  * An event store with the optional envelope methods, which every store in this repository implements.

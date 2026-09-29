@@ -3,9 +3,11 @@
 	"display": "Ocoda Event Sourcing Module",
 	"extends": "./base.json",
 	"compilerOptions": {
+		// Type-check tests against core's sources. NodeNext ESM resolution does not resolve directories to their
+		// index file, so the targets name the index.ts files ('@ocoda/event-sourcing/services' → services/index.ts).
 		"paths": {
-			"@ocoda/event-sourcing": ["../../core/lib"],
-			"@ocoda/event-sourcing/*": ["../../core/lib/*"]
+			"@ocoda/event-sourcing": ["../../core/lib/index.ts"],
+			"@ocoda/event-sourcing/*": ["../../core/lib/*/index.ts", "../../core/lib/*.ts"]
 		}
 	}
 }

@@ -1,3 +1,3 @@
-export type * from './interfaces';
-export * from './postgres.event-store';
-export * from './postgres.snapshot-store';
+export type * from './interfaces/index.js';
+export * from './postgres.event-store.js';
+export * from './postgres.snapshot-store.js';

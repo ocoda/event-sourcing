@@ -1,2 +1,2 @@
-export * from './observable-bus';
-export * from './event-filter';
+export * from './observable-bus.js';
+export * from './event-filter.js';

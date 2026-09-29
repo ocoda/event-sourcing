@@ -20,8 +20,8 @@ import {
 	getAggregateMetadata,
 } from '@ocoda/event-sourcing';
 import { type Connection, type Pool, createPool } from 'mariadb';
-import type { MariaDBSnapshotEntity, MariaDBSnapshotStoreConfig } from './interfaces';
-import { isDuplicateEntryError, streamRows } from './mariadb.utils';
+import type { MariaDBSnapshotEntity, MariaDBSnapshotStoreConfig } from './interfaces/index.js';
+import { isDuplicateEntryError, streamRows } from './mariadb.utils.js';
 
 export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConfig> {
 	private pool: Pool;

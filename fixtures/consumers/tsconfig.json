@@ -1,0 +1,18 @@
+{
+	// A typical strict NestJS 12 application config. scripts/test-consumers.mjs compiles the same source as ESM and as
+	// CommonJS by switching the "type" of the generated package.json; NodeNext picks the output format from it.
+	"compilerOptions": {
+		"module": "nodenext",
+		"moduleResolution": "nodenext",
+		"target": "es2023",
+		"lib": ["es2023"],
+		"types": ["node"],
+		"strict": true,
+		"experimentalDecorators": true,
+		"emitDecoratorMetadata": true,
+		"skipLibCheck": false,
+		"rootDir": "src",
+		"outDir": "dist"
+	},
+	"include": ["src"]
+}

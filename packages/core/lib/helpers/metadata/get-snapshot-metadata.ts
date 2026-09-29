@@ -1,7 +1,7 @@
 import type { Type } from '@nestjs/common';
-import { SNAPSHOT_METADATA } from '../../decorators';
-import type { ISnapshotRepository, SnapshotRepositoryMetadata } from '../../interfaces';
-import type { AggregateRoot } from '../../models';
+import { SNAPSHOT_METADATA } from '../../decorators/index.js';
+import type { ISnapshotRepository, SnapshotRepositoryMetadata } from '../../interfaces/index.js';
+import type { AggregateRoot } from '../../models/index.js';
 
 export const getSnapshotMetadata = <A extends AggregateRoot>(
 	snapshotRepository: Type<ISnapshotRepository<A>>,

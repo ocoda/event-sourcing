@@ -1,5 +1,5 @@
 import { Inject } from '@nestjs/common';
-import { getOptionsToken } from '../event-sourcing.providers';
+import { getOptionsToken } from '../event-sourcing.providers.js';
 
 /**
  * Decorator that injects the options used to configure the EventSourcingModule.

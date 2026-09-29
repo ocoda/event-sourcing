@@ -1,16 +1,16 @@
 import { type DynamicModule, Module, type Type } from '@nestjs/common';
 import { DiscoveryModule } from '@nestjs/core';
 
-import { EventSourcingCoreModule, EventSourcingFeatureModule } from './event-sourcing.core.module';
-import type { InMemoryEventStoreConfig, InMemorySnapshotStoreConfig } from './integration';
+import { EventSourcingCoreModule, EventSourcingFeatureModule } from './event-sourcing.core.module.js';
+import type { InMemoryEventStoreConfig, InMemorySnapshotStoreConfig } from './integration/index.js';
 import type {
 	EventSourcingModuleAsyncOptions,
 	EventSourcingModuleOptions,
 	EventStoreConfig,
 	IEvent,
 	SnapshotStoreConfig,
-} from './interfaces';
-import { EventRegistry } from './registries';
+} from './interfaces/index.js';
+import { EventRegistry } from './registries/index.js';
 
 @Module({})
 export class EventSourcingModule {

@@ -1,7 +1,7 @@
 import { CommandHandler, type ICommand, type ICommandHandler } from '@ocoda/event-sourcing';
-import { BookNotFoundException } from '../../domain/exceptions';
-import { BookId } from '../../domain/models';
-import { BookRepository } from '../repositories';
+import { BookNotFoundException } from '../../domain/exceptions/index.js';
+import { BookId } from '../../domain/models/index.js';
+import { BookRepository } from '../repositories/index.js';
 
 export class RemoveBookCommand implements ICommand {
 	constructor(

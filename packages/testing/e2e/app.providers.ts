@@ -13,7 +13,7 @@ import {
 	OpenAccountCommandHandler,
 	RemoveAccountOwnerCommandHandler,
 	TransferBetweenAccountsCommandHandler,
-} from './application';
+} from './application/index.js';
 import {
 	AccountClosedEvent,
 	AccountClosedEventSubscriber,
@@ -27,7 +27,7 @@ import {
 	AccountTransferFailedEvent,
 	AccountTransferSucceededEvent,
 	AccountTransferSucceededEventSubscriber,
-} from './domain';
+} from './domain/index.js';
 
 export const CommandHandlers: Type<ICommandHandler>[] = [
 	AddAccountOwnerCommandHandler,

@@ -1,6 +1,6 @@
 import { type IQuery, type IQueryHandler, QueryHandler } from '@ocoda/event-sourcing';
-import { AccountDto } from '../account.dtos';
-import { AccountRepository } from '../repositories';
+import { AccountDto } from '../account.dtos.js';
+import { AccountRepository } from '../repositories/index.js';
 
 export class GetAccountsQuery implements IQuery {}
 

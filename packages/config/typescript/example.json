@@ -3,11 +3,16 @@
 	"display": "Ocoda Event Sourcing Example",
 	"extends": "./base.json",
 	"compilerOptions": {
+		// Type-check the example against the library sources. NodeNext ESM resolution does not resolve directories to
+		// their index file, so the targets name the index.ts files.
 		"paths": {
-			"@ocoda/event-sourcing": ["../../core/lib"],
-			"@ocoda/event-sourcing/*": ["../../core/lib/*"],
-			"@ocoda/event-sourcing-mongodb": ["../../integration/mongodb/lib"],
-			"@ocoda/event-sourcing-mongodb/*": ["../../integration/mongodb/lib/*"]
+			"@ocoda/event-sourcing": ["../../core/lib/index.ts"],
+			"@ocoda/event-sourcing/*": ["../../core/lib/*/index.ts", "../../core/lib/*.ts"],
+			"@ocoda/event-sourcing-mongodb": ["../../integration/mongodb/lib/index.ts"],
+			"@ocoda/event-sourcing-mongodb/*": [
+				"../../integration/mongodb/lib/*/index.ts",
+				"../../integration/mongodb/lib/*.ts"
+			]
 		}
 	}
 }

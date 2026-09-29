@@ -1,6 +1,6 @@
 import { monotonicFactory, ulid } from 'ulidx';
-import { InvalidIdException } from '../exceptions';
-import { ULID } from './ulid';
+import { InvalidIdException } from '../exceptions/index.js';
+import { ULID } from './ulid.js';
 
 /**
  * Represents an event identifier.

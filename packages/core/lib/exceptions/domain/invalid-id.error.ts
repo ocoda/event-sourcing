@@ -1,4 +1,4 @@
-import { DomainException } from './domain-error';
+import { DomainException } from './domain-error.js';
 
 export class InvalidIdException extends DomainException {
 	/**

@@ -1,0 +1,8 @@
+{
+	"extends": "@ocoda/event-sourcing-config/typescript/build.json",
+	"compilerOptions": {
+		// Compiles against the built packages in node_modules rather than their sources.
+		"rootDir": "src"
+	},
+	"include": ["src/**/*.ts"]
+}

@@ -1,0 +1,3 @@
+{
+	"extends": "@ocoda/event-sourcing-config/typescript/build.json"
+}

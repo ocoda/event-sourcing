@@ -1,8 +1,8 @@
 import { type IQuery, type IQueryHandler, QueryHandler } from '@ocoda/event-sourcing';
-import { BookLoanNotFoundException } from '../../domain/exceptions';
-import { BookLoanId } from '../../domain/models';
-import { BookLoanDto } from '../book-loan.dtos';
-import { BookLoanRepository } from '../repositories';
+import { BookLoanNotFoundException } from '../../domain/exceptions/index.js';
+import { BookLoanId } from '../../domain/models/index.js';
+import { BookLoanDto } from '../book-loan.dtos.js';
+import { BookLoanRepository } from '../repositories/index.js';
 
 export class GetBookLoanByIdQuery implements IQuery {
 	constructor(public readonly bookLoanId: string) {}

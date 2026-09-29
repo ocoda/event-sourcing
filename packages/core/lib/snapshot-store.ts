@@ -8,8 +8,8 @@ import type {
 	ISnapshotFilter,
 	ISnapshotPool,
 	SnapshotStoreDriver,
-} from './interfaces';
-import type { AggregateRoot, SnapshotEnvelope, SnapshotStream } from './models';
+} from './interfaces/index.js';
+import type { AggregateRoot, SnapshotEnvelope, SnapshotStream } from './models/index.js';
 
 export abstract class SnapshotStore<
 	TOptions = Omit<EventSourcingModuleOptions['snapshotStore'], 'driver'>,

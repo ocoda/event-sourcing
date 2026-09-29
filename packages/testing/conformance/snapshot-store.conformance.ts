@@ -28,8 +28,8 @@ import {
 	newSnapshotStream,
 	uniquePoolName,
 	withinTimeout,
-} from './fixtures';
-import type { ConformanceStoreHandle } from './types';
+} from './fixtures.js';
+import type { ConformanceStoreHandle } from './types.js';
 
 /**
  * A snapshot store with the optional envelope and bulk methods, which every store in this repository implements.

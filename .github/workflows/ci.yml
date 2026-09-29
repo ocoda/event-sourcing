@@ -47,6 +47,8 @@ jobs:
               - docker-compose.yml
               - .github/workflows/ci.yml
               - .github/actions/**
+              - scripts/**
+              - fixtures/**
             core:
               - packages/core/**
               - packages/testing/**
@@ -145,6 +147,9 @@ jobs:
       - name: Lint and format (packages, example)
         run: pnpm run ci --filter="./packages/**" --filter=@ocoda/event-sourcing-example
 
+      - name: Lint and format (scripts, fixtures)
+        run: pnpm exec oxlint --deny-warnings scripts fixtures && pnpm exec oxfmt --check scripts fixtures
+
       - name: Typecheck
         run: pnpm typecheck
 
@@ -173,6 +178,13 @@ jobs:
 
       - name: Build packages
         run: pnpm build --filter="./packages/**"
+
+      - name: Check package shape (publint, attw)
+        if: ${{ matrix.node-version == '24.x' }}
+        run: pnpm check:packages
+
+      - name: Test consumer applications (ESM, and CommonJS through require(esm))
+        run: pnpm test:consumers
 
   test-core:
     name: Test core [Node.js ${{ matrix.node-version }}]

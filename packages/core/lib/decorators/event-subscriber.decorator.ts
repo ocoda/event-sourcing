@@ -1,6 +1,6 @@
 import 'reflect-metadata';
-import type { IEvent } from '../interfaces';
-import { EVENT_SUBSCRIBER_METADATA } from './constants';
+import type { IEvent } from '../interfaces/index.js';
+import { EVENT_SUBSCRIBER_METADATA } from './constants.js';
 
 /**
  * Decorator that marks a class as an event subscriber. An event-subscriber handles events that took place in your application.

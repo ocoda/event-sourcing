@@ -8,6 +8,10 @@ This library consists of a core module `@ocoda/event-sourcing` that provides the
 
 By default the core library will use an in-memory event- and snapshot-store, which is useful for testing and prototyping, but not recommended for production use.
 
+The packages require Node.js 22.12 or later and NestJS 12. They are published as ES modules only: CommonJS applications can keep using `require()` (or TypeScript's CommonJS output), which Node.js supports for ES modules since 22.12.
+
+The database drivers are peer dependencies of the integration libraries, so you install the driver next to the integration and choose its version yourself. TypeScript projects using PostgreSQL also need `@types/pg` and `@types/pg-cursor`.
+
 <Steps>
 
 1. ### Install the core module:
@@ -43,15 +47,15 @@ By default the core library will use an in-memory event- and snapshot-store, whi
 
    **MariaDB**
    ```bash
-   pnpm add @ocoda/event-sourcing-mariadb
+   pnpm add @ocoda/event-sourcing-mariadb mariadb
    ```
    **MongoDB**
    ```bash
-   pnpm add @ocoda/event-sourcing-mongodb
+   pnpm add @ocoda/event-sourcing-mongodb mongodb
    ```
    **PostgreSQL**
    ```bash
-   pnpm add @ocoda/event-sourcing-postgres
+   pnpm add @ocoda/event-sourcing-postgres pg pg-cursor
    ```
 
    </TabItem>
@@ -59,15 +63,15 @@ By default the core library will use an in-memory event- and snapshot-store, whi
 
    **MariaDB**
    ```bash
-   npm install @ocoda/event-sourcing-mariadb
+   npm install @ocoda/event-sourcing-mariadb mariadb
    ```
    **MongoDB**
    ```bash
-   npm install @ocoda/event-sourcing-mongodb
+   npm install @ocoda/event-sourcing-mongodb mongodb
    ```
    **PostgreSQL**
    ```bash
-   npm install @ocoda/event-sourcing-postgres
+   npm install @ocoda/event-sourcing-postgres pg pg-cursor
    ```
 
    </TabItem>
@@ -75,22 +79,22 @@ By default the core library will use an in-memory event- and snapshot-store, whi
 
    **MariaDB**
    ```bash
-   yarn add @ocoda/event-sourcing-mariadb
+   yarn add @ocoda/event-sourcing-mariadb mariadb
    ```
    **MongoDB**
    ```bash
-   yarn add @ocoda/event-sourcing-mongodb
+   yarn add @ocoda/event-sourcing-mongodb mongodb
    ```
    **PostgreSQL**
    ```bash
-   yarn add @ocoda/event-sourcing-postgres
+   yarn add @ocoda/event-sourcing-postgres pg pg-cursor
    ```
 
    </TabItem>
    </Tabs>
 
    <Aside title="DynamoDB">
-   The DynamoDB store is not part of 4.0: DynamoDB can't give the events a gap-free global order, which the 4.0 read side relies on. It remains available on the 3.x line, which still receives fixes, as `@ocoda/event-sourcing-dynamodb@3`.
+   The DynamoDB store is not part of 4.0: DynamoDB can't give the events a gap-free global order, which the 4.0 read side relies on. It remains available on the 3.x line (NestJS 11, CommonJS), which still receives fixes: install `@ocoda/event-sourcing@3` with `@ocoda/event-sourcing-dynamodb@3`. On 3.x the AWS SDK clients ship as dependencies of the integration, so there is no driver peer to add.
    </Aside>
 
 </Steps>

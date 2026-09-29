@@ -1,4 +1,4 @@
-import type { IEventPool } from './event-pool.type';
+import type { IEventPool } from './event-pool.type.js';
 
 export interface EventStoreDriver {
 	connect(): void | Promise<void>;

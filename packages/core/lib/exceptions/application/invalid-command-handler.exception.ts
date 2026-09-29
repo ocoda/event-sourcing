@@ -1,4 +1,4 @@
-import type { ICommandHandler } from '../../interfaces';
+import type { ICommandHandler } from '../../interfaces/index.js';
 
 export class InvalidCommandHandlerException extends Error {
 	constructor(commandHandler: ICommandHandler) {

@@ -6,9 +6,9 @@ import {
 	MissingQueryHandlerMetadataException,
 	MissingQueryMetadataException,
 	QueryHandlerNotFoundException,
-} from './exceptions';
-import { DefaultQueryPubSub, ObservableBus, getQueryHandlerMetadata, getQueryMetadata } from './helpers';
-import type { IQuery, IQueryBus, IQueryHandler, IQueryPublisher, ProviderWrapper } from './interfaces';
+} from './exceptions/index.js';
+import { DefaultQueryPubSub, ObservableBus, getQueryHandlerMetadata, getQueryMetadata } from './helpers/index.js';
+import type { IQuery, IQueryBus, IQueryHandler, IQueryPublisher, ProviderWrapper } from './interfaces/index.js';
 
 @Injectable()
 export class QueryBus<QueryBase extends IQuery = IQuery>

@@ -1,5 +1,5 @@
-import type { EventEnvelopeMetadata, IEvent, IEventPayload } from '../interfaces';
-import { EventId } from './event-id';
+import type { EventEnvelopeMetadata, IEvent, IEventPayload } from '../interfaces/index.js';
+import { EventId } from './event-id.js';
 
 export class EventEnvelope<E extends IEvent = IEvent> {
 	private constructor(

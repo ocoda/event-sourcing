@@ -3,10 +3,10 @@
 	"compilerOptions": {
 		"types": ["node", "vitest/globals"],
 		"paths": {
-			"@ocoda/event-sourcing": ["../../core/lib"],
-			"@ocoda/event-sourcing/*": ["../../core/lib/*"],
-			"@ocoda/event-sourcing-postgres": ["../../integration/postgres/lib"],
-			"@ocoda/event-sourcing-postgres/*": ["../../integration/postgres/lib/*"]
+			"@ocoda/event-sourcing": ["../../core/lib/index.ts"],
+			"@ocoda/event-sourcing/*": ["../../core/lib/*/index.ts", "../../core/lib/*.ts"],
+			"@ocoda/event-sourcing-postgres": ["./lib/index.ts"],
+			"@ocoda/event-sourcing-postgres/*": ["./lib/*/index.ts", "./lib/*.ts"]
 		}
 	},
 	"include": ["lib/**/*.ts", "tests/**/*.ts"]

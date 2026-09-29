@@ -1,1 +1,1 @@
-export * from './custom.event-publisher';
+export * from './custom.event-publisher.js';

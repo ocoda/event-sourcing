@@ -1,4 +1,4 @@
-import type { Id } from '../../models';
+import type { Id } from '../../models/index.js';
 
 export abstract class DomainException extends Error {
 	protected constructor(

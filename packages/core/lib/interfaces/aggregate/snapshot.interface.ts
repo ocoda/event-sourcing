@@ -1,4 +1,4 @@
-import type { AggregateRoot } from '../../models';
+import type { AggregateRoot } from '../../models/index.js';
 
 type AggregatePropertyNames<T> = {
 	[Key in keyof T]: T[Key] extends Function ? never : Key;

@@ -1,5 +1,5 @@
 import type { Type } from '@nestjs/common';
-import type { EventStoreDriver } from './event-store.interface';
+import type { EventStoreDriver } from './event-store.interface.js';
 
 export interface EventStoreConfig {
 	driver: Type<EventStoreDriver>;

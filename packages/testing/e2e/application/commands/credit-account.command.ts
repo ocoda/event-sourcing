@@ -1,6 +1,6 @@
 import { CommandHandler, type ICommand, type ICommandHandler } from '@ocoda/event-sourcing';
-import { AccountId } from '../../domain/models';
-import { AccountRepository } from '../repositories';
+import { AccountId } from '../../domain/models/index.js';
+import { AccountRepository } from '../repositories/index.js';
 
 export class CreditAccountCommand implements ICommand {
 	constructor(

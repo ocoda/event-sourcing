@@ -7,8 +7,8 @@ import {
 	AccountOwnerNotFoundException,
 	AccountTransferFailedEvent,
 	AccountTransferSucceededEvent,
-} from '../../domain';
-import { AccountRepository } from '../repositories';
+} from '../../domain/index.js';
+import { AccountRepository } from '../repositories/index.js';
 
 export class TransferBetweenAccountsCommand implements ICommand {
 	constructor(

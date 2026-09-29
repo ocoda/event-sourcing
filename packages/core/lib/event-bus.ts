@@ -2,11 +2,11 @@ import { Injectable, Logger, type OnModuleDestroy, type Type } from '@nestjs/com
 import { EMPTY, type Observable, type Subscription, defer } from 'rxjs';
 import { catchError, filter, mergeMap } from 'rxjs/operators';
 
-import { MissingEventMetadataException, MissingEventSubscriberMetadataException } from './exceptions';
-import { ObservableBus, getEventMetadata, getEventSubscriberMetadata } from './helpers';
-import { DefaultEventPubSub } from './helpers/default-event-publisher';
-import type { IEventBus, IEventPublisher, IEventSubscriber, ProviderWrapper } from './interfaces';
-import type { EventEnvelope } from './models';
+import { MissingEventMetadataException, MissingEventSubscriberMetadataException } from './exceptions/index.js';
+import { DefaultEventPubSub } from './helpers/default-event-publisher.js';
+import { ObservableBus, getEventMetadata, getEventSubscriberMetadata } from './helpers/index.js';
+import type { IEventBus, IEventPublisher, IEventSubscriber, ProviderWrapper } from './interfaces/index.js';
+import type { EventEnvelope } from './models/index.js';
 
 const logger = new Logger('EventBus');
 

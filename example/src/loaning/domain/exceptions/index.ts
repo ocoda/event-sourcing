@@ -1,1 +1,1 @@
-export * from './book-loan-not-found.exception';
+export * from './book-loan-not-found.exception.js';

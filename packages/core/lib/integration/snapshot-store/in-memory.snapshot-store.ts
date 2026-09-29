@@ -1,12 +1,12 @@
 import type { Type } from '@nestjs/common';
-import { DEFAULT_BATCH_SIZE, StreamReadingDirection } from '../../constants';
+import { DEFAULT_BATCH_SIZE, StreamReadingDirection } from '../../constants.js';
 import {
 	SnapshotNotFoundException,
 	SnapshotStoreCollectionCreationException,
 	SnapshotStorePersistenceException,
 	SnapshotStoreVersionConflictException,
-} from '../../exceptions';
-import { getAggregateMetadata } from '../../helpers';
+} from '../../exceptions/index.js';
+import { getAggregateMetadata } from '../../helpers/index.js';
 import type {
 	ILatestSnapshotFilter,
 	ISnapshot,
@@ -16,9 +16,9 @@ import type {
 	ISnapshotPool,
 	SnapshotEnvelopeMetadata,
 	SnapshotStoreConfig,
-} from '../../interfaces';
-import { type AggregateRoot, SnapshotCollection, SnapshotEnvelope, type SnapshotStream } from '../../models';
-import { SnapshotStore } from '../../snapshot-store';
+} from '../../interfaces/index.js';
+import { type AggregateRoot, SnapshotCollection, SnapshotEnvelope, type SnapshotStream } from '../../models/index.js';
+import { SnapshotStore } from '../../snapshot-store.js';
 
 export type InMemorySnapshotEntity<A extends AggregateRoot> = {
 	streamId: string;

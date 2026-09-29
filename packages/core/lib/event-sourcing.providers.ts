@@ -1,18 +1,18 @@
 import type { InjectionToken, OptionalFactoryDependency, Provider } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
-import { EVENT_SOURCING_OPTIONS } from './constants';
-import { EventMap } from './event-map';
-import { EventStore } from './event-store';
-import { InMemoryEventStore, type InMemoryEventStoreConfig } from './integration/event-store';
-import { InMemorySnapshotStore, type InMemorySnapshotStoreConfig } from './integration/snapshot-store';
+import { EVENT_SOURCING_OPTIONS } from './constants.js';
+import { EventMap } from './event-map.js';
+import { EventStore } from './event-store.js';
+import { InMemoryEventStore, type InMemoryEventStoreConfig } from './integration/event-store/index.js';
+import { InMemorySnapshotStore, type InMemorySnapshotStoreConfig } from './integration/snapshot-store/index.js';
 import type {
 	EventSourcingModuleAsyncOptions,
 	EventSourcingModuleOptions,
 	EventSourcingOptionsFactory,
 	EventStoreConfig,
 	SnapshotStoreConfig,
-} from './interfaces';
-import { SnapshotStore } from './snapshot-store';
+} from './interfaces/index.js';
+import { SnapshotStore } from './snapshot-store.js';
 
 export const EventStoreProvider = {
 	provide: EventStore,

@@ -1,0 +1,16 @@
+{
+	"$schema": "https://json.schemastore.org/tsconfig",
+	"display": "Ocoda Event Sourcing Build",
+	"extends": "./base.json",
+	"compilerOptions": {
+		// Per-file ESM emit of lib/ into dist/, no bundler. Other workspace packages resolve through node_modules to
+		// their built dist/, so there are no paths here.
+		"rootDir": "${configDir}/lib",
+		"outDir": "${configDir}/dist",
+		"declaration": true,
+		"declarationMap": true,
+		"sourceMap": true,
+		"types": ["node"]
+	},
+	"include": ["${configDir}/lib/**/*.ts"]
+}

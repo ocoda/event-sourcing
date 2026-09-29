@@ -27,8 +27,6 @@
 		"**/*.mdx",
 		"**/*.yml",
 		"**/*.yaml",
-		"packages/core/index.js",
-		"packages/integration/*/index.js",
 		"benchmarks/report"
 	]
 }

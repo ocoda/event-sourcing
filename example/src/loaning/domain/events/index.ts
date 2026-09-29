@@ -1,1 +1,1 @@
-export * from './book-loan';
+export * from './book-loan/index.js';

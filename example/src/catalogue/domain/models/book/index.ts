@@ -1,3 +1,3 @@
-export * from './book-id.vo';
-export * from './book.aggregate';
-export * from './isbn.vo';
+export * from './book-id.vo.js';
+export * from './book.aggregate.js';
+export * from './isbn.vo.js';

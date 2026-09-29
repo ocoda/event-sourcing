@@ -6,8 +6,8 @@ import {
 	MongoDBSnapshotStore,
 	type MongoDBSnapshotStoreConfig,
 } from '@ocoda/event-sourcing-mongodb';
-import { CatalogueModule } from './catalogue/catalogue.module';
-import { LoaningModule } from './loaning/loaning.module';
+import { CatalogueModule } from './catalogue/catalogue.module.js';
+import { LoaningModule } from './loaning/loaning.module.js';
 
 @Module({
 	imports: [

@@ -3,6 +3,14 @@
 	"version": "1.0.0",
 	"private": true,
 	"license": "MIT",
+	"type": "module",
+	"exports": {
+		"./conformance": "./conformance/index.ts",
+		"./e2e": "./e2e/index.ts",
+		"./e2e/application": "./e2e/application/index.ts",
+		"./e2e/domain": "./e2e/domain/index.ts",
+		"./unit": "./unit/index.ts"
+	},
 	"scripts": {
 		"ci": "oxlint --deny-warnings && oxfmt --check",
 		"format": "oxfmt",
@@ -12,8 +20,8 @@
 	},
 	"devDependencies": {
 		"@ocoda/event-sourcing-config": "workspace:*",
-		"@types/node": "22.13.4",
-		"typescript": "5.9.2",
+		"@types/node": "22.20.4",
+		"typescript": "7.0.2",
 		"vitest": "5.0.2"
 	},
 	"peerDependencies": {
