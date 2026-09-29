@@ -12,7 +12,6 @@ import {
 	UUID,
 	eventFilter,
 } from '@ocoda/event-sourcing';
-import { COMMAND_METADATA } from '@ocoda/event-sourcing/decorators';
 import { config } from 'rxjs';
 import type { Mock, MockInstance } from 'vitest';
 
@@ -243,10 +242,9 @@ describe('EventBus isolation', () => {
 
 		it('emits executed commands when subscribing to the command bus itself', async () => {
 			class OpenAccountCommand implements ICommand {}
-			Reflect.defineMetadata(COMMAND_METADATA, { id: 'isolation-open-account' }, OpenAccountCommand);
 
 			const bus = new CommandBus();
-			bus.bind({ execute: async () => 'opened' }, 'isolation-open-account');
+			bus.bind({ execute: async () => 'opened' }, OpenAccountCommand);
 
 			const received: ICommand[] = [];
 			const subscription = bus.subscribe((command) => received.push(command));

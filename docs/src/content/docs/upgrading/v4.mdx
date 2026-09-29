@@ -209,6 +209,57 @@ On MariaDB, `getLastEnvelopesForAggregate`, and so `SnapshotRepository.loadAll`,
 
 This reverses the order of `loadAll` on MariaDB, and a `limit` now returns the streams with the highest stream ids instead of the lowest. If you relied on the old order, sort the results yourself. This change is not in 3.x.
 
+## Typed command and query buses [#typed-buses]
+
+<Aside type="note" title="Not released yet">
+The changes in this section ship in a later 4.0 prerelease. The design is in [ADR 0001](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0001-v4-core-api.md#7-typed-buses).
+</Aside>
+
+`commandBus.execute()` and `queryBus.execute()` take their result type from the command or query, and reject instead of throwing.
+
+- **`Command<TResult>` and `Query<TResult>`** are new base classes. For `OpenAccountCommand extends Command<AccountId>`, `commandBus.execute(new OpenAccountCommand())` resolves to an `AccountId` without a type argument, `ICommandHandler<OpenAccountCommand>` resolves to it, and `@CommandHandler(OpenAccountCommand)` rejects a handler whose `execute()` resolves to something else. `Command` without a type argument is `Command<void>`, and `Query` needs one. The result type exists for the compiler only: the classes add no property, so the payloads are unchanged. `ResultOf<T>` is the result type of a command or query class.
+- **3.x commands and queries keep compiling.** A class that doesn't extend `Command` or `Query` still works, and `execute()` resolves to `any` for it. Both 3.x generic forms compile: `execute<AddBookCommand>(command)` resolves to `any`, and `execute<OpenAccountCommand, AccountId>(command)` to an `AccountId`. The result type is not inferred from the variable it is assigned to, so `const id: Promise<string> = commandBus.execute(new OpenAccountCommand())` is a compile error for a typed command.
+- **TypeScript 5.4 or later.** The type declarations of `execute()` use `NoInfer`, which TypeScript 5.4 introduced. An older compiler reports `Cannot find name 'NoInfer'`, or, with `skipLibCheck`, types every result as `any`.
+- **`ICommand` and `IQuery` are `object`**, not `any`, so a primitive, `null` or `undefined` no longer type-checks as a command or query. Neither does a value typed `unknown` or an unconstrained type parameter: constrain it, as in `dispatch<C extends ICommand>(command: C)`.
+- **`execute()` rejects instead of throwing.** A command or query without a handler rejects with a `CommandHandlerNotFoundException` or `QueryHandlerNotFoundException` and publishes nothing, and a handler that throws synchronously rejects too.
+- **Handlers are registered by class.** The buses route a command or query to the handler registered for its class or, if there is none, for its nearest parent class. A subclass without a handler of its own still reaches the handler of its parent, as in 3.x. 3.x routed by an id that `@CommandHandler()` and `@QueryHandler()` store on the class, and a subclass inherited that id: when a class and its subclass both had a handler, the handler registered last handled both. Each now reaches its own handler. A class that no handler was ever declared for rejects with the not-found exception, not with a `MissingCommandMetadataException` or `MissingQueryMetadataException`. Those two exceptions, `getCommandMetadata()`, `getQueryMetadata()`, `CommandMetadata` and `QueryMetadata` are deprecated and will be removed in 5.0. `commandBus.bind(handler, command)` and `queryBus.bind(handler, query)` take the class instead of the id.
+- **The decorators take classes.** `@CommandHandler()`, `@QueryHandler()`, `@EventSubscriber()` and `@EventSerializer()` no longer accept other values, and the class you pass needs a public constructor. `@CommandHandler()` and `@QueryHandler()` also check the class they decorate: it needs an `execute()` method that returns a promise. They return a decorator typed for the handler class instead of a `ClassDecorator`, so `applyDecorators()` of `@nestjs/common` doesn't accept them under `strictFunctionTypes`. Apply them directly, or cast them: `CommandHandler(OpenAccountCommand) as ClassDecorator`, which skips the check of the result type.
+- `execute()` takes an optional second argument, `{ request }`, for request-scoped handlers. It is ignored until they arrive in a later prerelease.
+
+To migrate:
+
+1. Assert the failures of `execute()` as rejections, for example in tests:
+
+   ```ts
+   // 3.x
+   expect(() => commandBus.execute(new UnhandledCommand())).toThrow(CommandHandlerNotFoundException);
+   // 4.0
+   await expect(commandBus.execute(new UnhandledCommand())).rejects.toThrow(CommandHandlerNotFoundException);
+   ```
+
+2. Where you catch a `MissingCommandMetadataException` or `MissingQueryMetadataException`, catch the not-found exception, or match `EventSourcingErrorCode.CommandHandlerNotFound` and `EventSourcingErrorCode.QueryHandlerNotFound`.
+3. Where a command or query class and its subclass both have a handler, check that each handler expects only its own class: 3.x ran the handler registered last for both.
+4. Make the `execute()` of every decorated handler return a promise, for example by making it `async`.
+5. Fix the compile errors of code that passed other values: constrain the type parameters you pass to `execute()`, make the constructors of command and query classes public (a private constructor with a static factory doesn't type-check), and cast `@CommandHandler()` and `@QueryHandler()` where you pass them to `applyDecorators()`.
+6. Optionally, extend `Command` and `Query`, and drop the type arguments of `execute()`. A constructor then calls `super()`:
+
+   ```ts
+   // 3.x
+   export class OpenAccountCommand implements ICommand {
+   	constructor(public readonly accountOwnerIds?: string[]) {}
+   }
+   const accountId = await commandBus.execute<OpenAccountCommand, AccountId>(new OpenAccountCommand());
+   // 4.0
+   export class OpenAccountCommand extends Command<AccountId> {
+   	constructor(public readonly accountOwnerIds?: string[]) {
+   		super();
+   	}
+   }
+   const accountId = await commandBus.execute(new OpenAccountCommand());
+   ```
+
+   In a file that also imports the `@Query()` decorator of `@nestjs/common`, import one of the two under another name, such as `import { Query as QueryParam } from '@nestjs/common'`.
+
 ## Event store, snapshots and schema v2 [#store-and-schema]
 
 <Aside type="note" title="Not released yet">

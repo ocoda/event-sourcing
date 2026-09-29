@@ -4,6 +4,7 @@ export * from './event-envelope.js';
 export * from './event-id.js';
 export * from './event-stream.js';
 export * from './id.js';
+export * from './message.js';
 export * from './snapshot-collection.js';
 export * from './snapshot-envelope.js';
 export * from './snapshot-stream.js';
