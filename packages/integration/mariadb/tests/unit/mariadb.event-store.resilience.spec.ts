@@ -251,43 +251,127 @@ describe(`${MariaDBEventStore.name} resilience`, () => {
 			expect(await eventStore.getStreamVersion(stream, eventPool)).toBe(0);
 		});
 
-		/** Makes the next connection the store takes from the pool fail its insert, or its commit, with the given error. */
-		const failNextConnection = (method: 'insert' | 'commit', error: Error) => {
+		/**
+		 * Intercepts the next connection the store takes from the pool: `beforeQuery` runs before each of its statements
+		 * (and may throw instead of it), `beforeCommit` before its commit. Records the statements, and whether the store
+		 * destroyed the connection rather than releasing it.
+		 */
+		const interceptNextConnection = ({
+			beforeQuery,
+			beforeCommit,
+		}: {
+			beforeQuery?: (sql: string, connection: PoolConnection) => Promise<void>;
+			beforeCommit?: (connection: PoolConnection) => Promise<void>;
+		}) => {
 			const getConnection = pool.getConnection.bind(pool);
-			const failures: MockInstance[] = [];
+			const spies: MockInstance[] = [];
+			const statements: string[] = [];
+			let destroyed = false;
 			const getConnectionSpy = vi.spyOn(pool, 'getConnection').mockImplementationOnce(async () => {
 				const connection: PoolConnection = await getConnection();
-				if (method === 'commit') {
-					failures.push(vi.spyOn(connection, 'commit').mockRejectedValue(error));
-				} else {
-					const query = connection.query.bind(connection);
-					failures.push(
-						vi.spyOn(connection, 'query').mockImplementation((async (sql: string, values?: unknown) => {
-							if (typeof sql === 'string' && sql.startsWith('INSERT INTO')) {
-								throw error;
-							}
-							return query(sql, values);
-						}) as PoolConnection['query']),
-					);
-				}
+				const query = connection.query.bind(connection);
+				const commit = connection.commit.bind(connection);
+				const destroy = connection.destroy.bind(connection);
+				spies.push(
+					vi.spyOn(connection, 'query').mockImplementation((async (sql: string, values?: unknown) => {
+						statements.push(sql);
+						await beforeQuery?.(sql, connection);
+						return query(sql, values);
+					}) as PoolConnection['query']),
+					vi.spyOn(connection, 'commit').mockImplementation(async () => {
+						statements.push('COMMIT');
+						await beforeCommit?.(connection);
+						return commit();
+					}),
+					vi.spyOn(connection, 'destroy').mockImplementation(() => {
+						destroyed = true;
+						return destroy();
+					}),
+				);
 				return connection;
 			});
 			return {
-				failures,
+				statements,
+				destroyed: () => destroyed,
 				restore: () => {
 					getConnectionSpy.mockRestore();
-					for (const failure of failures) {
-						failure.mockRestore();
+					for (const spy of spies) {
+						spy.mockRestore();
 					}
 				},
 			};
 		};
 
+		/** Makes the next connection the store takes from the pool fail its counter update, its insert, or its commit. */
+		const failNextConnection = (step: 'counter' | 'insert' | 'commit', error: unknown) =>
+			interceptNextConnection(
+				step === 'commit'
+					? {
+							beforeCommit: async () => {
+								throw error;
+							},
+						}
+					: {
+							beforeQuery: async (sql) => {
+								if (sql.startsWith(step === 'insert' ? 'INSERT INTO' : 'UPDATE')) {
+									throw error;
+								}
+							},
+						},
+			);
+
+		/** Kills a connection of the store's pool from another one, the way a lost connection ends it. */
+		const kill = async (connection: PoolConnection) => {
+			await pool.query(`KILL CONNECTION ${Number(connection.threadId)}`);
+		};
+
+		const nextPosition = async (eventPool: IEventPool) =>
+			(await eventStore.appendEvents(newStream(), events.slice(0, 1), { expectedVersion: 0, pool: eventPool }))[0]
+				.metadata.globalPosition;
+
+		it('should take the counter as the first write of a READ COMMITTED transaction', async () => {
+			const eventPool = await newPool('statements');
+			const { statements, restore } = interceptNextConnection({});
+			try {
+				await eventStore.appendEvents(newStream(), events.slice(0, 2), { expectedVersion: 0, pool: eventPool });
+			} finally {
+				restore();
+			}
+			expect(statements).toEqual([
+				'SET TRANSACTION ISOLATION LEVEL READ COMMITTED',
+				'START TRANSACTION',
+				expect.stringMatching(
+					/^UPDATE `event_sourcing_collections` SET last_position = LAST_INSERT_ID\(last_position \+ \?\)/,
+				),
+				expect.stringMatching(/^INSERT INTO /),
+				'COMMIT',
+			]);
+		});
+
+		it("should report a 'not-persisted' outcome when the counter update fails, such as with 1020 under snapshot isolation", async () => {
+			const eventPool = await newPool('check-read');
+			const cause = Object.assign(new Error('Record has changed since last read in table'), { errno: 1020 });
+			const { restore } = failNextConnection('counter', cause);
+			try {
+				await expect(
+					eventStore.appendEvents(newStream(), events.slice(0, 1), { expectedVersion: 0, pool: eventPool }),
+				).rejects.toMatchObject({
+					code: EventSourcingErrorCode.EventStorePersistence,
+					outcome: 'not-persisted',
+					cause,
+				});
+			} finally {
+				restore();
+			}
+			expect(pool.activeConnections()).toBe(0);
+			expect(await nextPosition(eventPool)).toBe(1n);
+		});
+
 		it("should report a 'not-persisted' outcome when the insert fails before the commit, and roll back the counter", async () => {
 			const eventPool = await newPool('insert-fails');
 			const stream = newStream();
 			const cause = new Error('insert failure');
-			const { failures, restore } = failNextConnection('insert', cause);
+			const { statements, restore } = failNextConnection('insert', cause);
 
 			try {
 				await expect(
@@ -298,7 +382,8 @@ describe(`${MariaDBEventStore.name} resilience`, () => {
 					outcome: 'not-persisted',
 					cause,
 				});
-				expect(failures[0]).toHaveBeenCalled();
+				expect(statements).toContainEqual(expect.stringMatching(/^INSERT INTO/));
+				expect(statements).not.toContain('COMMIT');
 			} finally {
 				restore();
 			}
@@ -315,7 +400,7 @@ describe(`${MariaDBEventStore.name} resilience`, () => {
 		it("should report an 'unknown' outcome when the commit fails", async () => {
 			const eventPool = await newPool('commit-fails');
 			const cause = new Error('commit failure');
-			const { failures, restore } = failNextConnection('commit', cause);
+			const { statements, restore } = failNextConnection('commit', cause);
 
 			try {
 				await expect(
@@ -325,7 +410,76 @@ describe(`${MariaDBEventStore.name} resilience`, () => {
 					outcome: 'unknown',
 					cause,
 				});
-				expect(failures[0]).toHaveBeenCalled();
+				expect(statements.at(-1)).toBe('COMMIT');
+			} finally {
+				restore();
+			}
+			expect(pool.activeConnections()).toBe(0);
+		});
+
+		it("should report a 'not-persisted' outcome when the commit is refused with a deadlock (a Galera certification failure)", async () => {
+			const eventPool = await newPool('commit-deadlock');
+			const cause = Object.assign(new Error('Deadlock found when trying to get lock; try restarting transaction'), {
+				errno: 1213,
+			});
+			const { statements, restore } = failNextConnection('commit', cause);
+
+			try {
+				await expect(
+					eventStore.appendEvents(newStream(), events.slice(0, 1), { expectedVersion: 0, pool: eventPool }),
+				).rejects.toMatchObject({
+					code: EventSourcingErrorCode.EventStorePersistence,
+					outcome: 'not-persisted',
+					cause,
+				});
+				expect(statements.at(-1)).toBe('COMMIT');
+			} finally {
+				restore();
+			}
+			expect(pool.activeConnections()).toBe(0);
+			// Rolled back: the next append takes the first position
+			expect(await nextPosition(eventPool)).toBe(1n);
+		});
+
+		it("should report a 'not-persisted' outcome when the connection is lost before the commit, and discard it", async () => {
+			const eventPool = await newPool('lost-insert');
+			const { destroyed, restore } = interceptNextConnection({
+				beforeQuery: async (sql, connection) => {
+					if (sql.startsWith('INSERT INTO')) {
+						await kill(connection);
+					}
+				},
+			});
+
+			try {
+				await expect(
+					eventStore.appendEvents(newStream(), events.slice(0, 2), { expectedVersion: 0, pool: eventPool }),
+				).rejects.toMatchObject({
+					code: EventSourcingErrorCode.EventStorePersistence,
+					outcome: 'not-persisted',
+					cause: expect.objectContaining({ fatal: true }),
+				});
+				expect(destroyed()).toBe(true);
+			} finally {
+				restore();
+			}
+			// The server rolled the transaction back with the connection: the counter too
+			expect(await nextPosition(eventPool)).toBe(1n);
+		});
+
+		it("should report an 'unknown' outcome when the connection is lost at the commit, and discard it", async () => {
+			const eventPool = await newPool('lost-commit');
+			const { destroyed, restore } = interceptNextConnection({ beforeCommit: kill });
+
+			try {
+				await expect(
+					eventStore.appendEvents(newStream(), events.slice(0, 1), { expectedVersion: 0, pool: eventPool }),
+				).rejects.toMatchObject({
+					code: EventSourcingErrorCode.EventStorePersistence,
+					outcome: 'unknown',
+					cause: expect.objectContaining({ fatal: true }),
+				});
+				expect(destroyed()).toBe(true);
 			} finally {
 				restore();
 			}

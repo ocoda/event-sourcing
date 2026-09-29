@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { setTimeout as sleep } from 'node:timers/promises';
 import {
 	EventCollection,
 	EventCollectionNotFoundException,
@@ -19,9 +20,16 @@ import {
 	getEventMap,
 	getEvents,
 } from '@ocoda/event-sourcing-testing/unit';
-import type { Pool } from 'mariadb';
+import type { Pool, PoolConnection } from 'mariadb';
 import { v1EventTableDdl } from '../fixtures/schema-v1.js';
-import { CATALOG, createEventStore, createTestDatabase, dropTables, poolOf } from '../support/stores.js';
+import {
+	CATALOG,
+	createEventStore,
+	createTestDatabase,
+	dropTables,
+	poolOf,
+	rootConnection,
+} from '../support/stores.js';
 
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
@@ -415,6 +423,89 @@ describe(MariaDBEventStore, () => {
 			return eventPool;
 		};
 
+		/**
+		 * On a pool with positions 1 and 2, the state a torn read view shows, for real: an append holds the pool's counter
+		 * (taken up to 4) and wrote position 3 without committing, while position 4 is committed.
+		 */
+		const appendInFlight = async () => {
+			const eventPool = await seedPool(2);
+			const collection = EventCollection.get(eventPool);
+			const insert = (db: Pool | PoolConnection, streamId: string, position: number) =>
+				db.query(
+					`INSERT INTO ${pool.escapeId(collection)} (stream_id, version, event, payload, event_id, aggregate_id, occurred_on, global_position)
+					 VALUES (?, 1, 'account-opened', '{}', ?, ?, '2024-01-01 00:00:00.000', ?)`,
+					[streamId, EventId.generate().value, streamId, position],
+				);
+			const holder = await pool.getConnection();
+			await holder.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED');
+			await holder.beginTransaction();
+			await holder.query(`UPDATE ${CATALOG} SET last_position = last_position + 2 WHERE name = ?`, [collection]);
+			await insert(holder, 'account-in-flight', 3);
+			await insert(pool, 'account-committed', 4);
+			return {
+				eventPool,
+				collection,
+				commit: () => holder.commit(),
+				release: async () => {
+					await holder.rollback().catch(() => undefined);
+					holder.release();
+				},
+			};
+		};
+
+		/** Waits until a statement that locks the counter row of the collection waits for its lock (true), or 3 s. */
+		const counterReadWaits = async (collection: string): Promise<boolean> => {
+			const root = await rootConnection();
+			try {
+				for (let tries = 0; tries < 300; tries++) {
+					const [{ waiting }] = await root.query<{ waiting: bigint | number }[]>(
+						`SELECT COUNT(*) AS waiting FROM information_schema.INNODB_TRX
+						 WHERE trx_state = 'LOCK WAIT' AND trx_query LIKE '%LOCK IN SHARE MODE%' AND LOCATE(?, trx_query) > 0`,
+						[collection],
+					);
+					if (Number(waiting) > 0) {
+						return true;
+					}
+					await sleep(10);
+				}
+				return false;
+			} finally {
+				await root.end();
+			}
+		};
+
+		it('waits at a gap for the append that holds the counter, then delivers what it wrote', async () => {
+			const inFlight = await appendInFlight();
+			try {
+				const reading = drain(store.readAll({ pool: inFlight.eventPool, fromPosition: 3n, batch: 10 }));
+				// The first batch shows 4 without 3: the reader reads the counter with a shared lock, and waits
+				const waited = await counterReadWaits(inFlight.collection);
+				await inFlight.commit();
+
+				expect((await reading).map(({ metadata }) => metadata.globalPosition)).toEqual([3n, 4n]);
+				expect(waited, 'the high-water mark read waited for the counter').toBe(true);
+			} finally {
+				await inFlight.release();
+			}
+		});
+
+		it('negative control: a plain keyset reader skips the position of an append in flight', async () => {
+			const inFlight = await appendInFlight();
+			const plain = new PlainReaderEventStore(store['context'], store['options']);
+			await plain.connect();
+			try {
+				const read = (await drain(
+					plain.readAll({ pool: inFlight.eventPool, fromPosition: 3n, batch: 10 }),
+				)) as unknown as {
+					global_position: string;
+				}[];
+				expect(read.map(({ global_position }) => global_position)).toEqual(['4']);
+			} finally {
+				await inFlight.release();
+				await plain.disconnect();
+			}
+		});
+
 		it('delivers a torn batch only up to its gap, and settles a gap at its start under the high-water mark', async () => {
 			const eventPool = await seedPool(6);
 			const batchesOf = async (hidden: bigint[]) => {
@@ -439,7 +530,7 @@ describe(MariaDBEventStore, () => {
 			expect(await batchesOf([1n, 2n])).toEqual([[1n, 2n, 3n, 4n, 5n, 6n]]);
 		});
 
-		it('negative control: a plain keyset reader skips the event that a torn batch hid', async () => {
+		it('negative control: a plain keyset reader skips the event that a torn batch hid (the batch torn by a mock)', async () => {
 			const eventPool = await seedPool(6);
 			const plain = new PlainReaderEventStore(store['context'], store['options']);
 			await plain.connect();
@@ -526,6 +617,40 @@ describe(MariaDBEventStore, () => {
 				).toEqual([9007199254740994n, 9007199254740995n]);
 			} finally {
 				await numbers.disconnect();
+			}
+		});
+
+		it('reads only committed rows, whatever the isolation level the pool sessions start with', async () => {
+			const { store: uncommitted } = createEventStore(
+				{ initSql: 'SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED', connectionLimit: 2 },
+				eventMap,
+			);
+			await uncommitted.connect();
+			const eventPool = await newPool('uncommitted');
+			const collection = EventCollection.get(eventPool);
+			const holder = await pool.getConnection();
+			try {
+				const [{ isolation }] = await poolOf(uncommitted).query<{ isolation: string }[]>(
+					'SELECT @@tx_isolation AS isolation',
+				);
+				expect(isolation).toBe('READ-COMMITTED');
+
+				// An append that may still roll back, and give its position to another one
+				const stream = newStream();
+				await holder.beginTransaction();
+				await holder.query(`UPDATE ${CATALOG} SET last_position = last_position + 1 WHERE name = ?`, [collection]);
+				await holder.query(
+					`INSERT INTO ${pool.escapeId(collection)} (stream_id, version, event, payload, event_id, aggregate_id, occurred_on, global_position)
+					 VALUES (?, 1, 'account-opened', '{}', ?, ?, '2024-01-01 00:00:00.000', 1)`,
+					[stream.streamId, EventId.generate().value, stream.aggregateId],
+				);
+
+				expect(await drain(uncommitted.readAll({ pool: eventPool }))).toEqual([]);
+				await expect(uncommitted.getStreamVersion(stream, eventPool)).resolves.toBe(0);
+			} finally {
+				await holder.rollback();
+				holder.release();
+				await uncommitted.disconnect();
 			}
 		});
 

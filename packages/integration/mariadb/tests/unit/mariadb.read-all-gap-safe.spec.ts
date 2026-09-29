@@ -1,4 +1,3 @@
-import { randomBytes } from 'node:crypto';
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises';
 import { EventCollection, type EventEnvelope, EventStream, type IEventPool } from '@ocoda/event-sourcing';
 import { Account, AccountId, getEventMap, getEvents } from '@ocoda/event-sourcing-testing/unit';
@@ -14,7 +13,14 @@ import { createEventStore, createTestDatabase, poolOf, rootConnection } from '..
  * their connection) in a database of its own while 8 writers append and readers tail the pool:
  * - the store's `readAll` (the hybrid reader) must read every event exactly once, in increasing positions;
  * - a plain keyset reader runs alongside, and the misses it has are reported (it can miss events; how often depends on
- *   the server and its load, so it is not asserted here; the deterministic negative control is in the event store spec).
+ *   the server and its load, so it is not asserted here).
+ *
+ * Torn read views are rare: with 1,000 prepared transactions CI has seen none so far, so this spec shows that readAll
+ * stays exact under load, not that the high-water mark read closes a torn view. The event store spec proves that part
+ * deterministically, with an append held in flight (`readAll` › "waits at a gap ...") and its negative control.
+ *
+ * The prepared transactions are named after the spec's database (`ocoda-gap-safe-<database>/<n>`), so that runs on a
+ * shared server only ever count and roll back their own.
  *
  * `ES_TEST_MARIADB_XA_TRANSACTIONS` sets the number of prepared transactions (default 1000),
  * `ES_TEST_MARIADB_GAP_SAFE_ROUNDS` and `ES_TEST_MARIADB_GAP_SAFE_APPENDS` the rounds (default 3) and the appends of
@@ -29,18 +35,26 @@ const WRITERS = 8;
 const APPENDS_PER_WRITER = Number(process.env.ES_TEST_MARIADB_GAP_SAFE_APPENDS || 25);
 const ROUNDS = Number(process.env.ES_TEST_MARIADB_GAP_SAFE_ROUNDS || 3);
 
-/** Rolls back the prepared XA transactions this spec created, including those of an earlier run that crashed. */
-const rollBackPrepared = async (root: Connection): Promise<number> => {
-	const prepared = await root.query<{ data: string | Buffer; gtrid_length: number | bigint }[]>('XA RECOVER');
+/** The ids of the prepared XA transactions of the server whose id starts with the prefix of this spec. */
+const preparedIds = async (root: Connection): Promise<string[]> =>
+	(await root.query<{ data: string | Buffer; gtrid_length: number | bigint }[]>('XA RECOVER'))
+		.map(({ data, gtrid_length }) => String(data).slice(0, Number(gtrid_length)))
+		.filter((gtrid) => gtrid.startsWith(XA_PREFIX));
+
+/** Rolls back the prepared XA transactions whose id matches. */
+const rollBackPrepared = async (root: Connection, matches: (gtrid: string) => boolean): Promise<number> => {
 	let rolledBack = 0;
-	for (const { data, gtrid_length } of prepared) {
-		const gtrid = String(data).slice(0, Number(gtrid_length));
-		if (gtrid.startsWith(XA_PREFIX)) {
-			await root.query(`XA ROLLBACK '${gtrid}'`);
-			rolledBack++;
-		}
+	for (const gtrid of (await preparedIds(root)).filter(matches)) {
+		await root.query(`XA ROLLBACK ${root.escape(gtrid)}`);
+		rolledBack++;
 	}
 	return rolledBack;
+};
+
+/** The database a run of this spec named its prepared transactions after (none for older names). */
+const databaseOf = (gtrid: string): string | undefined => {
+	const separator = gtrid.lastIndexOf('/');
+	return separator > XA_PREFIX.length ? gtrid.slice(XA_PREFIX.length, separator) : undefined;
 };
 
 const drain = async <T>(generator: AsyncGenerator<T[]>): Promise<T[]> => {
@@ -54,27 +68,41 @@ const drain = async <T>(generator: AsyncGenerator<T[]>): Promise<T[]> => {
 describe('MariaDB readAll under amplified read views (prepared XA transactions)', () => {
 	let database: Awaited<ReturnType<typeof createTestDatabase>>;
 	let root: Connection;
+	let run: string;
 	let created = 0;
 
 	beforeAll(async () => {
 		database = await createTestDatabase('xa');
 		root = await rootConnection(database.name);
-		await rollBackPrepared(root);
+		run = `${XA_PREFIX}${database.name}/`;
+		if (Buffer.byteLength(`${run}${XA_TRANSACTIONS}`) > 64) {
+			throw new Error(`The XA ids ${run}<n> exceed 64 bytes: use a shorter ES_TEST_MARIADB_DATABASE`);
+		}
+
+		// The leftovers of runs that crashed and whose database is gone; other runs may be going on
+		const databases = new Set(
+			(await root.query<{ name: string }[]>('SELECT SCHEMA_NAME AS name FROM information_schema.SCHEMATA')).map(
+				({ name }) => name,
+			),
+		);
+		await rollBackPrepared(root, (gtrid) => {
+			const owner = databaseOf(gtrid);
+			return owner !== undefined && !databases.has(owner);
+		});
 		await root.query('CREATE TABLE xa_ballast (id INT PRIMARY KEY) ENGINE=InnoDB');
 
 		// Each prepared transaction needs a connection of its own, which it outlives
-		const run = randomBytes(4).toString('hex');
 		for (let start = 0; start < XA_TRANSACTIONS; start += 50) {
 			await Promise.all(
 				Array.from({ length: Math.min(50, XA_TRANSACTIONS - start) }, async (_, offset) => {
 					const id = start + offset;
-					const xid = `${XA_PREFIX}${run}-${id}`;
+					const xid = root.escape(`${run}${id}`);
 					const connection = await rootConnection(database.name);
 					try {
-						await connection.query(`XA START '${xid}'`);
+						await connection.query(`XA START ${xid}`);
 						await connection.query('INSERT INTO xa_ballast VALUES (?)', [id]);
-						await connection.query(`XA END '${xid}'`);
-						await connection.query(`XA PREPARE '${xid}'`);
+						await connection.query(`XA END ${xid}`);
+						await connection.query(`XA PREPARE ${xid}`);
 						created++;
 					} finally {
 						await connection.end();
@@ -86,7 +114,7 @@ describe('MariaDB readAll under amplified read views (prepared XA transactions)'
 
 	afterAll(async () => {
 		if (root) {
-			await rollBackPrepared(root);
+			await rollBackPrepared(root, (gtrid) => gtrid.startsWith(run));
 			await root.end();
 		}
 		await database?.drop();
@@ -94,10 +122,7 @@ describe('MariaDB readAll under amplified read views (prepared XA transactions)'
 
 	it('hands every event to a tailing readAll exactly once, while a plain keyset reader may miss some', async (context) => {
 		expect(created).toBe(XA_TRANSACTIONS);
-		const prepared = (await root.query<{ data: string | Buffer }[]>('XA RECOVER')).filter(({ data }) =>
-			String(data).startsWith(XA_PREFIX),
-		).length;
-		expect(prepared).toBe(XA_TRANSACTIONS);
+		expect((await preparedIds(root)).filter((gtrid) => gtrid.startsWith(run))).toHaveLength(XA_TRANSACTIONS);
 
 		const eventMap = getEventMap();
 		const [event] = getEvents();

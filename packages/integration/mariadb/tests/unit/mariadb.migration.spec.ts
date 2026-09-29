@@ -509,11 +509,22 @@ describe('MariaDB migration from 3.x to schema v2', () => {
 					},
 				},
 			).catch(() => undefined);
+			for (const ddl of ['auto', 'none'] as const) {
+				const { store } = createEventStore({ ...config(), ddl }, getEventMap());
+				await store.connect();
+				try {
+					await expect(store.ensureCollection(pool)).rejects.toBeInstanceOf(EventStoreSchemaException);
+					await expect(store.ensureCollection(pool)).rejects.toMatchObject({
+						found: 'v1-partial',
+						remedy: expect.stringMatching(/MariaDBEventStore\.migrate/),
+					});
+				} finally {
+					await store.disconnect();
+				}
+			}
 			const { store } = createEventStore({ ...config() }, getEventMap());
 			await store.connect();
 			try {
-				await expect(store.ensureCollection(pool)).rejects.toBeInstanceOf(EventStoreSchemaException);
-				await expect(store.ensureCollection(pool)).rejects.toMatchObject({ found: 'v1-partial' });
 				expect(only(await store.migrate({ pools: [pool] }), table)).toMatchObject({
 					from: 'v1-partial',
 					action: 'resume',
@@ -669,7 +680,16 @@ describe('MariaDB migration from 3.x to schema v2', () => {
 				]);
 
 				const stream = SnapshotStream.for(Account, Id.from('s1'));
+				const registeredOn = () =>
+					root.query<{ version: number; registered_on: string }[]>(
+						`SELECT version, CAST(registered_on AS CHAR) AS registered_on FROM ${escapeId(table)} WHERE stream_id = ? ORDER BY version`,
+						[stream.streamId],
+					);
+				const before = await registeredOn();
+				expect(await showCreate(table)).toMatch(/ON UPDATE/i);
 				await store.appendSnapshot(stream, 4, { balance: 42 }, pool);
+				// Unflagging version 3 didn't let the legacy ON UPDATE attribute overwrite its registered_on
+				expect((await registeredOn()).slice(0, before.length)).toEqual(before);
 				const last = await store.getLastEnvelope(stream, pool);
 				expect(last?.metadata.version).toBe(4);
 				expect(last?.payload).toEqual({ balance: 42 });

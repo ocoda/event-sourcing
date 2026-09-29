@@ -386,6 +386,21 @@ describe(MariaDBSnapshotStore, () => {
 			).toEqual([{ kind: 'snapshots', schema_version: 2 }]);
 		});
 
+		it('reads in READ COMMITTED sessions, whatever the isolation level the pool sessions start with', async () => {
+			const uncommitted = createSnapshotStore({
+				initSql: 'SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED',
+				connectionLimit: 1,
+			});
+			await uncommitted.connect();
+			try {
+				await expect(poolOf(uncommitted).query('SELECT @@tx_isolation AS isolation')).resolves.toEqual([
+					{ isolation: 'READ-COMMITTED' },
+				]);
+			} finally {
+				await uncommitted.disconnect();
+			}
+		});
+
 		it('reads the snapshot with the highest version as the last one, whatever the latest flag says', async () => {
 			await snapshotStore.ensureCollection('highest');
 			const stream = SnapshotStream.for(Account, AccountId.generate());
@@ -417,12 +432,15 @@ describe(MariaDBSnapshotStore, () => {
 			const auto = createSnapshotStore({ ...database.config });
 			const none = createSnapshotStore({ ...database.config, ddl: 'none' });
 			await Promise.all([auto.connect(), none.connect()]);
+			const logged = vi.spyOn(none['logger'], 'error').mockImplementation(() => undefined);
 			try {
 				const noCatalog = await none.ensureCollection('tenant').catch((error: unknown) => error);
 				expect(noCatalog).toBeInstanceOf(SnapshotStoreCollectionCreationException);
 				expect(((noCatalog as Error).cause as Error).message).toMatch(
 					/CREATE TABLE IF NOT EXISTS `event_sourcing_collections`/,
 				);
+				// The exception has no message of its own: the statements to run reach the logs too
+				expect(logged).toHaveBeenCalledWith(((noCatalog as Error).cause as Error).message);
 
 				await auto.ensureCollection('other');
 				const noTable = await none.ensureCollection('tenant').catch((error: unknown) => error);
@@ -438,6 +456,7 @@ describe(MariaDBSnapshotStore, () => {
 				}
 				expect(listed).toEqual(['other-snapshots', 'tenant-snapshots']);
 			} finally {
+				logged.mockRestore();
 				await Promise.all([auto.disconnect(), none.disconnect()]);
 				await database.drop();
 			}
