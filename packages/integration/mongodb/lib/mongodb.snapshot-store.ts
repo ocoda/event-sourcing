@@ -73,6 +73,8 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 	private topology: MongoDBTopology = 'standalone';
 	/** Collections that are known to exist, so that appends don't have to look them up on every write. */
 	private readonly knownCollections = new Set<string>();
+	/** The 3.x collections the store warned about, once each. */
+	private readonly warnedLegacyCollections = new Set<string>();
 
 	/**
 	 * Migrates the 3.x snapshot collections of a database to schema v2, without bootstrapping the application. See
@@ -138,9 +140,12 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 				await this.createCollection(collection);
 			} else if (!hasLatestUniqueIndex(shape.indexes)) {
 				schemaVersion = 1;
-				this.logger.warn(
-					`The ${collection} collection has the 3.x snapshot schema: it keeps working, but racing appends can flag several latest snapshots. Migrate it with MongoDBSnapshotStore.migrate(config, { dryRun: true }), then migrate().`,
-				);
+				if (!this.warnedLegacyCollections.has(collection)) {
+					this.warnedLegacyCollections.add(collection);
+					this.logger.warn(
+						`The ${collection} collection has the 3.x snapshot schema: it keeps working, but racing appends can flag several latest snapshots. Migrate it with MongoDBSnapshotStore.migrate(config, { dryRun: true }), then migrate().`,
+					);
+				}
 			}
 			if (ddl === 'none' && !(await catalogExists(this.database))) {
 				throw new Error(`The store runs with ddl: 'none'; create the catalog with: ${catalogDdl()}`);
