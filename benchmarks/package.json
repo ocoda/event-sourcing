@@ -27,8 +27,8 @@
 		"@codechecks/client": "^0.1.12",
 		"@ocoda/event-sourcing-config": "workspace:*",
 		"@types/node": "20.17.6",
-		"artillery": "^2.0.24",
-		"tsup": "^8.5.0",
+		"artillery": "^2.0.34",
+		"tsup": "^8.5.1",
 		"typescript": "5.9.2"
 	}
 }
