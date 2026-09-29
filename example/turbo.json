@@ -1,13 +1,13 @@
 {
-	"$schema": "https://turbo.build/schema.json",
+	"$schema": "https://turborepo.dev/schema.json",
 	"extends": ["//"],
 	"tasks": {
 		"dev": {
-			"dependsOn": ["@ocoda/event-sourcing#build"],
-			"cache": false
+			"dependsOn": ["^build"]
 		},
-		"start": {},
-		"lint": {},
-		"format": {}
+		"typecheck": {
+			"description": "The example also compiles against the mongodb integration's sources.",
+			"inputs": ["$TURBO_EXTENDS$", "$TURBO_ROOT$/packages/integration/mongodb/lib/**"]
+		}
 	}
 }

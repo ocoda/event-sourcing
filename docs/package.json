@@ -12,6 +12,7 @@
 		"docs:start": "next start",
 		"ci": "oxlint --deny-warnings && oxfmt --check",
 		"format": "oxfmt",
+		"format:check": "oxfmt --check",
 		"lint": "oxlint"
 	},
 	"dependencies": {

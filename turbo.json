@@ -1,29 +1,92 @@
 {
-	"$schema": "https://turbo.build/schema.json",
+	"$schema": "https://turborepo.dev/schema.json",
+	"agentGuidance": false,
 	"tasks": {
-		"dev": {},
 		"build": {
-			"dependsOn": ["^build"]
-		},
-		"test": {
-			"inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/packages/config/vitest/**"]
-		},
-		"test:cov": {
-			"inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/packages/config/vitest/**"]
-		},
-		"ci": {
-			"inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/.oxlintrc.json", "$TURBO_ROOT$/.oxfmtrc.json"]
-		},
-		"lint": {
-			"inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/.oxlintrc.json"]
+			"description": "Bundle lib/ into dist/ with tsup.",
+			"dependsOn": ["^build"],
+			"inputs": [
+				"lib/**",
+				"tsconfig*.json",
+				"package.json",
+				"tsup.config.*",
+				"$TURBO_ROOT$/packages/config/typescript/**"
+			],
+			"outputs": ["dist/**"]
 		},
 		"typecheck": {
-			"cache": false
+			"description": "tsc --noEmit over lib/ and tests/. tsconfig paths resolve core and the shared suite from source.",
+			"inputs": [
+				"$TURBO_DEFAULT$",
+				"$TURBO_ROOT$/packages/config/typescript/**",
+				"$TURBO_ROOT$/packages/core/lib/**",
+				"$TURBO_ROOT$/packages/testing/**/*.ts",
+				"!$TURBO_ROOT$/packages/testing/node_modules/**"
+			],
+			"outputs": []
+		},
+		"lint": {
+			"description": "oxlint, read-only.",
+			"inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/.oxlintrc.json"],
+			"outputs": []
+		},
+		"format:check": {
+			"description": "oxfmt --check, read-only.",
+			"inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/.oxfmtrc.json"],
+			"outputs": []
+		},
+		"ci": {
+			"description": "oxlint --deny-warnings and oxfmt --check, read-only.",
+			"inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/.oxlintrc.json", "$TURBO_ROOT$/.oxfmtrc.json"],
+			"outputs": []
 		},
 		"format": {
+			"description": "oxfmt, rewrites files in place.",
 			"cache": false
 		},
-		"benchmark": {},
+		"test": {
+			"description": "vitest run. Specs alias core and the shared suite to their sources. DB-backed packages disable caching in their own turbo.json.",
+			"inputs": [
+				"$TURBO_DEFAULT$",
+				"$TURBO_ROOT$/packages/config/typescript/**",
+				"$TURBO_ROOT$/packages/config/vitest/**",
+				"$TURBO_ROOT$/packages/core/lib/**",
+				"$TURBO_ROOT$/packages/testing/**/*.ts",
+				"!$TURBO_ROOT$/packages/testing/node_modules/**"
+			],
+			"outputs": []
+		},
+		"test:cov": {
+			"description": "vitest run --coverage, enforcing the coverage thresholds.",
+			"inputs": [
+				"$TURBO_DEFAULT$",
+				"$TURBO_ROOT$/packages/config/typescript/**",
+				"$TURBO_ROOT$/packages/config/vitest/**",
+				"$TURBO_ROOT$/packages/core/lib/**",
+				"$TURBO_ROOT$/packages/testing/**/*.ts",
+				"!$TURBO_ROOT$/packages/testing/node_modules/**"
+			],
+			"outputs": ["coverage/**"]
+		},
+		"dev": {
+			"description": "Long-running watch process.",
+			"cache": false,
+			"persistent": true
+		},
+		"docs:build": {
+			"description": "Static Next.js export into dist/. postdocs:build regenerates the sitemap and robots.txt in public/.",
+			"inputs": [
+				"$TURBO_DEFAULT$",
+				"$TURBO_ROOT$/packages/config/typescript/**",
+				"!public/robots.txt",
+				"!public/sitemap*.xml"
+			],
+			"outputs": ["dist/**", "public/robots.txt", "public/sitemap*.xml"],
+			"env": ["GITHUB_PAGES"]
+		},
+		"benchmark": {
+			"cache": false
+		},
 		"benchmark:report": {}
 	}
 }

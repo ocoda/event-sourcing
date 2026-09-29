@@ -9,6 +9,7 @@
 		"dev": "tsup --onSuccess \"node dist/main.js\"",
 		"ci": "oxlint --deny-warnings && oxfmt --check",
 		"format": "oxfmt",
+		"format:check": "oxfmt --check",
 		"lint": "oxlint",
 		"typecheck": "tsc --noEmit -p tsconfig.json"
 	},
