@@ -25,7 +25,7 @@ describe('public entrypoint', () => {
 	it('does not expose internal helpers', () => {
 		expect(
 			Object.keys(EventSourcing).filter((key) =>
-				/CommittedVersions|isSnapshotDue|brandEventSourcingError|nameOf|describeValue|EVENT_SOURCING_ERROR|^validate/.test(
+				/CommittedVersions|isSnapshotDue|bindStaticFactories|brandEventSourcingError|nameOf|describeValue|EVENT_SOURCING_ERROR|^validate/.test(
 					key,
 				),
 			),

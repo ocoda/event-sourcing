@@ -14,7 +14,7 @@ The event store keeps the events of every aggregate in a **stream**, `EventStrea
 
 ```ts
 const envelopes = await eventStore.appendEvents(stream, events, {
-	expectedVersion: account.version - events.length, // the version of the stream before the append
+	expectedVersion: account.committedVersion, // the version of the stream before the append
 	pool: tenantId, // optional, the default pool otherwise
 	metadata: { correlationId, causationId, headers }, // optional, see Envelopes
 	publish: true, // default; false for imports and migrations

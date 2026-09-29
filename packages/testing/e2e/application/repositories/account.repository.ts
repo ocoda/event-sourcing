@@ -56,10 +56,11 @@ export class AccountRepository {
 	}
 
 	async save(account: Account): Promise<void> {
-		const events = account.commit();
+		const events = account.getUncommittedEvents();
 		const stream = EventStream.for<Account>(Account, account.id);
 
-		await this.eventStore.appendEvents(stream, account.version, events, 'e2e');
+		await this.eventStore.appendEvents(stream, events, { expectedVersion: account.committedVersion, pool: 'e2e' });
+		account.markCommitted();
 		await this.accountSnapshotRepository.save(account.id, account, 'e2e');
 	}
 }

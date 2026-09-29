@@ -8,9 +8,10 @@ import { AGGREGATE_METADATA } from './constants.js';
 /**
  * Decorator that provides an aggregate with metadata.
  * @description The decorated class must extend the `AggregateRoot` class.
- * @param {AggregateMetadata} options The metadata for the aggregate.
+ * @param {AggregateMetadata} options The metadata for the aggregate: the `streamName` (the lower-cased class name by
+ * default) and what `applyEvent()` does with an event that has no handler, `missingHandler` (`'throw'` by default).
  * @returns {ClassDecorator}
- * @example `@Aggregate('account')` or `@Aggregate({ streamName: 'account' })`
+ * @example `@Aggregate()`, `@Aggregate({ streamName: 'account' })` or `@Aggregate({ missingHandler: 'ignore' })`
  */
 export const Aggregate = (options?: AggregateMetadata): ClassDecorator => {
 	return (target: object) => {

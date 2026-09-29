@@ -62,10 +62,11 @@ export class BookLoanRepository {
 	}
 
 	async save(bookLoan: BookLoan): Promise<void> {
-		const events = bookLoan.commit();
+		const events = bookLoan.getUncommittedEvents();
 		const stream = EventStream.for<BookLoan>(BookLoan, bookLoan.id);
 
-		await this.eventStore.appendEvents(stream, bookLoan.version, events);
+		await this.eventStore.appendEvents(stream, events, { expectedVersion: bookLoan.committedVersion });
+		bookLoan.markCommitted();
 		await this.bookLoanSnapshotRepository.save(bookLoan.id, bookLoan);
 	}
 }
