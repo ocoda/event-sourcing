@@ -103,8 +103,8 @@ jobs:
             {"database":"mongodb","service":"mongodb-6 mongodb-6-rs","version":"6"},
             {"database":"mongodb","service":"mongodb-7 mongodb-7-rs","version":"7"},
             {"database":"mongodb","service":"mongodb-8 mongodb-8-rs","version":"8","crossVersion":true},
-            {"database":"mariadb","service":"mariadb-10","version":"10","crossVersion":true},
-            {"database":"mariadb","service":"mariadb-11","version":"11","crossVersion":true},
+            {"database":"mariadb","service":"mariadb-10","version":"10.11","crossVersion":true},
+            {"database":"mariadb","service":"mariadb-11","version":"11.4","crossVersion":true},
             {"database":"mariadb","service":"mariadb-11-8","version":"11.8","crossVersion":true}
           ]'
 
