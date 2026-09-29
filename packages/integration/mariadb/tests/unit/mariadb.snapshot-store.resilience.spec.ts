@@ -305,14 +305,14 @@ describe(`${MariaDBSnapshotStore.name} resilience`, () => {
 				}
 			});
 
-			it('should report a version conflict when the race is lost after the version check passed', async () => {
+			it('should report a version conflict when racing appends to a new stream all passed the version check', async () => {
 				const concurrentStore = await newConcurrentStore();
 
 				const concurrentPool: Pool = concurrentStore['pool'];
 				const getConnection = concurrentPool.getConnection.bind(concurrentPool);
 
-				// Hold every writer right after its version check until all of them have passed it, so that none of
-				// them can be stopped by the check and the unique constraint of the table has to decide.
+				// Hold every writer right after its version check until all of them have passed it. A new stream has no
+				// flagged snapshot to lock, so none of them waits there, and the unique keys of the table have to decide.
 				let versionChecks = 0;
 				let releaseWriters: () => void;
 				const allChecked = new Promise<void>((resolve) => {
@@ -323,7 +323,7 @@ describe(`${MariaDBSnapshotStore.name} resilience`, () => {
 					const query = connection.query.bind(connection);
 					vi.spyOn(connection, 'query').mockImplementation(async (sql: unknown, values?: unknown) => {
 						const result = await query(sql as string, values);
-						if (typeof sql === 'string' && sql.includes('WHERE latest IN (?)')) {
+						if (typeof sql === 'string' && sql.includes('FOR UPDATE')) {
 							versionChecks++;
 							if (versionChecks === WRITERS) {
 								releaseWriters();
@@ -340,15 +340,8 @@ describe(`${MariaDBSnapshotStore.name} resilience`, () => {
 				try {
 					const snapshotPool = await newPool('concurrent-check');
 					const stream = newStream();
-					await snapshotStore.appendSnapshot(stream, 1, { balance: 0 }, snapshotPool);
 
-					await expectExactlyOneWinner(
-						await append(concurrentStore, stream, 2, snapshotPool),
-						stream,
-						2,
-						[1, 2],
-						snapshotPool,
-					);
+					await expectExactlyOneWinner(await append(concurrentStore, stream, 1, snapshotPool), stream, 1, [1], snapshotPool);
 					expect(versionChecks).toBe(WRITERS);
 				} finally {
 					getConnectionSpy.mockRestore();
