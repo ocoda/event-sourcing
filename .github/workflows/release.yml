@@ -13,16 +13,31 @@ jobs:
   changelog:
     name: Release
     runs-on: ubuntu-latest
+    # Repository writes (version branch, PR, tags, GitHub releases) use the GitHub App token below.
     permissions:
-      contents: write
-      id-token: write
-      pull-requests: write
+      contents: read # GITHUB_TOKEN only reads
+      id-token: write # npm trusted publishing (OIDC)
     steps:
-      # changesets/action v1 pushes the release branch and tags with the checkout credentials.
+      # A GitHub App token lets changesets/action open the version PR (Actions may not create PRs in this
+      # repository), and its pushes and PR trigger CI, which events made with GITHUB_TOKEN never do.
+      - name: Create a GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          # The action sends this value as the JWT issuer, which may be the App ID or the Client ID.
+          client-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          repositories: ${{ github.repository }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      # changesets/action v1 pushes the release branch and tags with the checkout credentials,
+      # so the checkout must persist the App token.
       - name: Checkout the repository # zizmor: ignore[artipacked]
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Install pnpm
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
@@ -71,4 +86,5 @@ jobs:
           commit: "[ci] release"
           title: "[ci] release"
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Used for the PR and GitHub release API calls, and by @changesets/changelog-github during `changeset version`.
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
