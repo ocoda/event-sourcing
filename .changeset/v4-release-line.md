@@ -1,6 +1,5 @@
 ---
 '@ocoda/event-sourcing': major
-'@ocoda/event-sourcing-dynamodb': major
 '@ocoda/event-sourcing-mariadb': major
 '@ocoda/event-sourcing-mongodb': major
 '@ocoda/event-sourcing-postgres': major

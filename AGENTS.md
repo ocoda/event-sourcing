@@ -13,6 +13,7 @@ Commands live in the root and package `package.json` scripts. Run the ones below
 
 - `master` is the **v4 line**: NestJS 12, ESM-only, Node ≥ 22.12, work in progress. Breaking changes are allowed here, but they need a changeset and a migration note.
 - `3.x` is the **maintenance line**: NestJS 11, CommonJS. It takes patch changesets only. CI rejects anything else, because with the fixed version group and `workspace:*` peers, a `minor` there would publish an accidental major.
+- The DynamoDB store (`@ocoda/event-sourcing-dynamodb`) exists on `3.x` only. It was dropped from v4 because DynamoDB can't give the events a gap-free global order, which the v4 read side relies on. The 4.0 migration guide must say so; until it exists, the note is on the docs install page.
 
 ## Done means `ci-ok` would pass
 
@@ -23,7 +24,7 @@ The `ci-ok` check is the only required check on `master` and `3.x`. Before openi
 3. `pnpm build --filter="./packages/**"`
 4. `pnpm test:cov --filter=@ocoda/event-sourcing`. The coverage thresholds are enforced.
 5. For every integration you touched, and for all of them when core or `packages/testing` changed:
-   - Start the database: `docker compose up -d --wait <service>`. Service names are in `docker-compose.yml`, e.g. `postgres`, `mongodb`, `mariadb`, `dynamodb`.
+   - Start the database: `docker compose up -d --wait <service>`. Service names are in `docker-compose.yml`, e.g. `postgres`, `mongodb`, `mariadb`.
    - Then run `pnpm test:cov --filter=@ocoda/event-sourcing-<db>`.
 
 ## Invariants that no config enforces
@@ -37,7 +38,7 @@ The `ci-ok` check is the only required check on `master` and `3.x`. Before openi
 ## Changesets
 
 - Every change to a published package needs a changeset (`pnpm exec changeset`). It is the user-facing CHANGELOG entry, so write it for users and call out behaviour changes. On `master`, the `Changesets` CI job requires one when a PR changes `lib/` or the runtime fields of `package.json` in `packages/core` or `packages/integration/*`. Only a maintainer can waive that, with the `no-changeset` label.
-- A changeset may only name the five published packages, never a private one.
+- A changeset may only name the four published packages, never a private one.
 - `master` is in changesets pre mode with the tag `next` (`.changeset/pre.json`). It releases `4.0.0-next.N` prereleases under the npm dist-tag `next`, and `latest` stays on 3.x. `.github/scripts/release-guard.sh` fails the release workflow for anything else.
 - Versioned changesets move to `.changeset/pre/`. At 4.0 GA they become the 4.0.0 changelog, so fix an outdated one there.
 - Keep `` $` `` out of changeset text. Changesets 2 on `3.x`, where fixes get backported, treats it as a `String.replace` pattern and corrupts the entry.
