@@ -29,7 +29,15 @@ import {
 	snapshotsAccountB,
 } from '@ocoda/event-sourcing-testing/unit';
 import { Client, type Pool, escapeIdentifier } from 'pg';
-import { createSnapshotStore } from '../support/stores.js';
+import { createSnapshotStore, dropCollections } from '../support/stores.js';
+
+const drain = async <T>(batches: AsyncIterable<T[]>): Promise<T[]> => {
+	const items: T[] = [];
+	for await (const batch of batches) {
+		items.push(...batch);
+	}
+	return items;
+};
 
 const connectionOptions = {
 	...postgresTestConfig(),
@@ -49,18 +57,51 @@ describe(PostgresSnapshotStore, () => {
 		await snapshotStore.connect();
 		await snapshotStore.ensureCollection();
 
-		pool = snapshotStore['pool'];
+		pool = snapshotStore['pool']!;
 	});
 
 	afterAll(async () => {
-		await Promise.all([
-			pool.query(`DROP TABLE IF EXISTS "${SnapshotCollection.get()}"`),
-			pool.query(`DROP TABLE IF EXISTS "${SnapshotCollection.get('a')}"`),
-			pool.query(`DROP TABLE IF EXISTS "${SnapshotCollection.get('b')}"`),
-			pool.query(`DROP TABLE IF EXISTS "${SnapshotCollection.get('c')}"`),
+		await dropCollections(pool, [
+			SnapshotCollection.get(),
+			SnapshotCollection.get('a'),
+			SnapshotCollection.get('b'),
+			SnapshotCollection.get('c'),
 		]);
 		await snapshotStore.disconnect();
 	});
+
+	/**
+	 * Creates a snapshot table with the 3.x schema, as 3.0.2 does.
+	 */
+	const createV1Table = async (table: string) => {
+		await pool.query(
+			`CREATE TABLE ${escapeIdentifier(table)} (
+				stream_id VARCHAR(90) NOT NULL,
+				version INT NOT NULL,
+				payload JSONB NOT NULL,
+				snapshot_id VARCHAR(40) NOT NULL,
+				aggregate_id VARCHAR(40) NOT NULL,
+				registered_on TIMESTAMP NOT NULL,
+				aggregate_name VARCHAR(50) NOT NULL,
+				latest VARCHAR(100),
+				PRIMARY KEY (stream_id, version)
+			)`,
+		);
+		await pool.query(
+			`CREATE INDEX ${escapeIdentifier(`idx_${table}_aggregate_name_latest`)} ON ${escapeIdentifier(table)} (aggregate_name, latest)`,
+		);
+	};
+
+	/**
+	 * The catalog row of a collection.
+	 */
+	const catalogRow = async (collection: string) => {
+		const { rows } = await pool.query<{ kind: string; schema_version: number }>(
+			'SELECT kind, schema_version FROM event_sourcing_collections WHERE name = $1',
+			[collection],
+		);
+		return rows[0];
+	};
 
 	it('should append snapshot envelopes', async () => {
 		await snapshotStore.appendSnapshot(snapshotStreamAccountA, 1, snapshotsAccountA[0]);
@@ -517,7 +558,7 @@ describe(PostgresSnapshotStore, () => {
 		});
 
 		afterAll(async () => {
-			await pool.query(`DROP TABLE IF EXISTS ${escapeIdentifier(SnapshotCollection.get(connectionPool))}`);
+			await dropCollections(pool, [SnapshotCollection.get(connectionPool)]);
 		});
 
 		it.each(readers)(
@@ -609,7 +650,7 @@ describe(PostgresSnapshotStore, () => {
 			beforeEach(async () => {
 				smallStore = createSnapshotStore({ ...connectionOptions, max: 2 });
 				await smallStore.connect();
-				smallPool = smallStore['pool'];
+				smallPool = smallStore['pool']!;
 			});
 
 			afterEach(async () => {
@@ -672,7 +713,7 @@ describe(PostgresSnapshotStore, () => {
 		});
 
 		afterAll(async () => {
-			await pool.query(`DROP TABLE IF EXISTS ${escapeIdentifier(appendCollection)}`);
+			await dropCollections(pool, [appendCollection]);
 		});
 
 		it('should keep the previous snapshot flagged as latest when appending a snapshot fails', async () => {
@@ -733,23 +774,38 @@ describe(PostgresSnapshotStore, () => {
 			}
 		}, 15_000);
 
-		it('should unflag every previous snapshot when a stream has several flagged as latest', async () => {
+		it('should keep one latest snapshot per stream with a unique index', async () => {
 			const stream = SnapshotStream.for(Account, AccountId.generate());
-			// Concurrent appends of earlier versions could leave a stream with several snapshots flagged as latest
-			for (const version of [10, 20]) {
-				await pool.query(
+			await snapshotStore.appendSnapshot(stream, 10, { balance: 10 }, appendPool);
+
+			// A writer that doesn't go through the store can't flag a second snapshot of the stream
+			await expect(
+				pool.query(
 					`INSERT INTO ${escapeIdentifier(appendCollection)} (stream_id, version, payload, snapshot_id, aggregate_id, registered_on, aggregate_name, latest)
-					VALUES ($1, $2, '{}', 'legacy', 'legacy', now(), 'account', $3)`,
-					[stream.streamId, version, `latest#${stream.streamId}`],
-				);
-			}
+					VALUES ($1, 20, '{}', 'rogue', 'rogue', now(), 'account', $2)`,
+					[stream.streamId, `latest#${stream.streamId}`],
+				),
+			).rejects.toMatchObject({ code: '23505', constraint: `idx_${appendCollection}_latest` });
+			expect(await getStoredVersions(appendCollection, stream)).toEqual({ versions: [10], latest: [10] });
+		});
+
+		it('should conflict with a snapshot of a lower version than the highest, flagged or not', async () => {
+			const stream = SnapshotStream.for(Account, AccountId.generate());
+			await snapshotStore.appendSnapshot(stream, 10, { balance: 10 }, appendPool);
+			// A snapshot that isn't flagged, as a 3.x store could leave behind
+			await pool.query(
+				`INSERT INTO ${escapeIdentifier(appendCollection)} (stream_id, version, payload, snapshot_id, aggregate_id, registered_on, aggregate_name)
+				VALUES ($1, 30, '{"balance":30}', 'unflagged', 'unflagged', now(), 'account')`,
+				[stream.streamId],
+			);
 
 			await expect(snapshotStore.appendSnapshot(stream, 20, { balance: 20 }, appendPool)).rejects.toThrow(
-				new SnapshotStoreVersionConflictException({ stream, version: 20, latestVersion: 20, pool: appendPool }),
+				new SnapshotStoreVersionConflictException({ stream, version: 20, latestVersion: 30, pool: appendPool }),
 			);
-			await snapshotStore.appendSnapshot(stream, 30, { balance: 30 }, appendPool);
+			await expect(snapshotStore.getLastSnapshot(stream, appendPool)).resolves.toEqual({ balance: 30 });
 
-			expect(await getStoredVersions(appendCollection, stream)).toEqual({ versions: [10, 20, 30], latest: [30] });
+			await snapshotStore.appendSnapshot(stream, 40, { balance: 40 }, appendPool);
+			expect(await getStoredVersions(appendCollection, stream)).toEqual({ versions: [10, 30, 40], latest: [40] });
 		});
 
 		it('should report a unique violation during an append as a version conflict', async () => {
@@ -826,37 +882,59 @@ describe(PostgresSnapshotStore, () => {
 	});
 
 	describe('collections', () => {
-		const longPoolA = `postgres-${'x'.repeat(40)}-a`;
-		const longPoolB = `postgres-${'x'.repeat(40)}-b`;
+		const suffix = randomInt(1_000_000).toString(36);
+		const longPoolA = `postgres-${'x'.repeat(38)}-a${suffix}`;
+		const longPoolB = `postgres-${'x'.repeat(38)}-b${suffix}`;
 		const tables = [
-			SnapshotCollection.get('postgres-index'),
-			SnapshotCollection.get('postgres-existing'),
-			SnapshotCollection.get('postgres-race'),
-			SnapshotCollection.get('postgres-quo"te'),
-			SnapshotCollection.get('postgres-index-failure'),
+			SnapshotCollection.get(`postgres-index-${suffix}`),
+			SnapshotCollection.get(`postgres-legacy-${suffix}`),
+			SnapshotCollection.get(`postgres-flags-${suffix}`),
+			SnapshotCollection.get(`postgres-race-${suffix}`),
+			SnapshotCollection.get(`postgres-quo"te-${suffix}`),
+			SnapshotCollection.get(`postgres-index-failure-${suffix}`),
+			SnapshotCollection.get(`postgres-ddl-none-${suffix}`),
 			SnapshotCollection.get(longPoolA),
 			SnapshotCollection.get(longPoolB),
 		];
 
-		const dropTables = async () => {
-			await Promise.all(tables.map((table) => pool.query(`DROP TABLE IF EXISTS ${escapeIdentifier(table)}`)));
-		};
+		const dropTables = () => dropCollections(pool, tables);
 
 		beforeAll(dropTables);
 		afterAll(dropTables);
 		afterEach(() => vi.restoreAllMocks());
 
-		it('should create a secondary index for every new collection', async () => {
-			const collection = await snapshotStore.ensureCollection('postgres-index');
+		it('should create a v2 table with a unique index on the latest flags, and register it', async () => {
+			const collection = await snapshotStore.ensureCollection(`postgres-index-${suffix}`);
 
 			expect(await getIndexDefinitions(collection)).toEqual([
-				'CREATE INDEX "idx_postgres-index-snapshots_aggregate_name_latest" ON public."postgres-index-snapshots" USING btree (aggregate_name, latest)',
-				'CREATE UNIQUE INDEX "postgres-index-snapshots_pkey" ON public."postgres-index-snapshots" USING btree (stream_id, version)',
+				`CREATE UNIQUE INDEX "idx_${collection}_latest" ON public."${collection}" USING btree (aggregate_name, latest) WHERE (latest IS NOT NULL)`,
+				`CREATE UNIQUE INDEX "${collection}_pkey" ON public."${collection}" USING btree (stream_id, version)`,
 			]);
-			expect(await getIndexDefinitions(SnapshotCollection.get())).toEqual([
-				'CREATE INDEX idx_snapshots_aggregate_name_latest ON public.snapshots USING btree (aggregate_name, latest)',
-				'CREATE UNIQUE INDEX snapshots_pkey ON public.snapshots USING btree (stream_id, version)',
+			const { rows: columns } = await pool.query<{
+				column_name: string;
+				data_type: string;
+				collation_name: string | null;
+			}>(
+				`SELECT column_name, data_type, collation_name FROM information_schema.columns
+				WHERE table_schema = current_schema() AND table_name = $1 ORDER BY ordinal_position`,
+				[collection],
+			);
+			expect(
+				columns.map(
+					({ column_name, data_type, collation_name }) =>
+						`${column_name} ${data_type}${collation_name ? ` ${collation_name}` : ''}`,
+				),
+			).toEqual([
+				'stream_id text',
+				'version integer',
+				'payload jsonb',
+				'snapshot_id text',
+				'aggregate_id text',
+				'registered_on timestamp with time zone',
+				'aggregate_name text',
+				'latest text C',
 			]);
+			expect(await catalogRow(collection)).toEqual({ kind: 'snapshots', schema_version: 2 });
 		});
 
 		it('should derive distinct index names within the identifier limit for long pool names', async () => {
@@ -867,7 +945,7 @@ describe(PostgresSnapshotStore, () => {
 
 			const { rows } = await pool.query<{ tablename: string; indexname: string }>(
 				`SELECT tablename, indexname FROM pg_indexes
-				WHERE schemaname = current_schema() AND tablename = ANY ($1) AND indexdef LIKE '%(aggregate_name, latest)'
+				WHERE schemaname = current_schema() AND tablename = ANY ($1) AND indexdef LIKE '%(aggregate_name, latest)%'
 				ORDER BY tablename COLLATE "C"`,
 				[collections],
 			);
@@ -879,74 +957,137 @@ describe(PostgresSnapshotStore, () => {
 			}
 		});
 
-		it('should not build a missing index on an existing collection but log how to create it', async () => {
-			const warn = vi.spyOn(snapshotStore['logger'], 'warn').mockImplementation(() => undefined);
-			const table = SnapshotCollection.get('postgres-existing');
-			const statement =
-				'CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_postgres-existing-snapshots_aggregate_name_latest" ON "postgres-existing-snapshots" (aggregate_name, latest)';
+		it('should reject a pool whose table name Postgres would truncate', async () => {
+			const error = await snapshotStore
+				.ensureCollection(`postgres-too-long-${'y'.repeat(60)}`)
+				.catch((rejection: unknown) => rejection);
 
-			await pool.query(
-				`CREATE TABLE ${escapeIdentifier(table)} (
-					stream_id VARCHAR(90) NOT NULL,
-					version INT NOT NULL,
-					payload JSONB NOT NULL,
-					snapshot_id VARCHAR(40) NOT NULL,
-					aggregate_id VARCHAR(40) NOT NULL,
-					registered_on TIMESTAMP NOT NULL,
-					aggregate_name VARCHAR(50) NOT NULL,
-					latest VARCHAR(100),
-					PRIMARY KEY (stream_id, version)
-				)`,
-			);
-			await expect(snapshotStore.ensureCollection('postgres-existing')).resolves.toBe(table);
+			expect(error).toBeInstanceOf(SnapshotStoreCollectionCreationException);
+			expect((error as Error).cause).toBeInstanceOf(RangeError);
+		});
+
+		it('should keep using a 3.x table, register it with schema version 1 and warn once', async () => {
+			const legacyPool = `postgres-legacy-${suffix}`;
+			const table = SnapshotCollection.get(legacyPool);
+			const warn = vi.spyOn(snapshotStore['logger'], 'warn').mockImplementation(() => undefined);
+			await createV1Table(table);
+
+			await expect(snapshotStore.ensureCollection(legacyPool)).resolves.toBe(table);
+			await expect(snapshotStore.ensureCollection(legacyPool)).resolves.toBe(table);
 
 			expect(warn).toHaveBeenCalledTimes(1);
-			expect(warn).toHaveBeenCalledWith(expect.stringContaining(statement));
-			expect(await getIndexDefinitions(table)).toEqual([
-				'CREATE UNIQUE INDEX "postgres-existing-snapshots_pkey" ON public."postgres-existing-snapshots" USING btree (stream_id, version)',
-			]);
+			expect(warn).toHaveBeenCalledWith(expect.stringContaining('PostgresSnapshotStore.migrate('));
+			expect(await catalogRow(table)).toEqual({ kind: 'snapshots', schema_version: 1 });
+			expect(await drain(snapshotStore.listCollections())).toContain(table);
+			expect(await getIndexDefinitions(table)).toHaveLength(2);
 
-			// The suggested statement creates the index, after which the warning is no longer logged
-			await pool.query(statement);
-			warn.mockClear();
-			await snapshotStore.ensureCollection('postgres-existing');
-			expect(warn).not.toHaveBeenCalled();
+			const stream = SnapshotStream.for(Account, AccountId.generate());
+			await snapshotStore.appendSnapshot(stream, 10, { balance: 10 }, legacyPool);
+			const last = await snapshotStore.appendSnapshot(stream, 20, { balance: 20 }, legacyPool);
+			await expect(snapshotStore.getLastEnvelope(stream, legacyPool)).resolves.toEqual(last);
+			expect(await getStoredVersions(table, stream)).toEqual({ versions: [10, 20], latest: [20] });
+			expect(await drain(snapshotStore.getLastEnvelopesForAggregate(Account, { pool: legacyPool }))).toEqual([last]);
+		});
+
+		it('should read the highest version as the last snapshot, and unflag every snapshot of a 3.x stream on append', async () => {
+			const flagsPool = `postgres-flags-${suffix}`;
+			const table = SnapshotCollection.get(flagsPool);
+			vi.spyOn(snapshotStore['logger'], 'warn').mockImplementation(() => undefined);
+			await createV1Table(table);
+			await snapshotStore.ensureCollection(flagsPool);
+
+			// 3.x can leave a stream with several flags, or with the flag on a lower version than the highest
+			const stream = SnapshotStream.for(Account, AccountId.generate());
+			for (const [version, latest] of [
+				[10, true],
+				[20, true],
+				[30, false],
+			] as const) {
+				await pool.query(
+					`INSERT INTO ${escapeIdentifier(table)} (stream_id, version, payload, snapshot_id, aggregate_id, registered_on, aggregate_name, latest)
+					VALUES ($1, $2, $3, 'legacy', $4, now(), 'account', $5)`,
+					[
+						stream.streamId,
+						version,
+						{ balance: version },
+						stream.aggregateId,
+						latest ? `latest#${stream.streamId}` : null,
+					],
+				);
+			}
+
+			await expect(snapshotStore.getLastSnapshot(stream, flagsPool)).resolves.toEqual({ balance: 30 });
+			expect((await snapshotStore.getLastEnvelope(stream, flagsPool))?.metadata.version).toBe(30);
+			expect(await snapshotStore.getLastSnapshots([stream], flagsPool)).toEqual(new Map([[stream, { balance: 30 }]]));
+			expect(
+				[...(await snapshotStore.getManyLastSnapshotEnvelopes([stream], flagsPool)).values()].map(
+					({ metadata }) => metadata.version,
+				),
+			).toEqual([30]);
+
+			await expect(snapshotStore.appendSnapshot(stream, 30, { balance: 30 }, flagsPool)).rejects.toThrow(
+				new SnapshotStoreVersionConflictException({ stream, version: 30, latestVersion: 30, pool: flagsPool }),
+			);
+			await snapshotStore.appendSnapshot(stream, 40, { balance: 40 }, flagsPool);
+			expect(await getStoredVersions(table, stream)).toEqual({ versions: [10, 20, 30, 40], latest: [40] });
 		});
 
 		it('should roll back a new collection when its index cannot be created', async () => {
+			const failing = `postgres-index-failure-${suffix}`;
 			const query = Client.prototype.query;
 			vi.spyOn(Client.prototype, 'query').mockImplementation(function (this: Client, ...args: unknown[]) {
-				if (typeof args[0] === 'string' && args[0].startsWith('CREATE INDEX IF NOT EXISTS')) {
+				if (typeof args[0] === 'string' && args[0].startsWith('CREATE UNIQUE INDEX')) {
 					return Promise.reject(new Error('could not extend file'));
 				}
 				return query.apply(this, args);
 			} as never);
 
-			await expect(snapshotStore.ensureCollection('postgres-index-failure')).rejects.toThrow(
-				SnapshotStoreCollectionCreationException,
-			);
+			await expect(snapshotStore.ensureCollection(failing)).rejects.toThrow(SnapshotStoreCollectionCreationException);
+			vi.restoreAllMocks();
 
 			const { rows } = await pool.query<{ exists: boolean }>('SELECT to_regclass($1) IS NOT NULL AS exists', [
-				escapeIdentifier(SnapshotCollection.get('postgres-index-failure')),
+				escapeIdentifier(SnapshotCollection.get(failing)),
 			]);
 			expect(rows).toEqual([{ exists: false }]);
+			await expect(catalogRow(SnapshotCollection.get(failing))).resolves.toBeUndefined();
 		});
 
 		it('should ensure the same collection concurrently', async () => {
-			const collections = await Promise.all(
-				Array.from({ length: 8 }, () => snapshotStore.ensureCollection('postgres-race')),
-			);
+			const race = `postgres-race-${suffix}`;
+			const collections = await Promise.all(Array.from({ length: 8 }, () => snapshotStore.ensureCollection(race)));
 
-			expect(new Set(collections)).toEqual(new Set([SnapshotCollection.get('postgres-race')]));
-			expect(await getIndexDefinitions(SnapshotCollection.get('postgres-race'))).toHaveLength(2);
+			expect(new Set(collections)).toEqual(new Set([SnapshotCollection.get(race)]));
+			expect(await getIndexDefinitions(SnapshotCollection.get(race))).toHaveLength(2);
+		});
+
+		it("should refuse to create a table with ddl: 'none', with the statements that do in the cause", async () => {
+			const absent = `postgres-ddl-none-${suffix}`;
+			const store = createSnapshotStore({ ...connectionOptions, ddl: 'none' });
+			await store.connect();
+			try {
+				const error = await store.ensureCollection(absent).catch((rejection: unknown) => rejection);
+
+				expect(error).toBeInstanceOf(SnapshotStoreCollectionCreationException);
+				expect(String((error as Error).cause)).toContain(
+					`CREATE TABLE IF NOT EXISTS ${escapeIdentifier(SnapshotCollection.get(absent))}`,
+				);
+				await expect(catalogRow(SnapshotCollection.get(absent))).resolves.toBeUndefined();
+
+				// Once it exists, the store registers it
+				await snapshotStore.ensureCollection(absent);
+				await expect(store.ensureCollection(absent)).resolves.toBe(SnapshotCollection.get(absent));
+			} finally {
+				await store.disconnect();
+				await store.disconnect();
+			}
 		});
 
 		it('should support pool names that need quoting', async () => {
-			const quotedPool = 'postgres-quo"te';
+			const quotedPool = `postgres-quo"te-${suffix}`;
 			const stream = SnapshotStream.for(Account, AccountId.generate());
 
 			const collection = await snapshotStore.ensureCollection(quotedPool);
-			expect(collection).toBe('postgres-quo"te-snapshots');
+			expect(collection).toBe(`postgres-quo"te-${suffix}-snapshots`);
 			expect(await getIndexDefinitions(collection)).toHaveLength(2);
 
 			const first = await snapshotStore.appendSnapshot(stream, 10, { balance: 10 }, quotedPool);
@@ -961,30 +1102,94 @@ describe(PostgresSnapshotStore, () => {
 			await expect(snapshotStore.getLastEnvelope(stream, quotedPool)).resolves.toEqual(last);
 			expect(await snapshotStore.getLastSnapshots([stream], quotedPool)).toEqual(new Map([[stream, { balance: 20 }]]));
 			expect(await snapshotStore.getManyLastSnapshotEnvelopes([stream], quotedPool)).toEqual(new Map([[stream, last]]));
+			expect(await snapshotStore.getManyLastSnapshotEnvelopes([], quotedPool)).toEqual(new Map());
+			expect(await drain(snapshotStore.getSnapshots(stream, { pool: quotedPool }))).toEqual([
+				{ balance: 10 },
+				{ balance: 20 },
+			]);
+			expect(await drain(snapshotStore.getEnvelopes(stream, { pool: quotedPool }))).toEqual([first, last]);
+			expect(await drain(snapshotStore.getLastEnvelopesForAggregate(Account, { pool: quotedPool }))).toEqual([last]);
+			expect(await drain(snapshotStore.listCollections())).toContain(collection);
+		});
 
-			const resolvedSnapshots: ISnapshot<Account>[] = [];
-			for await (const batch of snapshotStore.getSnapshots(stream, { pool: quotedPool })) {
-				resolvedSnapshots.push(...batch);
-			}
-			expect(resolvedSnapshots).toEqual([{ balance: 10 }, { balance: 20 }]);
+		it("should refuse to create the catalog with ddl: 'none' in a schema without one", async () => {
+			const schema = `es_pg_nocatalog_${suffix}`;
+			await pool.query(`CREATE SCHEMA ${escapeIdentifier(schema)}`);
+			const store = createSnapshotStore({ ...connectionOptions, ddl: 'none', options: `-c search_path=${schema}` });
+			try {
+				await store.connect();
+				const error = await store.ensureCollection().catch((rejection: unknown) => rejection);
 
-			const resolvedEnvelopes: SnapshotEnvelope<Account>[] = [];
-			for await (const batch of snapshotStore.getEnvelopes(stream, { pool: quotedPool })) {
-				resolvedEnvelopes.push(...batch);
+				expect(error).toBeInstanceOf(SnapshotStoreCollectionCreationException);
+				expect(String((error as Error).cause)).toContain('CREATE TABLE IF NOT EXISTS event_sourcing_collections');
+				const { rows } = await pool.query('SELECT 1 FROM pg_tables WHERE schemaname = $1', [schema]);
+				expect(rows).toEqual([]);
+			} finally {
+				await store.disconnect();
+				await pool.query(`DROP SCHEMA ${escapeIdentifier(schema)} CASCADE`);
 			}
-			expect(resolvedEnvelopes).toEqual([first, last]);
+		});
 
-			const lastEnvelopes: SnapshotEnvelope<Account>[] = [];
-			for await (const batch of snapshotStore.getLastEnvelopesForAggregate(Account, { pool: quotedPool })) {
-				lastEnvelopes.push(...batch);
-			}
-			expect(lastEnvelopes).toEqual([last]);
+		it('should keep using a v2 table that lost its unique index, warn, and leave the repair to migrate()', async () => {
+			const schema = `es_pg_unindexed_${suffix}`;
+			await pool.query(`CREATE SCHEMA ${escapeIdentifier(schema)}`);
+			const options = { ...connectionOptions, options: `-c search_path=${schema}` };
+			const store = createSnapshotStore(options);
+			try {
+				await store.connect();
+				const table = await store.ensureCollection();
+				const own = store['pool']!;
+				await own.query(`DROP INDEX ${escapeIdentifier(`idx_${table}_latest`)}`);
+				const warn = vi.spyOn(store['logger'], 'warn').mockImplementation(() => undefined);
 
-			const collections: ISnapshotCollection[] = [];
-			for await (const batch of snapshotStore.listCollections()) {
-				collections.push(...batch);
+				await store.ensureCollection();
+
+				expect(warn).toHaveBeenCalledWith(
+					expect.stringContaining('lacks parts of snapshot schema v2 (such as the unique index on its latest flags)'),
+				);
+				const { rows } = await own.query('SELECT schema_version FROM event_sourcing_collections WHERE name = $1', [
+					table,
+				]);
+				expect(rows).toEqual([{ schema_version: 1 }]);
+
+				const report = await store.migrate({ legacyTimeZone: 'UTC' });
+				expect(report.collections).toMatchObject([{ name: table, from: 'v1-partial', action: 'resume' }]);
+				expect(report.collections[0].steps.map(({ name }) => name)).toEqual([
+					'migration-lock',
+					'begin',
+					'lock',
+					'unflag',
+					'flag',
+					'index-latest',
+					'register',
+					'commit',
+					'vacuum',
+				]);
+				warn.mockClear();
+				await store.ensureCollection();
+				expect(warn).not.toHaveBeenCalled();
+				const { rows: repaired } = await own.query(
+					'SELECT schema_version FROM event_sourcing_collections WHERE name = $1',
+					[table],
+				);
+				expect(repaired).toEqual([{ schema_version: 2 }]);
+			} finally {
+				await store.disconnect();
+				await pool.query(`DROP SCHEMA ${escapeIdentifier(schema)} CASCADE`);
 			}
-			expect(collections).toContain(collection);
+		});
+
+		it('should list nothing without a catalog', async () => {
+			const schema = `es_pg_empty_${suffix}`;
+			await pool.query(`CREATE SCHEMA ${escapeIdentifier(schema)}`);
+			const store = createSnapshotStore({ ...connectionOptions, options: `-c search_path=${schema}` });
+			try {
+				await store.connect();
+				expect(await drain(store.listCollections())).toEqual([]);
+			} finally {
+				await store.disconnect();
+				await pool.query(`DROP SCHEMA ${escapeIdentifier(schema)} CASCADE`);
+			}
 		});
 	});
 });
