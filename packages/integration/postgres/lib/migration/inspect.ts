@@ -220,8 +220,9 @@ export const inspectCollection = async (
 	);
 	inspection.referencingForeignKeys = foreignKeys.map(({ name: foreignKey }) => foreignKey);
 
-	// The objects of the table itself that depend on its columns internally (the primary key index on its constraint, the
-	// default of a column) aren't listed
+	// A generated column depends on the columns of its expression: through the column itself up to PostgreSQL 14 (and
+	// DROP COLUMN drops it too), through its expression from 15 on (and DROP COLUMN fails). Internal dependencies (the
+	// primary key index on its constraint, an expression on its column) aren't listed.
 	const { rows: columnDependents } = await connection.query<{
 		object: string;
 		kind: ColumnDependent['kind'];
@@ -229,9 +230,12 @@ export const inspectCollection = async (
 		column: string;
 		normal: boolean;
 	}>(
-		`SELECT pg_describe_object(d.classid, d.objid, d.objsubid) AS object,
+		`SELECT CASE
+				WHEN ad.oid IS NOT NULL THEN pg_describe_object('pg_class'::regclass, ad.adrelid, ad.adnum)
+				ELSE pg_describe_object(d.classid, d.objid, d.objsubid)
+			END AS object,
 			CASE
-				WHEN d.classid = 'pg_class'::regclass AND d.objsubid > 0 THEN 'generated column'
+				WHEN ad.oid IS NOT NULL OR (d.classid = 'pg_class'::regclass AND d.objsubid > 0) THEN 'generated column'
 				WHEN d.classid = 'pg_class'::regclass AND c.relkind IN ('i', 'I') THEN 'index'
 				WHEN d.classid = 'pg_constraint'::regclass THEN 'constraint'
 				WHEN d.classid = 'pg_policy'::regclass THEN 'policy'
@@ -246,8 +250,9 @@ export const inspectCollection = async (
 		JOIN pg_attribute a ON a.attrelid = d.refobjid AND a.attnum = d.refobjsubid
 		LEFT JOIN pg_class c ON d.classid = 'pg_class'::regclass AND c.oid = d.objid
 		LEFT JOIN pg_constraint con ON d.classid = 'pg_constraint'::regclass AND con.oid = d.objid
+		LEFT JOIN pg_attrdef ad ON d.classid = 'pg_attrdef'::regclass AND ad.oid = d.objid
 		WHERE d.refclassid = 'pg_class'::regclass AND d.refobjid = $1::oid AND d.refobjsubid > 0 AND d.deptype IN ('n', 'a')
-			AND d.classid NOT IN ('pg_rewrite'::regclass, 'pg_attrdef'::regclass)
+			AND d.classid <> 'pg_rewrite'::regclass
 			AND (con.oid IS NULL OR con.conrelid = $1::oid)
 		GROUP BY 1, 2, 3, 4
 		ORDER BY 1, 4`,

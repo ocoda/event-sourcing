@@ -784,15 +784,33 @@ describe('PostgresEventStore.migrate', () => {
 				`CREATE TRIGGER renamed BEFORE UPDATE OF stream_id ON ${t} FOR EACH ROW EXECUTE FUNCTION ${escapeIdentifier(`${schema}_noop`)}()`,
 			);
 
-			const report = await PostgresEventStore.migrate(config, { pools: ['guarded'], dryRun: true });
+			// PostgreSQL 15 and later: a row filter of a publication
+			const {
+				rows: [{ filters }],
+			} = await db.query<{ filters: boolean }>(
+				`SELECT current_setting('server_version_num')::int >= 150000 AS filters`,
+			);
+			const publication = escapeIdentifier(`${schema}_recent`);
+			if (filters) {
+				await db.query(`CREATE PUBLICATION ${publication} FOR TABLE ${t} WHERE (event_date > '2000-01')`);
+			}
 
-			const collection = collectionOf(report, guarded);
-			expect(collection.action).toBe('blocked');
-			expect(collection.blocking).toEqual([
-				expect.stringMatching(/^The column month of table .* uses event_date, which the migration drops/),
-				expect.stringMatching(/^The policy recent on table .* uses event_date, which the migration drops/),
-				expect.stringMatching(/^The trigger renamed on table .* uses stream_id, which the migration converts/),
-			]);
+			try {
+				const report = await PostgresEventStore.migrate(config, { pools: ['guarded'], dryRun: true });
+
+				const collection = collectionOf(report, guarded);
+				expect(collection.action).toBe('blocked');
+				expect(collection.blocking).toEqual([
+					expect.stringMatching(/^The column month of table .* uses event_date, which the migration drops/),
+					expect.stringMatching(/^The policy recent on table .* uses event_date, which the migration drops/),
+					...(filters
+						? [expect.stringMatching(/^The publication of table .* in publication .*_recent uses event_date/)]
+						: []),
+					expect.stringMatching(/^The trigger renamed on table .* uses stream_id, which the migration converts/),
+				]);
+			} finally {
+				await db.query(`DROP PUBLICATION IF EXISTS ${publication}`);
+			}
 		});
 
 		it('should not migrate a partly migrated table without event_date', async () => {
