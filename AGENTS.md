@@ -43,6 +43,15 @@ The `ci-ok` check is the only required check on `master` and `3.x`. Before openi
 - Versioned changesets move to `.changeset/pre/`. At 4.0 GA they become the 4.0.0 changelog, so fix an outdated one there.
 - Keep `` $` `` out of changeset text. Changesets 2 on `3.x`, where fixes get backported, treats it as a `String.replace` pattern and corrupts the entry.
 
+## Maintenance skills
+
+Claude Code skills in `.claude/skills/`, each with a `SKILL.md`. Other agents can follow those files as plain instructions:
+- `changeset`: drafts `.changeset/<slug>.md` for a branch or PR, with the bump per branch policy and user-facing text.
+- `dependency-risk`: gives a low/medium/high verdict for a Renovate/Dependabot PR or `pkg@from..to`, and says whether a changeset is needed. Read-only.
+- `triage-issue`: classifies an issue, checks released fixes and duplicates, and suggests labels and a draft reply. Posts nothing.
+- `feature-fit`: gives a fits/partial/out verdict and an API sketch, judged against `.claude/skills/feature-fit/scope-charter.md`.
+- `release`: the release preflight, invoked only by the maintainer with `/release`. Never publishes.
+
 ## Hard guardrails
 
 These need a maintainer's explicit OK:
