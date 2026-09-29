@@ -1,5 +1,11 @@
 # @ocoda/event-sourcing
 
+## 3.0.2
+
+### Patch Changes
+
+- [#544](https://github.com/ocoda/event-sourcing/pull/544) [`94b5f48`](https://github.com/ocoda/event-sourcing/commit/94b5f48415e54e3408f21c35858b431311c04462) Thanks [@drieshooghe](https://github.com/drieshooghe)! - `InMemoryEventStore.appendEvents` now rejects an append whose first version already exists with an `EventStoreVersionConflictException`. Before, appending two events at version 4 to a stream at version 3 stored a second event with version 3. The database stores already reject this through their unique (stream, version) key.
+
 ## 3.0.1
 
 ### Patch Changes

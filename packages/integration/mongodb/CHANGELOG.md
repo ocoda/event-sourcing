@@ -1,5 +1,12 @@
 # @ocoda/event-sourcing-mongodb
 
+## 3.0.2
+
+### Patch Changes
+
+- Updated dependencies [[`94b5f48`](https://github.com/ocoda/event-sourcing/commit/94b5f48415e54e3408f21c35858b431311c04462)]:
+  - @ocoda/event-sourcing@3.0.2
+
 ## 3.0.1
 
 ### Patch Changes
