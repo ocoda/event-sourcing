@@ -89,7 +89,8 @@ jobs:
           if [ "$all" = "true" ] || [ "$DOCS" = "true" ]; then docs=true; fi
 
           # Every supported database version, as docker compose services. A MongoDB job starts the standalone server
-          # and the replica set (mongodb-N-rs), and its specs run on both.
+          # and the replica set (mongodb-N-rs); its unit, resilience and conformance specs run on both, e2e on the
+          # standalone server.
           matrix='[
             {"database":"postgres","service":"postgres-13","version":"13"},
             {"database":"postgres","service":"postgres-14","version":"14"},
@@ -254,7 +255,8 @@ jobs:
       - name: Test
         env:
           DATABASE: ${{ matrix.database }}
-          # The MongoDB specs run on the standalone server (the default URL) and on this replica set.
+          # The MongoDB unit, resilience and conformance specs also run on this replica set (required in CI, see
+          # packages/testing/unit/db.ts); e2e stays on the standalone server (the default URL).
           ES_TEST_MONGODB_RS_URL: ${{ matrix.database == 'mongodb' && 'mongodb://localhost:27018/?replicaSet=rs0' || '' }}
         run: pnpm test:cov --filter="@ocoda/event-sourcing-$DATABASE"
 

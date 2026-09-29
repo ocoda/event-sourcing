@@ -18,13 +18,13 @@ import {
 	Account,
 	AccountId,
 	customerSnapshot,
+	mongodbTestTopologies,
 	snapshotEnvelopesAccountA,
 	snapshotEnvelopesAccountB,
 	snapshotStreamAccountA,
 	snapshotStreamAccountB,
 	snapshotStreamCustomer,
 	snapshotsAccountA,
-	mongodbTestTopologies,
 	snapshotsAccountB,
 } from '@ocoda/event-sourcing-testing/unit';
 import type { MongoClient } from 'mongodb';

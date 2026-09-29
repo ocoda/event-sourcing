@@ -48,22 +48,8 @@
 				"$TURBO_ROOT$/packages/testing/**/*.ts",
 				"!$TURBO_ROOT$/packages/testing/node_modules/**"
 			],
-			"env": [
-				"CONFORMANCE_RUN_SKIPPED",
-				"ES_TEST_PG_HOST",
-				"ES_TEST_PG_PORT",
-				"ES_TEST_PG_USER",
-				"ES_TEST_PG_PASSWORD",
-				"ES_TEST_PG_DATABASE",
-				"ES_TEST_MARIADB_HOST",
-				"ES_TEST_MARIADB_PORT",
-				"ES_TEST_MARIADB_USER",
-				"ES_TEST_MARIADB_PASSWORD",
-				"ES_TEST_MARIADB_DATABASE",
-				"ES_TEST_MARIADB_ROOT_PASSWORD",
-				"ES_TEST_MONGODB_URL",
-				"ES_TEST_MONGODB_RS_URL"
-			],
+			"env": ["CONFORMANCE_RUN_SKIPPED", "ES_TEST_*"],
+			"passThroughEnv": ["CI"],
 			"outputs": []
 		},
 		"test:cov": {
@@ -76,22 +62,8 @@
 				"$TURBO_ROOT$/packages/testing/**/*.ts",
 				"!$TURBO_ROOT$/packages/testing/node_modules/**"
 			],
-			"env": [
-				"CONFORMANCE_RUN_SKIPPED",
-				"ES_TEST_PG_HOST",
-				"ES_TEST_PG_PORT",
-				"ES_TEST_PG_USER",
-				"ES_TEST_PG_PASSWORD",
-				"ES_TEST_PG_DATABASE",
-				"ES_TEST_MARIADB_HOST",
-				"ES_TEST_MARIADB_PORT",
-				"ES_TEST_MARIADB_USER",
-				"ES_TEST_MARIADB_PASSWORD",
-				"ES_TEST_MARIADB_DATABASE",
-				"ES_TEST_MARIADB_ROOT_PASSWORD",
-				"ES_TEST_MONGODB_URL",
-				"ES_TEST_MONGODB_RS_URL"
-			],
+			"env": ["CONFORMANCE_RUN_SKIPPED", "ES_TEST_*"],
+			"passThroughEnv": ["CI"],
 			"outputs": ["coverage/**"]
 		},
 		"dev": {

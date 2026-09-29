@@ -3,9 +3,9 @@ import { describeSnapshotStoreConformance } from '@ocoda/event-sourcing-testing/
 import { mongodbTestTopologies } from '@ocoda/event-sourcing-testing/unit';
 import { createSnapshotStore } from '../support/stores.js';
 
-describe.each(mongodbTestTopologies())('$name', ({ url }) => {
+for (const { name, url } of mongodbTestTopologies()) {
 	describeSnapshotStoreConformance(
-		MongoDBSnapshotStore.name,
+		`${MongoDBSnapshotStore.name} (${name})`,
 		async () => {
 			const store = createSnapshotStore({ url });
 			await store.connect();
@@ -34,4 +34,4 @@ describe.each(mongodbTestTopologies())('$name', ({ url }) => {
 			},
 		},
 	);
-});
+}

@@ -63,7 +63,7 @@ Versions of the same database share a port, so run one version at a time.
 
 The specs connect with the settings in `packages/testing/unit/db.ts`, whose defaults match these services. Override them with `ES_TEST_PG_*`, `ES_TEST_MARIADB_*` and `ES_TEST_MONGODB_URL`, for example to use a database of your own on a shared server (the specs use fixed table names, so two runs must not share a database).
 
-The MongoDB specs run on a standalone server and, when `ES_TEST_MONGODB_RS_URL` is set, on a replica set too. CI runs both in every MongoDB job:
+The MongoDB unit, resilience and conformance specs run on a standalone server and, when `ES_TEST_MONGODB_RS_URL` is set, on a replica set too; the e2e suite runs on the standalone server only. CI runs both topologies in every MongoDB job and fails if `ES_TEST_MONGODB_RS_URL` is missing:
 
 ```bash
 docker compose up -d --wait mongodb mongodb-8-rs

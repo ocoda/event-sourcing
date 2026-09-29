@@ -15,7 +15,8 @@
  * | `ES_TEST_MONGODB_URL` | `mongodb://localhost:27017` (a standalone server) |
  * | `ES_TEST_MONGODB_RS_URL` | unset: no replica-set run (e.g. `mongodb://localhost:27018/?replicaSet=rs0`) |
  *
- * An empty variable counts as unset.
+ * An empty variable counts as unset. In CI (`CI` set) `ES_TEST_MONGODB_RS_URL` is required, so a MongoDB job cannot
+ * lose its replica-set run without failing.
  */
 
 /** The connection settings of a SQL database. */
@@ -42,7 +43,7 @@ const port = (name: string, fallback: number): number => {
 	}
 
 	const parsed = Number(value);
-	if (!Number.isInteger(parsed) || parsed <= 0) {
+	if (!Number.isInteger(parsed) || parsed <= 0 || parsed > 65535) {
 		throw new Error(`${name} must be a port number, got '${value}'`);
 	}
 	return parsed;
@@ -78,7 +79,8 @@ export const mariadbRootConfig = (): SqlTestConfig => ({
 
 /**
  * The MongoDB deployments to run the MongoDB specs against: always the standalone server (`ES_TEST_MONGODB_URL`),
- * first, and the replica set when `ES_TEST_MONGODB_RS_URL` is set.
+ * first, and the replica set when `ES_TEST_MONGODB_RS_URL` is set. Locally the replica set is optional; in CI a
+ * missing `ES_TEST_MONGODB_RS_URL` throws instead of silently dropping the replica-set run.
  */
 export const mongodbTestTopologies = (): MongoDBTestTopology[] => {
 	const topologies: MongoDBTestTopology[] = [
@@ -88,6 +90,10 @@ export const mongodbTestTopologies = (): MongoDBTestTopology[] => {
 	const replicaSetUrl = process.env.ES_TEST_MONGODB_RS_URL;
 	if (replicaSetUrl) {
 		topologies.push({ name: 'replica-set', url: replicaSetUrl });
+	} else if (process.env.CI && process.env.CI !== 'false') {
+		throw new Error(
+			'ES_TEST_MONGODB_RS_URL must be set in CI: the MongoDB specs run on the standalone server and on a replica set',
+		);
 	}
 
 	return topologies;

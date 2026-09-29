@@ -19,13 +19,13 @@ import {
 	Account,
 	AccountId,
 	customerSnapshot,
+	postgresTestConfig,
 	snapshotEnvelopesAccountA,
 	snapshotEnvelopesAccountB,
 	snapshotStreamAccountA,
 	snapshotStreamAccountB,
 	snapshotStreamCustomer,
 	snapshotsAccountA,
-	postgresTestConfig,
 	snapshotsAccountB,
 } from '@ocoda/event-sourcing-testing/unit';
 import { Client, type Pool, escapeIdentifier } from 'pg';

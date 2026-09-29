@@ -3,9 +3,9 @@ import { describeEventStoreConformance } from '@ocoda/event-sourcing-testing/con
 import { mongodbTestTopologies } from '@ocoda/event-sourcing-testing/unit';
 import { createEventStore } from '../support/stores.js';
 
-describe.each(mongodbTestTopologies())('$name', ({ url }) => {
+for (const { name, url } of mongodbTestTopologies()) {
 	describeEventStoreConformance(
-		MongoDBEventStore.name,
+		`${MongoDBEventStore.name} (${name})`,
 		async (eventMap) => {
 			const { store } = createEventStore({ url }, eventMap);
 			await store.connect();
@@ -31,4 +31,4 @@ describe.each(mongodbTestTopologies())('$name', ({ url }) => {
 			},
 		},
 	);
-});
+}

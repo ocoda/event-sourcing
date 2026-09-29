@@ -55,10 +55,11 @@ services:
       timeout: 5s
       retries: 6
 
-  # Single-member replica sets on 27018, next to the standalone servers on 27017: the MongoDB specs also run on the
-  # replica set when ES_TEST_MONGODB_RS_URL=mongodb://localhost:27018/?replicaSet=rs0 is set. The member advertises
-  # localhost:27018, so clients on the host reach it through the published port. The first health check initiates
-  # the replica set, and the service is healthy once the member is a writable primary.
+  # Single-member replica sets on 27018, next to the standalone servers on 27017: the MongoDB unit, resilience and
+  # conformance specs also run on the replica set when ES_TEST_MONGODB_RS_URL=mongodb://localhost:27018/?replicaSet=rs0
+  # is set (e2e stays on the standalone server). The member advertises localhost:27018, so clients on the host reach
+  # it through the published port. The first health check initiates the replica set, and the service is healthy once
+  # the member is a writable primary.
   mongodb-6-rs:
     container_name: es-mongodb-6-rs
     image: mongo:6
@@ -77,7 +78,7 @@ services:
           "27018",
           "--quiet",
           "--eval",
-          "try { rs.status() } catch (e) { rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'localhost:27018' }] }) } if (!db.runCommand({ hello: 1 }).isWritablePrimary) quit(1)",
+          "try { rs.status() } catch (e) { rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'localhost:27018' }] }) } quit(db.runCommand({ hello: 1 }).isWritablePrimary ? 0 : 1)",
         ]
       interval: 5s
       timeout: 5s
@@ -101,7 +102,7 @@ services:
           "27018",
           "--quiet",
           "--eval",
-          "try { rs.status() } catch (e) { rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'localhost:27018' }] }) } if (!db.runCommand({ hello: 1 }).isWritablePrimary) quit(1)",
+          "try { rs.status() } catch (e) { rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'localhost:27018' }] }) } quit(db.runCommand({ hello: 1 }).isWritablePrimary ? 0 : 1)",
         ]
       interval: 5s
       timeout: 5s
@@ -125,7 +126,7 @@ services:
           "27018",
           "--quiet",
           "--eval",
-          "try { rs.status() } catch (e) { rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'localhost:27018' }] }) } if (!db.runCommand({ hello: 1 }).isWritablePrimary) quit(1)",
+          "try { rs.status() } catch (e) { rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'localhost:27018' }] }) } quit(db.runCommand({ hello: 1 }).isWritablePrimary ? 0 : 1)",
         ]
       interval: 5s
       timeout: 5s
