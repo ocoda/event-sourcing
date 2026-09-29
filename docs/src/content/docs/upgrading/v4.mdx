@@ -6,7 +6,7 @@ import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
 
 4.0 is the next major release. It is published as prereleases (`4.0.0-next.N`) under the npm `next` tag, while 3.x stays on `latest` and keeps receiving fixes. See [Versioning and support](/upgrading/versioning) for what each release line gets.
 
-This guide covers the changes that have been released so far, in `4.0.0-next.0`. More breaking changes are planned before 4.0.0, see [Coming in later 4.0 prereleases](#coming-next). The guide is extended with each prerelease.
+This guide covers the changes that have been released so far, in `4.0.0-next.0`. More breaking changes are planned before 4.0.0. They are listed under [Coming in later 4.0 prereleases](#coming-next), and move into this guide as they ship.
 
 <Aside type="caution" title="Prerelease">
 There is no stability or support guarantee until 4.0.0 is released, and a later prerelease can break things again. Pin the exact version, and read the [changelog](https://github.com/ocoda/event-sourcing/blob/master/packages/core/CHANGELOG.md) before you move to the next prerelease.
@@ -48,13 +48,13 @@ The core and the integrations are released together with the same version number
 ## Upgrade steps [#upgrade-steps]
 
 1. Upgrade the application to [NestJS 12 and Node.js 22.12 or later](#nestjs-and-node).
-2. Install `@ocoda/event-sourcing` and your integrations from the `next` tag, see [Installing the prerelease](#installing-the-prerelease).
+2. Install `@ocoda/event-sourcing` and your integrations from the `next` tag, as shown in [Installing the prerelease](#installing-the-prerelease).
 3. Install the [driver](#drivers) of every integration you use.
 4. Replace [imports of paths inside the packages](#imports) with imports from the package name.
 5. On MariaDB, check code that depends on the [order of `loadAll`](#mariadb-snapshot-order).
 6. If you use DynamoDB, read [DynamoDB is not part of 4.0](#dynamodb) first.
 
-The stored event and snapshot formats are unchanged, so no data migration is needed.
+The stored event and snapshot formats are unchanged in `4.0.0-next.0`, so this prerelease needs no data migration. A one-time schema migration of the event tables is planned for a later prerelease (see [Coming in later 4.0 prereleases](#coming-next)).
 
 ## NestJS 12 and Node.js 22.12 [#nestjs-and-node]
 
@@ -140,7 +140,7 @@ The `@types/pg` and `@types/pg-cursor` packages are only needed in TypeScript pr
 
 ## Integrations peer on the core with a caret range [#core-peer]
 
-In 3.x each integration required one exact version of `@ocoda/event-sourcing`. In 4.0 the integrations peer on `@ocoda/event-sourcing` with a caret range (`^4.0.0`) and on `@nestjs/common` `^12.0.0`. They no longer list `@nestjs/core`, `rxjs` or `reflect-metadata`, which they don't import.
+In 3.x each integration required one exact version of `@ocoda/event-sourcing`. In 4.0 the integrations peer on `@ocoda/event-sourcing` with a caret range (`^4.0.0-next.0` in this prerelease) and on `@nestjs/common` `^12.0.0`. They no longer list `@nestjs/core`, `rxjs` or `reflect-metadata`, which they don't import.
 
 The packages are still released together, so upgrade the core and the integrations at the same time.
 
@@ -163,7 +163,7 @@ This reverses the order of `loadAll` on MariaDB, and a `limit` now returns the s
 
 ## DynamoDB is not part of 4.0 [#dynamodb]
 
-The DynamoDB store (`@ocoda/event-sourcing-dynamodb`) is not released for 4.0. DynamoDB can't give the events a gap-free global order, which the 4.0 read side relies on. You have two options:
+The DynamoDB store (`@ocoda/event-sourcing-dynamodb`) is not released for 4.0. DynamoDB can't give the events a gap-free global order, which the read side planned for 4.0 relies on. You have two options:
 
 - **Stay on 3.x.** 3.x keeps receiving security and critical fixes. Install `@ocoda/event-sourcing@3` with `@ocoda/event-sourcing-dynamodb@3`, on NestJS 11.
 - **Move your data to another store**: PostgreSQL, MariaDB or MongoDB. There is no migration tool for this yet. [ADR 0001](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0001-v4-core-api.md#migration-guide) plans to let a 4.0 store import exported events as pre-built envelopes that keep their ids and timestamps. This guide will describe it once it ships.
