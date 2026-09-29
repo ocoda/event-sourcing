@@ -248,6 +248,27 @@ services:
       timeout: 5s
       retries: 6
 
+  # From 18 on, the image keeps its data in /var/lib/postgresql/18/docker (PGDATA) and declares /var/lib/postgresql as
+  # the volume, so the tmpfs goes on /var/lib/postgresql instead of /var/lib/postgresql/data.
+  postgres-18:
+    container_name: es-postgres-18
+    image: postgres:18
+    shm_size: 256mb
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    volumes:
+      - type: tmpfs
+        target: /var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
   mariadb:
     container_name: es-mariadb
     image: mariadb:10.11
@@ -289,6 +310,25 @@ services:
   mariadb-11:
     container_name: es-mariadb-11
     image: mariadb:11.4
+    ports:
+      - 3306:3306
+    environment:
+      MYSQL_ROOT_PASSWORD: mariadb
+      MYSQL_DATABASE: mariadb
+      MYSQL_USER: mariadb
+      MYSQL_PASSWORD: mariadb
+    volumes:
+      - type: tmpfs
+        target: /var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  mariadb-11-8:
+    container_name: es-mariadb-11-8
+    image: mariadb:11.8
     ports:
       - 3306:3306
     environment:

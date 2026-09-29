@@ -9,8 +9,7 @@
 		"node": true,
 		"es2024": true
 	},
-	// benchmarks/ is not maintained and has never been linted.
-	"ignorePatterns": ["dist", "coverage", ".astro", ".turbo", "benchmarks"],
+	"ignorePatterns": ["dist", "coverage", ".astro", ".turbo"],
 	"rules": {
 		"no-unused-vars": [
 			"error",

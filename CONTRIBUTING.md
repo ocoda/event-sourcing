@@ -17,8 +17,8 @@ Base your pull request on the branch your change targets.
 
 ## Prerequisites
 
-- **Node.js ≥ 22.12**, which the test and build tooling requires.
-- **pnpm**: use the version pinned in the root `package.json` (`packageManager`); `corepack enable` picks it up.
+- **Node.js ≥ 22.12**, which the test and build tooling requires. `.node-version` names 24 for version managers.
+- **pnpm 12**: use the exact version pinned in the root `package.json` (`packageManager`). `corepack enable` picks it up with Corepack 0.34.6 or later (`corepack --version`); the Corepack bundled with older Node releases can't run pnpm 12, so update it first with `npm install --global corepack@latest`. pnpm doesn't switch to that version on its own in this repository (`pmOnFail: ignore` in `pnpm-workspace.yaml`), so with another pnpm, run `pnpm self-update <version>` first.
 - **Docker**, if you touch a database integration.
 
 ## Setup
@@ -28,6 +28,8 @@ git clone https://github.com/ocoda/event-sourcing.git
 cd event-sourcing
 pnpm install
 ```
+
+`pnpm-workspace.yaml` sets the dependency policy: versions that several packages share come from its `catalog` (write `catalog:` in `package.json`), pnpm installs only versions that are at least a day old, and a dependency install script runs only when `allowBuilds` sets that package to `true` (an unlisted package with one fails the install).
 
 The repository is a pnpm + turbo monorepo:
 
@@ -49,10 +51,10 @@ Core tests need no database. Integration tests run against the services in `dock
 
 | Service              | Versions                                        |
 | -------------------- | ----------------------------------------------- |
-| `postgres`           | `postgres-13` … `postgres-17` (`postgres` is 14) |
+| `postgres`           | `postgres-13` … `postgres-18` (`postgres` is 14) |
 | `mongodb`            | `mongodb-6`, `mongodb-7`, `mongodb-8` (`mongodb` is 8) |
 | MongoDB replica sets | `mongodb-6-rs`, `mongodb-7-rs`, `mongodb-8-rs` (port 27018) |
-| `mariadb`            | `mariadb-10` (10.11), `mariadb-11` (11.4)        |
+| `mariadb`            | `mariadb-10` (10.11), `mariadb-11` (11.4), `mariadb-11-8` (11.8) |
 
 Start one and wait until it is healthy:
 
@@ -71,7 +73,7 @@ docker compose up -d --wait mongodb mongodb-8-rs
 ES_TEST_MONGODB_RS_URL='mongodb://localhost:27018/?replicaSet=rs0' pnpm test:cov --filter=@ocoda/event-sourcing-mongodb
 ```
 
-The cross-version test checks that a driver reads what the published 3.0.2 packages wrote: the 3.0.2 writer in `fixtures/cross-version/v3` fills a schema or database of its own, then the driver's `tests/cross-version` specs read it back. CI runs it on the oldest and newest version of each database. It needs npm and the same `ES_TEST_*` settings (for MariaDB also the root password, to create the database):
+The cross-version test checks that a driver reads what the published 3.0.2 packages wrote: the 3.0.2 writer in `fixtures/cross-version/v3` fills a schema or database of its own, then the driver's `tests/cross-version` specs read it back. CI runs it on the oldest and newest version of each database, and on PostgreSQL 17 and MariaDB 11.4. It needs npm and the same `ES_TEST_*` settings (for MariaDB also the root password, to create the database):
 
 ```bash
 pnpm test:cross-version --database postgres   # or mariadb, mongodb (both topologies with ES_TEST_MONGODB_RS_URL)
@@ -125,7 +127,7 @@ pnpm exec changeset
 
 - Write the text for library users and call out behaviour changes.
 - Pick the bump as usual: `major` for a breaking change (with a migration note), `minor` for a feature, `patch` for a fix.
-- Name only the published packages: `@ocoda/event-sourcing` and the four `@ocoda/event-sourcing-<db>` integrations.
+- Name only the published packages: `@ocoda/event-sourcing` and the three `@ocoda/event-sourcing-<db>` integrations (`postgres`, `mongodb`, `mariadb`).
 - On `3.x`, only `patch` changesets are accepted.
 
 Docs, examples, CI and test-only changes don't need a changeset.
