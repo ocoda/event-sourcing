@@ -22,6 +22,9 @@ export const collect = async <T>(batches: AsyncIterable<T[]>): Promise<T[]> => {
 	return items;
 };
 
+/** Whether the specs run in CI (`CI` set and not `false`, like scripts/test-cross-version.mjs and unit/db.ts). */
+export const crossVersionRunsInCI = Boolean(process.env.CI) && process.env.CI !== 'false';
+
 /** The pool argument of the store methods for a manifest pool (`null` is the default pool). */
 export const poolOf = (pool: string | null): string | undefined => pool ?? undefined;
 
@@ -36,7 +39,38 @@ export const expectWriterTimeZone = (manifest: CrossVersionManifest): void => {
 	).toBe(manifest.writerTimeZone);
 };
 
-/** `getEnvelopes` and `getEvents` of a stream return what 3.x returned: fields, classes, dates and order. */
+/**
+ * The manifest holds the whole corpus: 3.x read back every event and snapshot the writer appended, so an empty or
+ * hollow manifest can't pass the read checks. writer.mjs checks the same before it writes the manifest.
+ */
+export const expectCompleteCorpus = (manifest: CrossVersionManifest): void => {
+	expect(manifest.eventPools.length, 'event pools').toBeGreaterThanOrEqual(3);
+	expect(manifest.snapshotPools.length, 'snapshot pools').toBeGreaterThanOrEqual(3);
+	for (const pool of manifest.eventPools) {
+		expect(pool.streams.length, `${pool.collection}: streams`).toBeGreaterThan(0);
+		expect(pool.legacyAllOrder, `${pool.collection}: getAllEnvelopes covered every written event`).toHaveLength(
+			pool.written.length,
+		);
+		for (const stream of pool.streams) {
+			if (pool.caseVariantStreams.includes(stream.streamId)) continue;
+			const written = pool.written.filter(({ streamId }) => streamId === stream.streamId).length;
+			expect(written, `${stream.streamId}: written events`).toBeGreaterThan(0);
+			expect(stream.envelopes, `${stream.streamId}: 3.x read back every written event`).toHaveLength(written);
+		}
+	}
+	for (const pool of manifest.snapshotPools) {
+		expect(pool.streams.length, `${pool.collection}: snapshot streams`).toBeGreaterThan(0);
+		expect(
+			pool.streams.flatMap(({ envelopes }) => envelopes),
+			`${pool.collection}: 3.x read back every snapshot`,
+		).toHaveLength(pool.written.length);
+	}
+};
+
+/**
+ * `getEnvelopes` and `getEvents` of a stream return what 3.x returned: fields, classes, dates and order. Soft
+ * assertions, so one run reports every stream that differs.
+ */
 export const expectEventStreamReads = async (
 	store: EventStore,
 	stream: ManifestEventStream,
@@ -44,9 +78,9 @@ export const expectEventStreamReads = async (
 ): Promise<void> => {
 	const eventStream = crossVersionEventStream(stream);
 	const envelopes = await collect(store.getEnvelopes!(eventStream, { pool }));
-	expect(envelopes.map(encodeEventEnvelope), `getEnvelopes(${stream.streamId})`).toEqual(stream.envelopes);
+	expect.soft(envelopes.map(encodeEventEnvelope), `getEnvelopes(${stream.streamId})`).toEqual(stream.envelopes);
 	const events = await collect(store.getEvents(eventStream, { pool }));
-	expect(events.map(encodeValue), `getEvents(${stream.streamId})`).toEqual(stream.events);
+	expect.soft(events.map(encodeValue), `getEvents(${stream.streamId})`).toEqual(stream.events);
 };
 
 /**
@@ -78,7 +112,7 @@ const versionOf = (envelope: EncodedSnapshotEnvelope | null): EncodedValue | und
 
 /**
  * `getEnvelopes` and `getLastEnvelope` of a snapshot stream return what 3.x returned. With two rows flagged latest
- * (`duplicateLatest`), 3.x returns either, so either is accepted.
+ * (`duplicateLatest`), 3.x returns either, so either is accepted. Soft assertions, like expectEventStreamReads.
  */
 export const expectSnapshotStreamReads = async (
 	store: SnapshotStore,
@@ -87,30 +121,35 @@ export const expectSnapshotStreamReads = async (
 ): Promise<void> => {
 	const snapshotStream = crossVersionSnapshotStream(stream);
 	const envelopes = await collect(store.getEnvelopes!(snapshotStream, { pool: poolOf(pool.pool) }));
-	expect(envelopes.map(encodeSnapshotEnvelope), `getEnvelopes(${stream.streamId})`).toEqual(stream.envelopes);
+	expect.soft(envelopes.map(encodeSnapshotEnvelope), `getEnvelopes(${stream.streamId})`).toEqual(stream.envelopes);
 
 	const last = encodeSnapshotEnvelope(await store.getLastEnvelope(snapshotStream, poolOf(pool.pool)));
 	const duplicate = pool.duplicateLatest.find(({ streamId }) => streamId === stream.streamId);
 	if (duplicate) {
-		expect(duplicate.flaggedVersions, `getLastEnvelope(${stream.streamId}) version`).toContain(versionOf(last));
-		expect(last, `getLastEnvelope(${stream.streamId})`).toEqual(
-			stream.envelopes.find((envelope) => versionOf(envelope) === versionOf(last)),
-		);
+		expect.soft(duplicate.flaggedVersions, `getLastEnvelope(${stream.streamId}) version`).toContain(versionOf(last));
+		expect
+			.soft(last, `getLastEnvelope(${stream.streamId})`)
+			.toEqual(stream.envelopes.find((envelope) => versionOf(envelope) === versionOf(last)));
 	} else {
-		expect(last, `getLastEnvelope(${stream.streamId})`).toEqual(stream.last);
+		expect.soft(last, `getLastEnvelope(${stream.streamId})`).toEqual(stream.last);
 	}
 };
 
 /**
  * `listCollections` lists the corpus collections as 3.x did. 3.x lists matching tables of every schema (PostgreSQL)
- * or database (MariaDB), which other test runs on a shared server may change meanwhile, so outside CI only the corpus
- * collections are compared.
+ * or database (MariaDB), which other test runs on a shared server may change meanwhile: expectEveryListedCollection
+ * compares the whole lists where the server is the run's own.
  */
 export const expectListedCollections = (actual: string[], expected: string[], corpus: string[]): void => {
 	const own = (names: string[]) => [...new Set(names.filter((name) => corpus.includes(name)))].sort();
 	expect(own(expected), '3.x listed every corpus collection').toEqual([...corpus].sort());
 	expect(own(actual), 'the corpus collections').toEqual([...corpus].sort());
-	if (process.env.CI) {
-		expect([...actual].sort(), 'every listed collection').toEqual([...expected].sort());
-	}
+};
+
+/**
+ * `listCollections` lists every collection 3.x listed, and no other. PostgreSQL and MariaDB: CI only (a server no
+ * other run writes to).
+ */
+export const expectEveryListedCollection = (actual: string[], expected: string[]): void => {
+	expect([...actual].sort(), 'every listed collection').toEqual([...expected].sort());
 };

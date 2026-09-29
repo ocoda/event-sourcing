@@ -12,11 +12,14 @@
 //    c. append-after.mjs appends with 3.0.2 once more, and must succeed or fail as the driver's
 //       tests/cross-version/cross-version.json says ("fails" once the driver migrates to schema v2);
 //    d. the namespace is dropped, unless KEEP_XV=1.
+// 3. The temporary copy is removed, unless KEEP_XV=1 or the run failed: then it keeps the manifests
+//    (<target>.manifest.json). XV_WORK_DIR names the directory to use instead of a new temporary one (CI uploads the
+//    manifests of a failed run from there).
 //
 // Connection settings: the ES_TEST_* variables of packages/testing/unit/db.ts, with the same defaults.
 import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { cpSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -30,6 +33,8 @@ const WRITER_TIME_ZONE = 'America/New_York';
 const APPEND_AFTER_EXIT_CODES = { succeeds: 0, fails: 2 };
 
 const { values } = parseArgs({ options: { database: { type: 'string' } } });
+const keep = process.env.KEEP_XV === '1';
+const inCI = Boolean(process.env.CI) && process.env.CI !== 'false';
 const database = values.database === 'pg' ? 'postgres' : values.database;
 if (!DATABASES.includes(database)) {
 	console.error(`Usage: node scripts/test-cross-version.mjs --database <${DATABASES.join('|')}>`);
@@ -61,8 +66,10 @@ const targets = () => {
 	const list = [{ name: 'standalone', url: process.env.ES_TEST_MONGODB_URL || 'mongodb://localhost:27017' }];
 	if (process.env.ES_TEST_MONGODB_RS_URL) {
 		list.push({ name: 'replica-set', url: process.env.ES_TEST_MONGODB_RS_URL });
-	} else if (process.env.CI && process.env.CI !== 'false') {
+	} else if (inCI) {
 		throw new Error('ES_TEST_MONGODB_RS_URL must be set in CI: the cross-version test runs on both MongoDB topologies');
+	} else {
+		console.log('Skipping the MongoDB replica set: ES_TEST_MONGODB_RS_URL is not set');
 	}
 	return list;
 };
@@ -71,22 +78,28 @@ const packageDir = join(repoRoot, 'packages', 'integration', database);
 const { appendAfter } = JSON.parse(
 	readFileSync(join(packageDir, 'tests', 'cross-version', 'cross-version.json'), 'utf8'),
 );
-if (!(appendAfter in APPEND_AFTER_EXIT_CODES)) {
+if (!Object.hasOwn(APPEND_AFTER_EXIT_CODES, appendAfter)) {
 	throw new Error(`cross-version.json: appendAfter must be one of ${Object.keys(APPEND_AFTER_EXIT_CODES)}`);
 }
 
-const work = mkdtempSync(join(tmpdir(), 'ocoda-cross-version-'));
+const ownWork = !process.env.XV_WORK_DIR;
+const work = process.env.XV_WORK_DIR || mkdtempSync(join(tmpdir(), 'ocoda-cross-version-'));
+mkdirSync(work, { recursive: true });
 const failures = [];
+const covered = [];
+const manifests = [];
 try {
 	const writer = join(work, 'v3');
 	cpSync(fixture, writer, { recursive: true, filter: (source) => !source.includes('node_modules') });
 	runOrThrow('npm', ['ci', '--ignore-scripts', '--no-audit', '--no-fund'], { cwd: writer });
 
 	for (const target of targets()) {
+		covered.push(target.name);
 		const namespace = `xv_${randomBytes(4).toString('hex')}`;
 		const url = target.url && namespacedMongoUrl(target.url, namespace);
 		const connection = ['--database', database, '--namespace', namespace, ...(url ? ['--url', url] : [])];
 		const manifest = join(work, `${target.name}.manifest.json`);
+		manifests.push(manifest);
 		const label = `${database} (${target.name}, ${namespace})`;
 		console.log(`\n### ${label}`);
 
@@ -125,6 +138,7 @@ try {
 			const expected = APPEND_AFTER_EXIT_CODES[appendAfter];
 			const status = run(process.execPath, ['append-after.mjs', ...connection, '--manifest', manifest], {
 				cwd: writer,
+				env,
 			});
 			if (status !== expected) {
 				failures.push(
@@ -132,20 +146,26 @@ try {
 				);
 			}
 		} finally {
-			if (process.env.KEEP_XV) {
-				console.log(`Kept the namespace ${namespace} (KEEP_XV)`);
-			} else {
-				run(process.execPath, ['namespace.mjs', 'drop', ...connection], { cwd: writer });
+			if (keep) {
+				console.log(`Kept the namespace ${namespace} (KEEP_XV=1)`);
+			} else if (run(process.execPath, ['namespace.mjs', 'drop', ...connection], { cwd: writer }) !== 0) {
+				failures.push(`${label}: could not drop the namespace ${namespace}; drop it by hand`);
 			}
 		}
 	}
 } catch (error) {
 	failures.push(error instanceof Error ? error.message : String(error));
 } finally {
-	if (process.env.KEEP_XV) {
-		console.log(`\nKept the writer and the manifests in ${work} (KEEP_XV)`);
+	if (keep) {
+		console.log(`\nKept the writer and the manifests in ${work} (KEEP_XV=1)`);
 	} else {
-		rmSync(work, { recursive: true, force: true });
+		rmSync(join(work, 'v3'), { recursive: true, force: true });
+		if (failures.length > 0) {
+			console.log(`\nKept the manifests of the failed run in ${work}`);
+		} else {
+			for (const manifest of manifests) rmSync(manifest, { force: true });
+			if (ownWork) rmSync(work, { recursive: true, force: true });
+		}
 	}
 }
 
@@ -153,4 +173,5 @@ if (failures.length > 0) {
 	console.error(`\nCross-version test failed:\n${failures.map((failure) => `- ${failure}`).join('\n')}`);
 	process.exit(1);
 }
-console.log(`\nCross-version test passed: ${database} reads what 3.0.2 wrote.`);
+const topologies = database === 'mongodb' ? ` (${covered.join(', ')})` : '';
+console.log(`\nCross-version test passed: ${database}${topologies} reads what 3.0.2 wrote.`);

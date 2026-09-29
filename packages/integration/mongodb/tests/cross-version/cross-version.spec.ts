@@ -2,7 +2,9 @@ import type { MongoDBEventStore, MongoDBSnapshotStore } from '@ocoda/event-sourc
 import {
 	collect,
 	createCrossVersionEventMap,
+	expectCompleteCorpus,
 	expectEventStreamReads,
+	expectEveryListedCollection,
 	expectLegacyAllOrder,
 	expectListedCollections,
 	expectSnapshotStreamReads,
@@ -30,6 +32,7 @@ describe(`MongoDB (${topology}) reads the 3.0.2 corpus as 3.0.2 did`, () => {
 
 	beforeAll(async () => {
 		expectWriterTimeZone(manifest);
+		expectCompleteCorpus(manifest);
 		eventStore = createEventStore(overrides, createCrossVersionEventMap()).store;
 		snapshotStore = createSnapshotStore(overrides);
 		await Promise.all([eventStore.connect(), snapshotStore.connect()]);
@@ -62,7 +65,7 @@ describe(`MongoDB (${topology}) reads the 3.0.2 corpus as 3.0.2 did`, () => {
 		});
 	});
 
-	it('lists the collections as 3.0.2 did', async () => {
+	it('lists the corpus collections as 3.0.2 did', async () => {
 		expectListedCollections(
 			await collect(eventStore.listCollections()),
 			manifest.eventCollections,
@@ -73,5 +76,11 @@ describe(`MongoDB (${topology}) reads the 3.0.2 corpus as 3.0.2 did`, () => {
 			manifest.snapshotCollections,
 			manifest.snapshotPools.map(({ collection }) => collection),
 		);
+	});
+
+	// The namespace is a database of its own, and 3.x lists the collections of one database: compared everywhere.
+	it('lists every collection as 3.0.2 did', async () => {
+		expectEveryListedCollection(await collect(eventStore.listCollections()), manifest.eventCollections);
+		expectEveryListedCollection(await collect(snapshotStore.listCollections()), manifest.snapshotCollections);
 	});
 });

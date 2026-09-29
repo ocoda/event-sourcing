@@ -2,7 +2,10 @@ import type { PostgresEventStore, PostgresSnapshotStore } from '@ocoda/event-sou
 import {
 	collect,
 	createCrossVersionEventMap,
+	crossVersionRunsInCI,
+	expectCompleteCorpus,
 	expectEventStreamReads,
+	expectEveryListedCollection,
 	expectLegacyAllOrder,
 	expectListedCollections,
 	expectSnapshotStreamReads,
@@ -24,6 +27,7 @@ describe('PostgreSQL reads the 3.0.2 corpus as 3.0.2 did', () => {
 
 	beforeAll(async () => {
 		expectWriterTimeZone(manifest);
+		expectCompleteCorpus(manifest);
 		eventStore = createEventStore(overrides, createCrossVersionEventMap()).store;
 		snapshotStore = createSnapshotStore(overrides);
 		await Promise.all([eventStore.connect(), snapshotStore.connect()]);
@@ -56,7 +60,7 @@ describe('PostgreSQL reads the 3.0.2 corpus as 3.0.2 did', () => {
 		});
 	});
 
-	it('lists the collections as 3.0.2 did', async () => {
+	it('lists the corpus collections as 3.0.2 did', async () => {
 		expectListedCollections(
 			await collect(eventStore.listCollections()),
 			manifest.eventCollections,
@@ -68,4 +72,12 @@ describe('PostgreSQL reads the 3.0.2 corpus as 3.0.2 did', () => {
 			manifest.snapshotPools.map(({ collection }) => collection),
 		);
 	});
+
+	it.skipIf(!crossVersionRunsInCI)(
+		'lists every collection as 3.0.2 did (CI only: 3.x lists the collections of other runs on a shared server)',
+		async () => {
+			expectEveryListedCollection(await collect(eventStore.listCollections()), manifest.eventCollections);
+			expectEveryListedCollection(await collect(snapshotStore.listCollections()), manifest.snapshotCollections);
+		},
+	);
 });

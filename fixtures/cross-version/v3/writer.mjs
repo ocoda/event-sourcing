@@ -27,7 +27,14 @@ import { MariaDBEventStore, MariaDBSnapshotStore } from '@ocoda/event-sourcing-m
 import { MongoDBEventStore, MongoDBSnapshotStore } from '@ocoda/event-sourcing-mongodb';
 import { PostgresEventStore, PostgresSnapshotStore } from '@ocoda/event-sourcing-postgres';
 import pg from 'pg';
-import { ALL_ENVELOPES_SINCE, buildCorpus, LEGACY_POOL, LONG_POOL, WRITER_TIME_ZONE } from './corpus.mjs';
+import {
+	ALL_ENVELOPES_SINCE,
+	BARE_POOL,
+	buildCorpus,
+	CANONICAL_EVENT_ID,
+	LEGACY_POOL,
+	WRITER_TIME_ZONE,
+} from './corpus.mjs';
 import { AGGREGATES, EVENTS } from './domain.mjs';
 import { applyPostgresIndexVariants, openLegacyMariaDBStores } from './legacy-ddl.mjs';
 import { openClient, parseDatabase, parseNamespace, storeOptions } from './namespace.mjs';
@@ -146,6 +153,84 @@ const setLatestFlag = async (database, client, collection, streamId, version) =>
 	}
 };
 
+/**
+ * Moves every `registered_on` of a MariaDB snapshot table by `days`. The explicit assignment doesn't fire the legacy
+ * `ON UPDATE`. Fails unless no row is left within half a day of now.
+ */
+const shiftRegisteredOn = async (client, collection, days) => {
+	await client.query(`UPDATE \`${collection}\` SET registered_on = registered_on + INTERVAL ? DAY`, [days]);
+	const [{ recent }] = await client.query(
+		`SELECT COUNT(*) AS recent FROM \`${collection}\` WHERE registered_on > NOW() - INTERVAL 12 HOUR`,
+	);
+	if (Number(recent) !== 0) {
+		throw new Error(`${collection}: ${recent} rows kept a recent registered_on after the shift by ${days} days`);
+	}
+};
+
+/**
+ * The streams whose events 3.x `getAllEnvelopes` did not list in version order. Every stream the corpus built
+ * `inverted` must be one; any other must hold a non-canonical event id (which sorts by its case where the column
+ * compares bytes), or the corpus isn't what it claims.
+ */
+const outOfOrderStreams = (legacyAllOrder, written, corpusPool) => {
+	const key = ({ eventId, aggregateId, version }) => `${eventId} ${aggregateId} ${version}`;
+	const streamOf = new Map(written.map((event) => [key(event), event.streamId]));
+	const lastVersion = new Map();
+	const outOfOrder = new Set();
+	for (const entry of legacyAllOrder) {
+		const streamId = streamOf.get(key(entry));
+		if (lastVersion.has(streamId) && entry.version < lastVersion.get(streamId)) outOfOrder.add(streamId);
+		lastVersion.set(streamId, Math.max(entry.version, lastVersion.get(streamId) ?? 0));
+	}
+
+	const streamIdOf = (stream) => EventStream.for(AGGREGATES[stream.aggregate], Id.from(stream.aggregateId)).streamId;
+	const nonCanonical = new Set(
+		written.filter(({ eventId }) => !CANONICAL_EVENT_ID.test(eventId)).map(({ streamId }) => streamId),
+	);
+	const inverted = new Set(corpusPool.streams.filter((stream) => stream.inverted).map(streamIdOf));
+	for (const streamId of inverted) {
+		if (!outOfOrder.has(streamId)) throw new Error(`3.x listed the inverted stream ${streamId} in version order`);
+	}
+	for (const streamId of outOfOrder) {
+		if (!inverted.has(streamId) && !nonCanonical.has(streamId)) {
+			throw new Error(`3.x listed ${streamId} out of version order, which the corpus didn't build`);
+		}
+	}
+	return [...outOfOrder];
+};
+
+/**
+ * Fails unless the manifest holds the whole corpus: 3.x read back every event and snapshot the writer appended. The
+ * master specs check the same (expectCompleteCorpus), so an empty or hollow manifest can't pass.
+ */
+const assertCompleteManifest = (manifest) => {
+	const fail = (message) => {
+		throw new Error(`Incomplete manifest: ${message}`);
+	};
+	if (manifest.eventPools.length < 3) fail(`${manifest.eventPools.length} event pools`);
+	if (manifest.snapshotPools.length < 3) fail(`${manifest.snapshotPools.length} snapshot pools`);
+	for (const pool of manifest.eventPools) {
+		if (pool.streams.length === 0) fail(`${pool.collection} has no streams`);
+		if (pool.legacyAllOrder.length !== pool.written.length) {
+			fail(
+				`${pool.collection}: getAllEnvelopes returned ${pool.legacyAllOrder.length} of ${pool.written.length} events`,
+			);
+		}
+		for (const stream of pool.streams) {
+			if (pool.caseVariantStreams.includes(stream.streamId)) continue;
+			const expected = pool.written.filter(({ streamId }) => streamId === stream.streamId).length;
+			if (expected === 0 || stream.envelopes.length !== expected || stream.events.length !== expected) {
+				fail(`${stream.streamId}: 3.x read back ${stream.envelopes.length} of ${expected} events`);
+			}
+		}
+	}
+	for (const pool of manifest.snapshotPools) {
+		if (pool.streams.length === 0) fail(`${pool.collection} has no streams`);
+		const read = pool.streams.reduce((sum, { envelopes }) => sum + envelopes.length, 0);
+		if (read !== pool.written.length) fail(`${pool.collection}: 3.x read back ${read} of ${pool.written.length}`);
+	}
+};
+
 /** Groups the entries of 3.x `getAllEnvelopes` whose event ids are equal: their relative order is undefined. */
 const markTies = (entries) => {
 	const counts = new Map();
@@ -241,6 +326,9 @@ const main = async () => {
 				const eventStream = EventStream.for(AGGREGATES[stream.aggregate], Id.from(stream.aggregateId));
 				let aggregate;
 				for (const change of stream.commits) {
+					// 3.x generates these ids with one monotonic factory per appendEvents call: a later commit in the same
+					// millisecond could get a lower id. A new millisecond keeps each stream in version order.
+					if (aggregate) await new Promise((resolve) => setTimeout(resolve, 2));
 					aggregate = change(aggregate);
 					const events = aggregate.commit();
 					record(eventStream, await store.appendEvents(eventStream, aggregate.version, events, pool.pool));
@@ -286,6 +374,9 @@ const main = async () => {
 				await setLatestFlag(database, client, collection, streamId, null);
 				missingLatest.push(streamId);
 			}
+			if (pool.registeredOnShiftDays) {
+				await shiftRegisteredOn(client, collection, pool.registeredOnShiftDays);
+			}
 
 			snapshotPools.push({ pool, written, duplicateLatest, missingLatest });
 		}
@@ -294,7 +385,7 @@ const main = async () => {
 			database === 'postgres'
 				? await applyPostgresIndexVariants(client, {
 						tenantPool: 'tenant-a',
-						bareCollections: [`${LONG_POOL}-events`, `${LONG_POOL}-snapshots`],
+						bareCollections: [`${BARE_POOL}-events`, `${BARE_POOL}-snapshots`],
 					})
 				: undefined;
 
@@ -349,21 +440,28 @@ const main = async () => {
 			const eventIdCounts = new Map();
 			for (const { eventId } of written) eventIdCounts.set(eventId, (eventIdCounts.get(eventId) ?? 0) + 1);
 
+			const legacyAllOrder = markTies(
+				all.map(({ metadata }) => ({
+					eventId: metadata.eventId.value,
+					aggregateId: metadata.aggregateId,
+					version: metadata.version,
+				})),
+			);
+
 			manifest.eventPools.push({
 				pool: pool.pool ?? null,
 				collection: pool.pool ? `${pool.pool}-events` : 'events',
 				written,
 				streams,
-				legacyAllOrder: markTies(
-					all.map(({ metadata }) => ({
-						eventId: metadata.eventId.value,
-						aggregateId: metadata.aggregateId,
-						version: metadata.version,
-					})),
-				),
+				legacyAllOrder,
 				gappedStreams: streamIds((stream) => stream.gapped),
 				caseVariantStreams: streamIds((stream) => stream.caseVariant),
 				duplicateEventIds: [...eventIdCounts].filter(([, count]) => count > 1).map(([eventId]) => eventId),
+				invertedStreams: streamIds((stream) => stream.inverted),
+				outOfOrderStreams: outOfOrderStreams(legacyAllOrder, written, corpusPool),
+				nonCanonicalEventIds: written
+					.map(({ eventId }) => eventId)
+					.filter((eventId) => !CANONICAL_EVENT_ID.test(eventId)),
 			});
 		}
 
@@ -388,9 +486,13 @@ const main = async () => {
 				streams,
 				duplicateLatest,
 				missingLatest,
+				...(corpus.snapshotPools[index].registeredOnShiftDays
+					? { registeredOnShiftDays: corpus.snapshotPools[index].registeredOnShiftDays }
+					: {}),
 			});
 		}
 
+		assertCompleteManifest(manifest);
 		writeFileSync(values.out, `${JSON.stringify(manifest, null, '\t')}\n`);
 		const events = manifest.eventPools.reduce((sum, { written }) => sum + written.length, 0);
 		const snapshots = manifest.snapshotPools.reduce((sum, { written }) => sum + written.length, 0);

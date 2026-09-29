@@ -43,6 +43,22 @@ export interface ManifestEventPool {
 	caseVariantStreams: string[];
 	/** SQL: event ids that more than one row has. */
 	duplicateEventIds: string[];
+	/**
+	 * Streams built with two versions in one millisecond whose ids sort the other way round (separate 3.x appends, or
+	 * pre-built envelopes, get non-monotonic ids): `legacyAllOrder` lists the later version first.
+	 */
+	invertedStreams: string[];
+	/**
+	 * Every stream whose events `legacyAllOrder` does not list in version order, as 3.x returned them: the inverted
+	 * streams, and streams with a non-canonical event id where the column compares bytes (MongoDB `_id`). The writer
+	 * fails on any other.
+	 */
+	outOfOrderStreams: string[];
+	/**
+	 * Event ids 3.x accepted (`/^[0-9a-z]{26}$/i`) that aren't canonical ULIDs (upper-case Crockford base32): lower
+	 * case, or I, L, O or U. The default pool has them, the other pools don't.
+	 */
+	nonCanonicalEventIds: string[];
 }
 
 export interface WrittenEvent {
@@ -82,6 +98,13 @@ export interface ManifestSnapshotPool {
 	duplicateLatest: { streamId: string; flaggedVersions: number[] }[];
 	/** Streams without a row flagged latest: 3.x `getLastEnvelope` returns nothing. */
 	missingLatest: string[];
+	/**
+	 * MariaDB legacy pool (`ON UPDATE` DDL): after the writes and the flag damage, every `registered_on` was moved this
+	 * many days with an explicit assignment, which doesn't fire `ON UPDATE`. So a migration UPDATE that lets
+	 * `ON UPDATE` clobber the column shows as a changed value. `written` has the values before the shift (and before
+	 * 3.x's own `ON UPDATE` clobbers), `streams` what 3.x read after it.
+	 */
+	registeredOnShiftDays?: number;
 }
 
 export interface WrittenSnapshot {

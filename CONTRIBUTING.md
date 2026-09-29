@@ -77,6 +77,8 @@ The cross-version test checks that a driver reads what the published 3.0.2 packa
 pnpm test:cross-version --database postgres   # or mariadb, mongodb (both topologies with ES_TEST_MONGODB_RS_URL)
 ```
 
+`KEEP_XV=1` keeps the namespaces and the manifests (what 3.0.2 wrote and read back) for a look afterwards; a failed run keeps the manifests.
+
 ## Before you open a pull request
 
 CI's `ci-ok` check is required to merge. Run the same checks locally:

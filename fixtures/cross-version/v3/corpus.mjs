@@ -17,11 +17,27 @@ import {
 /** The writer runs in this time zone: 3.x MariaDB `TIMESTAMP` and PostgreSQL snapshot `TIMESTAMP` values depend on it. */
 export const WRITER_TIME_ZONE = 'America/New_York';
 
-/** 49 bytes: `<pool>-snapshots` still fits PostgreSQL's 63-byte identifiers, the derived index names don't. */
+/**
+ * 49 bytes: `<pool>-snapshots` still fits PostgreSQL's 63-byte identifiers, the derived index names don't, so 3.0.1
+ * and later shorten them and end them with a hash (`deriveIndexName`).
+ */
 export const LONG_POOL = 'pool-with-a-name-close-to-the-postgres-limit-49by';
 
 /** MariaDB only: written by a second 3.x store whose sessions create the tables with the legacy `ON UPDATE` DDL. */
 export const LEGACY_POOL = 'legacy';
+
+/** PostgreSQL only: a pool whose collections lose their indexes, like a pool that 3.0.0 created after the first one. */
+export const BARE_POOL = 'bare';
+
+/** A valid ULID in canonical form: upper-case Crockford base32, without I, L, O and U. */
+export const CANONICAL_EVENT_ID = /^[0-9A-HJKMNP-TV-Z]{26}$/;
+
+/**
+ * MariaDB legacy pool: after the writes and the flag damage, the writer moves every `registered_on` by this many
+ * days with an explicit assignment (which doesn't fire `ON UPDATE`). A migration UPDATE that lets `ON UPDATE` clobber
+ * the column then shows as a changed value instead of one within the same second.
+ */
+export const LEGACY_REGISTERED_ON_SHIFT_DAYS = -1;
 
 /** `getAllEnvelopes` reads every month from here up to the current one. */
 export const ALL_ENVELOPES_SINCE = { year: 2020, month: 1 };
@@ -128,8 +144,10 @@ const incrementUlid = (id) => {
 };
 
 /**
- * Event ids for the times of one stream. Ids that share a millisecond within the stream ascend with the version, as
- * the ids of one 3.x `appendEvents` call do (its factory is monotonic); across streams they are random.
+ * Event ids for the times of one stream. Ids that share a millisecond within the stream ascend with the version. 3.x
+ * only guarantees that for the ids one `appendEvents` call generates itself (a monotonic factory per call):
+ * pre-built envelopes (`EventId.generate(date)`, a plain `ulid()`) and separate calls in the same millisecond can have
+ * a later version's id sort first. The `inverted` stream of buildCorpus covers that case.
  */
 const streamEventIds = (random, times) => {
 	const ids = [];
@@ -194,15 +212,19 @@ const randomStream = (random, { hot, correlate, correlationId }) => {
  * The corpus for one database.
  *
  * - `eventPools`: per pool, the streams of pre-built envelopes (`appends`, one `appendEvents` call each) and the
- *   streams written through an aggregate's `commit()` (`commits`, each a list of changes to the aggregate).
- * - `snapshotPools`: per pool, the snapshots per stream, and which stream ends up with two rows flagged latest
- *   (`duplicateLatest`) or none (`missingLatest`).
+ *   streams written through an aggregate's `commit()` (`commits`, each a list of changes to the aggregate). Streams
+ *   flagged `gapped`, `inverted` or `caseVariant` are edge cases the manifest lists. Pools flagged `legacy` (MariaDB)
+ *   are written with the legacy `ON UPDATE` DDL, pools flagged `bare` (PostgreSQL) lose their indexes.
+ * - `snapshotPools`: per pool, the snapshots per stream, which stream ends up with two rows flagged latest
+ *   (`duplicateLatest`) or none (`missingLatest`), and for the legacy pool `registeredOnShiftDays`.
  */
 export const buildCorpus = (database) => {
 	// The streams every database gets come from one sequence, the database-specific ones from another, so the shared
-	// part of the corpus is the same everywhere.
+	// part of the corpus is the same everywhere. The edge-case streams every database gets that were added later come
+	// from a third, so they didn't change the others.
 	const random = createRandom(0x0c0da3);
 	const edgeRandom = createRandom(0x3a0c0d);
+	const sharedEdgeRandom = createRandom(0x1d5c0de);
 	const sql = database !== 'mongodb';
 	const eventPools = [];
 
@@ -293,6 +315,44 @@ export const buildCorpus = (database) => {
 		],
 	});
 
+	// Two appends in one millisecond whose ids sort the other way round (3.x generated each id with a plain `ulid()`):
+	// 3.x `getAllEnvelopes` (`ORDER BY event_date, event_id`) lists version 2 before version 1.
+	const inverted = uuid(sharedEdgeRandom);
+	const invertedTime = Date.parse('2021-08-08T08:08:08.808Z');
+	const [lowId, highId] = [ulid(invertedTime, sharedEdgeRandom), ulid(invertedTime, sharedEdgeRandom)].sort();
+	defaultStreams.push({
+		aggregate: 'account',
+		aggregateId: inverted,
+		inverted: true,
+		appends: [
+			[{ event: openedEvent(sharedEdgeRandom, inverted, invertedTime), version: 1, eventId: highId }],
+			[{ event: new NoteAdded('same millisecond, its id sorts before version 1'), version: 2, eventId: lowId }],
+		],
+	});
+
+	// Ids 3.x accepted (`/^[0-9a-z]{26}$/i`) that aren't canonical ULIDs: lower case, and I, L, O and U in the random
+	// part. Their time part still decodes.
+	const nonCanonical = uuid(sharedEdgeRandom);
+	const nonCanonicalTime = Date.parse('2021-08-20T10:00:00.000Z');
+	defaultStreams.push({
+		aggregate: 'account',
+		aggregateId: nonCanonical,
+		appends: [
+			[
+				{
+					event: openedEvent(sharedEdgeRandom, nonCanonical, nonCanonicalTime),
+					version: 1,
+					eventId: ulid(nonCanonicalTime, sharedEdgeRandom).toLowerCase(),
+				},
+				{
+					event: new NoteAdded('an event id with I, L, O and U'),
+					version: 2,
+					eventId: `${ulid(nonCanonicalTime + 90_000, sharedEdgeRandom).slice(0, 22)}ILOU`,
+				},
+			],
+		],
+	});
+
 	if (sql) {
 		// The same event id in two streams (MongoDB keys its documents by event id, so SQL only).
 		const [first, second] = [uuid(edgeRandom), uuid(edgeRandom)];
@@ -345,6 +405,14 @@ export const buildCorpus = (database) => {
 	if (database === 'mariadb') {
 		eventPools.push({ pool: LEGACY_POOL, legacy: true, streams: poolStreams(4), commitStreams: [] });
 	}
+	if (database === 'postgres') {
+		eventPools.push({
+			pool: BARE_POOL,
+			bare: true,
+			streams: Array.from({ length: 3 }, () => randomStream(edgeRandom, {})),
+			commitStreams: [],
+		});
+	}
 
 	const snapshotPayload = (stream, version) => ({
 		accountId: stream.aggregateId,
@@ -361,23 +429,44 @@ export const buildCorpus = (database) => {
 			snapshots: versions.map((version) => ({ version, payload: snapshotPayload(stream, version) })),
 		}));
 
-	const [defaultPool, tenantPool, longPool, legacyPool] = eventPools;
-	const defaultSnapshots = snapshotStreams(defaultPool, 6, [1, 3, 5]);
+	const eventPool = (name) => eventPools.find(({ pool }) => pool === name);
 	const snapshotPools = [
 		{
 			pool: undefined,
-			streams: defaultSnapshots,
+			streams: snapshotStreams(eventPool(undefined), 6, [1, 3, 5]),
 			duplicateLatest: [{ streamIndex: 0, version: 3 }],
 			missingLatest: [{ streamIndex: 1 }],
 		},
-		{ pool: 'tenant-a', streams: snapshotStreams(tenantPool, 3, [2, 4]), duplicateLatest: [], missingLatest: [] },
-		{ pool: LONG_POOL, streams: snapshotStreams(longPool, 2, [2, 4]), duplicateLatest: [], missingLatest: [] },
+		{
+			pool: 'tenant-a',
+			streams: snapshotStreams(eventPool('tenant-a'), 3, [2, 4]),
+			duplicateLatest: [],
+			missingLatest: [],
+		},
+		{
+			pool: LONG_POOL,
+			streams: snapshotStreams(eventPool(LONG_POOL), 2, [2, 4]),
+			duplicateLatest: [],
+			missingLatest: [],
+		},
 	];
-	if (legacyPool) {
+	if (eventPool(LEGACY_POOL)) {
+		// The flag repair of the migration UPDATEs these rows, where `ON UPDATE` clobbers `registered_on` unless the
+		// statement assigns it (see LEGACY_REGISTERED_ON_SHIFT_DAYS).
 		snapshotPools.push({
 			pool: LEGACY_POOL,
 			legacy: true,
-			streams: snapshotStreams(legacyPool, 2, [1, 2, 3]),
+			streams: snapshotStreams(eventPool(LEGACY_POOL), 3, [1, 2, 3]),
+			duplicateLatest: [{ streamIndex: 0, version: 2 }],
+			missingLatest: [{ streamIndex: 1 }],
+			registeredOnShiftDays: LEGACY_REGISTERED_ON_SHIFT_DAYS,
+		});
+	}
+	if (eventPool(BARE_POOL)) {
+		snapshotPools.push({
+			pool: BARE_POOL,
+			bare: true,
+			streams: snapshotStreams(eventPool(BARE_POOL), 2, [1, 2]),
 			duplicateLatest: [],
 			missingLatest: [],
 		});

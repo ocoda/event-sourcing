@@ -261,9 +261,10 @@ jobs:
           ES_TEST_MONGODB_RS_URL: ${{ matrix.database == 'mongodb' && 'mongodb://localhost:27018/?replicaSet=rs0' || '' }}
         run: pnpm test:cov --filter="@ocoda/event-sourcing-$DATABASE"
 
-      # The cross-version writer installs the published 3.0.2 packages with npm ci, from its own lockfile.
+      # The cross-version writer installs the published 3.0.2 packages with npm ci, from its own lockfile. This step
+      # and the next run even when Test failed, so one run reports both.
       - name: Cache the cross-version writer's npm downloads
-        if: ${{ matrix.crossVersion }}
+        if: ${{ matrix.crossVersion && !cancelled() }}
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.npm
@@ -271,11 +272,23 @@ jobs:
 
       # 3.0.2 writes a corpus into a namespace of its own, this code reads it back (scripts/test-cross-version.mjs).
       - name: Cross-version test
-        if: ${{ matrix.crossVersion }}
+        if: ${{ matrix.crossVersion && !cancelled() }}
+        timeout-minutes: 10
         env:
           DATABASE: ${{ matrix.database }}
           ES_TEST_MONGODB_RS_URL: ${{ matrix.database == 'mongodb' && 'mongodb://localhost:27018/?replicaSet=rs0' || '' }}
+          XV_WORK_DIR: ${{ runner.temp }}/cross-version
         run: node scripts/test-cross-version.mjs --database "$DATABASE"
+
+      # A failed cross-version run keeps its manifests (what 3.0.2 wrote and read back).
+      - name: Upload the cross-version manifests
+        if: ${{ failure() && matrix.crossVersion }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cross-version-${{ matrix.database }}-${{ matrix.version }}
+          path: ${{ runner.temp }}/cross-version/*.manifest.json
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Database logs
         if: ${{ failure() }}
