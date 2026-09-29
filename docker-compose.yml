@@ -135,6 +135,9 @@ services:
   postgres:
     container_name: es-postgres
     image: postgres:14
+    # Docker's default 64 MB /dev/shm is too small for parallel VACUUM (and large sorts): 53100 could not resize shared
+    # memory segment. The schema v2 migration vacuums the tables it rewrote.
+    shm_size: 256mb
     ports:
       - 5432:5432
     environment:
@@ -153,6 +156,7 @@ services:
   postgres-13:
     container_name: es-postgres-13
     image: postgres:13
+    shm_size: 256mb
     ports:
       - 5432:5432
     environment:
@@ -171,6 +175,7 @@ services:
   postgres-14:
     container_name: es-postgres-14
     image: postgres:14
+    shm_size: 256mb
     ports:
       - 5432:5432
     environment:
@@ -189,6 +194,7 @@ services:
   postgres-15:
     container_name: es-postgres-15
     image: postgres:15
+    shm_size: 256mb
     ports:
       - 5432:5432
     environment:
@@ -207,6 +213,7 @@ services:
   postgres-16:
     container_name: es-postgres-16
     image: postgres:16
+    shm_size: 256mb
     ports:
       - 5432:5432
     environment:
@@ -225,6 +232,7 @@ services:
   postgres-17:
     container_name: es-postgres-17
     image: postgres:17
+    shm_size: 256mb
     ports:
       - 5432:5432
     environment:

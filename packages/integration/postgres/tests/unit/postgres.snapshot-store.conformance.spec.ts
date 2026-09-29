@@ -21,10 +21,11 @@ describeSnapshotStoreConformance(
 	},
 	{
 		skip: {
-			// TODO: getLastEnvelopesForAggregate() compares the raw aggregateId with the 'latest#<streamId>' keys
-			// (`latest >= $2`), which every key passes, so the filter is a no-op. Making it an exclusive cursor changes
-			// what the filter returns, which needs its own change (together with the other stores).
-			'aggregate-cursor-paging': 'the aggregateId filter is not a cursor, so every page repeats the first one',
+			// TODO(G-pg): getLastEnvelopesForAggregate() compares the raw aggregateId with the 'latest#<streamId>' keys
+			// (`latest >= $2`), which every key passes, so the filter is a no-op, and it orders by the collation of the
+			// database. Schema v2 makes the aggregateId an exclusive cursor in binary order.
+			'aggregate-cursor-paging':
+				'schema v2 (G): the aggregateId filter is not a cursor, so every page repeats the first one',
 		},
 	},
 );
