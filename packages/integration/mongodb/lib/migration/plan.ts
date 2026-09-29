@@ -18,7 +18,8 @@ import {
 import type { MongoDBTopology } from '../mongodb.topology.js';
 
 // The pure half of migrate(): what a collection needs, from what inspect.ts found. No I/O, so every state is covered by
-// table-driven specs, and the committed migration script (script.ts) is rendered from the same statements.
+// table-driven specs, and the committed mongosh script (script.ts, migrations/4.0.mongosh.js) is rendered from the same
+// statements.
 
 /** An event id as 4.0 generates it: a ULID in upper-case Crockford base32. */
 export const CANONICAL_EVENT_ID = /^[0-9A-HJKMNP-TV-Z]{26}$/;
@@ -247,11 +248,14 @@ export const legacyLatestIndexes = (indexes: readonly IndexInfo[]): string[] =>
 		)
 		.map(({ name }) => name);
 
-const leaseStatement = (collection: string): string =>
-	`${shellCollection(CATALOG_COLLECTION)}.insertOne({ _id: ${toShell(leaseIdOf(collection))}, kind: 'lock', owner: <owner>, expiresAt: new Date(Date.now() + ${LEASE_MS}) })`;
+/** The owner of a lease in a statement: a placeholder in a report, a variable in the committed script. */
+const OWNER_PLACEHOLDER = '<owner>';
 
-const releaseStatement = (collection: string): string =>
-	`${shellCollection(CATALOG_COLLECTION)}.deleteOne({ _id: ${toShell(leaseIdOf(collection))}, owner: <owner> })`;
+const leaseStatement = (collection: string, owner = OWNER_PLACEHOLDER): string =>
+	`${shellCollection(CATALOG_COLLECTION)}.insertOne({ _id: ${toShell(leaseIdOf(collection))}, kind: 'lock', owner: ${owner}, expiresAt: new Date(Date.now() + ${LEASE_MS}) })`;
+
+const releaseStatement = (collection: string, owner = OWNER_PLACEHOLDER): string =>
+	`${shellCollection(CATALOG_COLLECTION)}.deleteOne({ _id: ${toShell(leaseIdOf(collection))}, owner: ${owner} })`;
 
 /** The last position after the numbering: the highest one, which is the number of events. */
 const lastPositionExpression = (collection: string): string =>
@@ -261,12 +265,12 @@ const lastPositionExpression = (collection: string): string =>
 export const eventStepStatement = (
 	collection: string,
 	step: EventStepName,
-	context: { numbering: NumberingKey; indexes: readonly IndexInfo[] },
+	context: { numbering: NumberingKey; indexes: readonly IndexInfo[]; owner?: string },
 ): string => {
 	const coll = shellCollection(collection);
 	switch (step) {
 		case 'lease':
-			return leaseStatement(collection);
+			return leaseStatement(collection, context.owner);
 		case 'fence':
 			return `db.runCommand(${toShell({ collMod: collection, validator: EVENTS_VALIDATOR, ...VALIDATION_OPTIONS })})`;
 		case 'number':
@@ -284,7 +288,7 @@ export const eventStepStatement = (
 		case 'unset-event-date':
 			return `${coll}.updateMany({ eventDate: { $exists: true } }, { $unset: { eventDate: '' } })`;
 		case 'release':
-			return releaseStatement(collection);
+			return releaseStatement(collection, context.owner);
 	}
 };
 
@@ -292,12 +296,12 @@ export const eventStepStatement = (
 export const snapshotStepStatement = (
 	collection: string,
 	step: SnapshotStepName,
-	context: { indexes: readonly IndexInfo[] },
+	context: { indexes: readonly IndexInfo[]; owner?: string },
 ): string => {
 	const coll = shellCollection(collection);
 	switch (step) {
 		case 'lease':
-			return leaseStatement(collection);
+			return leaseStatement(collection, context.owner);
 		case 'unset-null-latest':
 			return `${coll}.updateMany({ latest: { $type: 'null' } }, { $unset: { latest: '' } })`;
 		case 'repair-latest-flags':
@@ -313,7 +317,7 @@ export const snapshotStepStatement = (
 		case 'register':
 			return `${shellCollection(CATALOG_COLLECTION)}.updateOne(${toShell({ _id: collection })}, ${toShell({ $setOnInsert: { kind: 'snapshots' }, $set: { schemaVersion: SCHEMA_VERSION } })}, { upsert: true })`;
 		case 'release':
-			return releaseStatement(collection);
+			return releaseStatement(collection, context.owner);
 	}
 };
 
@@ -335,7 +339,7 @@ export const latestRepairPipeline = (): Document[] => [
 	{ $project: { _id: 1, top: 1, flags: 1 } },
 ];
 
-const EVENT_LOCKS: Record<EventStepName, string> = {
+export const EVENT_LOCKS: Record<EventStepName, string> = {
 	lease: 'none',
 	fence: 'exclusive collection lock for the collMod (milliseconds)',
 	number: 'intent locks: reads and writes go on',
@@ -346,7 +350,7 @@ const EVENT_LOCKS: Record<EventStepName, string> = {
 	release: 'none',
 };
 
-const SNAPSHOT_LOCKS: Record<SnapshotStepName, string> = {
+export const SNAPSHOT_LOCKS: Record<SnapshotStepName, string> = {
 	lease: 'none',
 	'unset-null-latest': 'intent locks: reads and writes go on',
 	'repair-latest-flags': 'intent locks: reads and writes go on',

@@ -42,7 +42,8 @@
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
 	"files": [
-		"dist"
+		"dist",
+		"migrations"
 	],
 	"scripts": {
 		"build": "rm -rf dist && tsc -p tsconfig.build.json",
@@ -51,6 +52,7 @@
 		"ci": "oxlint --deny-warnings && oxfmt --check",
 		"format": "oxfmt",
 		"format:check": "oxfmt --check",
+		"gen:migration-sql": "UPDATE_MIGRATION_SQL=1 vitest run tests/unit/mongodb.migration-script.spec.ts",
 		"lint": "oxlint",
 		"typecheck": "tsc --noEmit -p tsconfig.json"
 	},
