@@ -5,7 +5,13 @@ import { catchError, filter, mergeMap } from 'rxjs/operators';
 import { MissingEventMetadataException, MissingEventSubscriberMetadataException } from './exceptions/index.js';
 import { DefaultEventPubSub } from './helpers/default-event-publisher.js';
 import { ObservableBus, getEventMetadata, getEventSubscriberMetadata } from './helpers/index.js';
-import type { IEventBus, IEventPublisher, IEventSubscriber, ProviderWrapper } from './interfaces/index.js';
+import type {
+	EnvelopePublisher,
+	IEventBus,
+	IEventPublisher,
+	IEventSubscriber,
+	ProviderWrapper,
+} from './interfaces/index.js';
 import type { EventEnvelope } from './models/index.js';
 
 const logger = new Logger('EventBus');
@@ -29,7 +35,7 @@ const logSubscriberError = (subscriber: IEventSubscriber, envelope: EventEnvelop
 	);
 
 @Injectable()
-export class EventBus extends ObservableBus<EventEnvelope> implements IEventBus, OnModuleDestroy {
+export class EventBus extends ObservableBus<EventEnvelope> implements IEventBus, EnvelopePublisher, OnModuleDestroy {
 	protected readonly subscriptions: Subscription[] = [];
 	private publishers: IEventPublisher[] = [new DefaultEventPubSub(this.subject$)];
 
@@ -56,6 +62,26 @@ export class EventBus extends ObservableBus<EventEnvelope> implements IEventBus,
 			}
 		}
 	};
+
+	/**
+	 * Publish the envelopes of one append, in order, to every registered publisher. Never rejects: like
+	 * {@link EventBus.publish}, a failing publisher is logged and doesn't stop the other publishers or envelopes.
+	 * Asynchronous publishers are not awaited.
+	 */
+	async publishAll(envelopes: readonly EventEnvelope[]): Promise<void> {
+		try {
+			for (const envelope of envelopes ?? []) {
+				try {
+					this.publish(envelope);
+				} catch (error) {
+					logger.error(`Failed to publish event "${envelope?.event}"`, describeError(error));
+				}
+			}
+		} catch (error) {
+			// Not iterable: nothing to publish, and publishing never makes an append fail
+			logger.error('Failed to publish the envelopes of an append', describeError(error));
+		}
+	}
 
 	/**
 	 * Bind a subscriber to the stream of envelopes (optionally filtered by event name).

@@ -220,21 +220,75 @@ export const expectRejection = async (promise: Promise<unknown>, description: st
 };
 
 /**
+ * `JSON.stringify` for assertion messages: bigints (global positions) are written as `123n` instead of making it throw.
+ */
+export const stringify = (value: unknown): string => {
+	const json = JSON.stringify(value, (_key, item: unknown) => (typeof item === 'bigint' ? `${item}n` : item));
+	return json === undefined ? String(value) : json;
+};
+
+/**
+ * How often every conformance case runs: `CONFORMANCE_REPEAT=n` runs each case n times, to soak out flaky
+ * concurrency. Defaults to once.
+ */
+export const conformanceRepeat = (value = process.env.CONFORMANCE_REPEAT): number => {
+	const repeat = Number(value);
+	return Number.isSafeInteger(repeat) && repeat > 1 ? repeat : 1;
+};
+
+/**
+ * The options of a single conformance case.
+ */
+export interface ConformanceTestOptions<TCapabilities> {
+	/**
+	 * The timeout of the case, in milliseconds.
+	 */
+	timeout?: number;
+	/**
+	 * Gates the case on the capabilities of the store: returns the capability the store lacks (the case is then skipped
+	 * with `capability: <what it returned>`), or undefined to run the case. It is evaluated when the case runs, once
+	 * the store is connected, because a store's capabilities are only final then.
+	 */
+	requires?: (capabilities: TCapabilities) => string | undefined;
+}
+
+/**
  * Registers a conformance test, or skips it with the reason the store gave for not satisfying it (yet).
  * Set `CONFORMANCE_RUN_SKIPPED=true` to run the skipped cases anyway, e.g. to check whether a skip is still needed.
+ *
+ * `capabilities` returns the capabilities of the connected store, for the cases gated with `requires`. Unlike a skip,
+ * a capability gate is not a gap, so `CONFORMANCE_RUN_SKIPPED` doesn't lift it. `CONFORMANCE_REPEAT=n` runs every
+ * case n times.
  */
-export const conformanceTest = <TCase extends string>(
+export const conformanceTest = <TCase extends string, TCapabilities = never>(
 	skip: Partial<Record<TCase, string>> | undefined,
 	timeout: number,
+	capabilities?: () => TCapabilities,
 ) => {
 	const runSkipped = process.env.CONFORMANCE_RUN_SKIPPED === 'true';
+	const repeats = conformanceRepeat() - 1;
 
-	return (id: TCase, title: string, fn: () => Promise<void>, testTimeout = timeout): void => {
+	return (
+		id: TCase,
+		title: string,
+		fn: () => Promise<void>,
+		options: number | ConformanceTestOptions<TCapabilities> = {},
+	): void => {
+		const { timeout: testTimeout = timeout, requires } = typeof options === 'number' ? { timeout: options } : options;
 		const reason = skip?.[id];
 		if (reason && !runSkipped) {
 			it.skip(`${title} [${id}] (skipped: ${reason})`, fn);
 			return;
 		}
-		it(`${title} [${id}]`, fn, testTimeout);
+		if (requires && !capabilities) {
+			throw new Error(`The conformance case ${id} requires a capability, but the suite has no capabilities to check`);
+		}
+		it(`${title} [${id}]`, { timeout: testTimeout, repeats }, async (context) => {
+			const missing = requires?.((capabilities as () => TCapabilities)());
+			if (missing) {
+				context.skip(`capability: ${missing}`);
+			}
+			await fn();
+		});
 	};
 };

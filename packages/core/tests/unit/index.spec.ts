@@ -24,8 +24,18 @@ describe('public entrypoint', () => {
 	it('does not expose internal helpers', () => {
 		expect(
 			Object.keys(EventSourcing).filter((key) =>
-				/CommittedVersions|isSnapshotDue|brandEventSourcingError|nameOf|EVENT_SOURCING_ERROR/.test(key),
+				/CommittedVersions|isSnapshotDue|brandEventSourcingError|nameOf|describeValue|EVENT_SOURCING_ERROR|^validate/.test(
+					key,
+				),
 			),
 		).toEqual([]);
+	});
+
+	it('exports the helpers and constants of the store contract', () => {
+		expect(EventSourcing.ANY_MAX_ATTEMPTS).toBe(16);
+		expect(EventSourcing.EVENT_STORE_LIMITS.headersBytes).toBe(8192);
+		expect(EventSourcing.DEFAULT_EVENT_STORE_CAPABILITIES.globalOrder).toBe('best-effort');
+		expect(EventSourcing.resolveCapabilities).toEqual(expect.any(Function));
+		expect(EventSourcing.toPosition).toEqual(expect.any(Function));
 	});
 });

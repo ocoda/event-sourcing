@@ -33,10 +33,11 @@ import {
 	expectRejectionOfClass,
 	newEventStream,
 	recordedEvents,
+	stringify,
 	uniquePoolName,
 	withinTimeout,
 } from './fixtures.js';
-import type { ConformanceStoreHandle } from './types.js';
+import type { EventStoreConformanceHandle } from './types.js';
 
 /**
  * An event store with the optional envelope methods, which every store in this repository implements.
@@ -49,7 +50,7 @@ export type ConformanceEventStore = EventStore<unknown> &
  */
 export type EventStoreConformanceFactory = (
 	eventMap: EventMap,
-) => ConformanceStoreHandle<ConformanceEventStore> | Promise<ConformanceStoreHandle<ConformanceEventStore>>;
+) => EventStoreConformanceHandle<ConformanceEventStore> | Promise<EventStoreConformanceHandle<ConformanceEventStore>>;
 
 export const EVENT_STORE_CONFORMANCE_CASES = [
 	'append-returns-envelopes',
@@ -184,7 +185,7 @@ export const describeEventStoreConformance = (
 		const collection = EventCollection.get(pool);
 		const allCollection = EventCollection.get(allPool);
 
-		let handle: ConformanceStoreHandle<ConformanceEventStore> | undefined;
+		let handle: EventStoreConformanceHandle<ConformanceEventStore> | undefined;
 		let store: ConformanceEventStore;
 
 		// A stream of 7 events (versions 1 to 7, 'seq' equals the version), written in two appends
@@ -218,11 +219,11 @@ export const describeEventStoreConformance = (
 
 			expect(
 				eventBatches.map((batch) => batch.map(seqOf)),
-				`getEvents(${JSON.stringify(filter)})`,
+				`getEvents(${stringify(filter)})`,
 			).toEqual(expected);
 			expect(
 				envelopeBatches.map((batch) => batch.map(({ metadata }) => metadata.version)),
-				`getEnvelopes(${JSON.stringify(filter)})`,
+				`getEnvelopes(${stringify(filter)})`,
 			).toEqual(expected);
 		};
 
@@ -233,10 +234,10 @@ export const describeEventStoreConformance = (
 			const events = await drain(readEvents(reference, filter));
 			const envelopes = await drain(readEnvelopes(reference, filter));
 
-			expect(events.map(seqOf), `getEvents(${JSON.stringify(filter)})`).toEqual(expected);
+			expect(events.map(seqOf), `getEvents(${stringify(filter)})`).toEqual(expected);
 			expect(
 				envelopes.map(({ metadata }) => metadata.version),
-				`getEnvelopes(${JSON.stringify(filter)})`,
+				`getEnvelopes(${stringify(filter)})`,
 			).toEqual(expected);
 		};
 
@@ -656,7 +657,7 @@ export const describeEventStoreConformance = (
 				for (const [since, until, expected] of ranges) {
 					expect(
 						(await drain(readAllEnvelopes({ since, until }))).map(describeEnvelope),
-						`${JSON.stringify(since)} - ${JSON.stringify(until)}`,
+						`${stringify(since)} - ${stringify(until)}`,
 					).toEqual(expected.map(describeEnvelope));
 				}
 			});

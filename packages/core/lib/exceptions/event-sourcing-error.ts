@@ -1,8 +1,12 @@
 import type {
 	CommandHandlerNotFoundException,
+	EventCollectionNotFoundException,
 	EventNotFoundException,
 	InvalidAggregateStreamNameException,
+	InvalidAppendOptionsException,
 	InvalidCommandHandlerException,
+	InvalidEventEnvelopeException,
+	InvalidEventMetadataException,
 	InvalidEventStreamNameException,
 	InvalidQueryHandlerException,
 	MissingAggregateMetadataException,
@@ -26,7 +30,9 @@ import type { IdAlreadyRegisteredException, IdNotFoundException, InvalidIdExcept
 import type {
 	EventStoreCollectionCreationException,
 	EventStorePersistenceException,
+	EventStoreSchemaException,
 	EventStoreVersionConflictException,
+	InvalidEventStoreImplementationException,
 	SnapshotStoreCollectionCreationException,
 	SnapshotStorePersistenceException,
 	SnapshotStoreVersionConflictException,
@@ -43,9 +49,13 @@ import { EVENT_SOURCING_ERROR, brandEventSourcingError } from './internal.js';
 export const EventSourcingErrorCode = {
 	// Application
 	CommandHandlerNotFound: 'ES_COMMAND_HANDLER_NOT_FOUND',
+	EventCollectionNotFound: 'ES_EVENT_COLLECTION_NOT_FOUND',
 	EventNotFound: 'ES_EVENT_NOT_FOUND',
 	InvalidAggregateStreamName: 'ES_INVALID_AGGREGATE_STREAM_NAME',
+	InvalidAppendOptions: 'ES_INVALID_APPEND_OPTIONS',
 	InvalidCommandHandler: 'ES_INVALID_COMMAND_HANDLER',
+	InvalidEventEnvelope: 'ES_INVALID_EVENT_ENVELOPE',
+	InvalidEventMetadata: 'ES_INVALID_EVENT_METADATA',
 	InvalidEventStreamName: 'ES_INVALID_EVENT_STREAM_NAME',
 	InvalidQueryHandler: 'ES_INVALID_QUERY_HANDLER',
 	MissingAggregateMetadata: 'ES_MISSING_AGGREGATE_METADATA',
@@ -71,7 +81,9 @@ export const EventSourcingErrorCode = {
 	// Integration
 	EventStoreCollectionCreation: 'ES_EVENT_STORE_COLLECTION_CREATION',
 	EventStorePersistence: 'ES_EVENT_STORE_PERSISTENCE',
+	EventStoreSchema: 'ES_EVENT_STORE_SCHEMA',
 	EventStoreVersionConflict: 'ES_EVENT_STORE_VERSION_CONFLICT',
+	InvalidEventStoreImplementation: 'ES_INVALID_EVENT_STORE_IMPLEMENTATION',
 	SnapshotStoreCollectionCreation: 'ES_SNAPSHOT_STORE_COLLECTION_CREATION',
 	SnapshotStorePersistence: 'ES_SNAPSHOT_STORE_PERSISTENCE',
 	SnapshotStoreVersionConflict: 'ES_SNAPSHOT_STORE_VERSION_CONFLICT',
@@ -84,9 +96,13 @@ export type EventSourcingErrorCode = (typeof EventSourcingErrorCode)[keyof typeo
  */
 export interface EventSourcingErrorByCode {
 	[EventSourcingErrorCode.CommandHandlerNotFound]: CommandHandlerNotFoundException;
+	[EventSourcingErrorCode.EventCollectionNotFound]: EventCollectionNotFoundException;
 	[EventSourcingErrorCode.EventNotFound]: EventNotFoundException;
 	[EventSourcingErrorCode.InvalidAggregateStreamName]: InvalidAggregateStreamNameException;
+	[EventSourcingErrorCode.InvalidAppendOptions]: InvalidAppendOptionsException;
 	[EventSourcingErrorCode.InvalidCommandHandler]: InvalidCommandHandlerException;
+	[EventSourcingErrorCode.InvalidEventEnvelope]: InvalidEventEnvelopeException;
+	[EventSourcingErrorCode.InvalidEventMetadata]: InvalidEventMetadataException;
 	[EventSourcingErrorCode.InvalidEventStreamName]: InvalidEventStreamNameException;
 	[EventSourcingErrorCode.InvalidQueryHandler]: InvalidQueryHandlerException;
 	[EventSourcingErrorCode.MissingAggregateMetadata]: MissingAggregateMetadataException;
@@ -110,7 +126,9 @@ export interface EventSourcingErrorByCode {
 	[EventSourcingErrorCode.InvalidId]: InvalidIdException;
 	[EventSourcingErrorCode.EventStoreCollectionCreation]: EventStoreCollectionCreationException;
 	[EventSourcingErrorCode.EventStorePersistence]: EventStorePersistenceException;
+	[EventSourcingErrorCode.EventStoreSchema]: EventStoreSchemaException;
 	[EventSourcingErrorCode.EventStoreVersionConflict]: EventStoreVersionConflictException;
+	[EventSourcingErrorCode.InvalidEventStoreImplementation]: InvalidEventStoreImplementationException;
 	[EventSourcingErrorCode.SnapshotStoreCollectionCreation]: SnapshotStoreCollectionCreationException;
 	[EventSourcingErrorCode.SnapshotStorePersistence]: SnapshotStorePersistenceException;
 	[EventSourcingErrorCode.SnapshotStoreVersionConflict]: SnapshotStoreVersionConflictException;

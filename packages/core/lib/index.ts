@@ -12,5 +12,6 @@ export * from './models/index.js';
 export * from './query-bus.js';
 export * from './snapshot-repository.js';
 export * from './snapshot-store.js';
+export * from './stores/index.js';
 
 export * from './event-sourcing.module.js';
