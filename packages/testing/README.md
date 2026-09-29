@@ -49,6 +49,8 @@ describeEventStoreConformance(
   store that doesn't claim a guarantee isn't expected to give it.
 - `CONFORMANCE_REPEAT=n` runs every case n times, to soak out flaky concurrency, e.g.
   `CONFORMANCE_REPEAT=20 pnpm --filter @ocoda/event-sourcing exec vitest run tests/unit/integration/event-store/in-memory.event-store.conformance.spec.ts`.
+  `turbo.json` doesn't declare it yet, so `pnpm test` (turbo) drops it and runs every case once: run it through
+  `pnpm --filter … exec vitest` as above.
 
 ## Banking Production Event Suite
 

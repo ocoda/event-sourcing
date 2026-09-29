@@ -7,11 +7,44 @@ import type { RunnerTestCase } from 'vitest';
 
 /**
  * The result of a sibling test that ran before the current one. `note` is the reason passed to `context.skip()`.
+ * The tests that read it rely on their siblings running first, so they fail when run on their own (`vitest -t`).
  */
 const resultOf = (task: RunnerTestCase, id: string) => {
 	const sibling = task.suite?.tasks.find(({ name }) => name.includes(`[${id}]`));
 	return sibling?.result as { state: string; note?: string; repeatCount?: number } | undefined;
 };
+
+/**
+ * Runs `fn` with the given environment variables set (`undefined` unsets one), then restores them. The harness reads
+ * `CONFORMANCE_RUN_SKIPPED` and `CONFORMANCE_REPEAT` when a suite is built, so the suites below are built under a fixed
+ * environment, whatever the environment of the test run.
+ */
+const withEnv = <T>(env: Record<string, string | undefined>, fn: () => T): T => {
+	const set = (values: Record<string, string | undefined>) => {
+		for (const [key, value] of Object.entries(values)) {
+			if (value === undefined) {
+				delete process.env[key];
+			} else {
+				process.env[key] = value;
+			}
+		}
+	};
+	const previous = Object.fromEntries(Object.keys(env).map((key) => [key, process.env[key]]));
+	set(env);
+	try {
+		return fn();
+	} finally {
+		set(previous);
+	}
+};
+
+const HARNESS_ENV = ['CONFORMANCE_RUN_SKIPPED', 'CONFORMANCE_REPEAT'] as const;
+
+/**
+ * Builds a suite under the given harness environment; the harness variables it doesn't name are unset.
+ */
+const withHarnessEnv = <T>(env: Partial<Record<(typeof HARNESS_ENV)[number], string>>, fn: () => T): T =>
+	withEnv({ ...Object.fromEntries(HARNESS_ENV.map((key) => [key, undefined])), ...env }, fn);
 
 describe(stringify, () => {
 	it('writes bigints, such as global positions, instead of throwing', () => {
@@ -37,7 +70,6 @@ describe(stringify, () => {
 
 describe(conformanceRepeat, () => {
 	it.each([
-		[undefined, 1],
 		['', 1],
 		['1', 1],
 		['0', 1],
@@ -49,18 +81,25 @@ describe(conformanceRepeat, () => {
 	])('reads CONFORMANCE_REPEAT=%o as %i run(s)', (value, runs) => {
 		expect(conformanceRepeat(value)).toBe(runs);
 	});
+
+	it('reads the environment by default', () => {
+		expect(withEnv({ CONFORMANCE_REPEAT: undefined }, () => conformanceRepeat())).toBe(1);
+		expect(withEnv({ CONFORMANCE_REPEAT: '4' }, () => conformanceRepeat())).toBe(4);
+	});
 });
 
 describe(conformanceTest, () => {
-	describe('capability gates', () => {
-		type Case = 'needs-headers' | 'needs-gap-safe' | 'ungated' | 'documented-gap';
-		const capabilities: Required<EventStoreCapabilities> = {
-			atomicAppend: true,
-			headers: true,
-			globalOrder: 'best-effort',
-		};
-		const ran: Case[] = [];
-		const test = conformanceTest<Case, Required<EventStoreCapabilities>>(
+	type GatedCase = 'needs-headers' | 'needs-gap-safe' | 'ungated' | 'documented-gap';
+	const capabilities: Required<EventStoreCapabilities> = {
+		atomicAppend: true,
+		headers: true,
+		globalOrder: 'best-effort',
+	};
+	/**
+	 * Registers the four gated cases, which record in `ran` that they ran.
+	 */
+	const registerGatedCases = (ran: GatedCase[]) => {
+		const test = conformanceTest<GatedCase, Required<EventStoreCapabilities>>(
 			{ 'documented-gap': 'a gap the store documents' },
 			5_000,
 			() => capabilities,
@@ -88,10 +127,29 @@ describe(conformanceTest, () => {
 		test('documented-gap', 'skips a case with a reason', async () => {
 			ran.push('documented-gap');
 		});
+	};
+
+	describe('capability gates', () => {
+		const ran: GatedCase[] = [];
+		withHarnessEnv({}, () => registerGatedCases(ran));
 
 		it('runs only the cases the store qualifies for, and reports the lacking capability', ({ task }) => {
 			expect(ran).toEqual(['needs-headers', 'ungated']);
 			expect(resultOf(task, 'needs-headers')?.state).toBe('pass');
+			expect(resultOf(task, 'needs-gap-safe')).toMatchObject({
+				state: 'skip',
+				note: "capability: globalOrder 'gap-safe'",
+			});
+		});
+	});
+
+	describe('capability gates with CONFORMANCE_RUN_SKIPPED=true', () => {
+		const ran: GatedCase[] = [];
+		withHarnessEnv({ CONFORMANCE_RUN_SKIPPED: 'true' }, () => registerGatedCases(ran));
+
+		it('runs the skipped cases, but not the cases the store lacks the capability for', ({ task }) => {
+			expect(ran).toEqual(['needs-headers', 'ungated', 'documented-gap']);
+			expect(resultOf(task, 'documented-gap')?.state).toBe('pass');
 			expect(resultOf(task, 'needs-gap-safe')).toMatchObject({
 				state: 'skip',
 				note: "capability: globalOrder 'gap-safe'",
@@ -111,14 +169,7 @@ describe(conformanceTest, () => {
 
 	describe('CONFORMANCE_REPEAT', () => {
 		let runs = 0;
-		const previous = process.env.CONFORMANCE_REPEAT;
-		process.env.CONFORMANCE_REPEAT = '3';
-		const test = conformanceTest<'repeated'>(undefined, 5_000);
-		if (previous === undefined) {
-			delete process.env.CONFORMANCE_REPEAT;
-		} else {
-			process.env.CONFORMANCE_REPEAT = previous;
-		}
+		const test = withHarnessEnv({ CONFORMANCE_REPEAT: '3' }, () => conformanceTest<'repeated'>(undefined, 5_000));
 
 		test('repeated', 'runs every case n times', async () => {
 			runs++;

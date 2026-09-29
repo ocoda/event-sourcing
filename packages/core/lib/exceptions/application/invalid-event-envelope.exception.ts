@@ -23,7 +23,7 @@ export class InvalidEventEnvelopeException extends EventSourcingError {
 	/** The index of the item in the appended array, when a single item is at fault. */
 	readonly index?: number;
 	readonly reason: InvalidEventEnvelopeReason;
-	/** For `'too-long'`: the value that is too long. */
+	/** For `'too-long'`: the value that is too long. `'event'` is the event name (`EVENT_STORE_LIMITS.eventName`). */
 	readonly field?: 'streamId' | 'aggregateId' | 'event';
 	/** The aggregate id, version or maximum length that was expected. */
 	readonly expected?: string | number;

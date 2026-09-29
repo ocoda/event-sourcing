@@ -9,6 +9,11 @@ import { EventSourcingError, EventSourcingErrorCode } from '../event-sourcing-er
  * - `'too-long'`: the correlation or causation id is longer than `limit` characters.
  * - `'too-large'`: the JSON of the headers is larger than `limit` bytes (UTF-8).
  */
+/**
+ * The metadata field an `InvalidEventMetadataException` is about.
+ */
+export type InvalidEventMetadataField = 'correlationId' | 'causationId' | 'headers';
+
 export type InvalidEventMetadataReason =
 	| 'invalid-type'
 	| 'empty-key'
@@ -25,7 +30,7 @@ export class InvalidEventMetadataException extends EventSourcingError {
 	override readonly name = 'InvalidEventMetadataException';
 	readonly code = EventSourcingErrorCode.InvalidEventMetadata;
 	/** The metadata field: `'correlationId'`, `'causationId'` or `'headers'`. */
-	readonly field: string;
+	readonly field: InvalidEventMetadataField;
 	readonly reason: InvalidEventMetadataReason;
 	/** The offending header key, for the reasons about a single header. */
 	readonly key?: string;
@@ -33,7 +38,7 @@ export class InvalidEventMetadataException extends EventSourcingError {
 	readonly limit?: number;
 
 	constructor(
-		details: { field: string; reason: InvalidEventMetadataReason; key?: string; limit?: number },
+		details: { field: InvalidEventMetadataField; reason: InvalidEventMetadataReason; key?: string; limit?: number },
 		options?: ErrorOptions,
 	) {
 		super(messageOf(details), options);

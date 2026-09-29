@@ -188,6 +188,18 @@ describe('append validation', () => {
 				expect(() => validateAppendMetadata({ headers: { 'price-$': 1 } }, headersCapable)).not.toThrow();
 			});
 
+			it('still checks keys, values and size when reserved keys are allowed', () => {
+				for (const [headers, reason] of [
+					[{ '': 'x' }, 'empty-key'],
+					[{ $k: { nested: true } }, 'invalid-value'],
+					[{ $k: 'x'.repeat(8192) }, 'too-large'],
+				] as const) {
+					expect(
+						thrownBy(() => validateAppendMetadata({ headers }, headersCapable, { allowReservedKeys: true })),
+					).toMatchObject({ name: 'InvalidEventMetadataException', field: 'headers', reason });
+				}
+			});
+
 			it.each([
 				['an object', { nested: true }],
 				['an array', ['a']],
@@ -236,6 +248,24 @@ describe('append validation', () => {
 				expect(thrownBy(() => validateAppendMetadata({ headers: { tenant: 'acme' } }, undefined))).toMatchObject({
 					component: 'event store',
 				});
+			});
+
+			it('rejects invalid headers as invalid metadata on a store without the headers capability too', () => {
+				for (const [headers, reason] of [
+					['tenant=acme', 'invalid-type'],
+					[{ '': 'x' }, 'empty-key'],
+					[{ $x: 1 }, 'reserved-key'],
+					[{ a: Number.NaN }, 'invalid-value'],
+					[{ k: 'x'.repeat(8192) }, 'too-large'],
+				] as const) {
+					for (const capabilities of [{ headers: false }, {}, undefined]) {
+						expect(thrownBy(() => validateAppendMetadata({ headers }, capabilities))).toMatchObject({
+							name: 'InvalidEventMetadataException',
+							field: 'headers',
+							reason,
+						});
+					}
+				}
 			});
 
 			it('lets empty or absent headers through on a store without the headers capability', () => {
@@ -288,6 +318,10 @@ describe('append validation', () => {
 
 			expect(error).toBeInstanceOf(InvalidEventEnvelopeException);
 			expect(error).toMatchObject({ reason: 'too-long', field: 'event', index: 1, expected: 255, actual: 256 });
+		});
+
+		it('leaves an event name that is not a string to the serializer', () => {
+			expect(() => validateEnvelopeLimits(streamOf(), [{ event: 42 as never }])).not.toThrow();
 		});
 	});
 

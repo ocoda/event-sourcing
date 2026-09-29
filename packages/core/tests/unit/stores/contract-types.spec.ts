@@ -36,7 +36,8 @@ describe('store contract types', () => {
 		}>();
 		expectTypeOf<EventHeaders>().toEqualTypeOf<Readonly<Record<string, string | number | boolean | null>>>();
 		// @ts-expect-error the expected version is required
-		expectTypeOf<AppendOptions>().toEqualTypeOf<{ pool?: IEventPool }>();
+		const withoutExpectedVersion: AppendOptions = { pool: 'tenant' };
+		expectTypeOf(withoutExpectedVersion).toEqualTypeOf<AppendOptions>();
 	});
 
 	it('defines the capabilities and the store context (§1)', () => {

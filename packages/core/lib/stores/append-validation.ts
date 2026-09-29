@@ -128,9 +128,6 @@ const validateHeaders = (
 	if (keys.length === 0) {
 		return;
 	}
-	if (capabilities?.headers !== true) {
-		throw new UnsupportedOperationException({ operation: 'headers', component: options.component ?? 'event store' });
-	}
 	for (const key of keys) {
 		if (key === '') {
 			throw new InvalidEventMetadataException({ field: 'headers', reason: 'empty-key', key });
@@ -148,6 +145,10 @@ const validateHeaders = (
 			reason: 'too-large',
 			limit: EVENT_STORE_LIMITS.headersBytes,
 		});
+	}
+	// Last, so that invalid headers get the same InvalidEventMetadataException from every store
+	if (capabilities?.headers !== true) {
+		throw new UnsupportedOperationException({ operation: 'headers', component: options.component ?? 'event store' });
 	}
 };
 
@@ -169,9 +170,11 @@ export interface AppendMetadataValidationOptions {
  * Checks the metadata of an append, or of a pre-built envelope:
  * - `correlationId` and `causationId` are strings of at most 255 characters (`null` counts as absent);
  * - `headers` is a plain object with non-empty keys that don't start with `$` (unless `allowReservedKeys`), whose values
- *   are strings, finite numbers, booleans or `null`, and whose JSON is at most 8 KiB (UTF-8);
- * - a store without the `headers` capability gets no headers: non-empty headers throw an
- *   `UnsupportedOperationException`. Empty headers (`{}`) carry nothing and pass.
+ *   are strings, finite numbers, booleans or `null`, and whose JSON is at most 8 KiB (UTF-8). `allowReservedKeys` lifts
+ *   only the `$` rule;
+ * - a store without the `headers` capability gets no headers: valid, non-empty headers then throw an
+ *   `UnsupportedOperationException`. Headers are checked first, so invalid headers throw the same
+ *   `InvalidEventMetadataException` on every store. Empty headers (`{}`) carry nothing and pass.
  *
  * @throws InvalidAppendOptionsException when the metadata is not an object
  * @throws InvalidEventMetadataException

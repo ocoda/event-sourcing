@@ -52,6 +52,10 @@ export class EventEnvelope<E extends IEvent = IEvent> {
 	 * The JSON form of the envelope, which `JSON.stringify(envelope)` writes. It is what `JSON.stringify` writes for a
 	 * plain object with the fields of the envelope, except that a bigint, such as the `globalPosition`, becomes a
 	 * decimal string instead of making `JSON.stringify` throw.
+	 *
+	 * It builds that object with a `JSON.stringify` and `JSON.parse` round trip (so the result is exactly what
+	 * `JSON.stringify` makes of every nested value), which means `JSON.stringify(envelope)` serializes the envelope twice.
+	 * The stores don't use it; it is meant for logs, APIs and tests, not for hot paths.
 	 */
 	toJSON(): { event: string; payload: Record<string, unknown>; metadata: Record<string, unknown> } {
 		return JSON.parse(
