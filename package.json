@@ -17,9 +17,7 @@
 		"typecheck": "turbo typecheck",
 		"check:packages": "turbo build --filter=\"./packages/**\" --output-logs=errors-only && node scripts/check-packages.mjs",
 		"format": "oxfmt",
-		"format:check": "oxfmt --check",
-		"benchmark": "turbo benchmark --",
-		"benchmark:report": "turbo benchmark:report"
+		"format:check": "oxfmt --check"
 	},
 	"engines": {
 		"node": ">=22.12"
@@ -28,26 +26,22 @@
 		"@arethetypeswrong/cli": "0.18.5",
 		"@changesets/changelog-github": "^1.0.1",
 		"@changesets/cli": "^3.0.3",
-		"@faker-js/faker": "^10.2.0",
-		"@nestjs/common": "12.1.1",
-		"@nestjs/core": "12.1.1",
-		"@nestjs/platform-express": "12.1.1",
-		"@nestjs/testing": "12.1.1",
-		"@types/node": "22.20.4",
+		"@nestjs/common": "catalog:",
+		"@types/node": "catalog:",
 		"@vitest/coverage-v8": "5.0.2",
 		"oxfmt": "0.71.0",
 		"oxlint": "1.86.0",
 		"publint": "0.3.24",
-		"reflect-metadata": "0.2.2",
-		"rxjs": "7.8.2",
+		"reflect-metadata": "catalog:",
+		"rxjs": "catalog:",
 		"turbo": "2.11.5",
-		"typescript": "7.0.2",
+		"typescript": "catalog:",
 		"vite": "8.3.1",
-		"vitest": "5.0.2"
+		"vitest": "catalog:"
 	},
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/ocoda/event-sourcing"
 	},
-	"packageManager": "pnpm@10.4.0"
+	"packageManager": "pnpm@12.7.0+sha512.9c56477e360068d6e9dca6a92efb4e46b3dc5a52fcebf3d84d78b9736c0ded589a561621a52f68219a7a39facc63cdc079c3226ef9c9d5f02b79f74e69a807b6"
 }

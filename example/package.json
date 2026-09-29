@@ -23,18 +23,18 @@
 		"node": ">=22.12"
 	},
 	"dependencies": {
-		"@nestjs/common": "^12.1.1",
-		"@nestjs/core": "^12.1.1",
-		"@nestjs/platform-express": "^12.1.1",
+		"@nestjs/common": "catalog:",
+		"@nestjs/core": "catalog:",
+		"@nestjs/platform-express": "catalog:",
 		"@ocoda/event-sourcing": "workspace:*",
 		"@ocoda/event-sourcing-mongodb": "workspace:*",
-		"mongodb": "^7.7.0",
-		"reflect-metadata": "^0.2.2",
-		"rxjs": "^7.8.2"
+		"mongodb": "catalog:",
+		"reflect-metadata": "catalog:",
+		"rxjs": "catalog:"
 	},
 	"devDependencies": {
 		"@ocoda/event-sourcing-config": "workspace:*",
-		"@types/node": "22.20.4",
-		"typescript": "7.0.2"
+		"@types/node": "catalog:",
+		"typescript": "catalog:"
 	}
 }
