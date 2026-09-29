@@ -18,7 +18,7 @@ Base your pull request on the branch your change targets.
 ## Prerequisites
 
 - **Node.js ≥ 22.12**, which the test and build tooling requires. `.node-version` names 24 for version managers.
-- **pnpm 12**: use the exact version pinned in the root `package.json` (`packageManager`); `corepack enable` picks it up. pnpm doesn't switch to that version on its own in this repository (`pmOnFail: ignore` in `pnpm-workspace.yaml`), so with another pnpm, run `pnpm self-update <version>` first.
+- **pnpm 12**: use the exact version pinned in the root `package.json` (`packageManager`). `corepack enable` picks it up with Corepack 0.34.6 or later (`corepack --version`); the Corepack bundled with older Node releases can't run pnpm 12, so update it first with `npm install --global corepack@latest`. pnpm doesn't switch to that version on its own in this repository (`pmOnFail: ignore` in `pnpm-workspace.yaml`), so with another pnpm, run `pnpm self-update <version>` first.
 - **Docker**, if you touch a database integration.
 
 ## Setup
@@ -29,7 +29,7 @@ cd event-sourcing
 pnpm install
 ```
 
-`pnpm-workspace.yaml` sets the dependency policy: versions that several packages share come from its `catalog` (write `catalog:` in `package.json`), pnpm installs only versions that are at least a day old, and dependency install scripts run only for the packages `allowBuilds` lists.
+`pnpm-workspace.yaml` sets the dependency policy: versions that several packages share come from its `catalog` (write `catalog:` in `package.json`), pnpm installs only versions that are at least a day old, and a dependency install script runs only when `allowBuilds` sets that package to `true` (an unlisted package with one fails the install).
 
 The repository is a pnpm + turbo monorepo:
 
