@@ -13,7 +13,7 @@ import {
 	type EventStoreConformanceCase,
 	type EventStoreConformanceHandle,
 	describeEventStoreConformance,
-} from '@ocoda/event-sourcing-testing/conformance';
+} from '@ocoda/event-sourcing/testing';
 
 // Negative controls: deliberately broken in-memory stores that the conformance cases must catch. Each suite registers
 // only the case that detects the defect, as a test that passes only when the case fails with the assertion that

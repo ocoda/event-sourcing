@@ -4,12 +4,16 @@ This package includes fixtures for unit and E2E test suites across the monorepo.
 
 ## Store Conformance Suites
 
-`@ocoda/event-sourcing-testing/conformance` holds the contract that every event store and snapshot store has to
-satisfy, whatever the database behind it. Every store in this repository runs it from a
-`*.conformance.spec.ts` file, next to its own specs.
+The conformance suites, the contract that every event store and snapshot store has to satisfy whatever the database
+behind it, are published: they live in `packages/core/lib/testing` and ship as the `@ocoda/event-sourcing/testing`
+subpath of the core package, with `vitest` as an optional peer dependency. They import Vitest's API rather than using
+its globals, and the root entry point of the core never imports them. Every store in this repository runs them from a
+`*.conformance.spec.ts` file, next to its own specs, through that public import (the specs resolve it to the core
+sources, like `@ocoda/event-sourcing`), so the drivers use the suites the way a custom store author does. This package
+keeps the fixtures that are not published.
 
 ```ts
-import { describeEventStoreConformance } from '@ocoda/event-sourcing-testing/conformance';
+import { describeEventStoreConformance } from '@ocoda/event-sourcing/testing';
 
 describeEventStoreConformance(
 	PostgresEventStore.name,
@@ -35,7 +39,9 @@ describeEventStoreConformance(
 );
 ```
 
-`describeSnapshotStoreConformance(name, factory, options)` works the same way; its factory takes no context.
+`describeSnapshotStoreConformance(name, factory, options)` works the same way; its factory takes no context. A snapshot
+store that keeps the `SnapshotStore` default of `getLastEnvelopesForAggregate` (which rejects every read) skips the
+`aggregate-*` cases with `capability: getLastEnvelopesForAggregate`, and the other cases leave that read out.
 
 - The event store suite covers the v4 store contract (ADR 0001 §1, §8 and §9): expected versions, `ExpectedVersion.Any`,
   pre-built envelopes, validation without I/O, publishing, metadata and headers, global positions and `readAll`. It reads

@@ -1,7 +1,7 @@
 import type { IEventCollection } from '@ocoda/event-sourcing';
 import { MongoDBEventStore } from '@ocoda/event-sourcing-mongodb';
-import { describeEventStoreConformance } from '@ocoda/event-sourcing-testing/conformance';
 import { mongodbTestTopologies } from '@ocoda/event-sourcing-testing/unit';
+import { describeEventStoreConformance } from '@ocoda/event-sourcing/testing';
 import type { Db, Document } from 'mongodb';
 import { dropCollections } from '../support/catalog.js';
 import { createEventStore } from '../support/stores.js';

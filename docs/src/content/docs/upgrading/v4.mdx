@@ -295,7 +295,7 @@ The database stores keep their 3.x appends until they move to schema v2. They ch
 
 **Reads.** `getEvent()` and `getEnvelope()` always return a promise, also on the in-memory store. On the in-memory store now, and on the database stores with schema v2, every read of a pool whose collection doesn't exist throws an `EventCollectionNotFoundException`; the in-memory store's `getEvents()` and `getEnvelopes()` yielded nothing and its `getEvent()` threw an `EventNotFoundException`. An append to such a pool throws an `EventStorePersistenceException` with `outcome: 'not-persisted'`, whose `cause` is the `EventCollectionNotFoundException`.
 
-**Custom stores.** The store is constructed with `(context, options)`, where `context` holds the event map and the publisher, and `options` no longer includes `useDefaultPool`. `EventStoreDriver` is now the type of that constructor rather than an interface of the store instance. A store implements the driver methods (`getStreamVersion`, `getEnvelope`, `getEnvelopes`, `readAll`, `persistEvents`) and declares its `capabilities`; the base class implements `appendEvents`, `getEvent` and `getEvents`, and a store that overrides one of them fails the bootstrap with an `InvalidEventStoreImplementationException`. `this.eventMap` is gone: the base class serializes and deserializes the events. See [Custom Event and Snapshot Stores](/advanced/custom-stores#migrating-a-3x-store).
+**Custom stores.** The store is constructed with `(context, options)`, where `context` holds the event map and the publisher, and `options` no longer includes `useDefaultPool`. `EventStoreDriver` is now the type of that constructor rather than an interface of the store instance. A store implements the driver methods (`getStreamVersion`, `getEnvelope`, `getEnvelopes`, `readAll`, `persistEvents`) and declares its `capabilities`; the base class implements `appendEvents`, `getEvent` and `getEvents`, and a store that overrides one of them fails the bootstrap with an `InvalidEventStoreImplementationException`. `this.eventMap` is gone: the base class serializes and deserializes the events. See [Custom Event and Snapshot Stores](/advanced/custom-stores#migrating-a-3x-store), and check the store with the [conformance suites](#custom-store-conformance).
 
 ### Metadata and headers [#metadata-headers]
 
@@ -346,6 +346,34 @@ For custom snapshot stores:
 2. Drop your `getManyLastSnapshotEnvelopes` if it only looped over `getLastEnvelope`: the base class does that.
 3. If you implement `getLastEnvelopesForAggregate`, order by the aggregate id in binary, descending order, and treat `filter.aggregateId` as an exclusive cursor.
 4. Replace uses of the `SnapshotStoreDriver` interface with `SnapshotStore`.
+
+### Testing a custom store [#custom-store-conformance]
+
+*In the next prerelease.* See [Test your Event Store](/advanced/custom-stores#test-your-event-store).
+
+The conformance suites that every built-in store runs are published as `@ocoda/event-sourcing/testing`. They register [Vitest](https://vitest.dev) tests, so `vitest` 5 is an optional peer dependency of `@ocoda/event-sourcing`: install it next to the prerelease to use the subpath. The suites import Vitest's API, so they need no `globals: true`, and the root entry point never loads Vitest.
+
+As the last step of moving a custom store to 4.0, run the suites against it:
+
+```ts
+import { describeEventStoreConformance, describeSnapshotStoreConformance } from '@ocoda/event-sourcing/testing';
+
+describeEventStoreConformance('FooEventStore', async (context) => {
+	const store = new FooEventStore(context, { ... });
+	await store.connect();
+	return { store, cleanup: async (collections) => { /* drop them, then disconnect */ } };
+});
+
+describeSnapshotStoreConformance('FooSnapshotStore', async () => {
+	const store = new FooSnapshotStore({ ... });
+	await store.connect();
+	return { store, cleanup: async (collections) => { /* drop them, then disconnect */ } };
+});
+```
+
+- Declare `capabilities` instead of skipping cases: a case that needs a guarantee your store doesn't claim is skipped with `capability: <flag>`. `skip` remains for real gaps, and each skip needs a reason.
+- A snapshot store that keeps the base class's `getLastEnvelopesForAggregate` skips the cases of that read the same way.
+- The subpath also has `createInMemoryEventStore()`, `createInMemorySnapshotStore()`, `createTestEventStoreContext()` and the `RecordingPublisher`, for tests that use the in-memory stores or construct a store without the module.
 
 ### PostgreSQL schema v2 [#postgres-schema-v2]
 
@@ -457,6 +485,7 @@ Nothing in this section is released yet. The changes are planned in [ADR 0001: v
 - **Event store, snapshots and schema v2.** See [Event store, snapshots and schema v2](#store-and-schema).
 - **Saving aggregates.** `commit()` gives way to `getUncommittedEvents()` and `markCommitted()`, and saving an unchanged aggregate becomes a no-op. `commit()` stays as a deprecated shim until 5.0.
 - **Publishing.** See [Publishing](#publishing).
+- **Conformance suites for custom stores.** See [Testing a custom store](#custom-store-conformance).
 - **Bootstrap checks.** Duplicate registrations, and request-scoped subscribers, publishers and serializers, fail the bootstrap. Request-scoped command and query handlers start to work.
 - **Serialization.** A JSON serializer replaces class-transformer as the default. Events that use class-transformer decorators opt back in with `defaultEventSerializer: ClassTransformerEventSerializer`.
 - **Ids.** `generate()` on an id class returns that class, so `AccountId.generate()` returns an `AccountId`, and ids of different classes are no longer equal.

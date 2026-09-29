@@ -1,5 +1,5 @@
 import { MariaDBEventStore } from '@ocoda/event-sourcing-mariadb';
-import { describeEventStoreConformance } from '@ocoda/event-sourcing-testing/conformance';
+import { describeEventStoreConformance } from '@ocoda/event-sourcing/testing';
 import { createEventStore, dropEventCollections, failInsertsOf } from '../support/stores.js';
 
 describeEventStoreConformance(MariaDBEventStore.name, async (context) => {

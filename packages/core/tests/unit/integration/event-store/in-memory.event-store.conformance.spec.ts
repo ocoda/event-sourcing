@@ -7,7 +7,7 @@ import {
 	type PersistOutcome,
 	type PersistTarget,
 } from '@ocoda/event-sourcing';
-import { describeEventStoreConformance } from '@ocoda/event-sourcing-testing/conformance';
+import { describeEventStoreConformance } from '@ocoda/event-sourcing/testing';
 
 /**
  * The in-memory store with the write failures the conformance suite injects: the append of an event with a failing

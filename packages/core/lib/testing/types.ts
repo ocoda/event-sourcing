@@ -1,4 +1,4 @@
-import type { EventStore, IEventCollection } from '@ocoda/event-sourcing';
+import type { EventStore, IEventCollection } from '../index.js';
 
 /**
  * What a conformance suite factory hands to the suite.

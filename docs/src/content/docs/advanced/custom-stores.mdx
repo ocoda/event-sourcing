@@ -176,9 +176,15 @@ export class AppModule {}
 ```
 
 #### Test your Event Store
-The conformance suite that every built-in store runs encodes the contract. It will be published as `@ocoda/event-sourcing/testing` in a later 4.0 prerelease; until then it lives in the repository's private `@ocoda/event-sourcing-testing` package. The suite hands your factory the store context, and your factory returns the connected store:
+The conformance suite that every built-in store runs encodes the contract, and `@ocoda/event-sourcing/testing` publishes it. It registers [Vitest](https://vitest.dev) tests, so add `vitest` 5 to your dev dependencies: it's an optional peer dependency of `@ocoda/event-sourcing`, which only this subpath loads. The suite imports Vitest's API itself, so it needs no `globals: true`.
+
+In a spec file, the suite hands your factory the store context (the suite's event map and a `RecordingPublisher`), and your factory returns the connected store:
 
 ```typescript
+// foo.event-store.conformance.spec.ts
+import { describeEventStoreConformance } from '@ocoda/event-sourcing/testing';
+import { FooEventStore } from './foo.event-store';
+
 describeEventStoreConformance('FooEventStore', async (context) => {
 	const store = new FooEventStore(context, { ... });
 	await store.connect();
@@ -199,7 +205,13 @@ describeEventStoreConformance('FooEventStore', async (context) => {
 });
 ```
 
-Cases that need a capability your store doesn't claim are skipped. A store that claims `atomicAppend` (the default) provides `faults.failInsertOf`, which `append-atomic-partial-failure` uses to make an append fail halfway, or skips that case with a reason. A case your store can't pass yet is skipped with a reason, in the `skip` option.
+Cases that need a capability your store doesn't claim are skipped with `capability: <flag>`. A store that claims `atomicAppend` (the default) provides `faults.failInsertOf`, which `append-atomic-partial-failure` uses to make an append fail halfway, or skips that case with a reason. A case your store can't pass yet is skipped with a reason, in the `skip` option; `EVENT_STORE_CONFORMANCE_CASES` lists the case ids.
+
+- The suite creates its own pools, named after the `pool` option, which defaults to a name unique to the run, and hands their collections to `cleanup` at the end. The list also names collections that were never created: ignore those.
+- `CONFORMANCE_RUN_SKIPPED=true` runs the cases you skipped, to check whether a skip is still needed. It doesn't lift a capability gate.
+- `CONFORMANCE_REPEAT=n` runs every case n times, to soak out flaky concurrency.
+
+To construct your store outside the module, in a test of your own, `createTestEventStoreContext({ events })` builds a context with a `RecordingPublisher`, which records what the store publishes. `createInMemoryEventStore({ events })` and `createInMemorySnapshotStore()` return connected in-memory stores, for tests that don't boot the module.
 
 #### Migrating a 3.x store
 1. The constructor becomes `(context, options)`. Remove yours, or pass both arguments on.
@@ -208,6 +220,7 @@ Cases that need a capability your store doesn't claim are skipped. A store that 
 4. Make every method `async`.
 5. Store the correlation id, causation id, headers and event version, and declare your `capabilities`.
 6. Construct exceptions with a single object argument, plus the error options for the `cause`.
+7. Run the [conformance suites](#test-your-event-store) from `@ocoda/event-sourcing/testing` against your event store and your snapshot store. Declare capabilities instead of skipping cases, and give every skip a reason.
 
 ---
 
@@ -339,7 +352,27 @@ The `SnapshotStore` base class has a default for two more methods. Override them
 
 An implementation of `getLastEnvelopesForAggregate` yields the latest snapshot of every stream of the aggregate, in descending binary order of the aggregate ids, and treats `filter.aggregateId` as an exclusive cursor. See [Snapshot store](/under-the-hood/snapshot-store#paging-through-an-aggregate).
 
-The conformance suite that checks a store against this contract will be published as `@ocoda/event-sourcing/testing` in a later prerelease.
+#### Test your Snapshot Store
+`describeSnapshotStoreConformance` from `@ocoda/event-sourcing/testing` checks a snapshot store against this contract, the same way as the [event store suite](#test-your-event-store). Its factory takes no context:
+
+```typescript
+// foo.snapshot-store.conformance.spec.ts
+import { describeSnapshotStoreConformance } from '@ocoda/event-sourcing/testing';
+import { FooSnapshotStore } from './foo.snapshot-store';
+
+describeSnapshotStoreConformance('FooSnapshotStore', async () => {
+	const store = new FooSnapshotStore({ ... });
+	await store.connect();
+	return {
+		store,
+		cleanup: async (collections) => {
+			// Drop the collections, then disconnect
+		},
+	};
+});
+```
+
+If your store keeps the base class's `getLastEnvelopesForAggregate`, the cases of that read are skipped with `capability: getLastEnvelopesForAggregate`, and the other cases leave it out. `SNAPSHOT_STORE_CONFORMANCE_CASES` lists the case ids.
 
 #### Register your Snapshot Store
 

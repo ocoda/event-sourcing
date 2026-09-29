@@ -3,5 +3,5 @@
 	"compilerOptions": {
 		"types": ["node", "vitest/globals"]
 	},
-	"include": ["conformance/**/*.ts", "cross-version/**/*.ts", "e2e/**/*.ts", "unit/**/*.ts"]
+	"include": ["cross-version/**/*.ts", "e2e/**/*.ts", "unit/**/*.ts"]
 }

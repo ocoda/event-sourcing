@@ -1,4 +1,4 @@
-import type { EnvelopePublisher, EventEnvelope } from '@ocoda/event-sourcing';
+import type { EnvelopePublisher, EventEnvelope } from '../index.js';
 
 /**
  * The publisher of the event store conformance suite: it records the envelopes of every `publishAll` call, and can be

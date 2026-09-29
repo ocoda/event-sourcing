@@ -1,3 +1,4 @@
+import { type MockInstance, afterAll, afterEach, beforeAll, describe, expect, vi } from 'vitest';
 import {
 	EventCollection,
 	EventCollectionNotFoundException,
@@ -22,8 +23,7 @@ import {
 	assertEventStoreImplementation,
 	isEventSourcingError,
 	resolveCapabilities,
-} from '@ocoda/event-sourcing';
-import type { MockInstance } from 'vitest';
+} from '../index.js';
 import {
 	CALL_TIMEOUT,
 	type ConformanceTestContext,

@@ -1,5 +1,5 @@
 import { PostgresSnapshotStore } from '@ocoda/event-sourcing-postgres';
-import { describeSnapshotStoreConformance } from '@ocoda/event-sourcing-testing/conformance';
+import { describeSnapshotStoreConformance } from '@ocoda/event-sourcing/testing';
 import { createSnapshotStore, dropCollections } from '../support/stores.js';
 
 describeSnapshotStoreConformance(PostgresSnapshotStore.name, async () => {
