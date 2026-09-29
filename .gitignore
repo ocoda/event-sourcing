@@ -2,7 +2,7 @@
 **/.turbo
 **/dist
 **/node_modules
-**/.next
+**/.astro
 **/coverage
 benchmarks/report/**
 

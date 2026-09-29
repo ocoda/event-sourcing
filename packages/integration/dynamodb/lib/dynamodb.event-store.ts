@@ -101,9 +101,9 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 			ExclusiveStartTableName = LastEvaluatedTableName;
 			entities.push(...((TableNames || []).filter((name) => name.endsWith('events')) as IEventCollection[]));
 
-			if (entities.length > 0 && !ExclusiveStartTableName) {
-				yield entities;
-				entities.length = 0;
+			if (entities.length > 0) {
+				// Hand out the buffered items in a new array, so a batch the consumer holds on to never changes
+				yield entities.splice(0);
 			}
 		} while (ExclusiveStartTableName);
 	}
@@ -153,8 +153,8 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 			leftToFetch -= Items?.length || 0;
 
 			if (entities.length > 0 && (entities.length === batch || !ExclusiveStartKey || leftToFetch <= 0)) {
-				yield entities;
-				entities.length = 0;
+				// Hand out the buffered items in a new array, so a batch the consumer holds on to never changes
+				yield entities.splice(0);
 			}
 		} while (ExclusiveStartKey && leftToFetch > 0);
 	}
@@ -367,8 +367,8 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 			leftToFetch -= Items?.length || 0;
 
 			if (entities.length > 0 && (entities.length === batch || !ExclusiveStartKey || leftToFetch <= 0)) {
-				yield entities;
-				entities.length = 0;
+				// Hand out the buffered items in a new array, so a batch the consumer holds on to never changes
+				yield entities.splice(0);
 			}
 		} while (ExclusiveStartKey && leftToFetch > 0);
 	}
@@ -419,8 +419,8 @@ export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 			}
 
 			if (entities.length > 0) {
-				yield entities;
-				entities.length = 0;
+				// Hand out the buffered items in a new array, so a batch the consumer holds on to never changes
+				yield entities.splice(0);
 			}
 		} while (monthsFetched < yearMonths.length);
 	}

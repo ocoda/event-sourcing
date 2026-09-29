@@ -1,0 +1,19 @@
+---
+import Default from '@astrojs/starlight/components/Footer.astro';
+---
+
+<Default />
+<p class="copyright">
+	MIT {new Date().getFullYear()} © <a href="https://www.ocoda.be/en" target="_blank" rel="noopener">Ocoda</a>.
+</p>
+
+<style>
+	@layer starlight.components {
+		.copyright {
+			margin-top: 1.5rem;
+			font-size: var(--sl-text-xs);
+			color: var(--sl-color-gray-3);
+			text-align: center;
+		}
+	}
+</style>

@@ -5,6 +5,7 @@
 	"license": "MIT",
 	"type": "module",
 	"exports": {
+		"./conformance": "./conformance/index.ts",
 		"./e2e": "./e2e/index.ts",
 		"./e2e/application": "./e2e/application/index.ts",
 		"./e2e/domain": "./e2e/domain/index.ts",

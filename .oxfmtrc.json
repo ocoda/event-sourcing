@@ -20,14 +20,13 @@
 	"ignorePatterns": [
 		"dist",
 		"coverage",
-		".next",
+		".astro",
 		".turbo",
 		"pnpm-lock.yaml",
 		"**/*.md",
 		"**/*.mdx",
 		"**/*.yml",
 		"**/*.yaml",
-		"docs/next-env.d.ts",
 		"benchmarks/report"
 	]
 }

@@ -4,28 +4,27 @@
 	"author": "Dries Hooghe <dries@drieshooghe.com>",
 	"license": "MIT",
 	"private": true,
+	"type": "module",
 	"keywords": [],
 	"scripts": {
-		"docs:dev": "next",
-		"docs:build": "next build",
-		"postdocs:build": "next-sitemap",
-		"docs:start": "next start",
+		"docs:dev": "astro dev",
+		"docs:build": "astro build",
+		"docs:preview": "astro preview",
+		"typecheck": "astro check",
 		"ci": "oxlint --deny-warnings && oxfmt --check",
 		"format": "oxfmt",
 		"format:check": "oxfmt --check",
 		"lint": "oxlint"
 	},
 	"dependencies": {
-		"next": "^15.2.0",
-		"next-sitemap": "^4.2.3",
-		"nextra": "^3.3.1",
-		"nextra-theme-docs": "^3.3.1",
-		"react": "^19.1.1",
-		"react-dom": "^19.1.1"
+		"@astrojs/markdown-satteri": "0.4.2",
+		"@astrojs/starlight": "0.42.4",
+		"astro": "7.3.5",
+		"starlight-links-validator": "0.26.0",
+		"starlight-llms-txt": "0.12.0"
 	},
 	"devDependencies": {
-		"@ocoda/event-sourcing-config": "workspace:*",
-		"@types/node": "22.20.4",
-		"typescript": "~6.0.3"
+		"@astrojs/check": "0.9.10",
+		"typescript": "6.0.3"
 	}
 }

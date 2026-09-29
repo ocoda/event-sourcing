@@ -1,0 +1,32 @@
+---
+import { LOGO_URL } from '../consts';
+
+const { siteTitleHref } = Astro.locals.starlightRoute;
+---
+
+<a href={siteTitleHref} class="site-title sl-flex">
+	<img src={LOGO_URL} width="40" height="40" alt="Ocoda Logo" />
+	<span translate="no">Ocoda | Event Sourcing</span>
+</a>
+
+<style>
+	@layer starlight.core {
+		.site-title {
+			align-items: center;
+			gap: 0.4em;
+			font-size: var(--sl-text-h4);
+			font-weight: 700;
+			color: var(--sl-color-text-accent);
+			text-decoration: none;
+			white-space: nowrap;
+			min-width: 0;
+		}
+		span {
+			overflow: hidden;
+		}
+		img {
+			height: calc(var(--sl-nav-height) - 2 * var(--sl-nav-pad-y));
+			width: auto;
+		}
+	}
+</style>

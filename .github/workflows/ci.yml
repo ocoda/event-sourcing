@@ -293,6 +293,9 @@ jobs:
       - name: Lint and format
         run: pnpm run ci --filter=@ocoda/event-sourcing-docs
 
+      - name: Typecheck
+        run: pnpm typecheck --filter=@ocoda/event-sourcing-docs
+
       - name: Build
         run: pnpm docs:build --filter=@ocoda/event-sourcing-docs
 

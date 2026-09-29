@@ -33,7 +33,7 @@
 		{ groupName: 'vitest', matchPackageNames: ['vitest', '@vitest/**', 'vite'] },
 		{ groupName: 'docs site', matchFileNames: ['docs/package.json'] },
 		{
-			description: "Next.js 15 type-checks through the TypeScript JS API, which TypeScript 7 doesn't ship: keep docs on 6",
+			description: "astro check (@astrojs/check) type-checks through the TypeScript JS API, which TypeScript 7 doesn't ship: keep docs on 6",
 			matchFileNames: ['docs/package.json'],
 			matchPackageNames: ['typescript'],
 			allowedVersions: '<7',
