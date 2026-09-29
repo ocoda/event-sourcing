@@ -1,5 +1,14 @@
 # @ocoda/event-sourcing-mariadb
 
+## 3.0.2
+
+### Patch Changes
+
+- [#544](https://github.com/ocoda/event-sourcing/pull/544) [`94b5f48`](https://github.com/ocoda/event-sourcing/commit/94b5f48415e54e3408f21c35858b431311c04462) Thanks [@drieshooghe](https://github.com/drieshooghe)! - `getLastSnapshots([])` and `getManyLastSnapshotEnvelopes([])` of the MariaDB snapshot store, and so `SnapshotRepository.loadMany([])`, return an empty map instead of failing with an SQL syntax error.
+
+- Updated dependencies [[`94b5f48`](https://github.com/ocoda/event-sourcing/commit/94b5f48415e54e3408f21c35858b431311c04462)]:
+  - @ocoda/event-sourcing@3.0.2
+
 ## 3.0.1
 
 ### Patch Changes
