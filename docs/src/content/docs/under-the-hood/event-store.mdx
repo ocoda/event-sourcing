@@ -5,7 +5,7 @@ title: Event Store
 import { Aside } from '@astrojs/starlight/components';
 
 <Aside type="note" title="4.0 prerelease">
-This page describes the event store of the 4.0 prereleases. The in-memory store implements all of it. The PostgreSQL, MariaDB and MongoDB stores keep their 3.x appends (no global positions, no `readAll`, no metadata in the options) until they move to schema v2 in a later prerelease.
+This page describes the event store contract, which ships in the next 4.0 prerelease. The in-memory, PostgreSQL and MongoDB stores implement all of it; the PostgreSQL and MongoDB stores need their [data migrated](/upgrading/v4#data-migration) first. The MariaDB store keeps its 3.x appends (no global positions, no `readAll`, no metadata in the options) until it moves to schema v2 in a later prerelease.
 </Aside>
 
 The event store keeps the events of every aggregate in a **stream**, `EventStream.for(Account, id)`, whose events are numbered 1, 2, 3, … by their `version`. Streams live in a **pool**: the default pool, or a named one (`ensureCollection('tenant-1')`), for instance per tenant. Each pool is a collection (table) of its own.
@@ -72,26 +72,65 @@ for await (const envelopes of eventStore.readAll({ fromPosition: checkpoint + 1n
 
 What a position guarantees depends on the store's `capabilities.globalOrder`:
 
-- **`'gap-safe'`**: once `readAll` yielded a position, no event at or below it commits later. A reader that resumes after its last position never misses an event, even while other appends are running. The in-memory store is gap-safe.
+- **`'gap-safe'`**: once `readAll` yielded a position, no event at or below it commits later. A reader that resumes after its last position never misses an event, even while other appends are running. The in-memory store, PostgreSQL and MongoDB replica sets are gap-safe.
 - **`'best-effort'`**: positions strictly increase, but an event can still commit below a position that was already read, while appends run. Read again from an older position, or wait until the writers are done, to be sure to see every event.
 
-The in-memory store implements `readAll`; the database stores implement it with schema v2. It replaces `getAllEnvelopes({ since, until })`: to read a period, filter the envelopes on `metadata.occurredOn`.
+The in-memory, PostgreSQL and MongoDB stores implement `readAll`; the MariaDB store implements it with its schema v2. It replaces `getAllEnvelopes({ since, until })`: to read a period, filter the envelopes on `metadata.occurredOn`.
 
 ## Capabilities [#capabilities]
 
 `eventStore.capabilities` lists the optional guarantees of a store, final once it is connected:
 
-| Capability | Meaning | In-memory |
-| --- | --- | --- |
-| `atomicAppend` | An append stores all of its events or none. | `true` |
-| `headers` | The store persists headers; without it, an append with headers is rejected. | `true` |
-| `globalOrder` | `'gap-safe'` or `'best-effort'`, see [Reading all events](#reading-all-events). | `'gap-safe'` |
+| Capability | Meaning |
+| --- | --- |
+| `atomicAppend` | An append stores all of its events or none. |
+| `headers` | The store persists headers; without it, an append with headers is rejected. |
+| `globalOrder` | `'gap-safe'` or `'best-effort'`, see [Reading all events](#reading-all-events). |
 
-`resolveCapabilities(store.capabilities)` fills in the defaults of a store that leaves a flag out: `atomicAppend: true`, `headers: false`, `globalOrder: 'best-effort'`.
+The built-in stores declare:
+
+| Store | `atomicAppend` | `headers` | `globalOrder` |
+| --- | --- | --- | --- |
+| In-memory | `true` | `true` | `'gap-safe'` |
+| PostgreSQL | `true` | `true` | `'gap-safe'` |
+| MongoDB replica set | `true` | `true` | `'gap-safe'` |
+| MongoDB sharded cluster | `true` | `true` | `'best-effort'` |
+| MongoDB standalone server | `false` | `true` | `'best-effort'` |
+
+The MongoDB store detects its topology when it connects; see [MongoDB](/integrations/mongodb#capabilities). `resolveCapabilities(store.capabilities)` fills in the defaults of a store that leaves a flag out: `atomicAppend: true`, `headers: false`, `globalOrder: 'best-effort'`. The MariaDB store declares none until its schema v2, so it has these defaults.
 
 ## Limits [#limits]
 
 `EVENT_STORE_LIMITS` holds the largest values every store accepts, checked before any I/O: stream ids, aggregate ids, event names, correlation ids and causation ids of at most 255 characters, and headers of at most 8 KiB of JSON.
+
+## The base class and the driver methods [#template]
+
+`EventStore` implements the store contract once, for every store. Its **template methods**, `appendEvents`, `getEvent` and `getEvents`, validate, serialize, check the version, retry `ExpectedVersion.Any`, stamp the global positions and publish. A store implements the **driver methods**, which do the I/O:
+
+| Method | Does |
+| --- | --- |
+| `connect()`, `disconnect()` | Open and close the connection. The capabilities are final once `connect()` resolved. |
+| `ensureCollection(pool?)`, `listCollections(filter?)` | Create the collection of a pool unless it exists; list the collections. |
+| `getStreamVersion(stream, pool?)` | The version of the last event of a stream, `0` when it has none. |
+| `getEnvelope(stream, version, pool?)`, `getEnvelopes(stream, filter?)` | Read a stream, with the global positions. |
+| `readAll(filter?)` | Read a pool in the order of the global positions. |
+| `persistEvents(envelopes, target)` | Store the envelopes of an append, all or nothing, and assign their positions. |
+
+The store gets a context when it's constructed, `new Store(context, options)`: the event map and the publisher, which is the `EventBus`. The driver methods don't need the event map: the base class serializes and deserializes.
+
+An append runs these steps:
+
+1. Validate the options and the metadata. An empty append returns `[]` here, without any I/O.
+2. Validate pre-built envelopes, serialize the events into envelopes (one monotonic id factory per store) and check the [limits](#limits), still before any I/O.
+3. Read the stream's version with `getStreamVersion`. A numeric `expectedVersion` that doesn't match throws a conflict with the `actualVersion`, and writes nothing. `ExpectedVersion.Any` numbers the envelopes after that version. A failure of this read is `outcome: 'not-persisted'`.
+4. Call `persistEvents`, which returns one of:
+   - `{ status: 'committed', positions }`: one bigint position per envelope, consecutive and in order. The base class stamps them on the envelopes it returns, and logs positions that break the contract instead of throwing, because the events are stored.
+   - `{ status: 'conflict', actualVersion?, cause? }`: another append took one of the versions, as the unique `(stream, version)` key reported, and nothing was stored. `ExpectedVersion.Any` goes back to step 3, up to 16 attempts with a jittered backoff; otherwise the append throws an `EventStoreVersionConflictException`.
+
+   Any other failure is thrown. An `EventStorePersistenceException` passes through with the outcome the store gave it; any other error becomes one with `outcome: 'unknown'`, because the commit may have happened.
+5. Publish the envelopes with the context's publisher, unless `publish: false`. A failure is logged, never thrown.
+
+A store must not override the template methods: the module checks it when it creates the store, and an override (a method of a subclass, or a class field) fails the bootstrap with an `InvalidEventStoreImplementationException` that names the methods. Until 4.0.0 there is one exception: a store class that overrides `appendEvents` the 3.x way runs on a deprecated path, see [Migrating a 3.x store](/advanced/custom-stores#migrating-a-3x-store). To decorate appends, for tracing for instance, override `persistEvents` and call `super`.
 
 ## Custom stores [#custom-stores]
 
