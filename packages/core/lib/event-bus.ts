@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 
 import {
 	type BeforeApplicationShutdown,
+	Inject,
 	Injectable,
 	Logger,
 	type OnApplicationShutdown,
@@ -25,6 +26,8 @@ import type {
 	ProviderWrapper,
 } from './interfaces/index.js';
 import type { EventEnvelope } from './models/index.js';
+import { providerClassOf } from './registration/providers.js';
+import { EVENT_SOURCING_REGISTRATION, type Registration } from './registration/registration.js';
 
 const logger = new Logger('EventBus');
 
@@ -204,9 +207,15 @@ export class EventBus
 	private readonly deliveries = new Map<IEventPublisher, Map<unknown, Promise<void>>>();
 
 	/**
+	 * @param options The `publishing` options of the module.
+	 * @param registration In the `EventSourcingModule`: registers the publishers and subscribers on the first
+	 * `publishAll`, if the module hasn't yet.
 	 * @throws RangeError when a timeout of the `publishing` options is not a non-negative number
 	 */
-	constructor(@Optional() @InjectEventSourcingOptions() options?: Pick<EventSourcingModuleOptions, 'publishing'>) {
+	constructor(
+		@Optional() @InjectEventSourcingOptions() options?: Pick<EventSourcingModuleOptions, 'publishing'>,
+		@Optional() @Inject(EVENT_SOURCING_REGISTRATION) private readonly registration?: Registration,
+	) {
 		super();
 		const publishing = options?.publishing;
 		this.publisherTimeout = toTimeout(
@@ -249,9 +258,14 @@ export class EventBus
 
 	/**
 	 * Publishes the envelopes of one append, in order, to every publisher, and resolves once every publisher has
-	 * settled or timed out. Never rejects: a failure is logged and reported on {@link EventBus.deliveryErrors$}.
+	 * settled or timed out. A failing publisher or subscriber never makes it reject: the failure is logged and reported
+	 * on {@link EventBus.deliveryErrors$}.
+	 *
+	 * @throws EventSourcingNotReadyException (as a rejection) when called while Nest is still instantiating the
+	 * providers, before the publishers and subscribers are registered. Nothing is published then.
 	 */
 	async publishAll(envelopes: readonly EventEnvelope[]): Promise<void> {
+		this.registration?.ensureRegistered('EventBus.publishAll');
 		let batch: readonly EventEnvelope[];
 		try {
 			batch = Object.freeze([...(envelopes ?? [])]);
@@ -370,23 +384,25 @@ export class EventBus
 	}
 
 	protected registerPublisher(handler: ProviderWrapper<IEventPublisher>) {
-		const { instance } = handler;
+		const instance = handler?.instance;
 		if (!instance) return;
 
 		this.addPublisher(instance as IEventPublisher);
 	}
 	protected registerSubscriber(handler: ProviderWrapper<IEventSubscriber>) {
-		const { metatype, instance } = handler;
-		if (!metatype || !instance) {
-			throw new MissingEventSubscriberMetadataException({ subscriber: metatype as Type<IEventSubscriber> });
+		// The class of the instance, so that factory and value providers work too
+		const type = providerClassOf(handler);
+		const instance = handler?.instance;
+		if (!type || !instance) {
+			throw new MissingEventSubscriberMetadataException({ subscriber: type as Type<IEventSubscriber> });
 		}
 
 		// check if the handler is an event subscriber
-		const { events } = getEventSubscriberMetadata(metatype as Type<IEventSubscriber>);
+		const { events } = getEventSubscriberMetadata(type as Type<IEventSubscriber>);
 
 		// if not, throw an error
 		if (!events) {
-			throw new MissingEventSubscriberMetadataException({ subscriber: metatype });
+			throw new MissingEventSubscriberMetadataException({ subscriber: type });
 		}
 
 		// register the subscriber for each event

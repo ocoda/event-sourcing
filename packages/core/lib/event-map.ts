@@ -1,4 +1,4 @@
-import { Injectable, type Type } from '@nestjs/common';
+import { Inject, Injectable, Optional, type Type } from '@nestjs/common';
 import {
 	MissingEventMetadataException,
 	UnregisteredEventException,
@@ -6,6 +6,8 @@ import {
 } from './exceptions/index.js';
 import { DefaultEventSerializer, getEventMetadata, getEventSerializerMetadata } from './helpers/index.js';
 import type { IEvent, IEventPayload, IEventSerializer, ProviderWrapper } from './interfaces/index.js';
+import { providerClassOf } from './registration/providers.js';
+import { EVENT_SOURCING_REGISTRATION, type Registration } from './registration/registration.js';
 
 export type EventSerializerType = Type<IEventSerializer<IEvent>>;
 
@@ -25,6 +27,27 @@ export type IEventMapTarget<E extends IEvent = IEvent> = IEventName | IEventCons
 export class EventMap {
 	private readonly eventMap: Set<IEventData<IEvent>> = new Set();
 
+	/**
+	 * @param registration In the `EventSourcingModule`: registers the events and serializers of the application on the
+	 * first lookup, if the module hasn't yet. A map created with `new EventMap()` has none; register its events yourself.
+	 */
+	constructor(@Optional() @Inject(EVENT_SOURCING_REGISTRATION) private readonly registration?: Registration) {}
+
+	/**
+	 * In the `EventSourcingModule`: registers the events, serializers, handlers, subscribers and publishers of the
+	 * application, unless that happened already. The event store calls it before an append or a read of events does any
+	 * I/O, also when no lookup is needed (an append of pre-built envelopes). Does nothing for a map created with
+	 * `new EventMap()`.
+	 *
+	 * @param operation what triggered it, for the error message
+	 * @throws EventSourcingNotReadyException while Nest is still instantiating the providers
+	 * @throws EventSourcingConfigurationException listing every problem with the configuration
+	 * @internal Used by the `EventStore` template.
+	 */
+	ensureRegistered(operation: string): void {
+		this.registration?.ensureRegistered(operation);
+	}
+
 	public register<E extends IEvent>(cls: IEventConstructor<E>, serializer?: IEventSerializer): void {
 		const { name } = getEventMetadata(cls);
 
@@ -36,6 +59,7 @@ export class EventMap {
 	}
 
 	private get<E extends IEvent>(target: IEventMapTarget<E>): IEventData<E> {
+		this.registration?.ensureRegistered('The EventMap (appendEvents, getEvent, getEvents)');
 		for (const helper of this.eventMap) {
 			if (
 				(typeof target === 'string' && target === helper.name) ||
@@ -50,6 +74,7 @@ export class EventMap {
 	}
 
 	public has<E extends IEvent>(target: IEventMapTarget<E>): boolean {
+		this.registration?.ensureRegistered('The EventMap (appendEvents, getEvent, getEvents)');
 		for (const helper of this.eventMap) {
 			if (
 				(typeof target === 'string' && target === helper.name) ||
@@ -97,8 +122,10 @@ export class EventMap {
 	registerSerializers(events: Type<IEvent>[] = [], serializers: ProviderWrapper<IEventSerializer>[] = []) {
 		for (const event of events) {
 			// get the handler
-			const handler = serializers.find(({ metatype }) => {
-				return getEventSerializerMetadata(metatype as Type<IEventSerializer>)?.event === event;
+			// The class of the serializer is that of its instance, so that factory and value providers are found too
+			const handler = serializers.find((wrapper) => {
+				const type = providerClassOf(wrapper);
+				return !!type && getEventSerializerMetadata(type as Type<IEventSerializer>)?.event === event;
 			});
 
 			// get the serializer, or use the default one
