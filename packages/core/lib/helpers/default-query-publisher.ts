@@ -1,5 +1,5 @@
 import type { Subject } from 'rxjs';
-import type { IQuery, IQueryPublisher } from '../interfaces';
+import type { IQuery, IQueryPublisher } from '../interfaces/index.js';
 
 export class DefaultQueryPubSub<QueryBase extends IQuery> implements IQueryPublisher<QueryBase> {
 	constructor(private subject$: Subject<QueryBase>) {}

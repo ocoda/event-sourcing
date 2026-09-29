@@ -1,1 +1,1 @@
-export * from './get-book-by-id.query';
+export * from './get-book-by-id.query.js';

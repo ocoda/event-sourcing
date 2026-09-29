@@ -1,4 +1,4 @@
-import type { ISnapshotCollection } from '../../interfaces';
+import type { ISnapshotCollection } from '../../interfaces/index.js';
 
 /**
  * Represents an exception that occurs while persisting snapshots to the snapshot store.

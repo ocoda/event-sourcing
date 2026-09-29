@@ -13,27 +13,27 @@ import type {
 	EventSourcingModuleOptions,
 	EventStoreConfig,
 	SnapshotStoreConfig,
-} from './interfaces';
+} from './interfaces/index.js';
 
-import { CommandBus } from './command-bus';
-import { EventBus } from './event-bus';
-import { EventMap } from './event-map';
-import { QueryBus } from './query-bus';
+import { CommandBus } from './command-bus.js';
+import { EventBus } from './event-bus.js';
+import { EventMap } from './event-map.js';
+import { QueryBus } from './query-bus.js';
 
-import { EventStore } from './event-store';
-import { SnapshotStore } from './snapshot-store';
+import { EventStore } from './event-store.js';
+import { SnapshotStore } from './snapshot-store.js';
 
-import { InjectEventSourcingOptions } from './decorators';
-import { ExplorerService } from './services';
+import { InjectEventSourcingOptions } from './decorators/index.js';
+import { ExplorerService } from './services/index.js';
 
 import {
 	createAsyncEventSourcingOptionsProvider,
 	createEventSourcingOptionsProvider,
 	createEventStoreProviders,
 	createSnapshotStoreProviders,
-} from './event-sourcing.providers';
+} from './event-sourcing.providers.js';
 
-import type { InMemoryEventStoreConfig, InMemorySnapshotStoreConfig } from './integration';
+import type { InMemoryEventStoreConfig, InMemorySnapshotStoreConfig } from './integration/index.js';
 
 @Module({})
 export class EventSourcingFeatureModule {}

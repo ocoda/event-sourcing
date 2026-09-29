@@ -21,8 +21,8 @@ import {
 	OpenAccountCommand,
 	RemoveAccountOwnerCommand,
 	TransferBetweenAccountsCommand,
-} from './application';
-import { type Account, type AccountId, AccountOwnerId } from './domain';
+} from './application/index.js';
+import { type Account, type AccountId, AccountOwnerId } from './domain/index.js';
 
 export interface E2EStoreSetup<
 	TEventStore extends EventStoreDriver,

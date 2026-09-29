@@ -6,9 +6,9 @@ import {
 	InvalidCommandHandlerException,
 	MissingCommandHandlerMetadataException,
 	MissingCommandMetadataException,
-} from './exceptions';
-import { DefaultCommandPubSub, ObservableBus, getCommandHandlerMetadata, getCommandMetadata } from './helpers';
-import type { ICommand, ICommandBus, ICommandHandler, ICommandPublisher, ProviderWrapper } from './interfaces';
+} from './exceptions/index.js';
+import { DefaultCommandPubSub, ObservableBus, getCommandHandlerMetadata, getCommandMetadata } from './helpers/index.js';
+import type { ICommand, ICommandBus, ICommandHandler, ICommandPublisher, ProviderWrapper } from './interfaces/index.js';
 
 @Injectable()
 export class CommandBus<CommandBase extends ICommand = ICommand>

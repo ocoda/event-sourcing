@@ -1,2 +1,2 @@
-export * from './book.repository';
-export * from './book.snapshot-repository';
+export * from './book.repository.js';
+export * from './book.snapshot-repository.js';

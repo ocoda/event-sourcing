@@ -18,8 +18,8 @@ import {
 	StreamReadingDirection,
 } from '@ocoda/event-sourcing';
 import { Pool, escapeIdentifier } from 'pg';
-import type { PostgresEventEntity, PostgresEventStoreConfig } from './interfaces';
-import { UNIQUE_VIOLATION, ensureTable, hasErrorCode, readInBatches } from './postgres.helpers';
+import type { PostgresEventEntity, PostgresEventStoreConfig } from './interfaces/index.js';
+import { UNIQUE_VIOLATION, ensureTable, hasErrorCode, readInBatches } from './postgres.helpers.js';
 
 type PostgresEnvelopeEntity = Pick<
 	PostgresEventEntity,

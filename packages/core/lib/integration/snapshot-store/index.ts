@@ -1,1 +1,1 @@
-export * from './in-memory.snapshot-store';
+export * from './in-memory.snapshot-store.js';

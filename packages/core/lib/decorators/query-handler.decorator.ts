@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import 'reflect-metadata';
-import type { IQuery } from '../interfaces';
-import { QUERY_HANDLER_METADATA, QUERY_METADATA } from './constants';
+import type { IQuery } from '../interfaces/index.js';
+import { QUERY_HANDLER_METADATA, QUERY_METADATA } from './constants.js';
 
 /**
  * Decorator that marks a class as a query handler. A query handler handles queries executed by your application code.

@@ -4,7 +4,7 @@ import { EventStore, SnapshotStore } from '@ocoda/event-sourcing';
 import type { MongoDBEventStore, MongoDBSnapshotStore } from '@ocoda/event-sourcing-mongodb';
 import { createDefaultStoreSetup, defaultCleanup, runAccountLifecycleE2E } from '@ocoda/event-sourcing-testing/e2e';
 import type { MongoClient } from 'mongodb';
-import { AppModule } from './src/app.module';
+import { AppModule } from './src/app.module.js';
 
 describe('EventSourcingModule - e2e', () => {
 	let app!: INestApplication;

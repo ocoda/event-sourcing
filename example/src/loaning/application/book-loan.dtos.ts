@@ -1,4 +1,4 @@
-import type { BookLoan } from '../domain/models';
+import type { BookLoan } from '../domain/models/index.js';
 
 export class CreateBookLoanDto {
 	bookId: string;

@@ -1,5 +1,5 @@
 import { type ISnapshot, Snapshot, SnapshotRepository } from '@ocoda/event-sourcing';
-import { Account, AccountId, AccountOwnerId } from './account.aggregate';
+import { Account, AccountId, AccountOwnerId } from './account.aggregate.js';
 
 @Snapshot(Account, { name: 'account', interval: 5 })
 export class AccountSnapshotRepository extends SnapshotRepository<Account> {

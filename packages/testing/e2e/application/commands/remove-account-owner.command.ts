@@ -1,7 +1,7 @@
 import { CommandHandler, type ICommand, type ICommandHandler } from '@ocoda/event-sourcing';
 
-import { AccountId, AccountOwnerId } from '../../domain/models';
-import { AccountRepository } from '../repositories';
+import { AccountId, AccountOwnerId } from '../../domain/models/index.js';
+import { AccountRepository } from '../repositories/index.js';
 
 export class RemoveAccountOwnerCommand implements ICommand {
 	constructor(

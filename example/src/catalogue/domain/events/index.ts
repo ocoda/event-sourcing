@@ -1,1 +1,1 @@
-export * from './book';
+export * from './book/index.js';

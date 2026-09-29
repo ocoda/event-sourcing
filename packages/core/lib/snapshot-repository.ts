@@ -1,11 +1,11 @@
 import { Inject, NotImplementedException, type Type } from '@nestjs/common';
-import { MissingAggregateMetadataException, MissingSnapshotMetadataException } from './exceptions';
-import { getAggregateMetadata, getSnapshotMetadata } from './helpers';
-import type { ISnapshotPool, ISnapshotRepository } from './interfaces';
-import type { ISnapshot } from './interfaces/aggregate/snapshot.interface';
-import { type AggregateRoot, type Id, type SnapshotEnvelope, SnapshotStream } from './models';
-import { getCommittedVersions } from './models/aggregate-commit-tracker';
-import { SnapshotStore } from './snapshot-store';
+import { MissingAggregateMetadataException, MissingSnapshotMetadataException } from './exceptions/index.js';
+import { getAggregateMetadata, getSnapshotMetadata } from './helpers/index.js';
+import type { ISnapshot } from './interfaces/aggregate/snapshot.interface.js';
+import type { ISnapshotPool, ISnapshotRepository } from './interfaces/index.js';
+import { getCommittedVersions } from './models/aggregate-commit-tracker.js';
+import { type AggregateRoot, type Id, type SnapshotEnvelope, SnapshotStream } from './models/index.js';
+import { SnapshotStore } from './snapshot-store.js';
 
 /**
  * Determine whether a snapshot should be taken for the given aggregate.

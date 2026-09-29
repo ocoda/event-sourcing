@@ -1,9 +1,9 @@
 import type { Type } from '@nestjs/common';
 import type { Observable } from 'rxjs';
 import { filter } from 'rxjs/operators';
-import type { IEvent } from '../../interfaces';
-import type { EventEnvelope } from '../../models';
-import { getEventMetadata } from '../metadata';
+import type { IEvent } from '../../interfaces/index.js';
+import type { EventEnvelope } from '../../models/index.js';
+import { getEventMetadata } from '../metadata/index.js';
 
 /**
  * Filter observables by event name

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { InvalidIdException } from '../exceptions';
-import { Id } from './id';
+import { InvalidIdException } from '../exceptions/index.js';
+import { Id } from './id.js';
 
 export class UUID extends Id {
 	protected constructor(id: string = randomUUID()) {

@@ -8,7 +8,7 @@ import {
 	AccountOwnerRemovedEvent,
 	AccountTransferFailedEvent,
 	AccountTransferSucceededEvent,
-} from '../events';
+} from '../events/index.js';
 
 export class AccountId extends UUID {}
 export class AccountOwnerId extends UUID {}

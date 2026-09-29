@@ -1,4 +1,4 @@
-import type { Book } from '../domain/models';
+import type { Book } from '../domain/models/index.js';
 
 export class AddBookDto {
 	title: string;

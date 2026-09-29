@@ -1,5 +1,5 @@
 import { type EventEnvelope, EventSubscriber, type IEventSubscriber } from '@ocoda/event-sourcing';
-import { AccountTransferSucceededEvent } from './account-transfer-succeeded.event';
+import { AccountTransferSucceededEvent } from './account-transfer-succeeded.event.js';
 
 @EventSubscriber(AccountTransferSucceededEvent)
 export class AccountTransferSucceededEventSubscriber implements IEventSubscriber {

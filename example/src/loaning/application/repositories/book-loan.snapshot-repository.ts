@@ -1,5 +1,5 @@
 import { type ISnapshot, Snapshot, SnapshotRepository } from '@ocoda/event-sourcing';
-import { BookId, BookLoan, BookLoanId, LibraryMemberId } from '../../domain/models';
+import { BookId, BookLoan, BookLoanId, LibraryMemberId } from '../../domain/models/index.js';
 
 @Snapshot(BookLoan, { name: 'book-loan', interval: 5 })
 export class BookLoanSnapshotRepository extends SnapshotRepository<BookLoan> {

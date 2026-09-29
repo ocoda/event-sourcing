@@ -1,9 +1,9 @@
 import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 import { CommandBus, QueryBus } from '@ocoda/event-sourcing';
-import type { BookLoanId } from '../domain/models';
-import type { CreateBookLoanDto, ExtendBookLoanDto } from './book-loan.dtos';
-import { CreateBookLoanCommand, ExtendBookLoanCommand, ReturnBookLoanCommand } from './commands';
-import { GetBookLoanByIdQuery } from './queries';
+import type { BookLoanId } from '../domain/models/index.js';
+import type { CreateBookLoanDto, ExtendBookLoanDto } from './book-loan.dtos.js';
+import { CreateBookLoanCommand, ExtendBookLoanCommand, ReturnBookLoanCommand } from './commands/index.js';
+import { GetBookLoanByIdQuery } from './queries/index.js';
 
 @Controller('book-loan')
 export class BookLoanController {

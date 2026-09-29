@@ -1,5 +1,5 @@
 import { ValueObject } from '@ocoda/event-sourcing';
-import { InvalidIsbnException } from '../../exceptions/invalid-isbn.exception';
+import { InvalidIsbnException } from '../../exceptions/invalid-isbn.exception.js';
 
 export class Isbn extends ValueObject<{ value: string }> {
 	private constructor(value: string) {

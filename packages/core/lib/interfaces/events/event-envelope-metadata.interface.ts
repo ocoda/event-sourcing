@@ -1,4 +1,4 @@
-import type { EventId } from '../../models';
+import type { EventId } from '../../models/index.js';
 
 /**
  * `EventEnvelope` metadata

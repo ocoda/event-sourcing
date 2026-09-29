@@ -20,8 +20,8 @@ import {
 	getAggregateMetadata,
 } from '@ocoda/event-sourcing';
 import { Pool, escapeIdentifier } from 'pg';
-import type { PostgresSnapshotEntity, PostgresSnapshotStoreConfig } from './interfaces';
-import { UNIQUE_VIOLATION, ensureTable, hasErrorCode, readInBatches, withTransaction } from './postgres.helpers';
+import type { PostgresSnapshotEntity, PostgresSnapshotStoreConfig } from './interfaces/index.js';
+import { UNIQUE_VIOLATION, ensureTable, hasErrorCode, readInBatches, withTransaction } from './postgres.helpers.js';
 
 type PostgresSnapshotEnvelopeEntity<A extends AggregateRoot> = Pick<
 	PostgresSnapshotEntity<A>,

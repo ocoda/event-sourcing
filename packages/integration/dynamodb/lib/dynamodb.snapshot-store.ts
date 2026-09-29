@@ -31,8 +31,8 @@ import {
 	StreamReadingDirection,
 	getAggregateMetadata,
 } from '@ocoda/event-sourcing';
-import { ensureTable, isConflictingTransaction, normalizePayload } from './helpers';
-import type { DynamoDBSnapshotStoreConfig, DynamoSnapshotEntity } from './interfaces';
+import { ensureTable, isConflictingTransaction, normalizePayload } from './helpers/index.js';
+import type { DynamoDBSnapshotStoreConfig, DynamoSnapshotEntity } from './interfaces/index.js';
 
 export class DynamoDBSnapshotStore extends SnapshotStore<DynamoDBSnapshotStoreConfig> {
 	private client: DynamoDBClient;

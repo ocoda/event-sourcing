@@ -1,9 +1,9 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
 import { CommandBus, QueryBus } from '@ocoda/event-sourcing';
-import type { BookId } from '../domain/models';
-import type { AddBookAuthorDto, AddBookDto, RemoveBookAuthorDto, RemoveBookDto } from './book.dtos';
-import { AddBookAuthorCommand, AddBookCommand, RemoveBookAuthorCommand, RemoveBookCommand } from './commands';
-import { GetBookByIdQuery } from './queries';
+import type { BookId } from '../domain/models/index.js';
+import type { AddBookAuthorDto, AddBookDto, RemoveBookAuthorDto, RemoveBookDto } from './book.dtos.js';
+import { AddBookAuthorCommand, AddBookCommand, RemoveBookAuthorCommand, RemoveBookCommand } from './commands/index.js';
+import { GetBookByIdQuery } from './queries/index.js';
 
 @Controller('book')
 export class BookController {

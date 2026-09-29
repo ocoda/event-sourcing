@@ -1,7 +1,7 @@
 import { type ArgumentsHost, Catch } from '@nestjs/common';
 import { BaseExceptionFilter } from '@nestjs/core';
 import { DomainException } from '@ocoda/event-sourcing';
-import { DomainHttpException } from './domain-http-exceptions';
+import { DomainHttpException } from './domain-http-exceptions.js';
 
 @Catch()
 export class DomainExceptionsFilter extends BaseExceptionFilter {

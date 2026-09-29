@@ -1,8 +1,8 @@
 import type { Type } from '@nestjs/common';
-import { MissingEventHandlerException } from '../exceptions';
-import { getEventHandlerMetadata } from '../helpers';
-import type { IEvent, IEventHandlerMethod } from '../interfaces';
-import { recordCommittedVersions } from './aggregate-commit-tracker';
+import { MissingEventHandlerException } from '../exceptions/index.js';
+import { getEventHandlerMetadata } from '../helpers/index.js';
+import type { IEvent, IEventHandlerMethod } from '../interfaces/index.js';
+import { recordCommittedVersions } from './aggregate-commit-tracker.js';
 
 const VERSION = Symbol();
 const EVENTS = Symbol();

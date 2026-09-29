@@ -1,4 +1,4 @@
-import type { SnapshotStream } from '../../models';
+import type { SnapshotStream } from '../../models/index.js';
 
 /**
  * Represents an exception that occurs when the snapshot being persisted

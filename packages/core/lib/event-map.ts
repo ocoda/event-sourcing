@@ -3,9 +3,9 @@ import {
 	MissingEventMetadataException,
 	UnregisteredEventException,
 	UnregisteredSerializerException,
-} from './exceptions';
-import { DefaultEventSerializer, getEventMetadata, getEventSerializerMetadata } from './helpers';
-import type { IEvent, IEventPayload, IEventSerializer, ProviderWrapper } from './interfaces';
+} from './exceptions/index.js';
+import { DefaultEventSerializer, getEventMetadata, getEventSerializerMetadata } from './helpers/index.js';
+import type { IEvent, IEventPayload, IEventSerializer, ProviderWrapper } from './interfaces/index.js';
 
 export type EventSerializerType = Type<IEventSerializer<IEvent>>;
 

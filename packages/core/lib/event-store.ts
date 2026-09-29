@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common';
-import { EventMap } from './event-map';
+import { EventMap } from './event-map.js';
 import type {
 	EventSourcingModuleOptions,
 	EventStoreDriver,
@@ -9,8 +9,8 @@ import type {
 	IEventCollectionFilter,
 	IEventFilter,
 	IEventPool,
-} from './interfaces';
-import type { EventEnvelope, EventStream } from './models';
+} from './interfaces/index.js';
+import type { EventEnvelope, EventStream } from './models/index.js';
 
 /**
  * Event stores that already logged that events were appended before a publish function was set,

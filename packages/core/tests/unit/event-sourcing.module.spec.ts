@@ -1,13 +1,13 @@
 import { DiscoveryModule, ModuleRef } from '@nestjs/core';
 import { EVENT_SOURCING_OPTIONS, EventSourcingModule } from '@ocoda/event-sourcing';
-import { EventSourcingCoreModule } from '../../lib/event-sourcing.core.module';
+import { EventSourcingCoreModule } from '../../lib/event-sourcing.core.module.js';
 import {
 	createAsyncEventSourcingOptionsProvider,
 	createEventSourcingOptionsProvider,
-} from '../../lib/event-sourcing.providers';
-import { InMemoryEventStore } from '../../lib/integration/event-store';
-import { InMemorySnapshotStore } from '../../lib/integration/snapshot-store';
-import { EventRegistry } from '../../lib/registries/event.registry';
+} from '../../lib/event-sourcing.providers.js';
+import { InMemoryEventStore } from '../../lib/integration/event-store/index.js';
+import { InMemorySnapshotStore } from '../../lib/integration/snapshot-store/index.js';
+import { EventRegistry } from '../../lib/registries/event.registry.js';
 
 describe(EventSourcingModule, () => {
 	class TestEvent {}

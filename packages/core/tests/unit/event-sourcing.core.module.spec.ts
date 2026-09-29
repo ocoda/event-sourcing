@@ -1,4 +1,4 @@
-import { EventSourcingCoreModule } from '../../lib/event-sourcing.core.module';
+import { EventSourcingCoreModule } from '../../lib/event-sourcing.core.module.js';
 
 describe(EventSourcingCoreModule, () => {
 	it('skips creating default pools when disabled', async () => {

@@ -28,8 +28,8 @@ import {
 	type IEventPool,
 	StreamReadingDirection,
 } from '@ocoda/event-sourcing';
-import { MAX_TRANSACTION_ITEMS, ensureTable, isConflictingTransaction, normalizePayload } from './helpers';
-import type { DynamoDBEventStoreConfig, DynamoEventEntity } from './interfaces';
+import { MAX_TRANSACTION_ITEMS, ensureTable, isConflictingTransaction, normalizePayload } from './helpers/index.js';
+import type { DynamoDBEventStoreConfig, DynamoEventEntity } from './interfaces/index.js';
 
 export class DynamoDBEventStore extends EventStore<DynamoDBEventStoreConfig> {
 	private client: DynamoDBClient;

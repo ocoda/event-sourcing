@@ -1,9 +1,9 @@
 import 'reflect-metadata';
 import type { Type } from '@nestjs/common';
-import { MissingEventMetadataException } from '../exceptions';
-import { getEventMetadata } from '../helpers';
-import type { IEvent } from '../interfaces';
-import { EVENT_HANDLER_METADATA } from './constants';
+import { MissingEventMetadataException } from '../exceptions/index.js';
+import { getEventMetadata } from '../helpers/index.js';
+import type { IEvent } from '../interfaces/index.js';
+import { EVENT_HANDLER_METADATA } from './constants.js';
 
 /**
  * Decorator that marks an aggregate method as an event handler. An event-handler handles an event that needs to be applied to the aggregate.

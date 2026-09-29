@@ -20,8 +20,8 @@ import {
 	getAggregateMetadata,
 } from '@ocoda/event-sourcing';
 import { type Db, MongoClient } from 'mongodb';
-import type { MongoDBSnapshotEntity, MongoDBSnapshotStoreConfig } from './interfaces';
-import { batchCursor, isDuplicateKeyError } from './mongodb.utils';
+import type { MongoDBSnapshotEntity, MongoDBSnapshotStoreConfig } from './interfaces/index.js';
+import { batchCursor, isDuplicateKeyError } from './mongodb.utils.js';
 
 export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConfig> {
 	private client: MongoClient;

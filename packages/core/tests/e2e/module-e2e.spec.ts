@@ -3,7 +3,7 @@ import { Test } from '@nestjs/testing';
 import { EventStore, SnapshotStore } from '@ocoda/event-sourcing';
 import { createDefaultStoreSetup, runAccountLifecycleE2E } from '@ocoda/event-sourcing-testing/e2e';
 import type { InMemoryEventStore, InMemorySnapshotStore } from '@ocoda/event-sourcing/integration';
-import { AppModule } from './src/app.module';
+import { AppModule } from './src/app.module.js';
 
 describe('EventSourcingModule - e2e', () => {
 	let app!: INestApplication;

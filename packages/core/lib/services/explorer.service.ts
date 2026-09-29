@@ -8,7 +8,7 @@ import {
 	EVENT_SUBSCRIBER_METADATA,
 	InjectEventSourcingOptions,
 	QUERY_HANDLER_METADATA,
-} from '../decorators';
+} from '../decorators/index.js';
 import type {
 	EventSourcingModuleOptions,
 	ICommandHandler,
@@ -18,8 +18,8 @@ import type {
 	IEventSubscriber,
 	IQueryHandler,
 	ProviderWrapper,
-} from '../interfaces';
-import { EventRegistry } from '../registries';
+} from '../interfaces/index.js';
+import { EventRegistry } from '../registries/index.js';
 
 export type ProvidersIntrospectionResult = {
 	/**

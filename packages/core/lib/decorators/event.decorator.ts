@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import 'reflect-metadata';
-import { InvalidEventStreamNameException } from '../exceptions';
-import type { EventMetadata } from '../interfaces';
-import { EVENT_METADATA } from './constants';
+import { InvalidEventStreamNameException } from '../exceptions/index.js';
+import type { EventMetadata } from '../interfaces/index.js';
+import { EVENT_METADATA } from './constants.js';
 
 /**
  * Decorator indicates the name of an event.

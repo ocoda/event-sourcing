@@ -4,7 +4,7 @@ import { Test } from '@nestjs/testing';
 import { EventStore, SnapshotStore } from '@ocoda/event-sourcing';
 import type { DynamoDBEventStore, DynamoDBSnapshotStore } from '@ocoda/event-sourcing-dynamodb';
 import { createDefaultStoreSetup, defaultCleanup, runAccountLifecycleE2E } from '@ocoda/event-sourcing-testing/e2e';
-import { AppModule } from './src/app.module';
+import { AppModule } from './src/app.module.js';
 
 describe('EventSourcingModule - e2e', () => {
 	let app!: INestApplication;

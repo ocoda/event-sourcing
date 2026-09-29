@@ -1,5 +1,5 @@
-import type { ISnapshotCollection } from './snapshot-collection.type';
-import type { ISnapshotPool } from './snapshot-pool.type';
+import type { ISnapshotCollection } from './snapshot-collection.type.js';
+import type { ISnapshotPool } from './snapshot-pool.type.js';
 
 export interface SnapshotStoreDriver {
 	connect(): void | Promise<void>;

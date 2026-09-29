@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { EventStore, EventStream } from '@ocoda/event-sourcing';
-import { Account, AccountId, AccountSnapshotRepository } from '../../domain/models';
+import { Account, AccountId, AccountSnapshotRepository } from '../../domain/models/index.js';
 
 @Injectable()
 export class AccountRepository {

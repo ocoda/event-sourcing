@@ -1,4 +1,4 @@
-import type { IQueryHandler } from '../../interfaces';
+import type { IQueryHandler } from '../../interfaces/index.js';
 
 export class InvalidQueryHandlerException extends Error {
 	constructor(queryHandler: IQueryHandler) {

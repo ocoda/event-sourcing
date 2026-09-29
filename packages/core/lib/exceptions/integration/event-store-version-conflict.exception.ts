@@ -1,4 +1,4 @@
-import type { EventStream } from '../../models';
+import type { EventStream } from '../../models/index.js';
 
 /**
  * Represents an exception that occurs when the event being persisted

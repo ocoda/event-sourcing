@@ -1,2 +1,2 @@
-export * from './event-store';
-export * from './snapshot-store';
+export * from './event-store/index.js';
+export * from './snapshot-store/index.js';

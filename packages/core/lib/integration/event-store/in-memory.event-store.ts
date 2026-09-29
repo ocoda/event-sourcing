@@ -1,12 +1,12 @@
 import type { Type } from '@nestjs/common';
-import { DEFAULT_BATCH_SIZE, StreamReadingDirection } from '../../constants';
-import { EventStore } from '../../event-store';
+import { DEFAULT_BATCH_SIZE, StreamReadingDirection } from '../../constants.js';
+import { EventStore } from '../../event-store.js';
 import {
 	EventNotFoundException,
 	EventStoreCollectionCreationException,
 	EventStorePersistenceException,
 	EventStoreVersionConflictException,
-} from '../../exceptions';
+} from '../../exceptions/index.js';
 import type {
 	EventEnvelopeMetadata,
 	EventStoreConfig,
@@ -17,8 +17,8 @@ import type {
 	IEventFilter,
 	IEventPayload,
 	IEventPool,
-} from '../../interfaces';
-import { EventCollection, EventEnvelope, EventId, type EventStream } from '../../models';
+} from '../../interfaces/index.js';
+import { EventCollection, EventEnvelope, EventId, type EventStream } from '../../models/index.js';
 
 export type InMemoryEventEntity = {
 	streamId: string;

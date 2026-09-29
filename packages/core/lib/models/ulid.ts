@@ -1,6 +1,6 @@
 import { decodeTime, monotonicFactory, ulid } from 'ulidx';
-import { InvalidIdException } from '../exceptions';
-import { Id } from './id';
+import { InvalidIdException } from '../exceptions/index.js';
+import { Id } from './id.js';
 
 export const ulidFactory = () => {};
 

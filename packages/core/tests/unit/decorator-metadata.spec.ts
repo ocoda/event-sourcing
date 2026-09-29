@@ -15,7 +15,7 @@ import { AccountSnapshotRepository } from '@ocoda/event-sourcing-testing/e2e/dom
 import { eventStreamAccountA, getEventMap, getEvents } from '@ocoda/event-sourcing-testing/unit';
 import { InMemoryEventStore } from '@ocoda/event-sourcing/integration/event-store';
 import { ExplorerService } from '@ocoda/event-sourcing/services';
-import { EventSourcingCoreModule } from '../../lib/event-sourcing.core.module';
+import { EventSourcingCoreModule } from '../../lib/event-sourcing.core.module.js';
 
 // Nest resolves constructor dependencies from `design:paramtypes`. The tests are transformed by Vite's Oxc
 // (not tsc or SWC), so these guard that it emits legacy decorators with that metadata for the library, the

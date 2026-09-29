@@ -1,4 +1,4 @@
-import type { Account } from '../domain/models';
+import type { Account } from '../domain/models/index.js';
 
 export class AddAccountOwnerDto {
 	ownerId: string;

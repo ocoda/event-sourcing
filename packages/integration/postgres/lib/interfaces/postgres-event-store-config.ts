@@ -1,7 +1,7 @@
 import type { Type } from '@nestjs/common';
 import type { EventStoreConfig } from '@ocoda/event-sourcing';
 import type { PoolConfig } from 'pg';
-import type { PostgresEventStore } from '../postgres.event-store';
+import type { PostgresEventStore } from '../postgres.event-store.js';
 
 export interface PostgresEventStoreConfig extends EventStoreConfig, PoolConfig {
 	driver: Type<PostgresEventStore>;

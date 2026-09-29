@@ -1,6 +1,6 @@
 import { CommandHandler, type ICommand, type ICommandHandler } from '@ocoda/event-sourcing';
-import { BookId, BookLoan, BookLoanId, LibraryMemberId } from '../../domain/models';
-import { BookLoanRepository } from '../repositories';
+import { BookId, BookLoan, BookLoanId, LibraryMemberId } from '../../domain/models/index.js';
+import { BookLoanRepository } from '../repositories/index.js';
 
 export class CreateBookLoanCommand implements ICommand {
 	constructor(

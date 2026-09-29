@@ -1,8 +1,8 @@
 import { Aggregate, AggregateRoot, EventHandler } from '@ocoda/event-sourcing';
-import { BookLoanCreatedEvent, BookLoanExtendedEvent, BookLoanReturnedEvent } from '../../events';
-import { LibraryMemberId } from '../library-member-id.vo';
-import { BookId } from './book-id.vo';
-import { BookLoanId } from './book-loan-id.vo';
+import { BookLoanCreatedEvent, BookLoanExtendedEvent, BookLoanReturnedEvent } from '../../events/index.js';
+import { LibraryMemberId } from '../library-member-id.vo.js';
+import { BookId } from './book-id.vo.js';
+import { BookLoanId } from './book-loan-id.vo.js';
 
 @Aggregate({ streamName: 'book-loan' })
 export class BookLoan extends AggregateRoot {

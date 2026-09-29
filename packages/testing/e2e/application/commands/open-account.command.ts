@@ -1,7 +1,7 @@
 import { CommandHandler, type ICommand, type ICommandHandler } from '@ocoda/event-sourcing';
 
-import { Account, AccountId, AccountOwnerId } from '../../domain/models';
-import { AccountRepository } from '../repositories';
+import { Account, AccountId, AccountOwnerId } from '../../domain/models/index.js';
+import { AccountRepository } from '../repositories/index.js';
 
 export class OpenAccountCommand implements ICommand {
 	constructor(public readonly accountOwnerIds?: string[]) {}

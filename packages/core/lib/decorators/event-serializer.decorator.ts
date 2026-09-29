@@ -1,6 +1,6 @@
 import 'reflect-metadata';
-import type { IEvent } from '../interfaces';
-import { EVENT_SERIALIZER_METADATA } from './constants';
+import type { IEvent } from '../interfaces/index.js';
+import { EVENT_SERIALIZER_METADATA } from './constants.js';
 
 /**
  * Decorator that marks a class as an event serializer. An event serializer is responsible for mapping events to plain objects and vice versa.

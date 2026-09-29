@@ -1,5 +1,5 @@
-import { InvalidIdException } from '../exceptions';
-import { ValueObject } from './value-object';
+import { InvalidIdException } from '../exceptions/index.js';
+import { ValueObject } from './value-object.js';
 
 interface Props {
 	value: string;

@@ -1,2 +1,2 @@
-export * from './account.aggregate';
-export * from './account.snapshot-repository';
+export * from './account.aggregate.js';
+export * from './account.snapshot-repository.js';

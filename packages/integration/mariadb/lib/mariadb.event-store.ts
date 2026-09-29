@@ -18,8 +18,8 @@ import {
 	StreamReadingDirection,
 } from '@ocoda/event-sourcing';
 import { type Pool, type PoolConnection, createPool } from 'mariadb';
-import type { MariaDBEventEntity, MariaDBEventStoreConfig } from './interfaces';
-import { isDuplicateEntryError, streamRows } from './mariadb.utils';
+import type { MariaDBEventEntity, MariaDBEventStoreConfig } from './interfaces/index.js';
+import { isDuplicateEntryError, streamRows } from './mariadb.utils.js';
 
 export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 	private pool: Pool;

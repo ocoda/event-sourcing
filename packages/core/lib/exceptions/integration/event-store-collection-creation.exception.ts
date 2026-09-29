@@ -1,4 +1,4 @@
-import type { IEventCollection } from '../../interfaces';
+import type { IEventCollection } from '../../interfaces/index.js';
 
 /**
  * Represents an exception that occurs while creating an event-store collection.

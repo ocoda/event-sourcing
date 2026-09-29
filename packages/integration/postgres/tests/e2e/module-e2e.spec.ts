@@ -4,7 +4,7 @@ import { EventStore, SnapshotStore } from '@ocoda/event-sourcing';
 import type { PostgresEventStore, PostgresSnapshotStore } from '@ocoda/event-sourcing-postgres';
 import { createDefaultStoreSetup, defaultCleanup, runAccountLifecycleE2E } from '@ocoda/event-sourcing-testing/e2e';
 import type { Pool } from 'pg';
-import { AppModule } from './src/app.module';
+import { AppModule } from './src/app.module.js';
 
 describe('EventSourcingModule - e2e', () => {
 	let app!: INestApplication;

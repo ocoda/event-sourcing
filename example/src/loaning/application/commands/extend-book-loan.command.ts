@@ -1,7 +1,7 @@
 import { CommandHandler, type ICommand, type ICommandHandler } from '@ocoda/event-sourcing';
-import { BookLoanNotFoundException } from '../../domain/exceptions';
-import { BookLoanId } from '../../domain/models';
-import { BookLoanRepository } from '../repositories';
+import { BookLoanNotFoundException } from '../../domain/exceptions/index.js';
+import { BookLoanId } from '../../domain/models/index.js';
+import { BookLoanRepository } from '../repositories/index.js';
 
 export class ExtendBookLoanCommand implements ICommand {
 	constructor(

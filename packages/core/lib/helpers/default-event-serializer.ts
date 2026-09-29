@@ -1,6 +1,6 @@
 import type { Type } from '@nestjs/common';
 import { instanceToPlain, plainToInstance } from 'class-transformer';
-import type { IEvent, IEventPayload, IEventSerializer } from '../interfaces';
+import type { IEvent, IEventPayload, IEventSerializer } from '../interfaces/index.js';
 
 export class DefaultEventSerializer<E extends IEvent = IEvent> implements IEventSerializer {
 	private constructor(private readonly eventType: Type<E>) {}
