@@ -1,6 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { LoggerService } from '@nestjs/common';
-import { type Pool, type PoolClient, escapeIdentifier } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import Cursor from 'pg-cursor';
 
 /**
@@ -9,14 +8,24 @@ import Cursor from 'pg-cursor';
 export const UNIQUE_VIOLATION = '23505';
 
 /**
- * SQLSTATE raised when the current role lacks a privilege.
+ * SQLSTATE raised when a table (relation) doesn't exist.
  */
-export const INSUFFICIENT_PRIVILEGE = '42501';
+export const UNDEFINED_TABLE = '42P01';
+
+/**
+ * SQLSTATE raised when a column doesn't exist, such as `global_position` in a 3.x table.
+ */
+export const UNDEFINED_COLUMN = '42703';
+
+/**
+ * SQLSTATE raised when a lock can't be taken within `lock_timeout`.
+ */
+export const LOCK_NOT_AVAILABLE = '55P03';
 
 /**
  * Postgres truncates identifiers longer than NAMEDATALEN - 1 bytes.
  */
-const MAX_IDENTIFIER_BYTES = 63;
+export const MAX_IDENTIFIER_BYTES = 63;
 
 /**
  * The largest number of rows a single fetch from a cursor can request.
@@ -58,6 +67,10 @@ export const deriveIndexName = (table: string, suffix: string): string => {
 /**
  * Runs the given work in a transaction on a dedicated client.
  * The transaction is rolled back when the work fails and the client is always returned to the pool.
+ *
+ * The isolation level is explicitly READ COMMITTED, whatever the server's default: the work serializes on locks (an
+ * advisory lock, a counter row) and has to see what the transaction it waited for committed. Under REPEATABLE READ or
+ * SERIALIZABLE it would fail with serialization errors (40001) instead.
  */
 export const withTransaction = async <T>(pool: Pool, work: (client: PoolClient) => Promise<T>): Promise<T> => {
 	const client = await pool.connect();
@@ -71,7 +84,7 @@ export const withTransaction = async <T>(pool: Pool, work: (client: PoolClient) 
 
 	let began = false;
 	try {
-		await client.query('BEGIN');
+		await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
 		began = true;
 
 		const result = await work(client);
@@ -168,101 +181,3 @@ export async function* readInBatches<Row>(
 		release();
 	}
 }
-
-export interface PostgresTableDefinition {
-	/**
-	 * The (unescaped) name of the table.
-	 */
-	table: string;
-	/**
-	 * The column and constraint definitions of the table.
-	 */
-	definition: string;
-	/**
-	 * The secondary index of the table.
-	 */
-	index: { suffix: string; columns: [string, string] };
-}
-
-/**
- * Creates a table and its secondary index if they don't exist yet.
- *
- * The DDL runs in a single transaction, guarded by an advisory lock on the table name,
- * so application instances that boot at the same time don't race each other.
- *
- * The secondary index is only created together with the table. When an existing table lacks it,
- * a warning with the statement to create it is logged instead, because building an index
- * on a large table blocks writes to it.
- */
-export const ensureTable = async (
-	pool: Pool,
-	logger: Pick<LoggerService, 'warn'>,
-	{ table, definition, index }: PostgresTableDefinition,
-): Promise<void> => {
-	const tableIdentifier = escapeIdentifier(table);
-	const indexIdentifier = escapeIdentifier(deriveIndexName(table, index.suffix));
-	const indexColumns = index.columns.join(', ');
-	const createIndexStatement = `CREATE INDEX CONCURRENTLY IF NOT EXISTS ${indexIdentifier} ON ${tableIdentifier} (${indexColumns})`;
-
-	await withTransaction(pool, async (client) => {
-		await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [table]);
-
-		const {
-			rows: [{ existed }],
-		} = await client.query<{ existed: boolean }>(
-			`SELECT to_regclass(format('%I.%I', current_schema(), $1::text)) IS NOT NULL AS existed`,
-			[table],
-		);
-
-		if (!existed) {
-			await client.query(`CREATE TABLE IF NOT EXISTS ${tableIdentifier} (${definition})`);
-		}
-
-		// Any valid, non-partial btree index that leads with the indexed columns will do, whatever its name
-		const {
-			rows: [{ indexed }],
-		} = await client.query<{ indexed: boolean }>(
-			`SELECT EXISTS (
-				SELECT 1
-				FROM pg_index i
-				JOIN pg_class ic ON ic.oid = i.indexrelid
-				JOIN pg_am am ON am.oid = ic.relam
-				JOIN pg_attribute a1 ON a1.attrelid = i.indrelid AND a1.attnum = i.indkey[0]
-				JOIN pg_attribute a2 ON a2.attrelid = i.indrelid AND a2.attnum = i.indkey[1]
-				WHERE i.indrelid = to_regclass(format('%I.%I', current_schema(), $1::text))
-				AND i.indisvalid
-				AND i.indpred IS NULL
-				AND i.indnkeyatts >= 2
-				AND am.amname = 'btree'
-				AND a1.attname = $2
-				AND a2.attname = $3
-			) AS indexed`,
-			[table, ...index.columns],
-		);
-
-		if (indexed) {
-			return;
-		}
-
-		if (existed) {
-			logger.warn(
-				`Collection ${tableIdentifier} has no index on (${indexColumns}). It isn't created automatically because building it blocks writes to the existing table, create it with: ${createIndexStatement};`,
-			);
-			return;
-		}
-
-		await client.query('SAVEPOINT create_index');
-		try {
-			await client.query(`CREATE INDEX IF NOT EXISTS ${indexIdentifier} ON ${tableIdentifier} (${indexColumns})`);
-			await client.query('RELEASE SAVEPOINT create_index');
-		} catch (error) {
-			if (!hasErrorCode(error, INSUFFICIENT_PRIVILEGE)) {
-				throw error;
-			}
-			await client.query('ROLLBACK TO SAVEPOINT create_index');
-			logger.warn(
-				`Collection ${tableIdentifier} has no index on (${indexColumns}) because the current role isn't allowed to create it, create it with: ${createIndexStatement};`,
-			);
-		}
-	});
-};
