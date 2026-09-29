@@ -1,8 +1,7 @@
-import type { ISnapshotCollection } from './snapshot-collection.type.js';
-import type { ISnapshotPool } from './snapshot-pool.type.js';
+import type { SnapshotStore } from '../../snapshot-store.js';
 
-export interface SnapshotStoreDriver {
-	connect(): void | Promise<void>;
-	disconnect(): void | Promise<void>;
-	ensureCollection(pool?: ISnapshotPool): ISnapshotCollection | Promise<ISnapshotCollection>;
-}
+/**
+ * The class of a snapshot store. The module creates the store with `new driver(options)`, where `options` is the
+ * `snapshotStore` configuration without its `driver`.
+ */
+export type SnapshotStoreDriver<TOptions = any> = new (options: TOptions) => SnapshotStore<TOptions>;

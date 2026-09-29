@@ -10,7 +10,7 @@ import {
 	Snapshot,
 	SnapshotEnvelope,
 	SnapshotRepository,
-	type SnapshotStore,
+	SnapshotStore,
 	SnapshotStream,
 	UUID,
 	UnsupportedOperationException,
@@ -324,22 +324,39 @@ describe(SnapshotRepository, () => {
 		expect(loadedAccounts).toEqual([account]);
 	});
 
-	it('throws when loading many without store support', async () => {
-		snapshotStore.getManyLastSnapshotEnvelopes = undefined;
-
-		await expect(snapshotRepository.loadMany([account.id])).rejects.toThrow(UnsupportedOperationException);
-		await expect(snapshotRepository.loadMany([account.id])).rejects.toMatchObject({
-			operation: 'getManyLastSnapshotEnvelopes',
-			component: 'snapshot store',
+	it("loads many with the base default, one getLastEnvelope per stream, when the store doesn't override it", async () => {
+		snapshotStore.getManyLastSnapshotEnvelopes = vi.fn(
+			SnapshotStore.prototype.getManyLastSnapshotEnvelopes,
+		) as typeof snapshotStore.getManyLastSnapshotEnvelopes;
+		account.version = snapshotInterval;
+		snapshotEnvelope = SnapshotEnvelope.create<Account>(snapshot, {
+			aggregateId: snapshotStream.aggregateId,
+			version: snapshotInterval,
 		});
+		const otherId = AccountId.generate();
+		snapshotStore.getLastEnvelope.mockImplementation(async (stream: SnapshotStream) =>
+			stream.aggregateId === account.id.value ? snapshotEnvelope : undefined,
+		);
+
+		const loadedAccounts = await snapshotRepository.loadMany([account.id, otherId], 'tenant-1');
+
+		expect(loadedAccounts).toEqual([account]);
+		expect(snapshotStore.getLastEnvelope).toHaveBeenCalledTimes(2);
+		expect(snapshotStore.getLastEnvelope).toHaveBeenNthCalledWith(1, snapshotStream, 'tenant-1');
+		expect(snapshotStore.getLastEnvelope).toHaveBeenNthCalledWith(2, SnapshotStream.for(Account, otherId), 'tenant-1');
 	});
 
-	it('throws when loading all without store support', async () => {
-		snapshotStore.getLastEnvelopesForAggregate = undefined;
+	it("rejects loading all with the UnsupportedOperationException of the base default when the store doesn't override it", async () => {
+		snapshotStore.getLastEnvelopesForAggregate = vi.fn(
+			SnapshotStore.prototype.getLastEnvelopesForAggregate,
+		) as typeof snapshotStore.getLastEnvelopesForAggregate;
 
 		const iterator = snapshotRepository.loadAll();
 		await expect(iterator.next()).rejects.toThrow(
 			new UnsupportedOperationException({ operation: 'getLastEnvelopesForAggregate', component: 'snapshot store' }),
 		);
+		expect(snapshotStore.getLastEnvelopesForAggregate).toHaveBeenCalledWith(Account, {
+			aggregateId: undefined,
+		});
 	});
 });

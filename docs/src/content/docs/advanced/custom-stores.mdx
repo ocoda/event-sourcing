@@ -237,29 +237,47 @@ export class FooSnapshotStore extends SnapshotStore<FooSnapshotStoreConfig> {
 		snapshot: ISnapshot<A>,
 		pool?: ISnapshotPool,
 	): Promise<SnapshotEnvelope<A>> {
-		// Store a snapshot in your Snapshot Store and return its envelope
+		// Store a snapshot in your Snapshot Store and return its envelope. Reject with a
+		// SnapshotStoreVersionConflictException unless version is higher than the stream's last one, so that racing
+		// appends leave a single latest snapshot
 	}
 
 	async getLastEnvelope<A extends AggregateRoot>(
 		snapshotStream: SnapshotStream,
 		pool?: ISnapshotPool,
 	): Promise<SnapshotEnvelope<A> | void> {
-		// Get the envelope of the last snapshot of a stream from your Snapshot Store
+		// Get the envelope of the last snapshot of a stream (the highest version) from your Snapshot Store
 	}
 
-	... // The optional methods
+	async getEnvelope<A extends AggregateRoot>(
+		snapshotStream: SnapshotStream,
+		version: number,
+		pool?: ISnapshotPool,
+	): Promise<SnapshotEnvelope<A>> {
+		// Get the envelope of the snapshot with the given version from your Snapshot Store
+	}
+
+	async *getEnvelopes<A extends AggregateRoot>(
+		snapshotStream: SnapshotStream,
+		filter?: ISnapshotFilter,
+	): AsyncGenerator<SnapshotEnvelope<A>[]> {
+		// Get the envelopes of the snapshots of a stream from your Snapshot Store
+	}
 }
 ```
 
-The methods above are required. A `SnapshotRepository` uses `appendSnapshot` to save snapshots and `getLastEnvelope` to load the last one.
+The methods above are required, and every one of them returns a promise (or an async generator). A `SnapshotRepository` uses `appendSnapshot` to save snapshots and `getLastEnvelope` to load the last one: the snapshot with the highest version of the stream.
 
-Some methods are optional, but the `SnapshotRepository` methods that need them throw an `UnsupportedOperationException` when your store doesn't have them (before 4.0, the `NotImplementedException` of `@nestjs/common`):
+The `SnapshotStore` base class has a default for two more methods. Override them when your database can do better:
 
-| Optional method | Needed for |
-| --- | --- |
-| `getManyLastSnapshotEnvelopes(snapshotStreams, pool?)` | `SnapshotRepository.loadMany()` |
-| `getLastEnvelopesForAggregate(aggregate, filter?)` | `SnapshotRepository.loadAll()` |
-| `getEnvelopes(snapshotStream, filter?)` and `getEnvelope(snapshotStream, version, pool?)` | Reading the snapshot envelopes of a stream. |
+| Method | Default | Used by |
+| --- | --- | --- |
+| `getManyLastSnapshotEnvelopes(snapshotStreams, pool?)` | Reads the streams one after the other with `getLastEnvelope`. | `SnapshotRepository.loadMany()` |
+| `getLastEnvelopesForAggregate(aggregate, filter?)` | Rejects with an `UnsupportedOperationException` when it's read (before 4.0, a missing method made `loadAll()` throw the `NotImplementedException` of `@nestjs/common`). | `SnapshotRepository.loadAll()` |
+
+An implementation of `getLastEnvelopesForAggregate` yields the latest snapshot of every stream of the aggregate, in descending binary order of the aggregate ids, and treats `filter.aggregateId` as an exclusive cursor. See [Snapshot store](/under-the-hood/snapshot-store#paging-through-an-aggregate).
+
+The conformance suite that checks a store against this contract will be published as `@ocoda/event-sourcing/testing` in a later prerelease.
 
 #### Register your Snapshot Store
 

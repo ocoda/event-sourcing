@@ -1,8 +1,8 @@
 import { EventSourcingError, EventSourcingErrorCode } from '../event-sourcing-error.js';
 
 /**
- * Thrown when a component doesn't support an operation, such as a snapshot store without the optional
- * `getManyLastSnapshotEnvelopes` method. Replaces the `NotImplementedException` of `@nestjs/common`, an HTTP 501
+ * Thrown when a component doesn't support an operation, such as a snapshot store that doesn't override
+ * `getLastEnvelopesForAggregate`. Replaces the `NotImplementedException` of `@nestjs/common`, an HTTP 501
  * exception, that 3.x threw.
  */
 export class UnsupportedOperationException extends EventSourcingError {
