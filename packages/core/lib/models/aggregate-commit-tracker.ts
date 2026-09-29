@@ -1,5 +1,5 @@
 /**
- * Internal bookkeeping of the last `commit()` of an aggregate.
+ * Internal bookkeeping of the last `markCommitted()` of an aggregate (the deprecated `commit()` calls it).
  *
  * This is intentionally kept outside of the aggregate instance (and not exported from the public entrypoint),
  * so it never leaks into the serialized aggregate, snapshots or the public types.

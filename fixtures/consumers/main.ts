@@ -16,6 +16,7 @@ import {
 	type EventDeliveryError,
 	type EventEnvelope,
 	EventHandler,
+	EventSourcingConfigurationException,
 	EventSourcingModule,
 	EventStore,
 	EventStoreVersionConflictException,
@@ -38,12 +39,14 @@ import {
 import { MariaDBEventStore, MariaDBSnapshotStore } from '@ocoda/event-sourcing-mariadb';
 import { MongoDBEventStore, MongoDBSnapshotStore } from '@ocoda/event-sourcing-mongodb';
 import { PostgresEventStore, PostgresSnapshotStore } from '@ocoda/event-sourcing-postgres';
+import { ClassTransformerEventSerializer } from '@ocoda/event-sourcing/class-transformer';
 import {
 	EVENT_STORE_CONFORMANCE_CASES,
 	RecordingPublisher,
 	createInMemoryEventStore,
 	createInMemorySnapshotStore,
 } from '@ocoda/event-sourcing/testing';
+import { Type } from 'class-transformer';
 
 const format = typeof require === 'function' ? 'cjs' : 'esm';
 let failures = 0;
@@ -71,6 +74,24 @@ class AccountOpenedEvent implements IEvent {
 @Event('consumer-account-credited')
 class AccountCreditedEvent implements IEvent {
 	constructor(public readonly amount: number) {}
+}
+
+class Money {
+	constructor(
+		public readonly amount: number,
+		public readonly currency: string,
+	) {}
+}
+
+/** Read back as a `Money` only by class-transformer, through `@Type`. */
+@Event('consumer-funds-deposited')
+class FundsDepositedEvent implements IEvent {
+	@Type(() => Money)
+	readonly amount: Money;
+
+	constructor(amount: Money) {
+		this.amount = amount;
+	}
 }
 
 @Aggregate({ streamName: 'consumer-account' })
@@ -302,6 +323,47 @@ async function testingHelpers(): Promise<void> {
 	);
 }
 
+/**
+ * The default JSON serializer refuses an event with class-transformer decorators at bootstrap, and the
+ * '@ocoda/event-sourcing/class-transformer' entry point serializes it with its decorators.
+ */
+async function serializers(): Promise<void> {
+	@Module({ imports: [EventSourcingModule.forRoot({ events: [FundsDepositedEvent] })] })
+	class JsonDefaultModule {}
+
+	const refused = await NestFactory.createApplicationContext(JsonDefaultModule, { logger: false }).then(
+		() => undefined,
+		(error: unknown) => error,
+	);
+	check(
+		refused instanceof EventSourcingConfigurationException &&
+			refused.issues.length === 1 &&
+			refused.issues[0]?.kind === 'class-transformer-decorators',
+		'the JSON default serializer refuses an event with class-transformer decorators at bootstrap',
+	);
+
+	@Module({
+		imports: [
+			EventSourcingModule.forRoot({
+				events: [FundsDepositedEvent],
+				defaultEventSerializer: ClassTransformerEventSerializer,
+			}),
+		],
+	})
+	class ClassTransformerModule {}
+
+	const app = await NestFactory.createApplicationContext(ClassTransformerModule, { logger: ['error', 'warn'] });
+	const eventStore = app.get(EventStore);
+	const stream = EventStream.for<Account>(Account, AccountId.generate());
+	await eventStore.appendEvents(stream, [new FundsDepositedEvent(new Money(7, 'EUR'))], { expectedVersion: 0 });
+	const read = await eventStore.getEvent(stream, 1);
+	check(
+		read instanceof FundsDepositedEvent && read.amount instanceof Money && read.amount.amount === 7,
+		'ClassTransformerEventSerializer reads back the nested class through @Type',
+	);
+	await app.close();
+}
+
 async function main(): Promise<void> {
 	check(EventSourcingModule.name === 'EventSourcingModule', 'class names are preserved');
 	check(
@@ -326,6 +388,7 @@ async function main(): Promise<void> {
 	await testingHelpers();
 	await scenario('forRoot', forRoot());
 	await scenario('forRootAsync', forRootAsync());
+	await serializers();
 
 	console.log(failures === 0 ? `CONSUMER OK (${format})` : `CONSUMER FAILED (${format}): ${failures} check(s)`);
 	process.exit(failures === 0 ? 0 : 1);

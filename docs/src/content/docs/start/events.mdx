@@ -77,8 +77,8 @@ The difference between event handlers and event subscribers is crucial. Event ha
 
 ## Event Serialization
 
-By default events are serialized and deserialized using the [class-transformer](https://www.npmjs.com/package/class-transformer) library. This works well for simple events that only contain primitive types.
-If you need more advanced events, for example containing Value Objects, it's possible to provide your own serialization logic by creating an EventSerializer.
+By default events are serialized to plain JSON-like payloads and deserialized again by `JsonEventSerializer`, which needs no decorators. This works well for simple events that only contain plain values.
+If you need more advanced events, for example containing Value Objects, it's possible to provide your own serialization logic by creating an EventSerializer. Events that use class-transformer decorators can use `ClassTransformerEventSerializer` instead.
 For more information on how to create an Event Serializer, please refer to the [Event Serialization](/advanced/event-serialization) documentation.
 
 ## Guidelines for creating events

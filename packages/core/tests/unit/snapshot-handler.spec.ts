@@ -11,6 +11,8 @@ import {
 	SnapshotEnvelope,
 	SnapshotRepository,
 	SnapshotStore,
+	SnapshotStorePersistenceException,
+	SnapshotStoreVersionConflictException,
 	SnapshotStream,
 	UUID,
 	UnsupportedOperationException,
@@ -132,6 +134,81 @@ describe(SnapshotRepository, () => {
 		);
 	});
 
+	describe('when the snapshot fails', () => {
+		beforeEach(() => {
+			account.version = snapshotInterval;
+		});
+
+		it('logs a version conflict as a warning instead of rejecting', async () => {
+			const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+			const error = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+			const conflict = new SnapshotStoreVersionConflictException({
+				stream: snapshotStream,
+				version: snapshotInterval,
+				latestVersion: snapshotInterval,
+				pool: 'tenant-1',
+			});
+			snapshotStore.appendSnapshot.mockRejectedValueOnce(conflict);
+
+			await expect(snapshotRepository.save(account.id, account, 'tenant-1')).resolves.toBeUndefined();
+
+			expect(snapshotStore.appendSnapshot).toHaveBeenCalledTimes(1);
+			expect(warn).toHaveBeenCalledWith(
+				`Skipped the snapshot of ${snapshotStream.streamId} at version ${snapshotInterval} in the tenant-1 pool: ${conflict.message}`,
+			);
+			expect(error).not.toHaveBeenCalled();
+		});
+
+		it('logs any other failure of the snapshot store as an error instead of rejecting', async () => {
+			const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+			const error = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+			const failure = new SnapshotStorePersistenceException({ collection: 'snapshots' });
+			snapshotStore.appendSnapshot.mockRejectedValueOnce(failure);
+
+			await expect(snapshotRepository.save(account.id, account)).resolves.toBeUndefined();
+
+			expect(error).toHaveBeenCalledWith(
+				`Failed to save the snapshot of ${snapshotStream.streamId} at version ${snapshotInterval}; the aggregate still loads from its events.`,
+				failure.stack,
+			);
+			expect(warn).not.toHaveBeenCalled();
+		});
+
+		it('logs a failure to serialize the aggregate as an error instead of rejecting', async () => {
+			const error = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+			const failure = new TypeError('Cannot read properties of undefined');
+			vi.spyOn(snapshotRepository, 'serialize').mockImplementationOnce(() => {
+				throw failure;
+			});
+
+			await expect(snapshotRepository.save(account.id, account)).resolves.toBeUndefined();
+
+			expect(snapshotStore.appendSnapshot).not.toHaveBeenCalled();
+			expect(error).toHaveBeenCalledWith(expect.stringContaining('Failed to save the snapshot'), failure.stack);
+		});
+
+		it('logs a failure to build the snapshot stream as an error instead of rejecting', async () => {
+			const error = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+
+			await expect(snapshotRepository.save(undefined as unknown as AccountId, account)).resolves.toBeUndefined();
+
+			expect(snapshotStore.appendSnapshot).not.toHaveBeenCalled();
+			expect(error).toHaveBeenCalledWith(
+				`Failed to save the snapshot of Account undefined at version ${snapshotInterval}; the aggregate still loads from its events.`,
+				expect.any(String),
+			);
+		});
+
+		it('logs a thrown value that is not an error', async () => {
+			const error = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+			snapshotStore.appendSnapshot.mockRejectedValueOnce('connection reset');
+
+			await expect(snapshotRepository.save(account.id, account)).resolves.toBeUndefined();
+
+			expect(error).toHaveBeenCalledWith(expect.stringContaining('Failed to save the snapshot'), 'connection reset');
+		});
+	});
+
 	describe('when the committed events are known', () => {
 		@Event('snapshot-interval-wallet-credited')
 		class WalletCreditedEvent implements IEvent {
@@ -175,11 +252,14 @@ describe(SnapshotRepository, () => {
 			return wallet;
 		};
 
+		// The events a repository appends, marked as committed after the append
 		const creditAndCommit = (wallet: Wallet, count: number) => {
 			for (let i = 0; i < count; i++) {
 				wallet.credit(1);
 			}
-			return wallet.commit();
+			const events = wallet.getUncommittedEvents();
+			wallet.markCommitted();
+			return events;
 		};
 
 		beforeEach(() => {
@@ -233,46 +313,74 @@ describe(SnapshotRepository, () => {
 			);
 		});
 
-		it('falls back to the interval multiples when commit() was not called', async () => {
+		it('takes the snapshot at the boundary with the deprecated commit() too', async () => {
 			const wallet = walletAt(9);
 			wallet.credit(1);
 			wallet.credit(1);
+			expect(wallet.commit()).toHaveLength(2);
 
 			await walletSnapshotRepository.save(walletId, wallet);
-			expect(snapshotStore.appendSnapshot).not.toHaveBeenCalled();
 
-			wallet.version = 20;
-			await walletSnapshotRepository.save(walletId, wallet);
-			expect(snapshotStore.appendSnapshot).toHaveBeenCalledTimes(1);
 			expect(snapshotStore.appendSnapshot).toHaveBeenCalledWith(
 				SnapshotStream.for(Wallet, walletId),
-				20,
+				11,
 				{ balance: 2 },
 				undefined,
 			);
 		});
 
-		it('falls back to the interval multiples when the aggregate changed after commit()', async () => {
-			const wallet = walletAt(9);
-			creditAndCommit(wallet, 2); // v11, crossed the boundary
-			wallet.credit(1); // v12, not committed
-
-			await walletSnapshotRepository.save(walletId, wallet);
-			expect(snapshotStore.appendSnapshot).not.toHaveBeenCalled();
-		});
-
-		it('falls back to the interval multiples when commit() had no events', async () => {
-			const wallet = walletAt(9);
-			creditAndCommit(wallet, 2); // v11, crossed the boundary
-			expect(wallet.commit()).toEqual([]); // nothing new
-
-			await walletSnapshotRepository.save(walletId, wallet);
+		it('falls back to the interval multiples when markCommitted() was not called', async () => {
+			// Events from the history: v9 -> v11
+			const loaded = walletAt(9);
+			await loaded.loadFromHistory([new WalletCreditedEvent(1), new WalletCreditedEvent(1)]);
+			await walletSnapshotRepository.save(walletId, loaded);
 			expect(snapshotStore.appendSnapshot).not.toHaveBeenCalled();
 
 			const walletAtBoundary = walletAt(20);
-			expect(walletAtBoundary.commit()).toEqual([]);
 			await walletSnapshotRepository.save(walletId, walletAtBoundary);
 			expect(snapshotStore.appendSnapshot).toHaveBeenCalledTimes(1);
+			expect(snapshotStore.appendSnapshot).toHaveBeenCalledWith(
+				SnapshotStream.for(Wallet, walletId),
+				20,
+				{ balance: 0 },
+				undefined,
+			);
+		});
+
+		it('skips the snapshot with a warning while the aggregate has uncommitted events', async () => {
+			const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+
+			// Uncommitted events that land on a multiple of the interval: v19 -> v20
+			const wallet = walletAt(19);
+			wallet.credit(1);
+			await walletSnapshotRepository.save(walletId, wallet);
+
+			// Changed after markCommitted(): v9 -> v11 committed, v12 uncommitted
+			const changed = walletAt(9);
+			creditAndCommit(changed, 2);
+			changed.credit(1);
+			await walletSnapshotRepository.save(walletId, changed);
+
+			expect(snapshotStore.appendSnapshot).not.toHaveBeenCalled();
+			expect(warn).toHaveBeenCalledTimes(2);
+			expect(warn).toHaveBeenCalledWith(
+				`Skipped the snapshot of Wallet ${walletId.value}: it has 1 uncommitted event(s). Append them and call markCommitted() before save().`,
+			);
+		});
+
+		it('takes no snapshot when markCommitted() committed nothing, even at a multiple of the interval', async () => {
+			const wallet = walletAt(9);
+			creditAndCommit(wallet, 2); // v11, crossed the boundary
+			expect(creditAndCommit(wallet, 0)).toEqual([]); // an unchanged save
+
+			await walletSnapshotRepository.save(walletId, wallet);
+			expect(snapshotStore.appendSnapshot).not.toHaveBeenCalled();
+
+			// Loaded at a multiple and saved unchanged: the stream may already have this snapshot, which would conflict
+			const walletAtBoundary = walletAt(20);
+			walletAtBoundary.markCommitted();
+			await walletSnapshotRepository.save(walletId, walletAtBoundary);
+			expect(snapshotStore.appendSnapshot).not.toHaveBeenCalled();
 		});
 
 		it('does not leak the commit bookkeeping into the aggregate', () => {

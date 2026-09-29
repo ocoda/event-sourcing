@@ -1,62 +1,152 @@
 import type { Type } from '@nestjs/common';
-import { MissingEventHandlerException } from '../exceptions/index.js';
-import { getEventHandlerMetadata } from '../helpers/index.js';
+import { MissingEventHandlerException, UncommittedEventsException } from '../exceptions/index.js';
+import { getAggregateMetadata, getEventHandlerMetadata } from '../helpers/index.js';
 import type { IEvent, IEventHandlerMethod } from '../interfaces/index.js';
 import { recordCommittedVersions } from './aggregate-commit-tracker.js';
 
-const VERSION = Symbol();
-const EVENTS = Symbol();
+// Symbol keys keep the bookkeeping out of JSON.stringify() and out of the aggregate's own string keys.
+const COMMITTED_VERSION = Symbol('committedVersion');
+const EVENTS = Symbol('uncommittedEvents');
 
+/**
+ * The base class of an event-sourced aggregate.
+ *
+ * An aggregate changes through events: `applyEvent()` runs the event's `@EventHandler()` and records the event as
+ * uncommitted. A repository saves it in three steps, so that a failed append loses nothing and can be retried:
+ *
+ * ```ts
+ * const events = account.getUncommittedEvents();
+ * await eventStore.appendEvents(stream, events, { expectedVersion: account.committedVersion, pool });
+ * account.markCommitted();
+ * ```
+ *
+ * `version` is `committedVersion` plus the number of uncommitted events.
+ */
 export abstract class AggregateRoot {
-	private [VERSION] = 0;
+	private [COMMITTED_VERSION] = 0;
 	private readonly [EVENTS]: IEvent[] = [];
 
-	set version(version: number) {
-		this[VERSION] = version;
-	}
-
+	/**
+	 * The version of the aggregate: its committed version plus the number of uncommitted events.
+	 */
 	get version(): number {
-		return this[VERSION];
+		return this[COMMITTED_VERSION] + this[EVENTS].length;
 	}
 
-	applyEvent<T extends IEvent = IEvent>(event: T, fromHistory = false) {
-		this[VERSION]++;
+	/**
+	 * Sets the committed version, for example when an aggregate is restored from a snapshot.
+	 * @throws UncommittedEventsException when the aggregate has uncommitted events
+	 */
+	set version(version: number) {
+		this.assertNoUncommittedEvents('version');
+		this[COMMITTED_VERSION] = version;
+	}
 
-		// If we're just hydrating the aggregate with events,
-		// don't push the event to the internal event collection to be committed
-		if (!fromHistory) {
-			this[EVENTS].push(event);
+	/**
+	 * The version of the last event that was loaded from the history or marked as committed: the version the stream
+	 * is expected to have before the uncommitted events are appended.
+	 */
+	get committedVersion(): number {
+		return this[COMMITTED_VERSION];
+	}
+
+	/**
+	 * A copy of the events that were applied since the aggregate was loaded or last marked as committed, oldest first.
+	 */
+	getUncommittedEvents(): readonly IEvent[] {
+		return [...this[EVENTS]];
+	}
+
+	/**
+	 * Marks the uncommitted events as committed, once they are appended: `committedVersion` moves up to `version` and
+	 * the events are cleared. The snapshot repository uses the range of versions this covers to decide whether a
+	 * snapshot is due.
+	 */
+	markCommitted(): void {
+		const fromVersion = this[COMMITTED_VERSION];
+		this[COMMITTED_VERSION] = this.version;
+		this[EVENTS].length = 0;
+
+		// Remember which versions were committed, so a snapshot repository can tell whether an interval was crossed
+		recordCommittedVersions(this, fromVersion, this[COMMITTED_VERSION]);
+	}
+
+	/**
+	 * Returns the uncommitted events and marks them as committed.
+	 * @deprecated Use `getUncommittedEvents()`, append the events, then call `markCommitted()`: `commit()` clears the
+	 * events before they are appended, so they are lost when the append fails. Removed in 5.0.
+	 */
+	commit(): IEvent[] {
+		const events = [...this[EVENTS]];
+		this.markCommitted();
+		return events;
+	}
+
+	/**
+	 * Applies an event: runs its `@EventHandler()`, then counts it towards the version. A new event is recorded as
+	 * uncommitted; an event from the history (`fromHistory`) is counted as committed.
+	 *
+	 * The handler runs first, so a handler that throws leaves the version and the uncommitted events unchanged. When
+	 * the aggregate has no handler for the event, `applyEvent()` throws a `MissingEventHandlerException`, unless the
+	 * aggregate is decorated with `@Aggregate({ missingHandler: 'ignore' })`.
+	 *
+	 * @throws UncommittedEventsException when an event from the history is applied to an aggregate that has
+	 * uncommitted events
+	 */
+	applyEvent<T extends IEvent = IEvent>(event: T, fromHistory = false): void {
+		if (fromHistory) {
+			this.assertNoUncommittedEvents('applyEvent');
 		}
 
 		const handler = this.getEventHandler(event.constructor as Type<T>);
 		handler?.call(this, event);
+
+		if (fromHistory) {
+			this[COMMITTED_VERSION]++;
+		} else {
+			this[EVENTS].push(event);
+		}
 	}
 
 	private getEventHandler<T extends IEvent = IEvent>(eventClass: Type<T>): IEventHandlerMethod<IEvent> | undefined {
 		const { method } = getEventHandlerMetadata(this, eventClass);
 
 		if (!method) {
+			if (getAggregateMetadata(this.constructor as Type<AggregateRoot>).missingHandler === 'ignore') {
+				return undefined;
+			}
 			throw new MissingEventHandlerException({ aggregate: this.constructor, event: eventClass });
 		}
 
 		return this[method];
 	}
 
-	commit(): IEvent[] {
-		const events = [...this[EVENTS]];
-		this[EVENTS].length = 0;
+	/**
+	 * Applies events from the history, such as the batches of `eventStore.getEvents()` or an array of events. Each
+	 * event counts as committed.
+	 * @throws UncommittedEventsException, before reading any event, when the aggregate has uncommitted events
+	 */
+	async loadFromHistory(events: AsyncIterable<IEvent[]> | Iterable<IEvent>): Promise<void> {
+		this.assertNoUncommittedEvents('loadFromHistory');
 
-		// Remember which versions were committed, so a snapshot repository can tell whether an interval was crossed
-		recordCommittedVersions(this, this[VERSION] - events.length, this[VERSION]);
+		if (Symbol.asyncIterator in events) {
+			for await (const batch of events) {
+				for (const event of batch) {
+					this.applyEvent(event, true);
+				}
+			}
+			return;
+		}
 
-		return events;
+		for (const event of events) {
+			this.applyEvent(event, true);
+		}
 	}
 
-	async loadFromHistory(eventCursor: AsyncGenerator<IEvent[]>) {
-		for await (const events of eventCursor) {
-			for (const event of events) {
-				this.applyEvent(event, true);
-			}
+	private assertNoUncommittedEvents(operation: string): void {
+		const uncommittedEvents = this[EVENTS].length;
+		if (uncommittedEvents > 0) {
+			throw new UncommittedEventsException({ aggregate: this.constructor, operation, uncommittedEvents });
 		}
 	}
 }

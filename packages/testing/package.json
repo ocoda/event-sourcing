@@ -21,6 +21,7 @@
 	"devDependencies": {
 		"@ocoda/event-sourcing-config": "workspace:*",
 		"@types/node": "catalog:",
+		"class-transformer": "catalog:",
 		"typescript": "catalog:",
 		"vitest": "catalog:"
 	},

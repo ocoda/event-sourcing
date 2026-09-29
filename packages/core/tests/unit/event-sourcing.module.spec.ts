@@ -1,131 +1,224 @@
-import { DiscoveryModule, ModuleRef } from '@nestjs/core';
-import { EVENT_SOURCING_OPTIONS, EventSourcingModule } from '@ocoda/event-sourcing';
-import { EventSourcingCoreModule } from '../../lib/event-sourcing.core.module.js';
+import type { FactoryProvider, Provider, ValueProvider } from '@nestjs/common';
+import { DiscoveryModule } from '@nestjs/core';
 import {
-	createAsyncEventSourcingOptionsProvider,
-	createEventSourcingOptionsProvider,
-} from '../../lib/event-sourcing.providers.js';
-import { InMemoryEventStore } from '../../lib/integration/event-store/index.js';
-import { InMemorySnapshotStore } from '../../lib/integration/snapshot-store/index.js';
-import { EventRegistry } from '../../lib/registries/event.registry.js';
+	CommandBus,
+	EVENT_SOURCING_OPTIONS,
+	Event,
+	EventBus,
+	EventMap,
+	EventSerializer,
+	EventSourcingConfigurationException,
+	EventSourcingModule,
+	EventStore,
+	type IEvent,
+	type IEventPayload,
+	type IEventSerializer,
+	QueryBus,
+	SnapshotStore,
+} from '@ocoda/event-sourcing';
+import { EventSourcingFeature, EventSourcingFeatureModule } from '../../lib/registration/event-sourcing-feature.js';
+
+@Event('module-spec-event')
+class ModuleSpecEvent implements IEvent {}
+
+@EventSerializer(ModuleSpecEvent)
+class ModuleSpecEventSerializer implements IEventSerializer<ModuleSpecEvent> {
+	serialize(): IEventPayload<ModuleSpecEvent> {
+		return {} as IEventPayload<ModuleSpecEvent>;
+	}
+	deserialize(): ModuleSpecEvent {
+		return new ModuleSpecEvent();
+	}
+}
+
+const tokenOf = (provider: Provider) =>
+	typeof provider === 'function' ? provider : (provider as { provide: unknown }).provide;
+const firstProvider = (definition: { providers?: Provider[] }) => (definition.providers ?? [])[0] as ValueProvider;
+const optionsProvider = (providers: Provider[] = []) =>
+	providers.find((provider) => tokenOf(provider) === EVENT_SOURCING_OPTIONS) as
+		| ValueProvider
+		| FactoryProvider
+		| undefined;
 
 describe(EventSourcingModule, () => {
-	class TestEvent {}
+	describe('forRoot', () => {
+		it('is one global module that provides and exports the stores, the buses, the event map and the options', () => {
+			const events = [ModuleSpecEvent];
+			const definition = EventSourcingModule.forRoot({ events });
 
-	it('registers feature modules with events', () => {
-		const dynamicModule = EventSourcingModule.forFeature({ events: [TestEvent as any] });
-
-		expect(dynamicModule.module).toBeDefined();
-		expect(dynamicModule.imports).toEqual([DiscoveryModule]);
-		expect(EventRegistry.getEvents()).toContain(TestEvent as any);
-	});
-
-	it('creates a core module with providers', () => {
-		const dynamicModule = EventSourcingModule.forRoot({});
-
-		expect(dynamicModule.module).toBe(EventSourcingModule);
-		expect((dynamicModule.imports?.[0] as any)?.module).toBe(EventSourcingCoreModule);
-		expect(dynamicModule.exports).toContain(EventSourcingCoreModule);
-	});
-
-	it('creates an async core module with imports', () => {
-		const dynamicModule = EventSourcingModule.forRootAsync({
-			imports: [DiscoveryModule],
-			useValue: {},
+			expect(definition.module).toBe(EventSourcingModule);
+			expect(definition.global).toBe(true);
+			expect(definition.imports).toEqual([DiscoveryModule]);
+			// Only the options and the providers of the module: no second (core) module
+			expect(definition.providers?.map(tokenOf)).toEqual(
+				expect.arrayContaining([
+					EVENT_SOURCING_OPTIONS,
+					EventStore,
+					SnapshotStore,
+					EventBus,
+					EventMap,
+					CommandBus,
+					QueryBus,
+				]),
+			);
+			expect(definition.exports).toEqual(
+				expect.arrayContaining([
+					EVENT_SOURCING_OPTIONS,
+					EventStore,
+					SnapshotStore,
+					EventBus,
+					EventMap,
+					CommandBus,
+					QueryBus,
+				]),
+			);
+			expect((optionsProvider(definition.providers) as ValueProvider).useValue).toEqual({ events });
 		});
 
-		expect(dynamicModule.module).toBe(EventSourcingModule);
-		expect(dynamicModule.imports?.[0]).toBe(DiscoveryModule);
-		expect(dynamicModule.providers?.length).toBe(0);
-		expect(dynamicModule.exports).toContain(EventSourcingCoreModule);
-	});
-});
+		it('takes no options as the defaults', () => {
+			const definition = EventSourcingModule.forRoot(undefined as never);
 
-describe('EventSourcing options providers', () => {
-	it('creates a sync options provider', () => {
-		const providers = createEventSourcingOptionsProvider({});
-		const provider = providers[0] as any;
-
-		expect(provider.provide).toBe(EVENT_SOURCING_OPTIONS);
-		expect(provider.useValue).toEqual({});
-	});
-
-	it('creates async options provider from useValue', () => {
-		const providers = createAsyncEventSourcingOptionsProvider({
-			useValue: { eventStore: { driver: InMemoryEventStore, useDefaultPool: false } },
-		});
-
-		expect(providers).toHaveLength(1);
-		expect((providers[0] as any).provide).toBe(EVENT_SOURCING_OPTIONS);
-		expect((providers[0] as any).useValue).toEqual({
-			eventStore: { driver: InMemoryEventStore, useDefaultPool: false },
+			expect((optionsProvider(definition.providers) as ValueProvider).useValue).toEqual({});
 		});
 	});
 
-	it('creates async options provider from useFactory', () => {
-		const factory = () => ({ snapshotStore: { driver: InMemorySnapshotStore, useDefaultPool: false } });
-		const providers = createAsyncEventSourcingOptionsProvider({ useFactory: factory });
+	describe('forRootAsync', () => {
+		it('creates the options with a factory, with its imports and injections', async () => {
+			const factory = (value: string) => ({ events: [ModuleSpecEvent], label: value });
+			const definition = EventSourcingModule.forRootAsync({
+				imports: [DiscoveryModule],
+				useFactory: factory,
+				inject: ['LABEL'],
+			});
 
-		expect((providers[0] as any).provide).toBe(EVENT_SOURCING_OPTIONS);
-		expect((providers[0] as any).useFactory).toBe(factory);
-		expect((providers[0] as any).inject).toEqual([]);
-	});
+			expect(definition.module).toBe(EventSourcingModule);
+			expect(definition.global).toBe(true);
+			expect(definition.imports).toEqual([DiscoveryModule, DiscoveryModule]);
+			const provider = optionsProvider(definition.providers) as FactoryProvider;
+			expect(provider.useFactory).toBe(factory);
+			expect(provider.inject).toEqual(['LABEL']);
+		});
 
-	it('creates async options provider from useExisting', async () => {
-		class OptionsFactory {
-			createEventSourcingOptions() {
-				return { eventStore: { driver: InMemoryEventStore, useDefaultPool: true } };
+		it('creates the options with an existing options factory', async () => {
+			class OptionsFactory {
+				createEventSourcingOptions() {
+					return { events: [ModuleSpecEvent] };
+				}
 			}
-		}
+			const definition = EventSourcingModule.forRootAsync({ useExisting: OptionsFactory });
+			const provider = optionsProvider(definition.providers) as FactoryProvider;
 
-		const providers = createAsyncEventSourcingOptionsProvider({ useExisting: OptionsFactory });
-		const provider = providers[0] as any;
-		const resolved = await provider.useFactory?.(new OptionsFactory());
+			expect(provider.inject).toEqual([OptionsFactory]);
+			await expect(provider.useFactory(new OptionsFactory())).resolves.toEqual({ events: [ModuleSpecEvent] });
+			// The existing factory is not provided again
+			expect(definition.providers?.map(tokenOf)).not.toContain(OptionsFactory);
+		});
 
-		expect(provider.inject).toEqual([OptionsFactory]);
-		expect(resolved).toEqual({ eventStore: { driver: InMemoryEventStore, useDefaultPool: true } });
-	});
-
-	it('creates async options provider from useClass', async () => {
-		class OptionsFactory {
-			createEventSourcingOptions() {
-				return { snapshotStore: { driver: InMemorySnapshotStore, useDefaultPool: true } };
+		it('creates the options with an options factory class, reusing an instance that is already provided', async () => {
+			class OptionsFactory {
+				createEventSourcingOptions() {
+					return { events: [ModuleSpecEvent] };
+				}
 			}
-		}
+			const definition = EventSourcingModule.forRootAsync({ useClass: OptionsFactory });
+			const provider = optionsProvider(definition.providers) as FactoryProvider;
+			const moduleRef = { create: vi.fn(async () => new OptionsFactory()) };
 
-		const providers = createAsyncEventSourcingOptionsProvider({ useClass: OptionsFactory });
-		const provider = providers[0] as any;
-		const moduleRef = { create: vi.fn(async () => new OptionsFactory()) };
-
-		expect(providers).toHaveLength(1);
-		expect(provider.inject).toEqual([{ token: OptionsFactory, optional: true }, ModuleRef]);
-
-		// an options factory that is already provided is reused
-		await expect(provider.useFactory(new OptionsFactory(), moduleRef)).resolves.toEqual({
-			snapshotStore: { driver: InMemorySnapshotStore, useDefaultPool: true },
+			expect(provider.inject?.[0]).toEqual({ token: OptionsFactory, optional: true });
+			await expect(provider.useFactory(new OptionsFactory(), moduleRef)).resolves.toEqual({
+				events: [ModuleSpecEvent],
+			});
+			expect(moduleRef.create).not.toHaveBeenCalled();
+			await expect(provider.useFactory(undefined, moduleRef)).resolves.toEqual({ events: [ModuleSpecEvent] });
+			expect(moduleRef.create).toHaveBeenCalledWith(OptionsFactory);
 		});
-		expect(moduleRef.create).not.toHaveBeenCalled();
 
-		// otherwise the options factory is instantiated within the module
-		await expect(provider.useFactory(undefined, moduleRef)).resolves.toEqual({
-			snapshotStore: { driver: InMemorySnapshotStore, useDefaultPool: true },
+		it('keeps useValue as a deprecated shim for forRoot, and warns once', async () => {
+			vi.resetModules();
+			const { EventSourcingModule: FreshModule } = await import('../../lib/event-sourcing.module.js');
+			const warnings: Error[] = [];
+			const onWarning = (warning: Error) => warnings.push(warning);
+			process.on('warning', onWarning);
+			try {
+				const value = { events: [ModuleSpecEvent] };
+				const definition = FreshModule.forRootAsync({ useValue: value });
+				FreshModule.forRootAsync({ useValue: value });
+				await new Promise((resolve) => setImmediate(resolve));
+
+				const provider = optionsProvider(definition.providers) as FactoryProvider;
+				expect(provider.useFactory()).toBe(value);
+				expect(
+					warnings.filter((warning) => (warning as { code?: string }).code === 'OCODA_ES_FOR_ROOT_ASYNC_USE_VALUE'),
+				).toHaveLength(1);
+			} finally {
+				process.off('warning', onWarning);
+			}
 		});
-		expect(moduleRef.create).toHaveBeenCalledWith(OptionsFactory);
+
+		it('fails with a configuration issue without a source for the options', () => {
+			const error = (() => {
+				try {
+					EventSourcingModule.forRootAsync({ imports: [DiscoveryModule] });
+				} catch (error) {
+					return error;
+				}
+			})();
+
+			expect(error).toBeInstanceOf(EventSourcingConfigurationException);
+			expect((error as EventSourcingConfigurationException).issues).toEqual([
+				{ kind: 'invalid-options', message: expect.stringContaining('"useFactory", "useClass" or "useExisting"') },
+			]);
+		});
 	});
 
-	it('registers feature modules without events', () => {
-		const dynamicModule = EventSourcingModule.forFeature();
+	describe('forFeature', () => {
+		it('provides the events and serializers of a feature module, with its imports, and registers nothing globally', () => {
+			const definition = EventSourcingModule.forFeature({
+				events: [ModuleSpecEvent],
+				serializers: [ModuleSpecEventSerializer],
+				imports: [DiscoveryModule],
+			});
 
-		expect(dynamicModule.imports).toEqual([DiscoveryModule]);
-	});
+			expect(definition.module).toBe(EventSourcingFeatureModule);
+			expect(definition.global).toBeUndefined();
+			expect(definition.imports).toEqual([DiscoveryModule]);
+			expect(definition.exports).toBeUndefined();
+			const [feature, ...serializers] = definition.providers ?? [];
+			expect((feature as ValueProvider).provide).toBe(EventSourcingFeature);
+			expect((feature as ValueProvider).useValue).toEqual(
+				new EventSourcingFeature([ModuleSpecEvent], [ModuleSpecEventSerializer]),
+			);
+			expect(serializers).toEqual([ModuleSpecEventSerializer]);
+		});
 
-	it('exposes core module providers', () => {
-		const moduleDef = EventSourcingCoreModule.forRoot({});
-		const hasOptions = (moduleDef.providers ?? []).some(
-			(provider) =>
-				typeof provider === 'object' && 'provide' in provider && provider.provide === EVENT_SOURCING_OPTIONS,
-		);
+		it('works without options', () => {
+			const definition = EventSourcingModule.forFeature();
 
-		expect(hasOptions).toBe(true);
+			expect(definition.imports).toEqual([]);
+			expect(firstProvider(definition).useValue).toEqual(new EventSourcingFeature());
+		});
+
+		it('is a module of its own for every call', () => {
+			const first = EventSourcingModule.forFeature({ events: [ModuleSpecEvent] });
+			const second = EventSourcingModule.forFeature({ events: [ModuleSpecEvent] });
+
+			expect(first).not.toBe(second);
+			expect(firstProvider(first).useValue).not.toBe(firstProvider(second).useValue);
+		});
+
+		it('does not provide what is not a class, and keeps it for the bootstrap checks', () => {
+			const definition = EventSourcingModule.forFeature({
+				events: 'not-an-array' as never,
+				serializers: [ModuleSpecEventSerializer, 'not-a-class' as never],
+			});
+			const [feature, ...serializers] = definition.providers ?? [];
+
+			expect(serializers).toEqual([ModuleSpecEventSerializer]);
+			expect((feature as ValueProvider<EventSourcingFeature>).useValue.events).toBe('not-an-array');
+			expect((feature as ValueProvider<EventSourcingFeature>).useValue.serializers).toEqual([
+				ModuleSpecEventSerializer,
+				'not-a-class',
+			]);
+		});
 	});
 });

@@ -41,7 +41,7 @@ try {
 
 	const dependencies = {
 		...Object.fromEntries(tarballs.map(({ name, tarball }) => [name, `file:${tarball}`])),
-		...pinned('packages/core', ['@nestjs/common', '@nestjs/core', 'reflect-metadata', 'rxjs']),
+		...pinned('packages/core', ['@nestjs/common', '@nestjs/core', 'class-transformer', 'reflect-metadata', 'rxjs']),
 		...pinned('packages/integration/mariadb', ['mariadb']),
 		...pinned('packages/integration/mongodb', ['mongodb']),
 		...pinned('packages/integration/postgres', ['pg', 'pg-cursor']),
@@ -83,9 +83,16 @@ try {
 		});
 		run(process.execPath, [tsc, '-p', dir]);
 
-		for (const file of ['main.js', 'conformance.spec.js']) {
+		// The entry points each compiled file must load the variant's way
+		for (const [file, names] of [
+			[
+				'main.js',
+				['@ocoda/event-sourcing', '@ocoda/event-sourcing/testing', '@ocoda/event-sourcing/class-transformer'],
+			],
+			['conformance.spec.js', ['@ocoda/event-sourcing', '@ocoda/event-sourcing/testing']],
+		]) {
 			const emitted = readFileSync(join(dir, 'dist', file), 'utf8');
-			for (const name of ['@ocoda/event-sourcing', '@ocoda/event-sourcing/testing']) {
+			for (const name of names) {
 				if (!loads(variant, emitted, name)) {
 					throw new Error(`${variant}: the compiled ${file} does not load ${name} the ${variant} way`);
 				}

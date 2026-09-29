@@ -31,6 +31,27 @@ export class AccountName extends ValueObject {
 
 By extending the ValueObject class, you get access to the `equals` method, which compares two Value Objects based on their properties. This method is used to determine if two Value Objects are in fact equal.
 
+## Ids [#ids]
+
+Ids are value objects too. Extend `UUID` or `ULID` for generated ids, or `Id` for ids of your own format:
+
+```typescript
+import { ULID, UUID } from '@ocoda/event-sourcing';
+
+export class AccountId extends UUID {}
+export class AccountOwnerId extends UUID {}
+export class OrderId extends ULID {}
+
+const accountId = AccountId.generate(); // an AccountId
+const sameAccountId = AccountId.from(accountId.value); // an AccountId
+const ownerIds = ['b6bca415-b7a6-499c-9f39-bf8fbf980a82'].map(AccountOwnerId.from); // AccountOwnerIds, typed as UUID[]
+```
+
+- `generate()` and `from()` create an instance of the class they are called on (since 4.0; 3.x returned a `UUID` or `ULID`), also when they are passed around, as in `values.map(AccountOwnerId.from)`. Passed around, a factory is typed as the base class, so `ownerIds` is a `UUID[]` that holds `AccountOwnerId`s: write `values.map((value) => AccountOwnerId.from(value))` for an `AccountOwnerId[]`. `ULID.factory()` returns a generator of ids that increase monotonically.
+- Ids of different classes are never equal, even with the same value: `AccountId.from(value).equals(AccountOwnerId.from(value))` is `false`.
+- The factories call `new this(value)`. An id class whose constructor takes anything other than the id alone declares its own `generate()` and `from()`, and a constructor of your own is `protected`, not `private`.
+- `from()` throws an `InvalidIdException` for an empty value or a value that doesn't have the format of the class. A `UUID` is 32 hexadecimal digits with its four dashes, in either case. A `ULID` is 26 characters of Crockford's base32 in either case (the digits and the letters without I, L, O and U), starting with 0 to 7 (since 4.0; 3.x accepted any 26 letters and digits).
+
 ## Guidelines for working with Value Objects
 
 <Steps>
@@ -65,6 +86,8 @@ By extending the ValueObject class, you get access to the `equals` method, which
 
    name1.equals(name2); // true
    ```
+
+   Value objects of different classes are never equal, even with the same properties, and `equals(null)` or `equals(undefined)` returns `false` (since 4.0).
 
 4. ### Domain Logic Encapsulation
    Although Value Objects are often simple, they can encapsulate domain-specific logic related to their properties. For instance, you might add formatting logic or rules for special cases. However, keep in mind that Value Objects should remain focused and not include complex domain behaviors, which are usually the responsibility of entities or aggregates.

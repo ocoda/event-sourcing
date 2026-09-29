@@ -64,6 +64,8 @@ The next prerelease adds these steps:
 10. Adapt to the [typed buses](#typed-buses): assert the failures of `execute()` as rejections, and make the `execute()` of every decorated handler return a promise. Type-checking needs TypeScript 5.4 or later.
 11. Migrate the data of the PostgreSQL, MariaDB and MongoDB stores to schema v2 before you deploy: run the store's `migrate()` with `dryRun: true` first and review the report, stop every 3.x instance, then run `migrate()` for the events and then for the snapshots. See [Data migration](#data-migration).
 12. Replace `getAllEnvelopes()` with [`readAll()`](#read-all), and `ULID.yearMonth` with `id.date.toISOString().slice(0, 7)`: both are removed. A custom event store implements the driver methods instead of `appendEvents`: see [Migrating a 3.x store](/advanced/custom-stores#migrating-a-3x-store).
+13. Save aggregates with `getUncommittedEvents()`, `appendEvents(stream, events, { expectedVersion: account.committedVersion, pool })` and `markCommitted()` instead of `commit()`, and check the other [aggregate and id changes](#aggregates-and-ids): event handlers run before the version moves, and ids of different classes are no longer equal.
+14. Replace `DefaultEventSerializer` with `JsonEventSerializer`, the new default. If your events, or the classes of the values they hold, use class-transformer decorators, install `class-transformer@^0.5.1` and set `defaultEventSerializer: ClassTransformerEventSerializer`: otherwise the application fails to bootstrap, or the append of such an event fails. See [Serialization](#serialization).
 
 ## NestJS 12 and Node.js 22.12 [#nestjs-and-node]
 
@@ -297,7 +299,7 @@ The 3.x form still works, but is deprecated and will be removed in 5.0. It emits
 - **Invalid arguments throw before any I/O**: an `InvalidAppendOptionsException` for a negative or fractional expected version (in the 3.x form, an aggregate version below the number of events) or an empty pool name, and an `InvalidEventEnvelopeException` for a stream id, aggregate id or event name over 255 characters.
 - **The failure of the version check's read** is an `EventStorePersistenceException` with `outcome: 'not-persisted'`.
 
-**Publishing.** The module hands the store the `EventBus` when it creates it, and `eventStore.publish = …` is gone. Events appended before the application bootstrapped are no longer held back with a warning, but the publishers and subscribers are only registered at bootstrap, so they still don't receive them. The store calls `eventBus.publishAll(envelopes)`, so a test double that replaces the `EventBus` must implement it. The bus no longer passes the envelopes of an append through `eventBus.publish`, so a spy on it sees nothing: see [Publishing](#publishing).
+**Publishing.** The module hands the store the `EventBus` when it creates it, and `eventStore.publish = …` is gone. Events appended before the application bootstrapped are no longer held back with a warning. The publishers and subscribers are registered in the module's `onModuleInit`, so they receive the events appended from a lifecycle hook, and appending from a provider factory throws: see [Module configuration](#module-configuration). The store calls `eventBus.publishAll(envelopes)`, so a test double that replaces the `EventBus` must implement it. The bus no longer passes the envelopes of an append through `eventBus.publish`, so a spy on it sees nothing: see [Publishing](#publishing).
 
 **Reads.** `getEvent()` and `getEnvelope()` always return a promise, also on the in-memory store. On the in-memory store now, and on the database stores with schema v2, every read of a pool whose collection doesn't exist throws an `EventCollectionNotFoundException`; the in-memory store's `getEvents()` and `getEnvelopes()` yielded nothing and its `getEvent()` threw an `EventNotFoundException`. An append to such a pool throws an `EventStorePersistenceException` with `outcome: 'not-persisted'`, whose `cause` is the `EventCollectionNotFoundException`.
 
@@ -464,7 +466,7 @@ await MariaDBSnapshotStore.migrate(config);
 *In the next prerelease.* See [Event Publishers and Subscribers](/advanced/event-pubsub#delivery-semantics).
 
 - **Publishers are awaited.** The bus awaits the promise that a publisher's `publish` returns before it passes that publisher the next envelope of the append, and `appendEvents` resolves once every publisher is done. 3.x fired them and forgot. The publishers run concurrently, and each call may take at most `publishing.publisherTimeout` milliseconds (30 s by default, `0` disables it): after that the bus logs and reports a timeout and moves on. Each publisher gets the appends of a stream in the order in which they were stored, one after the other, even when they run concurrently; appends to other streams don't wait for each other. A slow publisher now slows down your commands: each call up to that timeout, and an append to a stream also waits for the calls of the earlier appends to that stream that the publisher still handles. A publisher may implement `publishAll(envelopes)` to get the envelopes of an append in one call.
-- **`eventBus.publish()` returns a promise**, which resolves once the publishers are done and never rejects. The envelopes of an append go through `eventBus.publishAll()`, not through `publish()`: to see what an append published in a test, register a publisher or subscribe to the bus instead of spying on `eventBus.publish`.
+- **`eventBus.publish()` returns a promise**, which resolves once the publishers are done and never rejects because of a publisher or subscriber. The envelopes of an append go through `eventBus.publishAll()`, not through `publish()`: to see what an append published in a test, register a publisher or subscribe to the bus instead of spying on `eventBus.publish`.
 - **`eventBus.whenIdle()`** resolves once no publisher or subscriber is running. In tests, `await eventBus.whenIdle()` replaces waiting for a fixed time for the subscribers.
 - **`eventBus.deliveryErrors$`** emits every publisher and subscriber failure, a timeout included. They are still logged.
 - **Shutdown.** `app.close()` waits for the running publishers and subscribers, for at most `publishing.shutdownTimeout` milliseconds (10 s by default), then unsubscribes the subscribers and disconnects the stores. 3.x unsubscribed and disconnected in `onModuleDestroy`, which dropped the deliveries in flight. NestJS still runs `onModuleDestroy` first, so if your subscribers use providers that clean up there, `await eventBus.whenIdle()` before `app.close()`.
@@ -476,6 +478,101 @@ EventSourcingModule.forRoot({
 	publishing: { publisherTimeout: 5_000, shutdownTimeout: 30_000 },
 });
 ```
+
+## Module configuration [#module-configuration]
+
+*In the next prerelease.* See [Module configuration](/start/module-configuration).
+
+- **Registration moves to `onModuleInit`.** The handlers, subscribers, publishers and serializers are registered in the module's `onModuleInit`, or on the first use of the event store or a bus if a provider of another module (your own `@Global()` module, say) uses them from its `onModuleInit` first. 3.x registered them in `onApplicationBootstrap`, so events appended from `onModuleInit` were never published. Commands, queries and appends now work from `onModuleInit` on.
+- **Provider factories can't use the library yet.** Appending events (pre-built envelopes and `publish: false` included), reading events (`getEvent`, `getEvents`), executing or publishing from a provider factory or a constructor throws an `EventSourcingNotReadyException` (`ES_EVENT_SOURCING_NOT_READY`), before any I/O: the handlers don't exist yet. Move that code to `onModuleInit` or later. Reading envelopes (`getEnvelope`, `getEnvelopes`, `readAll`) still works there.
+- **The stores connect while the providers are instantiated**, the snapshot store after the event store, and create their default pools right after. A wrong connection still fails the bootstrap, but now before any `onModuleInit` runs, and a store that fails is disconnected again, as is the event store when the snapshot store fails. The error is thrown while `NestFactory.create()` instantiates the providers: with Nest's default `abortOnError: true`, Nest logs it and exits with code 1 instead of rejecting `app.listen()`. Pass `NestFactory.create(AppModule, { abortOnError: false })` to catch it; `Test.createTestingModule().compile()` rejects with it. They disconnect in their own `onApplicationShutdown`, after the `EventBus` has drained.
+- **Misconfiguration fails the bootstrap** with one `EventSourcingConfigurationException` (`ES_EVENT_SOURCING_CONFIGURATION`) whose `issues` list every problem: two event classes with one name, two handlers for one command or query, two serializers for one event, a serializer or subscriber for an unregistered event, missing decorator metadata, request-scoped or transient subscribers, publishers and serializers, and events with class-transformer decorators on the JSON serializer (see [Serialization](#serialization)). 3.x kept one of the duplicates, or dropped the provider, silently. Providing one class in several modules, or listing an event twice, is still fine. See [Configuration checks](/start/module-configuration#configuration-checks).
+- **Request-scoped command and query handlers work**: the bus resolves them per call, and `execute(message, { request })` lets them inject the request with `@Inject(REQUEST)`. 3.x registered their bare prototype. A request-scoped handler provided with `useFactory` must use the handler class as its token. See [request-scoped handlers](/start/module-configuration#request-scoped-handlers).
+- **Handlers provided with `useFactory` or `useValue` are discovered**, by the class of their instance.
+- **`forFeature` is no longer global state.** Its events belong to the applications that import the feature module; 3.x put them in a registry shared by the whole process, so several applications in one process (tests) now each see only their own events. `forFeature({ serializers, imports })` provides the serializers of the feature's events.
+- **One global module.** `forRoot` and `forRootAsync` return the global `EventSourcingModule` itself, built with Nest's `ConfigurableModuleBuilder`; there is no separate core module to import or reference. The options token (`EVENT_SOURCING_OPTIONS`), `@InjectEventSourcingOptions()`, the flat `{ driver, ...driverOptions }` store configs and the typed `forRoot<PostgresEventStoreConfig, …>()` stay the same.
+- **`forRootAsync({ useValue })` is deprecated** (`DeprecationWarning` `OCODA_ES_FOR_ROOT_ASYNC_USE_VALUE`): use `forRoot(options)`. Without `useFactory`, `useClass` or `useExisting`, `forRootAsync` throws an `EventSourcingConfigurationException` instead of a plain `Error`.
+- **Implicit in-memory stores warn in production.** When `NODE_ENV` is `production` and `eventStore` or `snapshotStore` is left out, the module logs a warning.
+- **Removed:** `EventRegistry`, `ExplorerService` and `getOptionsToken()`, which were reachable through paths inside the package in 3.x. Inject the options with `@InjectEventSourcingOptions()`.
+
+```ts
+// 3.x: appended from a provider factory, never published
+{ provide: 'SEED', inject: [EventStore], useFactory: (store: EventStore) => seed(store) }
+
+// 4.0: from a lifecycle hook
+@Injectable()
+export class Seeder implements OnModuleInit {
+	constructor(private readonly eventStore: EventStore) {}
+	onModuleInit() {
+		return seed(this.eventStore);
+	}
+}
+```
+
+## Aggregates and ids [#aggregates-and-ids]
+
+*In the next prerelease.* See [Aggregates](/start/aggregates#versions), [Repositories](/start/repositories) and [Ids](/start/value-objects#ids).
+
+**Saving aggregates.** `AggregateRoot` gets `committedVersion`, `getUncommittedEvents()` and `markCommitted()`. A repository saves in three steps, and marks the events as committed only once the append succeeded:
+
+```ts
+// 3.x
+const events = account.commit();
+await this.eventStore.appendEvents(stream, account.version, events, pool);
+// 4.0
+const events = account.getUncommittedEvents();
+await this.eventStore.appendEvents(stream, events, { expectedVersion: account.committedVersion, pool });
+account.markCommitted();
+```
+
+- **`commit()` is deprecated** and will be removed in 5.0. It still works, but it clears the events before they are appended, so they are lost when the append fails. With the three steps, a failed save keeps the events, and can be retried with the same aggregate or after reloading it.
+- **Saving an unchanged aggregate is a no-op**: it has no uncommitted events, and an empty append does nothing.
+- **`applyEvent()` runs the event handler first**, then counts the event. 3.x counted the event first, so a handler that threw left the aggregate one version ahead with the failed event recorded, and the next save stored it or conflicted. Now the version and the uncommitted events stay as they were. A handler that reads `this.version` gets the version before its event, one less than in 3.x. An event handler must not call `applyEvent()`: the nested event would be recorded before the event whose handler raised it.
+- **`loadFromHistory()` and the `version` setter throw an `UncommittedEventsException`** (`ES_UNCOMMITTED_EVENTS`) while the aggregate has uncommitted events, and so does `applyEvent(event, true)`: load the aggregate before you apply new events. `loadFromHistory()` also takes an array of events.
+- **`@Aggregate({ missingHandler: 'ignore' })`** applies the events the aggregate has no handler for, where `'throw'`, the default, throws a `MissingEventHandlerException` as before.
+
+**Snapshots.**
+
+- **`SnapshotRepository.save()` never rejects.** When the snapshot can't be serialized or stored, it logs the failure: a version conflict, which means that the stream already has that snapshot or a newer one, as a warning, and anything else as an error. The events are stored by then, and the aggregate still loads from them. 3.x rejected, which failed a command whose events were already stored.
+- **The versions a save covers come from `markCommitted()`** (the deprecated `commit()` calls it), so call it before `save()`. With an interval of 10, a save from version 9 to 11 still takes a snapshot, and a save whose `markCommitted()` committed nothing takes none, even at a multiple of the interval. While the aggregate has uncommitted events, `save()` logs a warning and takes no snapshot: 3.x stored a snapshot ahead of the stored events, and every later save of the stream conflicted.
+
+**Ids.**
+
+- **`generate()`, `from()` and `ULID.factory()` create an instance of the class they are called on.** `AccountId.generate()` returns an `AccountId`, where 3.x returned a `UUID`, also when the factory is passed around, as in `values.map(AccountId.from)`. They call `new this(value)`, so an id class whose constructor takes anything other than the id alone must declare its own `generate()`, `from()` and `factory()`. TypeScript doesn't catch this when the first parameter is a string: `from()` then passes your value to that parameter and returns an id with a different value. Make a `private` constructor `protected`, or the inherited factories no longer compile. Passed around, a factory is typed as the base class (`values.map(AccountId.from)` is a `UUID[]` that holds `AccountId`s): write `values.map((value) => AccountId.from(value))` for an `AccountId[]`.
+- **Ids of different classes are never equal**, even with the same value: `AccountId.from(value).equals(UUID.from(value))` is `false`, where 3.x compared two `UUID`s. Compare the `value`s instead.
+- **`ULID.from()` requires Crockford's base32**: 26 digits and letters without I, L, O and U, in either case, starting with 0 to 7. 3.x accepted any 26 letters and digits. The event ids that a store reads are not validated, so stored events stay readable, and the dry run of the data migration counts the event ids that aren't canonical.
+- **`InvalidIdException.idType`** names the class the value was given to, such as `'AccountId'`, instead of `'UUID'`, and so does the message.
+- **`ulidFactory` is deprecated**: it has always been a no-op. Use `ULID.factory()`. It is removed in 5.0.
+- **`ValueObject.equals()`** returns `false` for `null` and `undefined` instead of throwing a `TypeError`, and compares the keys of the props, not only their number.
+
+## Serialization [#serialization]
+
+*In the next prerelease.* See [Event Serialization](/advanced/event-serialization).
+
+- **A JSON serializer is the default.** `JsonEventSerializer` replaces class-transformer as the serializer of every event without an `@EventSerializer()` of its own. For events that use no class-transformer decorators, neither on the event class nor on the classes of the values it holds, it stores the same payloads and reads back the same events as 3.x, so stored events need no migration: nested class instances, value objects such as ids included, are stored and read back as plain objects, a `Date` stays a `Date` in the payload (the SQL stores read back its ISO string), a `Set` becomes an array and a `Map` an object. The values that the MongoDB driver returns as instances of its classes (a `Binary` for a buffer, a `Long` for an integer beyond 2^53, an `ObjectId`) read back as those instances, as in 3.x; so does a `Decimal128`, which 3.x failed to read.
+- **class-transformer decorators can't lose their effect silently.** The JSON serializer ignores them, so the events whose payload they would change fail with an error that names the event, the decorators and the fix:
+  - at bootstrap, an event class or a parent class with `@Type`, `@Transform`, `@Expose` or `@Exclude`: an `EventSourcingConfigurationException` with a `class-transformer-decorators` issue for every such event (see [Module configuration](#module-configuration));
+  - when you append an event that holds an instance of a class whose decorators changed the payload that 3.x stored: a value object or DTO with `@Expose`, `@Exclude`, `@Transform`, or a `@Type` with a discriminator. The append fails with an `EventSerializationException` (`reason: 'class-transformer-decorators'`) before it writes anything, and the exception's `path` names the property that holds the instance. The bootstrap can't find these classes, because nothing refers to them until an event holds one. Without this check, an `@Exclude()`d field would be stored.
+
+  Serialize those events with class-transformer, as 3.x did:
+
+  ```ts
+  import { ClassTransformerEventSerializer } from '@ocoda/event-sourcing/class-transformer';
+
+  EventSourcingModule.forRoot({ events, defaultEventSerializer: ClassTransformerEventSerializer });
+  ```
+
+  The checks see the decorators that reach class-transformer the way Node loads it. A bundler that resolves class-transformer's ES module build keeps a second copy of its metadata, which the checks can't see.
+- **class-transformer is an optional peer dependency.** The core no longer installs it: install `class-transformer@^0.5.1` if you use `ClassTransformerEventSerializer` or class-transformer's decorators.
+- **`DefaultEventSerializer` is removed** from `@ocoda/event-sourcing`. Use `JsonEventSerializer.for(MyEvent)` or `ClassTransformerEventSerializer.for(MyEvent)` instead.
+- **A circular reference in an event** fails the append with an `EventSerializationException` (`reason: 'circular-reference'`) before anything is written. 3.x overflowed the stack.
+- The JSON serializer accepts a few inputs that class-transformer threw a `TypeError` for: a payload key that matches a getter without a setter inherited from a parent class is skipped, and so is a nested `constructor` key.
+
+To migrate:
+
+1. Replace `DefaultEventSerializer.for(MyEvent)` with `JsonEventSerializer.for(MyEvent)`, or with `ClassTransformerEventSerializer.for(MyEvent)` for an event with class-transformer decorators.
+2. Look for class-transformer decorators on your event classes and on the classes of the values they hold (value objects, DTOs). If you find any, install `class-transformer@^0.5.1` and set `defaultEventSerializer: ClassTransformerEventSerializer`, or give those events an `@EventSerializer()` of their own. The bootstrap fails for an event class with decorators, and an append fails for an event that holds an instance of a class with decorators; both name the event.
+3. If you bundle the application, the checks may not see the decorators: rely on step 2.
 
 ## DynamoDB is not part of 4.0 [#dynamodb]
 
@@ -495,13 +592,9 @@ In the next prerelease, described above:
 - **Event store, snapshots and schema v2** for PostgreSQL, MariaDB and MongoDB. See [Event store, snapshots and schema v2](#store-and-schema).
 - **Publishing.** See [Publishing](#publishing).
 - **Typed command and query buses.** See [Typed command and query buses](#typed-buses).
+- **Module configuration.** See [Module configuration](#module-configuration).
+- **Aggregates and ids.** See [Aggregates and ids](#aggregates-and-ids).
+- **Serialization.** See [Serialization](#serialization).
 - **Conformance suites for custom stores.** See [Testing a custom store](#custom-store-conformance).
-
-In later prereleases:
-
-- **Saving aggregates.** `commit()` gives way to `getUncommittedEvents()` and `markCommitted()`, and saving an unchanged aggregate becomes a no-op. `commit()` stays as a deprecated shim until 5.0.
-- **Bootstrap checks.** Duplicate registrations, and request-scoped subscribers, publishers and serializers, fail the bootstrap. Request-scoped command and query handlers start to work.
-- **Serialization.** A JSON serializer replaces class-transformer as the default. Events that use class-transformer decorators opt back in with `defaultEventSerializer: ClassTransformerEventSerializer`.
-- **Ids.** `generate()` on an id class returns that class, so `AccountId.generate()` returns an `AccountId`, and ids of different classes are no longer equal.
 
 See the ADR's [migration guide](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0001-v4-core-api.md#migration-guide) for the planned steps, including those for custom store authors.

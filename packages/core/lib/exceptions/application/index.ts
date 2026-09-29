@@ -1,6 +1,9 @@
 export * from './command-handler-not-found.exception.js';
 export * from './event-collection-not-found.exception.js';
 export * from './event-not-found.exception.js';
+export * from './event-serialization.exception.js';
+export * from './event-sourcing-configuration.exception.js';
+export * from './event-sourcing-not-ready.exception.js';
 export * from './invalid-aggregate-stream-name.exception.js';
 export * from './invalid-append-options.exception.js';
 export * from './invalid-command-handler.exception.js';
@@ -21,6 +24,7 @@ export * from './missing-query-metadata.exception.js';
 export * from './missing-snapshot-metadata.exception.js';
 export * from './query-handler-not-found.exception.js';
 export * from './snapshot-not-found.exception.js';
+export * from './uncommitted-events.exception.js';
 export * from './unregistered-event.exception.js';
 export * from './unregistered-serializer.exception.js';
 export * from './unsupported-operation.exception.js';

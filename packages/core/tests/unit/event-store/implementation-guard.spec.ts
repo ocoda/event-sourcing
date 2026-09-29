@@ -128,17 +128,25 @@ describe('EventStoreProvider', () => {
 			},
 		);
 
-		const store = await EventStoreProvider.useFactory(eventMap, eventBus, {
-			eventStore: { driver: Driver as never, useDefaultPool: false, host: 'db', port: 5432 } as never,
-		});
+		const connect = vi.spyOn(StubEventStore.prototype, 'connect');
+		const ensureCollection = vi.spyOn(StubEventStore.prototype, 'ensureCollection');
+
+		const store = await EventStoreProvider.useFactory(
+			{ eventStore: { driver: Driver as never, useDefaultPool: false, host: 'db', port: 5432 } as never },
+			eventMap,
+			eventBus,
+		);
 
 		expect(Driver).toHaveBeenCalledWith({ eventMap, publisher: eventBus }, { host: 'db', port: 5432 });
 		expect(store).toBeInstanceOf(StubEventStore);
-		expect(EventStoreProvider.inject).toEqual([EventMap, EventBus, expect.any(String)]);
+		// Connected, without the default pool (useDefaultPool: false)
+		expect(connect).toHaveBeenCalledTimes(1);
+		expect(ensureCollection).not.toHaveBeenCalled();
+		expect(EventStoreProvider.inject).toEqual([expect.any(String), EventMap, EventBus]);
 	});
 
 	it('uses the in-memory store by default, with the template methods of the base class', async () => {
-		const store = await EventStoreProvider.useFactory(eventMap, eventBus, {});
+		const store = await EventStoreProvider.useFactory({}, eventMap, eventBus);
 
 		expect(store).toBeInstanceOf(InMemoryEventStore);
 		expect(store.appendEvents).toBe(EventStore.prototype.appendEvents);
@@ -150,7 +158,7 @@ describe('EventStoreProvider', () => {
 		[ExtendsInMemoryAndOverridesAppendEvents, ['appendEvents']],
 	])('fails for %o, which overrides %o', async (Store, methods) => {
 		await expect(
-			EventStoreProvider.useFactory(eventMap, eventBus, { eventStore: { driver: Store as never } }),
+			EventStoreProvider.useFactory({ eventStore: { driver: Store as never } }, eventMap, eventBus),
 		).rejects.toThrow(expect.objectContaining({ name: 'InvalidEventStoreImplementationException', methods }));
 	});
 

@@ -2,6 +2,9 @@ import type {
 	CommandHandlerNotFoundException,
 	EventCollectionNotFoundException,
 	EventNotFoundException,
+	EventSerializationException,
+	EventSourcingConfigurationException,
+	EventSourcingNotReadyException,
 	InvalidAggregateStreamNameException,
 	InvalidAppendOptionsException,
 	InvalidCommandHandlerException,
@@ -22,6 +25,7 @@ import type {
 	MissingSnapshotMetadataException,
 	QueryHandlerNotFoundException,
 	SnapshotNotFoundException,
+	UncommittedEventsException,
 	UnregisteredEventException,
 	UnregisteredSerializerException,
 	UnsupportedOperationException,
@@ -51,6 +55,9 @@ export const EventSourcingErrorCode = {
 	CommandHandlerNotFound: 'ES_COMMAND_HANDLER_NOT_FOUND',
 	EventCollectionNotFound: 'ES_EVENT_COLLECTION_NOT_FOUND',
 	EventNotFound: 'ES_EVENT_NOT_FOUND',
+	EventSerialization: 'ES_EVENT_SERIALIZATION',
+	EventSourcingConfiguration: 'ES_EVENT_SOURCING_CONFIGURATION',
+	EventSourcingNotReady: 'ES_EVENT_SOURCING_NOT_READY',
 	InvalidAggregateStreamName: 'ES_INVALID_AGGREGATE_STREAM_NAME',
 	InvalidAppendOptions: 'ES_INVALID_APPEND_OPTIONS',
 	InvalidCommandHandler: 'ES_INVALID_COMMAND_HANDLER',
@@ -71,6 +78,7 @@ export const EventSourcingErrorCode = {
 	MissingSnapshotMetadata: 'ES_MISSING_SNAPSHOT_METADATA',
 	QueryHandlerNotFound: 'ES_QUERY_HANDLER_NOT_FOUND',
 	SnapshotNotFound: 'ES_SNAPSHOT_NOT_FOUND',
+	UncommittedEvents: 'ES_UNCOMMITTED_EVENTS',
 	UnregisteredEvent: 'ES_UNREGISTERED_EVENT',
 	UnregisteredSerializer: 'ES_UNREGISTERED_SERIALIZER',
 	UnsupportedOperation: 'ES_UNSUPPORTED_OPERATION',
@@ -98,6 +106,9 @@ export interface EventSourcingErrorByCode {
 	[EventSourcingErrorCode.CommandHandlerNotFound]: CommandHandlerNotFoundException;
 	[EventSourcingErrorCode.EventCollectionNotFound]: EventCollectionNotFoundException;
 	[EventSourcingErrorCode.EventNotFound]: EventNotFoundException;
+	[EventSourcingErrorCode.EventSerialization]: EventSerializationException;
+	[EventSourcingErrorCode.EventSourcingConfiguration]: EventSourcingConfigurationException;
+	[EventSourcingErrorCode.EventSourcingNotReady]: EventSourcingNotReadyException;
 	[EventSourcingErrorCode.InvalidAggregateStreamName]: InvalidAggregateStreamNameException;
 	[EventSourcingErrorCode.InvalidAppendOptions]: InvalidAppendOptionsException;
 	[EventSourcingErrorCode.InvalidCommandHandler]: InvalidCommandHandlerException;
@@ -118,6 +129,7 @@ export interface EventSourcingErrorByCode {
 	[EventSourcingErrorCode.MissingSnapshotMetadata]: MissingSnapshotMetadataException;
 	[EventSourcingErrorCode.QueryHandlerNotFound]: QueryHandlerNotFoundException;
 	[EventSourcingErrorCode.SnapshotNotFound]: SnapshotNotFoundException;
+	[EventSourcingErrorCode.UncommittedEvents]: UncommittedEventsException;
 	[EventSourcingErrorCode.UnregisteredEvent]: UnregisteredEventException;
 	[EventSourcingErrorCode.UnregisteredSerializer]: UnregisteredSerializerException;
 	[EventSourcingErrorCode.UnsupportedOperation]: UnsupportedOperationException;
