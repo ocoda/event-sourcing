@@ -28,6 +28,7 @@ import {
 	snapshotsAccountB,
 } from '@ocoda/event-sourcing-testing/unit';
 import type { MongoClient } from 'mongodb';
+import { dropCollections } from '../support/catalog.js';
 import { createSnapshotStore } from '../support/stores.js';
 
 describe.each(mongodbTestTopologies())(`${MongoDBSnapshotStore.name} ($name)`, ({ url }) => {
@@ -43,7 +44,7 @@ describe.each(mongodbTestTopologies())(`${MongoDBSnapshotStore.name} ($name)`, (
 		await snapshotStore.connect();
 		await snapshotStore.ensureCollection();
 
-		client = snapshotStore['client'];
+		client = snapshotStore['client'] as MongoClient;
 
 		await client.db().collection(SnapshotCollection.get()).deleteMany({});
 		await client.db().collection(SnapshotCollection.get('a')).deleteMany({});
@@ -52,13 +53,13 @@ describe.each(mongodbTestTopologies())(`${MongoDBSnapshotStore.name} ($name)`, (
 	});
 
 	afterAll(async () => {
-		await Promise.all([
-			client.db().dropCollection(SnapshotCollection.get()),
-			client.db().dropCollection(SnapshotCollection.get('a')),
-			client.db().dropCollection(SnapshotCollection.get('b')),
-			client.db().dropCollection(SnapshotCollection.get('c')),
+		await dropCollections(client.db(), [
+			SnapshotCollection.get(),
+			SnapshotCollection.get('a'),
+			SnapshotCollection.get('b'),
+			SnapshotCollection.get('c'),
 		]);
-		await client.close();
+		await snapshotStore.disconnect();
 	});
 
 	it('should append snapshot envelopes', async () => {
@@ -101,7 +102,8 @@ describe.each(mongodbTestTopologies())(`${MongoDBSnapshotStore.name} ($name)`, (
 			if (index === entitiesAccountA.length - 1) {
 				expect(entity.latest).toEqual(`latest#${snapshotStreamAccountA.streamId}`);
 			} else {
-				expect(entity.latest).toBeNull();
+				// An unflagged snapshot has no latest field (3.x stored null)
+				expect(entity).not.toHaveProperty('latest');
 			}
 		}
 	});

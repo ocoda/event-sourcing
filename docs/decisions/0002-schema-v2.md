@@ -569,7 +569,45 @@ Appends per second per pool, 1–3 events per append, 8 writers unless noted (me
 
 ### MongoDB
 
-*Pending.* S1 and S2 results, including WriteConflict retry counts under 8 writers on a replica set and client-side against server-side numbering; `read-all-gap-safe` on replica sets of MongoDB 6, 7 and 8; `read-all-best-effort` on standalone servers.
+From the MongoDB schema v2 PR. The spikes ran on MongoDB 8.2.4 in Docker (a single-node replica set `rs0`, and the standalone test server), driver `mongodb` 7.7.0, Node.js 24, on a laptop whose load average was 13 to 20 from other runs: the timings are on the slow side.
+
+**S1, position stress** (the §4 transaction: counter first, `readConcern: 'snapshot'`, `w: 'majority'`, own 30 s retry loop with a 100 ms backoff cap; a tailing keyset reader with majority read concern; `ExpectedVersion.Any` writers on 32 shared streams):
+
+| Run | Appends/s per pool | WriteConflicts per append | Max attempts | p99 / max latency | Holes, missed, duplicates, out of order |
+| --- | --- | --- | --- | --- | --- |
+| Replica set, 8 writers × 200 appends, 5 runs | 292–329 | 1.81–1.84 | 14–19 | 279–339 / 592–753 ms | 0 |
+| Soak, 8 × 2000 appends, batch 10 | 229 | 2.12 | 23 | 399 ms / 1.67 s | 0 |
+| 1 writer × 1600 | 266 | 0 | 1 | 7.5 / 15.9 ms | 0 |
+| 16 writers × 100 | 195 | 3.35 | 26 | 869 ms / 1.96 s | 0 |
+| 4 pools, 8 writers each | 128 each, ≈ 512 together | 2.32–2.52 | 19–29 | ≈ 600 ms / 1.58 s | 0 |
+| Broken: reserve, sleep ≤ 5 ms, commit (3 runs) | – | – | – | – | 620–773 missed: **detected** |
+| Standalone, the §4 compensation path | 1298 | – | – | – | 516 holes, 69 missed: **not gap-safe** |
+
+- Every replica-set run delivered each event exactly once, in strictly increasing positions, without holes: 20 pool-runs, about 52,000 appends. The catalog's `lastPosition` equalled the highest position and the event count every time.
+- `UnknownTransactionCommitResult` never occurred, and no append came near the 30 s budget.
+- On a standalone server a transaction fails with the driver error "does not support retryable writes", not a usable server code, so the store detects the topology with `hello` before it chooses a path.
+
+**S2, migration timing** (synthetic 3.x collections, ≈ 446 B per event, ten events per stream, the two 3.x indexes; replica set):
+
+| Numbering | 1M events: numbering / to the commit point / total | Min per million | Oplog per million | Sort spill |
+| --- | --- | --- | --- | --- |
+| Client-side cursor, 1,000-update bulk writes (§6 as first planned) | 53.9 s / 60.4 s / 77.5 s | 1.29 | 567 MB | 0 |
+| Server-side, `$concat(eventDate, '#', _id)` key | 39.4 s / 42.7 s / 61.5 s | 1.03 | 425 MB | 40 MB |
+| Server-side, `_id` key | 54.4 s / 59.8 s / 83.8 s | 1.40 | 431 MB | 0 |
+
+- All three numbered 1M events identically (sha256 over `(_id, position)`).
+- At 10M the client-side numbering took 17 minutes (about 14.5 without a stray concurrent query), over the 10-minute threshold of §6, so the PR numbers on the server. The server-side 10M run wasn't done: the host disk filled up.
+- `$documentNumber` returns a 32-bit integer, which the fence's validator rejects (121): the pipeline converts it with `$toLong`. It accepts a single sort key.
+- The dry run's `$group` over the streams took 353 s at 10M; the PR scans the `{ streamId, version }` index once instead, with the counts per stream computed in the client.
+- Only `collMod`, `createIndex` and `dropIndex` took exclusive collection locks, for milliseconds; a probe reading every 50 ms never blocked. The collection's storage grew about 2.4×.
+
+**The PR's own measurements** (at most 100,000 rows locally after the disk incident; MongoDB 8.2.4 single-node replica set, load average ≈ 19): 100,000 events migrate in 5.8–6.2 s, 0.98–1.04 minutes per million: the numbering takes 3.25–3.43 s with the `_id` key and 3.60 s with the `$concat` key, the unique index 0.20–0.23 s, the `eventDate` clean-up 1.45–1.75 s, and the dry run 0.39–0.41 s. The oplog grew by 47 MB per 100,000 events. The committed `migrations/4.0.mongosh.js` and `migrate()` leave identical collections, validators, indexes and catalog documents on the same 3.x seeds, with canonical and with non-canonical ids (`mongodb.migration-script.run.spec.ts`, which runs where `mongosh` is installed).
+
+**Sort spill of the shipped pipeline** (from the PR's review). The S2 figures are those of the single-sort spike pipeline. The D33 pipeline adds two sorts over every event, by `{ streamId, version }` and by the order key, whatever the ranking key; `explain` estimated them at 70–100 MB per 100,000 events, so at the default 100 MB sort limit they spill from roughly 90,000 to 130,000 events on, and the 100,000-event timing above is of a run that didn't spill. With the sort limit lowered to 5–10 MB (standing in for a million events and more), they spilled about 100–150 MB per million events with the `_id` key and 165–250 MB with the `$concat` key. MongoDB 8.2 refuses to spill with less than 500 MB free in the `dbPath`, and 7.1 and later refuse an index build below 500 MB. Minutes per million at a million events and more remain to be measured with this pipeline.
+
+**CI** ([run 36601997169](https://github.com/ocoda/event-sourcing/actions/runs/36601997169), PR #572, and after the review fixes [run 36608855195](https://github.com/ocoda/event-sourcing/actions/runs/36608855195)): on MongoDB 6, 7 and 8, each as a standalone server and a replica set in one job, the driver suite passed (after the review: 505 passed, 28 skipped by capability, by topology or with a reason, 6 of them the mongosh run of the script, since the runner has no mongosh; coverage 97.1 % statements, 95.3 % branches). `read-all-gap-safe` passed on the replica set of every version (first run 6: 1.8 s, 7: 0.7 s, 8: 1.0 s; after the review 6: 2.0 s, 7: 1.9 s, 8: 1.7 s) and is skipped by capability on the standalone servers, where `read-all-best-effort` passed. A spec now also asserts the majority read concern of every `readAll` batch and the transaction options, which a single-node replica set can't tell apart otherwise. The migration specs, crash injection after every step included, passed on both topologies of every version. The cross-version test (MongoDB 8, both topologies) migrated the 3.0.2 corpus, read it back as 3.0.2 did with positions in 3.x's order and every stream in version order, and a 3.0.2 append afterwards was refused on every pool.
+
+**Decision.** Replica sets claim `'gap-safe'`; standalone servers and sharded clusters stay `'best-effort'`. The migration numbers on the server by default, with the `_id` key when every id of the collection is a canonical ULID and the `$concat` key otherwise (D35).
 
 ## Alternatives considered
 
