@@ -32,6 +32,8 @@ describe('@Aggregate', () => {
 		};
 
 		expect(() => decorate(50)).not.toThrow();
-		expect(() => decorate(51)).toThrow(InvalidAggregateStreamNameException.becauseExceedsMaxLength('Account', 50));
+		expect(() => decorate(51)).toThrow(
+			new InvalidAggregateStreamNameException({ aggregate: 'Account', streamName: 'a'.repeat(51), maxLength: 50 }),
+		);
 	});
 });

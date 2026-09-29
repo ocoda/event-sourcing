@@ -1,5 +1,9 @@
-import { Inject, NotImplementedException, type Type } from '@nestjs/common';
-import { MissingAggregateMetadataException, MissingSnapshotMetadataException } from './exceptions/index.js';
+import { Inject, type Type } from '@nestjs/common';
+import {
+	MissingAggregateMetadataException,
+	MissingSnapshotMetadataException,
+	UnsupportedOperationException,
+} from './exceptions/index.js';
 import { getAggregateMetadata, getSnapshotMetadata } from './helpers/index.js';
 import type { ISnapshot } from './interfaces/aggregate/snapshot.interface.js';
 import type { ISnapshotPool, ISnapshotRepository } from './interfaces/index.js';
@@ -35,13 +39,13 @@ export abstract class SnapshotRepository<A extends AggregateRoot = AggregateRoot
 		const { aggregate, interval } = getSnapshotMetadata<A>(this.constructor as Type<ISnapshotRepository<A>>);
 
 		if (!(aggregate && interval)) {
-			throw new MissingSnapshotMetadataException(this.constructor);
+			throw new MissingSnapshotMetadataException({ repository: this.constructor });
 		}
 
 		const { streamName } = getAggregateMetadata(aggregate);
 
 		if (!streamName) {
-			throw new MissingAggregateMetadataException(aggregate);
+			throw new MissingAggregateMetadataException({ aggregate });
 		}
 
 		this.aggregate = aggregate;
@@ -72,7 +76,10 @@ export abstract class SnapshotRepository<A extends AggregateRoot = AggregateRoot
 
 	async loadMany(ids: Id[], pool?: ISnapshotPool): Promise<A[]> {
 		if (!this.snapshotStore.getManyLastSnapshotEnvelopes) {
-			throw new NotImplementedException('The snapshot store does not support method: getManyLastSnapshotEnvelopes.');
+			throw new UnsupportedOperationException({
+				operation: 'getManyLastSnapshotEnvelopes',
+				component: 'snapshot store',
+			});
 		}
 
 		const snapshotStreams = ids.map((id) => SnapshotStream.for<A>(this.aggregate, id));
@@ -91,7 +98,10 @@ export abstract class SnapshotRepository<A extends AggregateRoot = AggregateRoot
 
 	async *loadAll(filter?: { aggregateId?: Id; limit?: number; pool?: string }): AsyncGenerator<SnapshotEnvelope<A>[]> {
 		if (!this.snapshotStore.getLastEnvelopesForAggregate) {
-			throw new NotImplementedException('The snapshot store does not support method: getLastEnvelopesForAggregate.');
+			throw new UnsupportedOperationException({
+				operation: 'getLastEnvelopesForAggregate',
+				component: 'snapshot store',
+			});
 		}
 
 		const id = filter?.aggregateId?.value;

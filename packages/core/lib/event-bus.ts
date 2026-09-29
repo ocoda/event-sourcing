@@ -107,7 +107,7 @@ export class EventBus extends ObservableBus<EventEnvelope> implements IEventBus,
 	protected registerSubscriber(handler: ProviderWrapper<IEventSubscriber>) {
 		const { metatype, instance } = handler;
 		if (!metatype || !instance) {
-			throw new MissingEventSubscriberMetadataException(metatype as Type<IEventSubscriber>);
+			throw new MissingEventSubscriberMetadataException({ subscriber: metatype as Type<IEventSubscriber> });
 		}
 
 		// check if the handler is an event subscriber
@@ -115,14 +115,14 @@ export class EventBus extends ObservableBus<EventEnvelope> implements IEventBus,
 
 		// if not, throw an error
 		if (!events) {
-			throw new MissingEventSubscriberMetadataException(metatype);
+			throw new MissingEventSubscriberMetadataException({ subscriber: metatype });
 		}
 
 		// register the subscriber for each event
 		for (const event of events) {
 			const { name } = getEventMetadata(event);
 			if (!name) {
-				throw new MissingEventMetadataException(event);
+				throw new MissingEventMetadataException({ event });
 			}
 			this.bind(instance as IEventSubscriber, name);
 		}

@@ -4,7 +4,7 @@
 - **Date:** 2026-09-29
 - **Scope:** plan milestone M6 (b–f), plus the store contract that M7 (schema v2, `global_position`) implements
 - **Baseline:** `origin/v4/platform-esm` (#543), which already includes the 3.0.1 fixes
-- **Amendments:** 2026-09-29: DynamoDB leaves v4 (#550; 3.x only) because it has no gap-free global order. Its `maxEventsPerAppend` and `globalOrder: 'none'` go too, and `readAll` over a store-assigned `global_position` replaces the year-month API in 4.0 (§9).
+- **Amendments:** 2026-09-29: DynamoDB leaves v4 (#550; 3.x only) because it has no gap-free global order. Its `maxEventsPerAppend` and `globalOrder: 'none'` go too, and `readAll` over a store-assigned `global_position` replaces the year-month API in 4.0 (§9). 2026-09-29, with the §5 PR (pending owner confirmation): `InvalidIdException` keeps `DomainException` as its parent and is branded instead, so `instanceof EventSourcingError` is a brand check; `isEventSourcingError(error, code)` narrows to the class of the code; §1 step 5 keeps a driver's own `outcome` (§5, §1).
 
 ## Context
 
@@ -92,7 +92,7 @@ export abstract class EventStore<TOptions = unknown> implements OnApplicationShu
 2. Validate `expectedVersion`, the metadata (§8) and pre-built envelopes before any I/O. Pre-built envelopes need a numeric expected version, the stream's `aggregateId` and versions `expected+1…` (`InvalidEventEnvelopeException`). They keep their `eventId` and `occurredOn`, which conformance seeding and imports rely on; the store assigns their position.
 3. Serialize through `EventMap`, using one monotonic id factory.
 4. Resolve the expected version. A number (0 is `NoStream`) is **pre-checked** against `getStreamVersion()`: a mismatch throws a conflict carrying `actualVersion` and writes nothing. `Any` uses that read.
-5. Call `persistEvents` and stamp the returned positions on the envelopes. A conflict under `Any` retries from step 4 (up to 3 times, same ids); any other conflict throws `EventStoreVersionConflictException`. A foreign error becomes `EventStorePersistenceException({ outcome: 'unknown', cause })`.
+5. Call `persistEvents` and stamp the returned positions on the envelopes. A conflict under `Any` retries from step 4 (up to 3 times, same ids); any other conflict throws `EventStoreVersionConflictException`. An `EventStorePersistenceException` from `persistEvents` passes through unchanged, because the driver knows its `outcome` best; any other foreign error becomes `new EventStorePersistenceException({ collection, outcome: 'unknown' }, { cause })`. A failure before `persistEvents`, such as the pre-check's read, is `'not-persisted'`.
 6. Unless `publish: false`, await `publisher.publishAll()` inside try/catch. **Nothing rejects after commit.**
 
 **Why no guarded insert is needed.** Versions are contiguous. The pre-check catches stale writers and gaps. A writer that commits after the pre-check holds `expected+1`, so our insert fails on the unique `(stream_id, version)` key. Together this equals `head == expected` at commit, with no read 3.x didn't already do.
@@ -231,6 +231,8 @@ export class EventStorePersistenceException extends EventSourcingError {
 ```
 
 - All ~30 exceptions are re-parented and **keep their class names**, so `instanceof` still works. Constructors take one null-safe object argument, and not-found exceptions name the message class.
+- *Amended:* `InvalidIdException` is the exception: it keeps `DomainException` as its parent, so 3.x filters that map domain errors to 4xx keep catching invalid ids, and is branded and has a `code`. `EventSourcingError[Symbol.hasInstance]` checks the brand, so `instanceof EventSourcingError` holds for it and for errors from a second copy of the package; subclasses keep the prototype check. Its 3.x `super(message, id)` stays as a `@deprecated` overload.
+- *Amended:* `isEventSourcingError(error, code)` narrows to the class of the code through the exported type map `EventSourcingErrorByCode` (an overload; without a code it narrows to `EventSourcingError`), so the fields are reachable without a cast.
 - `NotImplementedException` becomes `UnsupportedOperationException`.
 - `DomainException` (the user base) gains `name` and `cause` but not `code`, so user subclasses compile.
 - After `outcome: 'unknown'`, retrying with a numeric `expectedVersion` is safe, because a duplicate conflicts. With `Any` it is not.

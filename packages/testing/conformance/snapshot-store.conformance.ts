@@ -503,7 +503,7 @@ export const describeSnapshotStoreConformance = (
 						await expectRejectionOfClass(
 							call(() => store.appendSnapshot(stream, version, snapshotAt(version, { stale: true }), pool)),
 							SnapshotStoreVersionConflictException,
-							`Expected to append version ${version}, but latest is 10`,
+							{ streamId: stream.streamId, aggregateId: stream.aggregateId, pool, version, latestVersion: 10 },
 						);
 					}
 

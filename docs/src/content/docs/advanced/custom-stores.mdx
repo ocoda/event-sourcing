@@ -103,9 +103,22 @@ The methods that are required:
 
 A few things to keep in mind when implementing `appendEvents`:
 - The `version` is the version of the aggregate **after** the events were applied. The first of the new events gets the version `version - events.length + 1`.
-- Reject the append with an `EventStoreVersionConflictException` when the stream already contains an event with this version or a higher one. That's how concurrent changes to the same aggregate are detected.
+- Reject the append with an `EventStoreVersionConflictException` when the stream already contains an event with this version or a higher one. That's how concurrent changes to the same aggregate are detected. Map a duplicate-key error of your database to the same exception, passing it as the `cause`.
+- Wrap any other failure in an `EventStorePersistenceException`, with an `outcome` that says whether the events may have been stored: `'not-persisted'` when the failure happened before anything was written, `'unknown'` otherwise.
 - Serialize the events with `this.eventMap.getName(event)` and `this.eventMap.serializeEvent(event)`, and turn stored events back into instances with `this.eventMap.deserializeEvent(name, payload)`.
 - Return the created envelopes. You don't publish them yourself, the `EventStore` base class publishes them after `appendEvents` has resolved, see [Event Pub/Sub](/advanced/event-pubsub).
+
+The exceptions take a single object argument (since 4.0), plus the standard error options for the `cause`:
+
+```typescript
+const expectedVersion = version - events.length; // the version of the stream before the append
+
+throw new EventStoreVersionConflictException({ stream: eventStream, expectedVersion, actualVersion, pool });
+throw new EventStorePersistenceException({ collection, outcome: 'unknown' }, { cause: error });
+throw new EventNotFoundException({ streamId: eventStream.streamId, version, pool });
+```
+
+Leave `actualVersion` out when you don't know it, for instance after losing a race on the unique key. To tell errors apart, use `isEventSourcingError(error, EventSourcingErrorCode.EventStoreVersionConflict)` rather than comparing `error.constructor`.
 
 #### Register your Event Store
 Once you have that, you can register your EventStore in the module, while providing the configuration for it so the module knows that it's an EventStore.
@@ -240,7 +253,7 @@ export class FooSnapshotStore extends SnapshotStore<FooSnapshotStoreConfig> {
 
 The methods above are required. A `SnapshotRepository` uses `appendSnapshot` to save snapshots and `getLastEnvelope` to load the last one.
 
-Some methods are optional, but the `SnapshotRepository` methods that need them throw a `NotImplementedException` when your store doesn't have them:
+Some methods are optional, but the `SnapshotRepository` methods that need them throw an `UnsupportedOperationException` when your store doesn't have them (before 4.0, the `NotImplementedException` of `@nestjs/common`):
 
 | Optional method | Needed for |
 | --- | --- |

@@ -10,6 +10,7 @@ import {
 	type ISnapshot,
 	SnapshotStream,
 	UUID,
+	isEventSourcingError,
 } from '@ocoda/event-sourcing';
 
 export class ConformanceId extends UUID {}
@@ -190,19 +191,23 @@ export const rejectionOf = async (promise: Promise<unknown>): Promise<unknown> =
 	);
 
 /**
- * Asserts that the promise rejects with an instance of exactly the given class (not a subclass or a wrapper).
+ * Asserts that the promise rejects with the library error of the given class (not a wrapper), and optionally with the
+ * given fields. Match errors on their fields and `code`, not on their messages.
+ *
+ * It checks the brand and the literal `name` rather than the constructor, so a store that resolves another copy of
+ * `@ocoda/event-sourcing` passes too.
  */
 export const expectRejectionOfClass = async (
 	promise: Promise<unknown>,
 	exception: abstract new (...args: never[]) => Error,
-	message?: string,
+	fields?: Record<string, unknown>,
 ): Promise<void> => {
 	const error = await rejectionOf(promise);
 
-	expect(error, `expected a rejection with ${exception.name}`).toBeInstanceOf(Error);
-	expect((error as Error).constructor).toBe(exception);
-	if (message) {
-		expect((error as Error).message).toContain(message);
+	expect(isEventSourcingError(error), `expected a rejection with ${exception.name}, got ${String(error)}`).toBe(true);
+	expect((error as Error).name).toBe(exception.name);
+	if (fields) {
+		expect(error).toMatchObject(fields);
 	}
 };
 

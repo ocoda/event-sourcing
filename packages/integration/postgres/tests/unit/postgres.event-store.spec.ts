@@ -3,6 +3,7 @@ import {
 	type EventEnvelope,
 	EventNotFoundException,
 	EventStoreCollectionCreationException,
+	EventSourcingErrorCode,
 	EventStorePersistenceException,
 	EventStoreVersionConflictException,
 	EventStream,
@@ -23,7 +24,7 @@ import {
 	getEventMap,
 	getEvents,
 } from '@ocoda/event-sourcing-testing/unit';
-import { Client, type Pool, escapeIdentifier } from 'pg';
+import { Client, DatabaseError, type Pool, escapeIdentifier } from 'pg';
 
 const connectionOptions = {
 	host: '127.0.0.1',
@@ -138,17 +139,29 @@ describe(PostgresEventStore, () => {
 		const lastVersion = events.length;
 		const beforeLastVersion = lastVersion - 1;
 		await expect(eventStore.appendEvents(eventStreamAccountA, beforeLastVersion, [lastEvent])).rejects.toThrow(
-			new EventStoreVersionConflictException(eventStreamAccountA, beforeLastVersion, lastVersion),
+			new EventStoreVersionConflictException({
+				stream: eventStreamAccountA,
+				expectedVersion: beforeLastVersion - 1,
+				actualVersion: lastVersion,
+			}),
 		);
 		await expect(eventStore.appendEvents(eventStreamAccountA, lastVersion, [lastEvent])).rejects.toThrow(
-			new EventStoreVersionConflictException(eventStreamAccountA, lastVersion, lastVersion),
+			new EventStoreVersionConflictException({
+				stream: eventStreamAccountA,
+				expectedVersion: lastVersion - 1,
+				actualVersion: lastVersion,
+			}),
 		);
 	});
 
 	it("should throw when event envelopes can't be appended", async () => {
-		await expect(eventStore.appendEvents(eventStreamAccountA, 3, events.slice(0, 3), 'not-a-pool')).rejects.toThrow(
-			EventStorePersistenceException,
-		);
+		await expect(
+			eventStore.appendEvents(eventStreamAccountA, 3, events.slice(0, 3), 'not-a-pool'),
+		).rejects.toMatchObject({
+			name: EventStorePersistenceException.name,
+			outcome: 'not-persisted',
+			cause: expect.objectContaining({ code: '42P01' }),
+		});
 	});
 
 	it('should retrieve a single event from a specified stream', async () => {
@@ -179,7 +192,9 @@ describe(PostgresEventStore, () => {
 
 	it("should throw when an event isn't found in a specified stream", async () => {
 		const stream = EventStream.for(Account, AccountId.generate());
-		await expect(eventStore.getEvent(stream, 5)).rejects.toThrow(new EventNotFoundException(stream.streamId, 5));
+		await expect(eventStore.getEvent(stream, 5)).rejects.toThrow(
+			new EventNotFoundException({ streamId: stream.streamId, version: 5 }),
+		);
 	});
 
 	it('should retrieve events backwards', async () => {
@@ -338,7 +353,9 @@ describe(PostgresEventStore, () => {
 				'Idle database connection failed: terminating connection due to administrator command',
 			);
 			const stream = EventStream.for(Account, AccountId.generate());
-			await expect(eventStore.getEvent(stream, 1)).rejects.toThrow(new EventNotFoundException(stream.streamId, 1));
+			await expect(eventStore.getEvent(stream, 1)).rejects.toThrow(
+				new EventNotFoundException({ streamId: stream.streamId, version: 1 }),
+			);
 		});
 	});
 
@@ -680,11 +697,78 @@ describe(PostgresEventStore, () => {
 
 				const error = await append;
 				expect(error).toBeInstanceOf(EventStoreVersionConflictException);
-				expect(error).toEqual(new EventStoreVersionConflictException(stream, 3, 1));
+				expect(error).toMatchObject({
+					streamId: stream.streamId,
+					pool: concurrencyPool,
+					expectedVersion: 0,
+					actualVersion: 1,
+					cause: expect.objectContaining({ code: '23505' }),
+				});
 			} finally {
 				await blocker.end();
 			}
 		}, 15_000);
+	});
+
+	describe('persistence outcome', () => {
+		const outcomePool = 'postgres-outcome';
+
+		beforeAll(async () => {
+			await pool.query(`DROP TABLE IF EXISTS ${escapeIdentifier(EventCollection.get(outcomePool))}`);
+			await eventStore.ensureCollection(outcomePool);
+		});
+
+		afterAll(async () => {
+			await pool.query(`DROP TABLE IF EXISTS ${escapeIdentifier(EventCollection.get(outcomePool))}`);
+		});
+
+		afterEach(() => vi.restoreAllMocks());
+
+		/** Makes the insert of the next append fail with the given error, leaving the other statements alone. */
+		const failInsert = (error: Error) => {
+			const query = pool.query.bind(pool) as (...args: unknown[]) => Promise<unknown>;
+			vi.spyOn(pool, 'query').mockImplementation(((text: unknown, ...rest: unknown[]) =>
+				typeof text === 'string' && text.startsWith('INSERT') ? Promise.reject(error) : query(text, ...rest)) as never);
+		};
+
+		const databaseError = (severity: string, code: string) => {
+			const error = new DatabaseError(`${severity} ${code}`, 0, 'error');
+			error.severity = severity;
+			error.code = code;
+			return error;
+		};
+
+		it("should report 'not-persisted' when Postgres rejects the insert", async () => {
+			const cause = databaseError('ERROR', '23514');
+			failInsert(cause);
+
+			await expect(
+				eventStore.appendEvents(EventStream.for(Account, AccountId.generate()), 1, events.slice(0, 1), outcomePool),
+			).rejects.toMatchObject({
+				code: EventSourcingErrorCode.EventStorePersistence,
+				collection: EventCollection.get(outcomePool),
+				outcome: 'not-persisted',
+				cause,
+			});
+		});
+
+		it("should report 'unknown' when the connection fails while the insert is in flight", async () => {
+			const cause = new Error('Connection terminated unexpectedly');
+			failInsert(cause);
+
+			await expect(
+				eventStore.appendEvents(EventStream.for(Account, AccountId.generate()), 1, events.slice(0, 1), outcomePool),
+			).rejects.toMatchObject({ code: EventSourcingErrorCode.EventStorePersistence, outcome: 'unknown', cause });
+		});
+
+		it("should report 'unknown' when the session ends during the insert", async () => {
+			const cause = databaseError('FATAL', '57P01');
+			failInsert(cause);
+
+			await expect(
+				eventStore.appendEvents(EventStream.for(Account, AccountId.generate()), 1, events.slice(0, 1), outcomePool),
+			).rejects.toMatchObject({ code: EventSourcingErrorCode.EventStorePersistence, outcome: 'unknown', cause });
+		});
 	});
 
 	describe('collections', () => {

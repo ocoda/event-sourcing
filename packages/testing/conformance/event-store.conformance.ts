@@ -4,6 +4,7 @@ import {
 	EventId,
 	type EventMap,
 	EventNotFoundException,
+	EventSourcingErrorCode,
 	type EventStore,
 	EventStorePersistenceException,
 	EventStoreVersionConflictException,
@@ -484,13 +485,20 @@ export const describeEventStoreConformance = (
 						await expectRejectionOfClass(
 							store.appendEvents(stream, version, [new ConformanceRecorded(99)], pool),
 							EventStoreVersionConflictException,
-							`Expected to append version ${version}, but latest is 3`,
+							{
+								code: EventSourcingErrorCode.EventStoreVersionConflict,
+								streamId: stream.streamId,
+								aggregateId: stream.aggregateId,
+								pool,
+								expectedVersion: version - 1,
+								actualVersion: 3,
+							},
 						);
 					}
 					await expectRejectionOfClass(
 						store.appendEvents(stream, 3, recordedEvents(2, 98), pool),
 						EventStoreVersionConflictException,
-						'latest is 3',
+						{ expectedVersion: 1, actualVersion: 3 },
 					);
 
 					// Nothing was written
@@ -569,6 +577,7 @@ export const describeEventStoreConformance = (
 					await expectRejectionOfClass(
 						store.appendEvents(newEventStream(), 1, recordedEvents(1), unknownPool),
 						EventStorePersistenceException,
+						{ code: EventSourcingErrorCode.EventStorePersistence, outcome: 'not-persisted' },
 					);
 					expect(await drain(store.listCollections())).not.toContain(EventCollection.get(unknownPool));
 				},

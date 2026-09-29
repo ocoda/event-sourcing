@@ -89,6 +89,8 @@ describe(Aggregate, () => {
 
 	it('should throw when applying an event that has no handler', () => {
 		const account = Account.open();
-		expect(() => account.close()).toThrow(new MissingEventHandlerException(Account, AccountClosedEvent));
+		expect(() => account.close()).toThrow(
+			new MissingEventHandlerException({ aggregate: Account, event: AccountClosedEvent }),
+		);
 	});
 });

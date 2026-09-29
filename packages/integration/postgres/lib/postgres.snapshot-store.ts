@@ -69,7 +69,7 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 
 			return collection;
 		} catch (err) {
-			throw new SnapshotStoreCollectionCreationException(collection, err);
+			throw new SnapshotStoreCollectionCreationException({ collection }, { cause: err });
 		}
 	}
 
@@ -129,7 +129,7 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 		const entity = entities[0];
 
 		if (!entity) {
-			throw new SnapshotNotFoundException(streamId, version);
+			throw new SnapshotNotFoundException({ streamId, version, pool });
 		}
 
 		return entity.payload;
@@ -158,7 +158,12 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 				const lastVersion = await this.getLatestVersion(client, table, stream);
 
 				if (lastVersion !== undefined && aggregateVersion <= lastVersion) {
-					throw new SnapshotStoreVersionConflictException(stream, aggregateVersion, lastVersion);
+					throw new SnapshotStoreVersionConflictException({
+						stream,
+						version: aggregateVersion,
+						latestVersion: lastVersion,
+						pool,
+					});
 				}
 
 				if (lastVersion !== undefined) {
@@ -195,16 +200,14 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 
 			// A writer that doesn't take the stream lock appended the same version concurrently
 			if (hasErrorCode(error, UNIQUE_VIOLATION)) {
-				const latestVersion = await this.getLatestVersion(this.pool, table, stream).catch(() => aggregateVersion);
+				const latestVersion = await this.getLatestVersion(this.pool, table, stream).catch(() => undefined);
 				throw new SnapshotStoreVersionConflictException(
-					stream,
-					aggregateVersion,
-					latestVersion ?? aggregateVersion,
-					error,
+					{ stream, version: aggregateVersion, latestVersion, pool },
+					{ cause: error },
 				);
 			}
 
-			throw new SnapshotStorePersistenceException(collection, error);
+			throw new SnapshotStorePersistenceException({ collection }, { cause: error });
 		}
 	}
 
@@ -322,7 +325,7 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 		const entity = entities[0];
 
 		if (!entity) {
-			throw new SnapshotNotFoundException(streamId, version);
+			throw new SnapshotNotFoundException({ streamId, version, pool });
 		}
 
 		return this.toEnvelope(entity);

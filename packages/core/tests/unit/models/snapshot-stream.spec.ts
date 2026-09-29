@@ -32,6 +32,8 @@ describe(SnapshotStream, () => {
 		class FooId extends UUID {}
 		class Foo extends AggregateRoot {}
 
-		expect(() => SnapshotStream.for(Foo, FooId.generate())).toThrow(new MissingAggregateMetadataException(Foo));
+		expect(() => SnapshotStream.for(Foo, FooId.generate())).toThrow(
+			new MissingAggregateMetadataException({ aggregate: Foo }),
+		);
 	});
 });

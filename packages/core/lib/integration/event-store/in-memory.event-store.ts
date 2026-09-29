@@ -52,7 +52,7 @@ export class InMemoryEventStore extends EventStore<InMemoryEventStoreConfig> {
 			}
 			return collection;
 		} catch (error) {
-			throw new EventStoreCollectionCreationException(collection, error);
+			throw new EventStoreCollectionCreationException({ collection }, { cause: error });
 		}
 	}
 
@@ -109,7 +109,7 @@ export class InMemoryEventStore extends EventStore<InMemoryEventStoreConfig> {
 		);
 
 		if (!entity) {
-			throw new EventNotFoundException(streamId, version);
+			throw new EventNotFoundException({ streamId, version, pool });
 		}
 
 		return this.eventMap.deserializeEvent(entity.event, entity.payload);
@@ -139,7 +139,12 @@ export class InMemoryEventStore extends EventStore<InMemoryEventStoreConfig> {
 			// Ensure the current version matches the aggregateVersion for optimistic locking.
 			// Like a unique (stream, version) key in a database, none of the appended versions may exist already.
 			if (aggregateVersion <= currentVersion || version <= currentVersion) {
-				throw new EventStoreVersionConflictException(stream, aggregateVersion, currentVersion);
+				throw new EventStoreVersionConflictException({
+					stream,
+					expectedVersion: aggregateVersion - events.length,
+					actualVersion: currentVersion,
+					pool,
+				});
 			}
 
 			const envelopes: EventEnvelope[] = [];
@@ -171,12 +176,11 @@ export class InMemoryEventStore extends EventStore<InMemoryEventStoreConfig> {
 
 			return Promise.resolve(envelopes);
 		} catch (error) {
-			switch (error.constructor) {
-				case EventStoreVersionConflictException:
-					throw error;
-				default:
-					throw new EventStorePersistenceException(collection, error);
+			if (error instanceof EventStoreVersionConflictException) {
+				throw error;
 			}
+			// Every failure happens before the single, synchronous push
+			throw new EventStorePersistenceException({ collection, outcome: 'not-persisted' }, { cause: error });
 		}
 	}
 
@@ -190,7 +194,7 @@ export class InMemoryEventStore extends EventStore<InMemoryEventStoreConfig> {
 		);
 
 		if (!entity) {
-			throw new EventNotFoundException(streamId, version);
+			throw new EventNotFoundException({ streamId, version, pool });
 		}
 
 		return EventEnvelope.from(entity.event, entity.payload, {

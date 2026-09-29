@@ -112,10 +112,18 @@ describe(InMemoryEventStore, () => {
 		const lastVersion = events.length;
 		const beforeLastVersion = lastVersion - 1;
 		await expect(eventStore.appendEvents(eventStreamAccountA, beforeLastVersion, [lastEvent])).rejects.toThrow(
-			new EventStoreVersionConflictException(eventStreamAccountA, beforeLastVersion, lastVersion),
+			new EventStoreVersionConflictException({
+				stream: eventStreamAccountA,
+				expectedVersion: beforeLastVersion - 1,
+				actualVersion: lastVersion,
+			}),
 		);
 		await expect(eventStore.appendEvents(eventStreamAccountA, lastVersion, [lastEvent])).rejects.toThrow(
-			new EventStoreVersionConflictException(eventStreamAccountA, lastVersion, lastVersion),
+			new EventStoreVersionConflictException({
+				stream: eventStreamAccountA,
+				expectedVersion: lastVersion - 1,
+				actualVersion: lastVersion,
+			}),
 		);
 	});
 
@@ -151,7 +159,9 @@ describe(InMemoryEventStore, () => {
 
 	it("should throw when an event isn't found in a specified stream", () => {
 		const stream = EventStream.for(Account, AccountId.generate());
-		expect(() => eventStore.getEvent(stream, 5)).toThrow(new EventNotFoundException(stream.streamId, 5));
+		expect(() => eventStore.getEvent(stream, 5)).toThrow(
+			new EventNotFoundException({ streamId: stream.streamId, version: 5 }),
+		);
 	});
 
 	it('should retrieve events backwards', async () => {

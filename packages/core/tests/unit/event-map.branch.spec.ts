@@ -16,7 +16,7 @@ describe(EventMap, () => {
 		const eventMap = new EventMap();
 
 		expect(() => eventMap.getConstructor(new BillingUpdatedEvent(10))).toThrow(
-			new UnregisteredEventException('BillingUpdatedEvent'),
+			new UnregisteredEventException({ event: 'BillingUpdatedEvent' }),
 		);
 	});
 
