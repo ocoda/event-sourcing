@@ -11,7 +11,7 @@ This page is under construction.
 By default events are serialized to a plain payload, and deserialized again, by `JsonEventSerializer`. It needs no decorators:
 
 - **Serializing** copies the event's own fields into plain objects, recursively. A nested class instance, such as a value object, becomes a plain object: an `Id` is stored as `{ props: { value } }`. A `Date` stays a `Date`, which the SQL stores write as an ISO string and MongoDB as a date. A `Set` becomes an array and a `Map` an object with a key per entry. Getters and `toJSON` are ignored. An event that refers back to itself (a circular reference) fails the append with an `EventSerializationException` before anything is written.
-- **Deserializing** calls the event's constructor without arguments, so the defaults it assigns fill the fields that older payloads lack, and copies the payload's fields onto the event. Nested objects stay plain objects: a value object or a `Date` read from a SQL store doesn't come back as an instance of its class.
+- **Deserializing** calls the event's constructor without arguments, so the defaults it assigns fill the fields that older payloads lack, and copies the payload's fields onto the event. Nested objects stay plain objects: a value object or a `Date` read from a SQL store doesn't come back as an instance of its class. The values that the MongoDB driver returns as instances of its classes, such as a `Binary` for a buffer or a `Long` for an integer beyond 2^53, are kept.
 
 This is what the 3.x default, class-transformer, did for classes without decorators, so events stored by 3.x read back the same. That works for events that only contain plain values. When an event contains value objects or dates that should read back as instances of their class, create an event serializer that converts the event to a payload of plain values and back.
 
@@ -88,5 +88,10 @@ export class FundsDepositedEventSerializer extends ClassTransformerEventSerializ
 ```
 
 <Aside type="caution" title="Decorated events on the JSON serializer">
-The JSON serializer ignores class-transformer decorators, so an event with `@Type`, `@Transform`, `@Expose` or `@Exclude` that would get it fails the bootstrap with an `EventSerializationException` that names the event and its decorators. The check sees the decorators that reach class-transformer the way Node loads it. A bundler that resolves class-transformer's ES module build keeps a second copy of its metadata, which the check can't see: check the events of a bundled application yourself.
+The JSON serializer ignores class-transformer decorators, so it refuses the events whose payload they would change, with an `EventSerializationException` that names the event, its decorators and the fix:
+
+- An event class, or a parent class, with `@Type`, `@Transform`, `@Expose` or `@Exclude` fails the bootstrap.
+- An event that holds an instance of a class with `@Expose`, `@Exclude`, `@Transform`, or a `@Type` with a discriminator, such as a value object with an `@Exclude()`d field, fails the append before anything is written. The exception's `path` names the property that holds the instance. The bootstrap can't find these classes, because nothing refers to them until an event holds one, so look for decorators on the classes your events hold before you upgrade.
+
+The checks see the decorators that reach class-transformer the way Node loads it. A bundler that resolves class-transformer's ES module build keeps a second copy of its metadata, which the checks can't see: check the events of a bundled application, and the classes they hold, yourself.
 </Aside>

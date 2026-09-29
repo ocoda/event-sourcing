@@ -18,8 +18,8 @@ export interface EventSourcingModuleOptions<
 	/**
 	 * The serializer of every event that has no `@EventSerializer()` of its own. Default: `JsonEventSerializer`.
 	 * Events with class-transformer decorators need `ClassTransformerEventSerializer`, from
-	 * `@ocoda/event-sourcing/class-transformer`: the application fails to bootstrap when such an event would get the
-	 * JSON serializer.
+	 * `@ocoda/event-sourcing/class-transformer`: on the JSON serializer, the application fails to bootstrap for an event
+	 * class with decorators, and an append fails for an event that holds an instance of a class with decorators.
 	 */
 	defaultEventSerializer?: EventSerializerFactory;
 	/**

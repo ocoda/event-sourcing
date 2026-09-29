@@ -1,6 +1,7 @@
 import type { Type } from '@nestjs/common';
 import { EventSerializationException } from '../exceptions/index.js';
 import type { IEvent, IEventPayload, IEventSerializer } from '../interfaces/index.js';
+import { type ClassTransformerDecoratorsOf, nestedClassCheckOf } from './class-transformer-decorators.js';
 
 /**
  * The default event serializer. It needs no decorators and no dependency, and for event classes without
@@ -21,11 +22,15 @@ import type { IEvent, IEventPayload, IEventSerializer } from '../interfaces/inde
  * `deserialize` calls the constructor without arguments, so the defaults it assigns fill the fields that an older
  * payload lacks, then copies the payload onto the event. It skips the keys `__proto__` and `constructor`, getters
  * without a setter, and methods. Nested objects stay plain objects (copies), so a nested `ValueObject` reads back as
- * `{ props: { value } }`, as in 3.x; dates and buffers are copied.
+ * `{ props: { value } }`, as in 3.x; dates and buffers are copied. The value types of the MongoDB driver (`Binary`,
+ * `Long`, `ObjectId`…) are kept as they are: class-transformer reads them back as instances too (and fails on a
+ * `Decimal128`).
  *
  * Events with class-transformer decorators (`@Type`, `@Transform`, `@Expose`, `@Exclude`) need
- * `ClassTransformerEventSerializer` from `@ocoda/event-sourcing/class-transformer`; the application fails to bootstrap
- * when one would be serialized by this serializer.
+ * `ClassTransformerEventSerializer` from `@ocoda/event-sourcing/class-transformer`. When the module gives an event this
+ * serializer by default, the application fails to bootstrap if the event class has such decorators, and an append
+ * fails, before it writes anything, if the event holds an instance of a class whose decorators would have changed the
+ * payload that 3.x stored.
  *
  * @example
  * eventMap.register(AccountOpenedEvent, JsonEventSerializer.for(AccountOpenedEvent));
@@ -38,7 +43,12 @@ export class JsonEventSerializer<E extends IEvent = IEvent> implements IEventSer
 	}
 
 	serialize(event: E): IEventPayload<E> {
-		return toPlain(event, { event: this.eventType.name, ancestors: new Set(), path: [] }) as IEventPayload<E>;
+		return toPlain(event, {
+			event: this.eventType.name,
+			ancestors: new Set(),
+			path: [],
+			decoratorsOf: nestedClassCheckOf(this),
+		}) as IEventPayload<E>;
 	}
 
 	deserialize(payload: IEventPayload<E>): E {
@@ -59,6 +69,8 @@ interface SerializationState {
 	ancestors: Set<object>;
 	/** The keys from the event to the value being serialized. */
 	path: PathSegment[];
+	/** Finds the class-transformer decorators of a class, when the registration asked for the check. */
+	decoratorsOf?: ClassTransformerDecoratorsOf;
 }
 
 /** class-transformer copies a `Buffer` wherever the runtime has one. */
@@ -76,6 +88,40 @@ const formatPath = (path: PathSegment[]): string =>
 			return `[${JSON.stringify(segment)}]`;
 		})
 		.join('');
+
+/**
+ * Refuses an instance of a class whose class-transformer decorators would have shaped the payload that 3.x stored,
+ * such as an `@Exclude()`d field of a value object: this serializer ignores them.
+ */
+const checkClass = (value: object, state: SerializationState): void => {
+	if (!state.decoratorsOf) return;
+	const prototype: unknown = Object.getPrototypeOf(value);
+	if (prototype === Object.prototype || prototype === null) return;
+	const cls = (prototype as { constructor?: unknown }).constructor;
+	if (typeof cls !== 'function') return;
+	const decorators = state.decoratorsOf(cls, 'serialize');
+	if (decorators.length > 0) {
+		throw new EventSerializationException({
+			event: state.event,
+			reason: 'class-transformer-decorators',
+			path: formatPath(state.path),
+			decorators,
+		});
+	}
+};
+
+/**
+ * A value type of the MongoDB driver (`Binary`, `Long`, `Decimal128`, `ObjectId`…), which it returns in a payload.
+ * class-transformer reads it back as a copy of the instance. A plain object with a `_bsontype` key is not one.
+ */
+const isBsonValue = (value: object): boolean => {
+	const prototype: unknown = Object.getPrototypeOf(value);
+	return (
+		prototype !== Object.prototype &&
+		prototype !== null &&
+		typeof (value as { _bsontype?: unknown })._bsontype === 'string'
+	);
+};
 
 const enter = (value: object, state: SerializationState): void => {
 	if (state.ancestors.has(value)) {
@@ -123,6 +169,7 @@ const toPlain = (value: unknown, state: SerializationState): unknown => {
 			state.path.pop();
 		}
 	} else {
+		checkClass(value, state);
 		for (const key of Object.keys(value)) {
 			if (isSkippedKey(key)) continue;
 			const property = (value as Record<string, unknown>)[key];
@@ -149,7 +196,7 @@ const fromPlain = (value: unknown): unknown => {
 	if (isBuffer(value)) {
 		return Buffer.from(value);
 	}
-	if (value === null || typeof value !== 'object') {
+	if (value === null || typeof value !== 'object' || isBsonValue(value)) {
 		return value;
 	}
 	return copyOnto({}, value);

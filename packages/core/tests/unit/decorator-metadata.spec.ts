@@ -55,6 +55,8 @@ describe('decorator metadata', () => {
 			EventStore,
 			SnapshotStore,
 			ExplorerService,
+			// The class-transformer lookup, injected by its token
+			Object,
 		]);
 		expect(paramTypes(ExplorerService)).toEqual([Object, DiscoveryService]);
 	});

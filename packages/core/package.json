@@ -45,6 +45,13 @@
 	},
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
+	"typesVersions": {
+		"*": {
+			"class-transformer": [
+				"./dist/class-transformer/index.d.ts"
+			]
+		}
+	},
 	"files": [
 		"dist"
 	],

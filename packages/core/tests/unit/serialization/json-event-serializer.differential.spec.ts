@@ -168,6 +168,34 @@ class BinaryEvent {
 	nested = { big: -1n, bytes: Buffer.from([0, 255]) };
 }
 
+/**
+ * Stand-ins for the value types of the MongoDB driver, which core can't import: bson marks each with a `_bsontype`
+ * getter on its prototype. The driver returns a buffer as a `Binary` and an integer beyond 2^53 as a `Long`.
+ */
+class BsonBinary {
+	sub_type = 0;
+	buffer = Buffer.from('ab');
+	position = 2;
+
+	get _bsontype(): 'Binary' {
+		return 'Binary';
+	}
+
+	value(): string {
+		return this.buffer.subarray(0, this.position).toString();
+	}
+}
+
+class BsonLong {
+	low = 1;
+	high = 2 ** 21;
+	unsigned = false;
+
+	get _bsontype(): 'Long' {
+		return 'Long';
+	}
+}
+
 class SharedReferences {
 	shared = { value: 1 };
 	first = this.shared;
@@ -254,8 +282,18 @@ describe('JsonEventSerializer and class-transformer 0.5.1 on undecorated classes
 
 	const deserializeCases: [string, AnyClass, () => object][] = [
 		['a payload that 3.x wrote to a SQL store (JSON)', CorpusEvent, () => jsonPayloadOf(new CorpusEvent())],
-		['a payload as the in-memory store and MongoDB return it', CorpusEvent, () => rawPayloadOf(new CorpusEvent())],
-		['bigint and Buffer', BinaryEvent, () => rawPayloadOf(new BinaryEvent())],
+		['a payload as the in-memory store returns it', CorpusEvent, () => rawPayloadOf(new CorpusEvent())],
+		['bigint and Buffer, as the in-memory store returns them', BinaryEvent, () => rawPayloadOf(new BinaryEvent())],
+		[
+			'values of the MongoDB driver (Binary, Long…) are kept as instances of their class',
+			Account,
+			() => ({ nested: { data: new BsonBinary(), count: new BsonLong() } }),
+		],
+		[
+			'a plain object with a _bsontype key is not a value of the MongoDB driver',
+			Account,
+			() => JSON.parse('{"nested": {"_bsontype": "Binary", "sub_type": 0}}'),
+		],
 		['an older payload: the constructor defaults fill the missing fields', Account, () => ({ accountId: 'a-1' })],
 		[
 			'extra, nested and undefined fields',
@@ -311,6 +349,16 @@ describe('JsonEventSerializer and class-transformer 0.5.1 on undecorated classes
 			expect(event[key], `${key}`).not.toBe(payload[key]);
 		}
 		expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+	});
+
+	it('deserialize: keeps a value of the MongoDB driver as it is', () => {
+		const data = new BsonBinary();
+		const event = JsonEventSerializer.for(Account).deserialize({ nested: { data } } as never) as unknown as {
+			nested: { data: BsonBinary };
+		};
+
+		expect(event.nested.data).toBe(data);
+		expect(event.nested.data.value()).toBe('ab');
 	});
 
 	it('round trip: reads back what 3.x read back', () => {
@@ -377,7 +425,7 @@ describe('JsonEventSerializer and class-transformer 0.5.1 on undecorated classes
 			expect(JsonEventSerializer.for(Holder).deserialize(payload).nested).toStrictEqual({ kept: 1 });
 		});
 
-		it('a nested class instance in a payload becomes a plain object instead of an instance of its class', () => {
+		it('a nested class instance in a payload, other than a value of the MongoDB driver, becomes a plain object', () => {
 			class Holder {
 				money?: unknown;
 			}
@@ -396,7 +444,10 @@ function jsonPayloadOf(event: object): object {
 	return JSON.parse(JSON.stringify(instanceToPlain(event)));
 }
 
-/** What the in-memory store and MongoDB return: the serialized payload with its dates, bigints and buffers. */
+/**
+ * What the in-memory store returns: the serialized payload with its dates, bigints and buffers. MongoDB returns its
+ * dates too, but a buffer as a `Binary` and an integer beyond 2^53 as a `Long` (see `BsonBinary` and `BsonLong`).
+ */
 function rawPayloadOf(event: object): object {
 	return instanceToPlain(event);
 }

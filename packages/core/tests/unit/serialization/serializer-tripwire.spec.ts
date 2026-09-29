@@ -14,8 +14,11 @@ import {
 } from '@ocoda/event-sourcing';
 import { Account, AccountId } from '@ocoda/event-sourcing-testing/unit';
 import { ClassTransformerEventSerializer } from '@ocoda/event-sourcing/class-transformer';
-import { Exclude, Expose, Transform, Type } from 'class-transformer';
-import { loadClassTransformerDecorators } from '../../../lib/helpers/class-transformer-decorators.js';
+import { Exclude, Expose, instanceToPlain, Transform, Type } from 'class-transformer';
+import {
+	CLASS_TRANSFORMER_DECORATORS,
+	loadClassTransformerDecorators,
+} from '../../../lib/helpers/class-transformer-decorators.js';
 
 // ADR 0001 §6: an event with class-transformer decorators can't switch to the JSON default silently. The bootstrap
 // loads class-transformer's metadata storage and fails for such an event, naming the fix.
@@ -54,6 +57,55 @@ class Inherited extends ExcludedBase {
 	readonly note: string = '';
 }
 
+// Classes nested in an event: 3.x applied their decorators when it stored the event (instanceToPlain), but never read
+// them back into instances of their class, as the event has no @Type for them.
+class Credentials {
+	readonly user: string = 'u';
+	@Exclude()
+	readonly secret: string = 's3cr3t';
+}
+
+class Cents {
+	@Expose({ name: 'amount_cents' })
+	readonly amountCents: number = 700;
+}
+
+/** Decorators that don't change what instanceToPlain returns for an instance of the class. */
+@Expose()
+class ReadSide {
+	@Type(() => Date)
+	readonly at: Date = new Date(0);
+	@Transform(({ value }) => value, { toClassOnly: true })
+	readonly note: string = '';
+	@Exclude({ toClassOnly: true })
+	readonly hidden: string = '';
+}
+
+class Circle {
+	readonly radius: number = 1;
+}
+
+/** Decorators that do: a @Type with a discriminator adds its property, a class-level @Exclude excludes the rest. */
+@Exclude()
+class Drawing {
+	@Type(() => Object, { discriminator: { property: 'kind', subTypes: [{ value: Circle, name: 'circle' }] } })
+	readonly shape: Circle = new Circle();
+	@Transform(({ value }) => value, { toPlainOnly: true })
+	readonly label: string = '';
+}
+
+@Event('tripwire-registered')
+class Registered {
+	readonly credentials = new Credentials();
+}
+
+@Event('tripwire-nested')
+class Nested {
+	readonly readSide = new ReadSide();
+	readonly amounts: unknown[] = [1];
+	readonly byCurrency = new Map<string, unknown>();
+}
+
 const decoratorsOf = async () => {
 	const found = await loadClassTransformerDecorators();
 	if (!found) throw new Error('class-transformer is installed for the tests');
@@ -73,6 +125,33 @@ describe('the class-transformer tripwire', () => {
 			]);
 			expect(of(Plain)).toEqual([]);
 			expect(of(Money)).toEqual([]);
+		});
+
+		it("with the scope 'serialize', finds the decorators that change what instanceToPlain returns", async () => {
+			const of = await decoratorsOf();
+
+			expect(of(Credentials, 'serialize')).toEqual(['@Exclude on Credentials.secret']);
+			expect(of(Cents, 'serialize')).toEqual(['@Expose on Cents.amountCents']);
+			expect(of(ReadSide)).toEqual([
+				'@Type on ReadSide.at',
+				'@Transform on ReadSide.note',
+				'@Expose on ReadSide',
+				'@Exclude on ReadSide.hidden',
+			]);
+			expect(of(ReadSide, 'serialize')).toEqual([]);
+			expect(of(Drawing, 'serialize')).toEqual([
+				'@Type on Drawing.shape',
+				'@Transform on Drawing.label',
+				'@Exclude on Drawing',
+			]);
+			expect(of(Inherited, 'serialize')).toEqual([
+				'@Transform on Inherited.note',
+				'@Expose on ExcludedBase.id',
+				'@Exclude on ExcludedBase',
+			]);
+			expect(of(Money, 'serialize')).toEqual([]);
+			// The JSON serializer asks for every class instance it meets
+			expect(of(Credentials, 'serialize')).toBe(of(Credentials, 'serialize'));
 		});
 
 		it('resolves to undefined without class-transformer, so nothing is checked', async () => {
@@ -148,6 +227,76 @@ describe('the class-transformer tripwire', () => {
 			expect(own.deserializeEvent<Deposited>('tripwire-deposited', { amount: { amount: 2 } }).amount).toBeInstanceOf(
 				Money,
 			);
+		});
+
+		describe('an event that holds an instance of a class with decorators', () => {
+			it('fails to serialize on the JSON serializers it registers, and names the property', async () => {
+				const eventMap = new EventMap();
+				eventMap.registerSerializers([Registered, Nested], [], { classTransformerDecoratorsOf: await decoratorsOf() });
+
+				// Why: 3.x stored the payload without the excluded field
+				expect(instanceToPlain(new Registered())).toStrictEqual({ credentials: { user: 'u' } });
+				expect(() => eventMap.serializeEvent(new Registered())).toThrow(
+					"Cannot serialize the event Registered: credentials is an instance of a class with class-transformer decorators (@Exclude on Credentials.secret), which the default JsonEventSerializer ignores. Serialize it with class-transformer: set defaultEventSerializer: ClassTransformerEventSerializer (from '@ocoda/event-sourcing/class-transformer') in EventSourcingModule.forRoot(), or register an @EventSerializer() for the event.",
+				);
+
+				const nested = new Nested();
+				// An object whose prototype has no constructor has no class to check
+				nested.amounts.push(Object.assign(Object.create(Object.create(null)), { two: 2 }));
+				expect(eventMap.serializeEvent(nested)).toStrictEqual({
+					readSide: { at: new Date(0), note: '', hidden: '' },
+					amounts: [1, { two: 2 }],
+					byCurrency: {},
+				});
+				nested.amounts.pop();
+				nested.amounts.push(new Cents());
+				expect(() => eventMap.serializeEvent(nested)).toThrow(
+					expect.objectContaining({
+						event: 'Nested',
+						reason: 'class-transformer-decorators',
+						path: 'amounts[1]',
+						decorators: ['@Expose on Cents.amountCents'],
+					}),
+				);
+				nested.amounts.pop();
+				nested.byCurrency.set('EUR', { drawing: new Drawing() });
+				expect(() => eventMap.serializeEvent(nested)).toThrow(
+					expect.objectContaining({ path: 'byCurrency.EUR.drawing' }),
+				);
+			});
+
+			it('serializes it with class-transformer on the class-transformer default', async () => {
+				const eventMap = new EventMap();
+				eventMap.registerSerializers([Registered], [], {
+					defaultSerializer: ClassTransformerEventSerializer,
+					classTransformerDecoratorsOf: await decoratorsOf(),
+				});
+
+				expect(eventMap.serializeEvent(new Registered())).toStrictEqual({ credentials: { user: 'u' } });
+			});
+
+			it('leaves an own serializer and an unchecked registration alone', async () => {
+				@EventSerializer(Registered)
+				class RegisteredSerializer extends JsonEventSerializer<Registered> {
+					constructor() {
+						super(Registered);
+					}
+				}
+				const own = new EventMap();
+				own.registerSerializers(
+					[Registered],
+					[{ metatype: RegisteredSerializer, instance: new RegisteredSerializer() }] as never,
+					{ classTransformerDecoratorsOf: await decoratorsOf() },
+				);
+				expect(own.serializeEvent(new Registered())).toStrictEqual({ credentials: { user: 'u', secret: 's3cr3t' } });
+
+				// Without class-transformer's metadata (a bundled application), nothing is checked
+				const unchecked = new EventMap();
+				unchecked.registerSerializers([Registered]);
+				expect(unchecked.serializeEvent(new Registered())).toStrictEqual({
+					credentials: { user: 'u', secret: 's3cr3t' },
+				});
+			});
 		});
 
 		it('checks a factory that returns JSON serializers too', async () => {
@@ -233,6 +382,36 @@ describe('the class-transformer tripwire', () => {
 			const app = await (await Test.createTestingModule({ imports: [AppModule] }).compile()).init();
 
 			expect((await app.get(Deposits).roundTrip()).amount).toBeInstanceOf(Money);
+			await app.close();
+		});
+
+		it('fails an append, before it writes anything, for an event that holds an instance of a class with decorators', async () => {
+			const app = await bootstrap(EventSourcingModule.forRoot({ events: [Plain, Registered] }));
+			const eventStore = app.get(EventStore);
+			const stream = EventStream.for(Account, AccountId.generate());
+
+			await expect(eventStore.appendEvents(stream, [new Registered()], { expectedVersion: 0 })).rejects.toMatchObject({
+				reason: 'class-transformer-decorators',
+				path: 'credentials',
+			});
+			// The stream is still empty
+			await eventStore.appendEvents(stream, [new Plain('a')], { expectedVersion: 0 });
+			await app.close();
+		});
+
+		it('checks nothing without class-transformer', async () => {
+			const moduleRef = await Test.createTestingModule({
+				imports: [EventSourcingModule.forRoot({ events: [Plain, Deposited] })],
+			})
+				.overrideProvider(CLASS_TRANSFORMER_DECORATORS)
+				.useFactory({ factory: () => undefined })
+				.compile();
+
+			const app = await moduleRef.init();
+
+			expect(app.get(EventMap).serializeEvent(new Deposited(new Money(1, 'EUR')))).toStrictEqual({
+				amount: { amount: 1, currency: 'EUR' },
+			});
 			await app.close();
 		});
 

@@ -73,12 +73,12 @@ try {
 		run(process.execPath, [tsc, '-p', dir]);
 
 		const emitted = readFileSync(join(dir, 'dist', 'main.js'), 'utf8');
-		const loads =
-			variant === 'cjs'
-				? /require\(["']@ocoda\/event-sourcing["']\)/.test(emitted)
-				: /from ["']@ocoda\/event-sourcing["']/.test(emitted);
-		if (!loads) {
-			throw new Error(`${variant}: the compiled application does not load @ocoda/event-sourcing the ${variant} way`);
+		for (const specifier of ['@ocoda/event-sourcing', '@ocoda/event-sourcing/class-transformer']) {
+			const quoted = `["']${specifier.replaceAll('/', '\\/')}["']`;
+			const loads = new RegExp(variant === 'cjs' ? `require\\(${quoted}\\)` : `from ${quoted}`).test(emitted);
+			if (!loads) {
+				throw new Error(`${variant}: the compiled application does not load ${specifier} the ${variant} way`);
+			}
 		}
 
 		const app = spawnSync(process.execPath, ['--enable-source-maps', join('dist', 'main.js')], {

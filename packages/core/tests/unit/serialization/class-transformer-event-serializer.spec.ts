@@ -69,10 +69,13 @@ describe(ClassTransformerEventSerializer, () => {
 		expect(EventSourcing.JsonEventSerializer).toEqual(expect.any(Function));
 	});
 
-	it('keeps class-transformer out of the root entry point', () => {
+	it('keeps class-transformer out of every other entry point', () => {
 		// class-transformer is an optional peer dependency: only the class-transformer entry point imports it statically.
 		// The bootstrap check loads it with a dynamic import that tolerates its absence.
 		const lib = resolve(import.meta.dirname, '../../../lib');
+		const manifest = JSON.parse(readFileSync(resolve(lib, '../package.json'), 'utf8')) as {
+			exports: Record<string, string | { import: string }>;
+		};
 		const packagesImportedBy = (entry: string): Set<string> => {
 			const packages = new Set<string>();
 			const seen = new Set<string>();
@@ -92,9 +95,22 @@ describe(ClassTransformerEventSerializer, () => {
 			return packages;
 		};
 
-		const root = packagesImportedBy('index.ts');
-		expect(root).toContain('@nestjs/common');
-		expect(root).not.toContain('class-transformer');
-		expect(packagesImportedBy('class-transformer/index.ts')).toContain('class-transformer');
+		// './dist/testing/index.js' is built from 'lib/testing/index.ts'
+		const entries = Object.entries(manifest.exports)
+			.filter(([subpath]) => subpath !== './package.json')
+			.map(([subpath, target]) => {
+				const file = typeof target === 'string' ? target : target.import;
+				return [subpath, file.replace(/^\.\/dist\//, '').replace(/\.js$/, '.ts')] as const;
+			});
+		expect(entries).toContainEqual(['.', 'index.ts']);
+		expect(entries).toContainEqual(['./class-transformer', 'class-transformer/index.ts']);
+
+		const found = entries.map(([subpath, source]) => {
+			const packages = packagesImportedBy(source);
+			return { subpath, walked: packages.size > 0, classTransformer: packages.has('class-transformer') };
+		});
+		expect(found).toEqual(
+			entries.map(([subpath]) => ({ subpath, walked: true, classTransformer: subpath === './class-transformer' })),
+		);
 	});
 });

@@ -5,7 +5,7 @@ import {
 	UnregisteredEventException,
 	UnregisteredSerializerException,
 } from './exceptions/index.js';
-import type { ClassTransformerDecoratorsOf } from './helpers/class-transformer-decorators.js';
+import { type ClassTransformerDecoratorsOf, checkNestedClasses } from './helpers/class-transformer-decorators.js';
 import { JsonEventSerializer, getEventMetadata, getEventSerializerMetadata } from './helpers/index.js';
 import type {
 	EventSerializerFactory,
@@ -109,7 +109,8 @@ export class EventMap {
 	 *
 	 * @throws EventSerializationException when an event would get a `JsonEventSerializer` although it carries
 	 * class-transformer decorators, which that serializer ignores. `classTransformerDecoratorsOf` finds them; without
-	 * it, nothing is checked.
+	 * it, nothing is checked. With it, the JSON serializers registered here also refuse, when they serialize, an event
+	 * that holds an instance of a class whose decorators would have shaped the payload.
 	 */
 	registerSerializers(
 		events: Type<IEvent>[] = [],
@@ -129,6 +130,8 @@ export class EventMap {
 
 			if (!custom && serializer instanceof JsonEventSerializer && classTransformerDecoratorsOf) {
 				const decorators = classTransformerDecoratorsOf(event);
+				// TODO(#579): report this as an issue of EventSourcingConfigurationException.issues[] (ADR 0001 §3), which
+				// lists every offending event at once, instead of throwing for the first one.
 				if (decorators.length > 0) {
 					throw new EventSerializationException({
 						event: event.name,
@@ -136,6 +139,7 @@ export class EventMap {
 						decorators,
 					});
 				}
+				checkNestedClasses(serializer, classTransformerDecoratorsOf);
 			}
 
 			this.register(event, serializer);

@@ -1,5 +1,6 @@
 import {
 	type DynamicModule,
+	Inject,
 	Logger,
 	Module,
 	type OnApplicationBootstrap,
@@ -24,7 +25,11 @@ import { EventStore } from './event-store.js';
 import { SnapshotStore } from './snapshot-store.js';
 
 import { InjectEventSourcingOptions } from './decorators/index.js';
-import { loadClassTransformerDecorators } from './helpers/class-transformer-decorators.js';
+import {
+	CLASS_TRANSFORMER_DECORATORS,
+	type ClassTransformerDecoratorsOf,
+	classTransformerDecoratorsProvider,
+} from './helpers/class-transformer-decorators.js';
 import { ExplorerService } from './services/index.js';
 
 import {
@@ -53,6 +58,8 @@ export class EventSourcingCoreModule implements OnModuleInit, OnApplicationBoots
 		private readonly eventStore: EventStore,
 		private readonly snapshotStore: SnapshotStore,
 		private readonly explorerService: ExplorerService,
+		@Inject(CLASS_TRANSFORMER_DECORATORS)
+		private readonly classTransformerDecoratorsOf?: ClassTransformerDecoratorsOf,
 	) {}
 
 	static forRoot<
@@ -74,7 +81,7 @@ export class EventSourcingCoreModule implements OnModuleInit, OnApplicationBoots
 			global: true,
 			module: EventSourcingCoreModule,
 			imports: [DiscoveryModule],
-			providers: [ExplorerService, ...exportedProviders],
+			providers: [ExplorerService, classTransformerDecoratorsProvider, ...exportedProviders],
 			exports: [...exportedProviders],
 		};
 	}
@@ -96,7 +103,7 @@ export class EventSourcingCoreModule implements OnModuleInit, OnApplicationBoots
 			global: true,
 			module: EventSourcingCoreModule,
 			imports: [DiscoveryModule, ...(options?.imports || [])],
-			providers: [ExplorerService, ...exportedProviders],
+			providers: [ExplorerService, classTransformerDecoratorsProvider, ...exportedProviders],
 			exports: [...exportedProviders],
 		};
 	}
@@ -128,11 +135,9 @@ export class EventSourcingCoreModule implements OnModuleInit, OnApplicationBoots
 		}
 	}
 
-	async onApplicationBootstrap(): Promise<void> {
+	onApplicationBootstrap(): any {
 		const { events, queries, commands, eventPublishers, eventSerializers, eventSubscribers } =
 			this.explorerService.explore();
-		// Fails the bootstrap for an event with class-transformer decorators that would get the JSON serializer
-		const classTransformerDecoratorsOf = await loadClassTransformerDecorators();
 
 		// Register the handlers
 		this._logger.debug('Registering event handlers...');
@@ -140,9 +145,10 @@ export class EventSourcingCoreModule implements OnModuleInit, OnApplicationBoots
 		this.commandBus.register(commands);
 		this.eventBus.registerPublishers(eventPublishers);
 		this.eventBus.registerSubscribers(eventSubscribers);
+		// Fails the bootstrap for an event with class-transformer decorators that would get the JSON serializer
 		this.eventMap.registerSerializers(events, eventSerializers, {
 			defaultSerializer: this.options.defaultEventSerializer,
-			classTransformerDecoratorsOf,
+			classTransformerDecoratorsOf: this.classTransformerDecoratorsOf,
 		});
 		this._logger.debug('Event handlers registered successfully.');
 	}
