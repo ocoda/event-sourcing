@@ -46,12 +46,16 @@ jobs:
         run: |
           pnpm exec changeset status --output=changeset-status.json || true
           if [ -f changeset-status.json ]; then
-            jq -r '.releases[] | "\(.name) \(.type) \(.newVersion)"' changeset-status.json
-            if jq -e '[.releases[] | select(.type != "patch" and .type != "none")] | length > 0' changeset-status.json > /dev/null; then
+            # Only packages that are actually released are checked; private packages have type "none"
+            # and no newVersion. Any jq error fails the step instead of silently passing the guard.
+            jq -r '.releases[] | select(.type != "none") | "\(.name) \(.type) \(.newVersion)"' changeset-status.json
+            not_patch=$(jq '[.releases[] | select(.type != "none" and .type != "patch")] | length' changeset-status.json)
+            not_3x=$(jq '[.releases[] | select(.type != "none") | select((.newVersion // "") | startswith("3.") | not)] | length' changeset-status.json)
+            if [ "$not_patch" -ne 0 ]; then
               echo "::error::The 3.x maintenance line only accepts patch changesets."
               exit 1
             fi
-            if jq -e '[.releases[] | select(.newVersion | startswith("3.") | not)] | length > 0' changeset-status.json > /dev/null; then
+            if [ "$not_3x" -ne 0 ]; then
               echo "::error::3.x releases must stay on the 3.x major."
               exit 1
             fi
