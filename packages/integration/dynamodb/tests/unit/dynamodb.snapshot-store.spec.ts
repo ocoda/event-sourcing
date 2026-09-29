@@ -446,7 +446,7 @@ describe(DynamoDBSnapshotStore, () => {
 		// Makes the version check see an empty stream, like a stale (eventually consistent) read or a concurrent writer would
 		const simulateStaleVersionCheck = () => {
 			const send = client.send.bind(client);
-			return jest
+			return vi
 				.spyOn(client, 'send')
 				.mockImplementation((async (command: unknown) =>
 					command instanceof QueryCommand && command.input.Limit === 1
@@ -462,7 +462,7 @@ describe(DynamoDBSnapshotStore, () => {
 			const released = new Promise<void>((resolve) => {
 				release = resolve;
 			});
-			return jest.spyOn(client, 'send').mockImplementation((async (command: unknown) => {
+			return vi.spyOn(client, 'send').mockImplementation((async (command: unknown) => {
 				if (command instanceof TransactWriteItemsCommand) {
 					arrived++;
 					if (arrived === count) {
@@ -479,7 +479,7 @@ describe(DynamoDBSnapshotStore, () => {
 		});
 
 		afterEach(() => {
-			jest.restoreAllMocks();
+			vi.restoreAllMocks();
 		});
 
 		afterAll(async () => {
@@ -501,7 +501,7 @@ describe(DynamoDBSnapshotStore, () => {
 			await expect(append).rejects.toThrow(new SnapshotStoreVersionConflictException(stream, 10, 10));
 			await expect(append).rejects.toHaveProperty('stack', expect.stringContaining('ConditionalCheckFailed'));
 
-			jest.restoreAllMocks();
+			vi.restoreAllMocks();
 			expect(await readItems(stream)).toEqual(storedItems);
 			expect(storedItems).toHaveLength(1);
 			expect(storedItems[0].payload).toEqual({ balance: 10 });
@@ -540,7 +540,7 @@ describe(DynamoDBSnapshotStore, () => {
 				versions.map((version) => snapshotStore.appendSnapshot(stream, version, { balance: version }, pool)),
 			);
 
-			jest.restoreAllMocks();
+			vi.restoreAllMocks();
 
 			const rejected = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected');
 			expect(results.filter(({ status }) => status === 'fulfilled')).toHaveLength(1);
@@ -593,7 +593,7 @@ describe(DynamoDBSnapshotStore, () => {
 				}
 				return items;
 			};
-			const send = jest.spyOn(client, 'send');
+			const send = vi.spyOn(client, 'send');
 
 			await snapshotStore.appendSnapshot(stream, 1, { balance: 1 }, pool);
 			await snapshotStore.appendSnapshot(stream, 10, { balance: 10 }, pool);
@@ -646,12 +646,10 @@ describe(DynamoDBSnapshotStore, () => {
 
 		it('should throw when a collection cannot be created', async () => {
 			const send = client.send.bind(client);
-			jest
-				.spyOn(client, 'send')
-				.mockImplementation((async (command: unknown) =>
-					command instanceof CreateTableCommand
-						? Promise.reject(new Error('LimitExceededException'))
-						: send(command as QueryCommand)) as any);
+			vi.spyOn(client, 'send').mockImplementation((async (command: unknown) =>
+				command instanceof CreateTableCommand
+					? Promise.reject(new Error('LimitExceededException'))
+					: send(command as QueryCommand)) as any);
 
 			await expect(snapshotStore.ensureCollection('dynamodb-create-failure')).rejects.toThrow(
 				new SnapshotStoreCollectionCreationException('dynamodb-create-failure-snapshots', new Error()),
@@ -659,7 +657,7 @@ describe(DynamoDBSnapshotStore, () => {
 		});
 
 		it('should create the same collection concurrently without provisioned throughput', async () => {
-			const send = jest.spyOn(client, 'send');
+			const send = vi.spyOn(client, 'send');
 
 			await expect(
 				Promise.all([

@@ -23,12 +23,13 @@ import {
 	getEvents,
 } from '@ocoda/event-sourcing-testing/unit';
 import { type InMemoryEventEntity, InMemoryEventStore } from '@ocoda/event-sourcing/integration/event-store';
+import type { MockInstance } from 'vitest';
 
 describe(InMemoryEventStore, () => {
 	let eventStore: InMemoryEventStore;
 	let envelopesAccountA: EventEnvelope[];
 	let envelopesAccountB: EventEnvelope[];
-	const publish = jest.fn(async () => Promise.resolve());
+	const publish = vi.fn(async () => Promise.resolve());
 
 	const eventMap = getEventMap();
 	const events = getEvents();
@@ -289,13 +290,13 @@ describe(`${InMemoryEventStore.name} lifecycle and publishing`, () => {
 	const events = getEvents();
 
 	let eventStore: InMemoryEventStore;
-	let loggerWarn: jest.SpyInstance;
-	let loggerError: jest.SpyInstance;
+	let loggerWarn: MockInstance;
+	let loggerError: MockInstance;
 
 	beforeEach(async () => {
-		jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
-		loggerWarn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
-		loggerError = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+		vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+		loggerWarn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+		loggerError = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
 
 		eventStore = new InMemoryEventStore(eventMap, { driver: InMemoryEventStore });
 		await eventStore.connect();
@@ -304,7 +305,7 @@ describe(`${InMemoryEventStore.name} lifecycle and publishing`, () => {
 
 	afterEach(async () => {
 		await eventStore.disconnect();
-		jest.restoreAllMocks();
+		vi.restoreAllMocks();
 	});
 
 	it('does not throw when disconnecting before connecting', async () => {
@@ -314,7 +315,7 @@ describe(`${InMemoryEventStore.name} lifecycle and publishing`, () => {
 	});
 
 	it('does not wipe existing events when ensuring an existing collection', async () => {
-		eventStore.publish = jest.fn();
+		eventStore.publish = vi.fn();
 		const stream = EventStream.for(Account, AccountId.generate());
 
 		await eventStore.ensureCollection('tenant-1');
@@ -347,7 +348,7 @@ describe(`${InMemoryEventStore.name} lifecycle and publishing`, () => {
 	});
 
 	it('does not reject the append nor skip the remaining envelopes when publishing fails', async () => {
-		const publish = jest
+		const publish = vi
 			.fn()
 			.mockImplementationOnce(() => {
 				throw new Error('sync publish failure');
@@ -378,14 +379,14 @@ describe(`${InMemoryEventStore.name} lifecycle and publishing`, () => {
 
 	it('isolates failing event publishers when wired to the event bus', async () => {
 		const eventBus = new EventBus();
-		const rejectingPublisher = { publish: jest.fn(() => Promise.reject(new Error('broker unavailable'))) };
+		const rejectingPublisher = { publish: vi.fn(() => Promise.reject(new Error('broker unavailable'))) };
 		const throwingPublisher = {
-			publish: jest.fn(() => {
+			publish: vi.fn(() => {
 				throw new Error('broker misconfigured');
 			}),
 		};
-		const healthyPublisher = { publish: jest.fn() };
-		const subscriber = { handle: jest.fn() };
+		const healthyPublisher = { publish: vi.fn() };
+		const subscriber = { handle: vi.fn() };
 
 		eventBus.addPublisher(rejectingPublisher);
 		eventBus.addPublisher(throwingPublisher);
@@ -409,20 +410,20 @@ describe(`${InMemoryEventStore.name} lifecycle and publishing`, () => {
 
 	it('includes the events of the current UTC month when no until date is given', async () => {
 		// 2024-02-01T00:30Z is still January in a UTC-10 timezone (e.g. Pacific/Honolulu)
-		jest.useFakeTimers({
+		vi.useFakeTimers({
 			now: new Date('2024-02-01T00:30:00Z'),
-			doNotFake: ['nextTick', 'setImmediate', 'queueMicrotask'],
+			toNotFake: ['nextTick', 'setImmediate', 'queueMicrotask'],
 		});
 		const shift = (date: Date) => new Date(date.getTime() - 10 * 60 * 60 * 1000);
-		jest.spyOn(Date.prototype, 'getFullYear').mockImplementation(function (this: Date) {
+		vi.spyOn(Date.prototype, 'getFullYear').mockImplementation(function (this: Date) {
 			return shift(this).getUTCFullYear();
 		});
-		jest.spyOn(Date.prototype, 'getMonth').mockImplementation(function (this: Date) {
+		vi.spyOn(Date.prototype, 'getMonth').mockImplementation(function (this: Date) {
 			return shift(this).getUTCMonth();
 		});
 
 		try {
-			eventStore.publish = jest.fn();
+			eventStore.publish = vi.fn();
 			const stream = EventStream.for(Account, AccountId.generate());
 			await eventStore.appendEvents(stream, 1, events.slice(0, 1));
 
@@ -434,7 +435,7 @@ describe(`${InMemoryEventStore.name} lifecycle and publishing`, () => {
 			expect(resolvedEnvelopes).toHaveLength(1);
 			expect(resolvedEnvelopes[0].metadata.occurredOn).toEqual(new Date('2024-02-01T00:30:00Z'));
 		} finally {
-			jest.useRealTimers();
+			vi.useRealTimers();
 		}
 	});
 });

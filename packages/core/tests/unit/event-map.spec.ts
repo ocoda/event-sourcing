@@ -16,9 +16,9 @@ describe(EventMap, () => {
 
 	class UnregisteredEvent implements IEvent {}
 
-	beforeAll(() => jest.useFakeTimers({ now: new Date() }));
+	beforeAll(() => vi.useFakeTimers({ now: new Date() }));
 
-	afterAll(() => jest.useRealTimers());
+	afterAll(() => vi.useRealTimers());
 
 	it('throws when registering an event without an event-name', () => {
 		class FooCreatedEvent implements IEvent {}

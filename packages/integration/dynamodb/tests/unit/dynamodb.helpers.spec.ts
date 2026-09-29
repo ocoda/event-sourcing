@@ -190,7 +190,7 @@ describe('DynamoDB helpers', () => {
 		const notFound = () => new ResourceNotFoundException({ message: 'Table not found', $metadata: {} });
 		const describeResult = (status: TableStatus) => ({ Table: { TableStatus: status }, $metadata: {} });
 		const fakeClient = (responses: ((command: unknown) => unknown)[]) => {
-			const send = jest.fn(async (command: unknown) => {
+			const send = vi.fn(async (command: unknown) => {
 				const respond = responses.shift();
 				if (!respond) {
 					throw new Error('Unexpected call');

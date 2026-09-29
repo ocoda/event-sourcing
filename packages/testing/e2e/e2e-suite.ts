@@ -85,7 +85,7 @@ export const runAccountLifecycleE2E = async <
 		commandBus = app.get<CommandBus>(CommandBus);
 		queryBus = app.get<QueryBus>(QueryBus);
 		customEventPublisher = app.get<IEventPublisher>(CustomEventPublisher);
-		customEventPublisher.publish = jest.fn((_) => Promise.resolve());
+		customEventPublisher.publish = vi.fn((_) => Promise.resolve());
 		accountRepository = app.get<AccountRepository>(AccountRepository);
 	});
 

@@ -95,7 +95,7 @@ describe('EventSourcing options providers', () => {
 
 		const providers = createAsyncEventSourcingOptionsProvider({ useClass: OptionsFactory });
 		const provider = providers[0] as any;
-		const moduleRef = { create: jest.fn(async () => new OptionsFactory()) };
+		const moduleRef = { create: vi.fn(async () => new OptionsFactory()) };
 
 		expect(providers).toHaveLength(1);
 		expect(provider.inject).toEqual([{ token: OptionsFactory, optional: true }, ModuleRef]);

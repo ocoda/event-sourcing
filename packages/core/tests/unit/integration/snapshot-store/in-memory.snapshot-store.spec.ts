@@ -383,7 +383,7 @@ describe(`${InMemorySnapshotStore.name} lifecycle`, () => {
 	let snapshotStore: InMemorySnapshotStore;
 
 	beforeEach(async () => {
-		jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+		vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
 		snapshotStore = new InMemorySnapshotStore({ driver: InMemorySnapshotStore });
 		await snapshotStore.connect();
 		await snapshotStore.ensureCollection();
@@ -391,7 +391,7 @@ describe(`${InMemorySnapshotStore.name} lifecycle`, () => {
 
 	afterEach(async () => {
 		await snapshotStore.disconnect();
-		jest.restoreAllMocks();
+		vi.restoreAllMocks();
 	});
 
 	it('does not throw when disconnecting before connecting', async () => {

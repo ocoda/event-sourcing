@@ -12,6 +12,7 @@ import {
 } from '@ocoda/event-sourcing';
 import { EventRegistry } from '@ocoda/event-sourcing/registries';
 import { ExplorerService } from '@ocoda/event-sourcing/services';
+import type { Mocked } from 'vitest';
 
 @Event('event-a')
 class EventA implements IEvent {}
@@ -21,8 +22,8 @@ class EventB implements IEvent {}
 
 describe('ExplorerService', () => {
 	let explorerService: ExplorerService;
-	let discoveryServiceMock: jest.Mocked<Pick<DiscoveryService, 'getProviders'>>;
-	let optionsMock: jest.Mocked<EventSourcingModuleOptions>;
+	let discoveryServiceMock: Mocked<Pick<DiscoveryService, 'getProviders'>>;
+	let optionsMock: Mocked<EventSourcingModuleOptions>;
 
 	const createWrapper = (instance: any, metadataKey?: string): ProviderWrapper => {
 		const wrapper = { instance } as ProviderWrapper;
@@ -35,10 +36,10 @@ describe('ExplorerService', () => {
 	beforeEach(() => {
 		optionsMock = { events: [EventA] };
 		discoveryServiceMock = {
-			getProviders: jest.fn().mockReturnValue([]),
+			getProviders: vi.fn().mockReturnValue([]),
 		};
 		explorerService = new ExplorerService(optionsMock, discoveryServiceMock as unknown as DiscoveryService);
-		jest.spyOn(EventRegistry, 'getEvents').mockReturnValue([EventB]);
+		vi.spyOn(EventRegistry, 'getEvents').mockReturnValue([EventB]);
 	});
 
 	it('should return correct events from options and registry', () => {

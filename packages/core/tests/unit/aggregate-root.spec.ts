@@ -15,7 +15,7 @@ describe(AggregateRoot, () => {
 
 	it('applyEvent tracks version and commits', () => {
 		const account = new Account();
-		jest.spyOn(account as any, 'getEventHandler').mockReturnValue(account.onBalanceChanged);
+		vi.spyOn(account as any, 'getEventHandler').mockReturnValue(account.onBalanceChanged);
 		account.applyEvent(new BalanceChangedEvent(5));
 
 		expect(account.version).toBe(1);
@@ -26,7 +26,7 @@ describe(AggregateRoot, () => {
 
 	it('applyEvent skips commit for history events', () => {
 		const account = new Account();
-		jest.spyOn(account as any, 'getEventHandler').mockReturnValue(account.onBalanceChanged);
+		vi.spyOn(account as any, 'getEventHandler').mockReturnValue(account.onBalanceChanged);
 		account.applyEvent(new BalanceChangedEvent(10), true);
 
 		expect(account.commit()).toHaveLength(0);

@@ -14,6 +14,7 @@ import {
 } from '@ocoda/event-sourcing';
 import { COMMAND_METADATA } from '@ocoda/event-sourcing/decorators';
 import { config } from 'rxjs';
+import type { Mock, MockInstance } from 'vitest';
 
 const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 10));
 
@@ -28,12 +29,12 @@ describe('EventBus isolation', () => {
 	const envelopeFor = (event: string, version = 1) =>
 		EventEnvelope.create(event, {}, { aggregateId: UUID.generate().value, eventId: EventId.generate(), version });
 
-	let loggerError: jest.SpyInstance;
+	let loggerError: MockInstance;
 	let unhandledRxjsErrors: unknown[];
 	let originalOnUnhandledError: typeof config.onUnhandledError;
 
 	beforeEach(() => {
-		loggerError = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+		loggerError = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
 
 		// rxjs reports errors that nobody handles (e.g. rethrown from an error callback) asynchronously,
 		// which crashes the process with an uncaughtException. Capture them to assert nothing escapes.
@@ -49,19 +50,19 @@ describe('EventBus isolation', () => {
 
 	describe('subscribers', () => {
 		class ThrowingSubscriber implements IEventSubscriber {
-			handle = jest.fn((_envelope: EventEnvelope): void => {
+			handle = vi.fn((_envelope: EventEnvelope): void => {
 				throw new Error('sync subscriber failure');
 			});
 		}
 
 		class RejectingSubscriber implements IEventSubscriber {
-			handle = jest.fn(async (_envelope: EventEnvelope): Promise<void> => {
+			handle = vi.fn(async (_envelope: EventEnvelope): Promise<void> => {
 				throw new Error('async subscriber failure');
 			});
 		}
 
 		class HealthySubscriber implements IEventSubscriber {
-			handle = jest.fn(async (_envelope: EventEnvelope): Promise<void> => undefined);
+			handle = vi.fn(async (_envelope: EventEnvelope): Promise<void> => undefined);
 		}
 
 		it.each([
@@ -69,7 +70,7 @@ describe('EventBus isolation', () => {
 			['returns a rejected promise', RejectingSubscriber, 'async subscriber failure'],
 		])(
 			'keeps delivering events when a subscriber %s',
-			async (_, FailingSubscriber: new () => IEventSubscriber & { handle: jest.Mock }, message) => {
+			async (_, FailingSubscriber: new () => IEventSubscriber & { handle: Mock }, message) => {
 				const bus = new EventBus();
 				const failing = new FailingSubscriber();
 				const healthy = new HealthySubscriber();
@@ -127,19 +128,19 @@ describe('EventBus isolation', () => {
 
 	describe('publishers', () => {
 		class ThrowingPublisher implements IEventPublisher {
-			publish = jest.fn((_envelope: EventEnvelope): void => {
+			publish = vi.fn((_envelope: EventEnvelope): void => {
 				throw new Error('sync publisher failure');
 			});
 		}
 
 		class RejectingPublisher implements IEventPublisher {
-			publish = jest.fn(async (_envelope: EventEnvelope): Promise<void> => {
+			publish = vi.fn(async (_envelope: EventEnvelope): Promise<void> => {
 				throw new Error('async publisher failure');
 			});
 		}
 
 		class HealthyPublisher implements IEventPublisher {
-			publish = jest.fn(async (_envelope: EventEnvelope): Promise<void> => undefined);
+			publish = vi.fn(async (_envelope: EventEnvelope): Promise<void> => undefined);
 		}
 
 		it('publishes to the remaining publishers and logs failures of throwing or rejecting publishers', async () => {
@@ -147,7 +148,7 @@ describe('EventBus isolation', () => {
 			const throwing = new ThrowingPublisher();
 			const rejecting = new RejectingPublisher();
 			const healthy = new HealthyPublisher();
-			const subscriber = { handle: jest.fn() };
+			const subscriber = { handle: vi.fn() };
 
 			bus.addPublisher(throwing);
 			bus.addPublisher(rejecting);

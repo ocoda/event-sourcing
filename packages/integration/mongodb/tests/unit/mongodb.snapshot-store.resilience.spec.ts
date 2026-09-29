@@ -11,7 +11,8 @@ import { type MongoDBSnapshotEntity, MongoDBSnapshotStore } from '@ocoda/event-s
 import { Account, AccountId } from '@ocoda/event-sourcing-testing/unit';
 import { AbstractCursor, Collection, type Db, type MongoClient } from 'mongodb';
 
-jest.setTimeout(30_000);
+// Pool exhaustion and concurrency scenarios: allow slow tests and setup/teardown hooks.
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
 type Config = ConstructorParameters<typeof MongoDBSnapshotStore>[0];
 
@@ -95,7 +96,7 @@ describe(`${MongoDBSnapshotStore.name} resilience`, () => {
 	});
 
 	afterEach(() => {
-		jest.restoreAllMocks();
+		vi.restoreAllMocks();
 	});
 
 	describe('reading', () => {
@@ -130,7 +131,7 @@ describe(`${MongoDBSnapshotStore.name} resilience`, () => {
 		it('should close the cursor of the collections listing when the consumer stops reading early', async () => {
 			await newPool('listing-a');
 			await newPool('listing-b');
-			const close = jest.spyOn(AbstractCursor.prototype, 'close');
+			const close = vi.spyOn(AbstractCursor.prototype, 'close');
 
 			for await (const batch of snapshotStore.listCollections({ batch: 1 })) {
 				expect(batch).toHaveLength(1);
@@ -171,7 +172,7 @@ describe(`${MongoDBSnapshotStore.name} resilience`, () => {
 		describe('to known collections', () => {
 			it('should not look up the collection again on every append', async () => {
 				const snapshotPool = await newPool('known');
-				const listCollections = jest.spyOn(database, 'listCollections');
+				const listCollections = vi.spyOn(database, 'listCollections');
 
 				const stream = newStream();
 				await snapshotStore.appendSnapshot(stream, 1, { balance: 1 }, snapshotPool);
@@ -186,7 +187,7 @@ describe(`${MongoDBSnapshotStore.name} resilience`, () => {
 				const otherStore = await newStore();
 
 				try {
-					const listCollections = jest.spyOn(otherStore['database'], 'listCollections');
+					const listCollections = vi.spyOn(otherStore['database'], 'listCollections');
 
 					const stream = newStream();
 					await otherStore.appendSnapshot(stream, 1, { balance: 1 }, snapshotPool);
@@ -204,7 +205,7 @@ describe(`${MongoDBSnapshotStore.name} resilience`, () => {
 			it('should keep rejecting them and check the server each time', async () => {
 				const snapshotPool = uniquePool('unknown');
 				pools.push(snapshotPool);
-				const listCollections = jest.spyOn(database, 'listCollections');
+				const listCollections = vi.spyOn(database, 'listCollections');
 
 				await expect(snapshotStore.appendSnapshot(newStream(), 1, { balance: 1 }, snapshotPool)).rejects.toThrow(
 					SnapshotStorePersistenceException,
@@ -287,7 +288,7 @@ describe(`${MongoDBSnapshotStore.name} resilience`, () => {
 					releaseWriters = resolve;
 				});
 				const insertOne = Collection.prototype.insertOne;
-				const insertOneSpy = jest.spyOn(Collection.prototype, 'insertOne').mockImplementation(async function (
+				const insertOneSpy = vi.spyOn(Collection.prototype, 'insertOne').mockImplementation(async function (
 					this: Collection,
 					...args: Parameters<Collection['insertOne']>
 				) {

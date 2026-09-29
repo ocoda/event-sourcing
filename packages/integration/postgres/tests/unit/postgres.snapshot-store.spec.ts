@@ -374,7 +374,7 @@ describe(PostgresSnapshotStore, () => {
 	});
 
 	describe('lifecycle', () => {
-		afterEach(() => jest.restoreAllMocks());
+		afterEach(() => vi.restoreAllMocks());
 
 		it('should fail to connect when the database is unreachable', async () => {
 			const unreachableStore = new PostgresSnapshotStore({ driver: undefined as never, ...connectionOptions, port: 1 });
@@ -384,7 +384,7 @@ describe(PostgresSnapshotStore, () => {
 		});
 
 		it('should discard idle connections that fail instead of crashing', async () => {
-			const error = jest.spyOn(snapshotStore['logger'], 'error').mockImplementation(() => undefined);
+			const error = vi.spyOn(snapshotStore['logger'], 'error').mockImplementation(() => undefined);
 
 			// Make sure the pool holds more than the connection that terminates the others
 			await Promise.all([pool.query('SELECT pg_sleep(0.05)'), pool.query('SELECT pg_sleep(0.05)')]);
@@ -830,7 +830,7 @@ describe(PostgresSnapshotStore, () => {
 
 		beforeAll(dropTables);
 		afterAll(dropTables);
-		afterEach(() => jest.restoreAllMocks());
+		afterEach(() => vi.restoreAllMocks());
 
 		it('should create a secondary index for every new collection', async () => {
 			const collection = await snapshotStore.ensureCollection('postgres-index');
@@ -866,7 +866,7 @@ describe(PostgresSnapshotStore, () => {
 		});
 
 		it('should not build a missing index on an existing collection but log how to create it', async () => {
-			const warn = jest.spyOn(snapshotStore['logger'], 'warn').mockImplementation(() => undefined);
+			const warn = vi.spyOn(snapshotStore['logger'], 'warn').mockImplementation(() => undefined);
 			const table = SnapshotCollection.get('postgres-existing');
 			const statement =
 				'CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_postgres-existing-snapshots_aggregate_name_latest" ON "postgres-existing-snapshots" (aggregate_name, latest)';
@@ -901,7 +901,7 @@ describe(PostgresSnapshotStore, () => {
 
 		it('should roll back a new collection when its index cannot be created', async () => {
 			const query = Client.prototype.query;
-			jest.spyOn(Client.prototype, 'query').mockImplementation(function (this: Client, ...args: unknown[]) {
+			vi.spyOn(Client.prototype, 'query').mockImplementation(function (this: Client, ...args: unknown[]) {
 				if (typeof args[0] === 'string' && args[0].startsWith('CREATE INDEX IF NOT EXISTS')) {
 					return Promise.reject(new Error('could not extend file'));
 				}

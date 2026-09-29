@@ -38,7 +38,7 @@ describe(PostgresEventStore, () => {
 	let eventStore: PostgresEventStore;
 	let envelopesAccountA: EventEnvelope[];
 	let envelopesAccountB: EventEnvelope[];
-	const publish = jest.fn(async () => Promise.resolve());
+	const publish = vi.fn(async () => Promise.resolve());
 
 	let pool: Pool;
 
@@ -305,7 +305,7 @@ describe(PostgresEventStore, () => {
 	});
 
 	describe('lifecycle', () => {
-		afterEach(() => jest.restoreAllMocks());
+		afterEach(() => vi.restoreAllMocks());
 
 		it('should fail to connect when the database is unreachable', async () => {
 			const unreachableStore = new PostgresEventStore(eventMap, {
@@ -319,7 +319,7 @@ describe(PostgresEventStore, () => {
 		});
 
 		it('should discard idle connections that fail instead of crashing', async () => {
-			const error = jest.spyOn(eventStore['logger'], 'error').mockImplementation(() => undefined);
+			const error = vi.spyOn(eventStore['logger'], 'error').mockImplementation(() => undefined);
 
 			// Make sure the pool holds more than the connection that terminates the others
 			await Promise.all([pool.query('SELECT pg_sleep(0.05)'), pool.query('SELECT pg_sleep(0.05)')]);
@@ -725,7 +725,7 @@ describe(PostgresEventStore, () => {
 
 		beforeAll(dropTables);
 		afterAll(dropTables);
-		afterEach(() => jest.restoreAllMocks());
+		afterEach(() => vi.restoreAllMocks());
 
 		it('should create a secondary index for every new collection', async () => {
 			const collection = await eventStore.ensureCollection('postgres-index');
@@ -761,7 +761,7 @@ describe(PostgresEventStore, () => {
 		});
 
 		it('should not build a missing index on an existing collection but log how to create it', async () => {
-			const warn = jest.spyOn(eventStore['logger'], 'warn').mockImplementation(() => undefined);
+			const warn = vi.spyOn(eventStore['logger'], 'warn').mockImplementation(() => undefined);
 			const table = EventCollection.get('postgres-existing');
 			const statement =
 				'CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_postgres-existing-events_event_date_id" ON "postgres-existing-events" (event_date, event_id)';
@@ -783,7 +783,7 @@ describe(PostgresEventStore, () => {
 		});
 
 		it('should accept an existing index on the same columns regardless of its name', async () => {
-			const warn = jest.spyOn(eventStore['logger'], 'warn').mockImplementation(() => undefined);
+			const warn = vi.spyOn(eventStore['logger'], 'warn').mockImplementation(() => undefined);
 			const table = EventCollection.get('postgres-existing-indexed');
 
 			await createUnindexedTable(table);
@@ -798,9 +798,9 @@ describe(PostgresEventStore, () => {
 		});
 
 		it('should log how to create the index of a new collection when the role may not create it', async () => {
-			const warn = jest.spyOn(eventStore['logger'], 'warn').mockImplementation(() => undefined);
+			const warn = vi.spyOn(eventStore['logger'], 'warn').mockImplementation(() => undefined);
 			const query = Client.prototype.query;
-			jest.spyOn(Client.prototype, 'query').mockImplementation(function (this: Client, ...args: unknown[]) {
+			vi.spyOn(Client.prototype, 'query').mockImplementation(function (this: Client, ...args: unknown[]) {
 				if (typeof args[0] === 'string' && args[0].startsWith('CREATE INDEX IF NOT EXISTS')) {
 					return Promise.reject(Object.assign(new Error('must be owner of table'), { code: '42501' }));
 				}
@@ -823,7 +823,7 @@ describe(PostgresEventStore, () => {
 
 		it('should roll back a new collection when its index cannot be created', async () => {
 			const query = Client.prototype.query;
-			jest.spyOn(Client.prototype, 'query').mockImplementation(function (this: Client, ...args: unknown[]) {
+			vi.spyOn(Client.prototype, 'query').mockImplementation(function (this: Client, ...args: unknown[]) {
 				if (typeof args[0] === 'string' && args[0].startsWith('CREATE INDEX IF NOT EXISTS')) {
 					return Promise.reject(new Error('could not extend file'));
 				}

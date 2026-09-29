@@ -5,8 +5,12 @@
 		"build": {
 			"dependsOn": ["^build"]
 		},
-		"test": {},
-		"test:cov": {},
+		"test": {
+			"inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/packages/config/vitest/**"]
+		},
+		"test:cov": {
+			"inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/packages/config/vitest/**"]
+		},
 		"ci": {
 			"inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/.oxlintrc.json", "$TURBO_ROOT$/.oxfmtrc.json"]
 		},
