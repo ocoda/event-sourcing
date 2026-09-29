@@ -141,7 +141,9 @@ describe('the interim path of stores that override appendEvents', () => {
 		['invalid headers', { expectedVersion: 0, metadata: { headers: { $a: 'b' } } }, InvalidEventMetadataException],
 		['an invalid expected version', { expectedVersion: -1 }, InvalidAppendOptionsException],
 	])('rejects %s in the options form, without calling the store', async (_description, options, exception, fields) => {
-		const error = await base().appendEvents(eventStreamAccountA, events.slice(0, 1), options as never).catch((e) => e);
+		const error = await base()
+			.appendEvents(eventStreamAccountA, events.slice(0, 1), options as never)
+			.catch((e) => e);
 
 		expect(error).toBeInstanceOf(exception);
 		if (fields) {

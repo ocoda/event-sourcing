@@ -135,8 +135,6 @@ negativeControl(
 	}),
 );
 
-negativeControl(
-	'lost-uniqueness',
-	(context) => new LostUniquenessEventStore(context, { driver: InMemoryEventStore }),
-	['conflict-concurrent-appends'],
-);
+negativeControl('lost-uniqueness', (context) => new LostUniquenessEventStore(context, { driver: InMemoryEventStore }), [
+	'conflict-concurrent-appends',
+]);

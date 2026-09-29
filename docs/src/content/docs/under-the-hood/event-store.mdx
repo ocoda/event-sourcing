@@ -4,6 +4,95 @@ title: Event Store
 
 import { Aside } from '@astrojs/starlight/components';
 
-<Aside type="caution" title="Under construction">
-This page is under construction.
+<Aside type="note" title="4.0 prerelease">
+This page describes the event store of the 4.0 prereleases. The in-memory store implements all of it. The PostgreSQL, MariaDB and MongoDB stores keep their 3.x appends (no global positions, no `readAll`, no metadata in the options) until they move to schema v2 in a later prerelease.
 </Aside>
+
+The event store keeps the events of every aggregate in a **stream**, `EventStream.for(Account, id)`, whose events are numbered 1, 2, 3, … by their `version`. Streams live in a **pool**: the default pool, or a named one (`ensureCollection('tenant-1')`), for instance per tenant. Each pool is a collection (table) of its own.
+
+## Appending events [#appending-events]
+
+```ts
+const envelopes = await eventStore.appendEvents(stream, events, {
+	expectedVersion: account.version, // the version of the stream before the append
+	pool: tenantId, // optional, the default pool otherwise
+	metadata: { correlationId, causationId, headers }, // optional, see Envelopes
+	publish: true, // default; false for imports and migrations
+});
+```
+
+An append stores all of its events or none of them, and returns one [envelope](/under-the-hood/envelopes) per event, with its `version` and its `globalPosition`.
+
+- **`expectedVersion`** is the version the stream must have **before** the append: `ExpectedVersion.NoStream` (0) for a new stream, or the version of the last event you read. If the stream is at another version, the append throws an `EventStoreVersionConflictException` and writes nothing. That includes a stream that is behind the expected version: an append can't leave a gap in the versions.
+- **`ExpectedVersion.Any`** appends after whatever the stream holds. When concurrent appends keep taking the versions, it retries up to `ANY_MAX_ATTEMPTS` (16) times with a short random backoff, with the same event ids. Under sustained contention on one stream it can still end in a conflict, so retry such a conflict in your application.
+- **An empty append** returns `[]` without touching the database or the publishers.
+- **Invalid arguments** are rejected before any I/O: an `InvalidAppendOptionsException` for the options, an `InvalidEventMetadataException` for the metadata, an `InvalidEventEnvelopeException` for pre-built envelopes that don't continue the stream or values over the [limits](#limits).
+- **Other failures** throw an `EventStorePersistenceException`. Its `outcome` is `'not-persisted'` when nothing was written, and `'unknown'` when the events may have been stored. Retrying with the same numeric expected version is safe in both cases: if the first attempt was stored, the retry conflicts.
+
+Match these errors on their `code` and fields, with `isEventSourcingError(error, EventSourcingErrorCode.EventStoreVersionConflict)`, not on their message.
+
+The 3.x form, `appendEvents(stream, aggregateVersion, events, pool?)`, passes the version of the aggregate **after** the append: the expected version is `aggregateVersion - events.length`. It is deprecated, emits a `DeprecationWarning` (`OCODA_ES_POSITIONAL_APPEND`) once per process, and will be removed in 5.0.
+
+### Pre-built envelopes [#pre-built-envelopes]
+
+An append can store `EventEnvelope`s instead of events, for instance to import events from another store. They keep their `eventId`, `occurredOn`, correlation id, causation id, headers and event version; the store assigns their global position. They need a numeric expected version, the aggregate id of the stream, and the versions that continue it: the item at index `i` has the version `expectedVersion + 1 + i`. Events and envelopes can be mixed in one append.
+
+```ts
+await eventStore.appendEvents(stream, importedEnvelopes, { expectedVersion: ExpectedVersion.NoStream, publish: false });
+```
+
+## Publishing [#publishing]
+
+Once the events are stored, the store hands their envelopes to the `EventBus`, which passes them to the event publishers and subscribers. See [Event Pub/Sub](/advanced/event-pubsub). Publishing never makes the append fail: the events are stored at that point. `publish: false` skips it.
+
+## Reading a stream [#reading-a-stream]
+
+- `getEvents(stream, filter?)` yields the events of a stream in batches, `getEvent(stream, version, pool?)` returns one. Both deserialize the events with their serializer.
+- `getEnvelopes(stream, filter?)` and `getEnvelope(stream, version, pool?)` return the envelopes, with the metadata and the global position, without deserializing.
+
+The filter takes `fromVersion`, `direction` (`StreamReadingDirection.FORWARD` or `BACKWARD`), `limit`, `batch` and `pool`. Every read of a pool whose collection doesn't exist throws an `EventCollectionNotFoundException`.
+
+## Reading all events [#reading-all-events]
+
+Every event gets a **global position** when it is stored: a `bigint`, per pool, starting at `1n`. The events of one append have consecutive positions, and a position is never reused. `readAll` reads a pool across streams, in the order of these positions:
+
+```ts
+let checkpoint = await loadCheckpoint(); // 0n the first time
+
+for await (const envelopes of eventStore.readAll({ fromPosition: checkpoint + 1n, batch: 100, pool })) {
+	for (const envelope of envelopes) {
+		await project(envelope);
+		checkpoint = envelope.metadata.globalPosition;
+	}
+	await saveCheckpoint(checkpoint);
+}
+```
+
+`fromPosition` is inclusive, like `fromVersion`: resume after a checkpoint with `checkpoint + 1n`. Store the checkpoint as a string (`checkpoint.toString()`) where JSON can't hold a bigint.
+
+What a position guarantees depends on the store's `capabilities.globalOrder`:
+
+- **`'gap-safe'`**: once `readAll` yielded a position, no event at or below it commits later. A reader that resumes after its last position never misses an event, even while other appends are running. The in-memory store is gap-safe.
+- **`'best-effort'`**: positions strictly increase, but an event can still commit below a position that was already read, while appends run. Read again from an older position, or wait until the writers are done, to be sure to see every event.
+
+The in-memory store implements `readAll`; the database stores implement it with schema v2. It replaces `getAllEnvelopes({ since, until })`: to read a period, filter the envelopes on `metadata.occurredOn`.
+
+## Capabilities [#capabilities]
+
+`eventStore.capabilities` lists the optional guarantees of a store, final once it is connected:
+
+| Capability | Meaning | In-memory |
+| --- | --- | --- |
+| `atomicAppend` | An append stores all of its events or none. | `true` |
+| `headers` | The store persists headers; without it, an append with headers is rejected. | `true` |
+| `globalOrder` | `'gap-safe'` or `'best-effort'`, see [Reading all events](#reading-all-events). | `'gap-safe'` |
+
+`resolveCapabilities(store.capabilities)` fills in the defaults of a store that leaves a flag out: `atomicAppend: true`, `headers: false`, `globalOrder: 'best-effort'`.
+
+## Limits [#limits]
+
+`EVENT_STORE_LIMITS` holds the largest values every store accepts, checked before any I/O: stream ids, aggregate ids, event names, correlation ids and causation ids of at most 255 characters, and headers of at most 8 KiB of JSON.
+
+## Custom stores [#custom-stores]
+
+A store implements the driver methods, such as `persistEvents` and `readAll`, and the `EventStore` base class does the rest. See [Custom Event and Snapshot Stores](/advanced/custom-stores).

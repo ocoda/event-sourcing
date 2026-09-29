@@ -29,8 +29,7 @@ export const createEventStore = (
 	eventMapOrContext: EventMap | EventStoreContext = getEventMap(),
 ): TestEventStore => {
 	const publish = vi.fn(async (_envelope: EventEnvelope<IEvent>) => undefined);
-	const context =
-		'publisher' in eventMapOrContext ? eventMapOrContext : createTestContext(eventMapOrContext, publish);
+	const context = 'publisher' in eventMapOrContext ? eventMapOrContext : createTestContext(eventMapOrContext, publish);
 	const store = new MongoDBEventStore(context, { driver: undefined as never, url: standaloneUrl(), ...overrides });
 
 	return { store, publish, eventMap: context.eventMap };

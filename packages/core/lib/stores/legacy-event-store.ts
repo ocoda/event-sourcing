@@ -70,7 +70,10 @@ export const createLegacyEventStoreProxy = <T extends EventStore<unknown>>(
 			throw new UnsupportedOperationException({ operation: 'ExpectedVersion.Any', component });
 		}
 		const { correlationId, causationId } = (append.metadata ?? {}) as Record<string, unknown>;
-		if ((correlationId !== undefined && correlationId !== null) || (causationId !== undefined && causationId !== null)) {
+		if (
+			(correlationId !== undefined && correlationId !== null) ||
+			(causationId !== undefined && causationId !== null)
+		) {
 			throw new UnsupportedOperationException({ operation: 'append metadata', component });
 		}
 		return {

@@ -110,7 +110,7 @@ export abstract class EventStore<TOptions = Omit<EventSourcingModuleOptions['eve
 	 *
 	 * ```ts
 	 * await eventStore.appendEvents(stream, events, { expectedVersion: ExpectedVersion.NoStream });
-	 * await eventStore.appendEvents(stream, events, { expectedVersion: account.committedVersion, pool: tenantId });
+	 * await eventStore.appendEvents(stream, events, { expectedVersion: lastReadVersion, pool: tenantId });
 	 * ```
 	 *
 	 * - `expectedVersion` is the version of the stream before the append (`ExpectedVersion.NoStream`, 0, for a new
@@ -170,7 +170,9 @@ export abstract class EventStore<TOptions = Omit<EventSourcingModuleOptions['eve
 			}
 
 			const envelopes =
-				expectedVersion === ExpectedVersion.Any ? drafts.map((draft, index) => renumber(draft, head + 1 + index)) : drafts;
+				expectedVersion === ExpectedVersion.Any
+					? drafts.map((draft, index) => renumber(draft, head + 1 + index))
+					: drafts;
 
 			const outcome = await this.persist(envelopes, { stream, collection, expectedVersion: head, pool });
 			if (outcome.status === 'committed') {
@@ -188,7 +190,7 @@ export abstract class EventStore<TOptions = Omit<EventSourcingModuleOptions['eve
 			}
 			throw new EventStoreVersionConflictException(
 				{ stream, expectedVersion, actualVersion: outcome.actualVersion, pool },
-				{ cause: outcome.cause },
+				outcome.cause === undefined ? undefined : { cause: outcome.cause },
 			);
 		}
 	}
@@ -290,7 +292,9 @@ export abstract class EventStore<TOptions = Omit<EventSourcingModuleOptions['eve
 	 */
 	// INTERIM(H)
 	getAllEnvelopes(_filter: IAllEventsFilter): AsyncGenerator<EventEnvelope[]> {
-		return failing(new UnsupportedOperationException({ operation: 'getAllEnvelopes', component: this.constructor.name }));
+		return failing(
+			new UnsupportedOperationException({ operation: 'getAllEnvelopes', component: this.constructor.name }),
+		);
 	}
 
 	/**
@@ -402,10 +406,7 @@ export abstract class EventStore<TOptions = Omit<EventSourcingModuleOptions['eve
 			if (isEventSourcingError(error, EventSourcingErrorCode.EventStorePersistence)) {
 				throw error;
 			}
-			throw new EventStorePersistenceException(
-				{ collection: target.collection, outcome: 'unknown' },
-				{ cause: error },
-			);
+			throw new EventStorePersistenceException({ collection: target.collection, outcome: 'unknown' }, { cause: error });
 		}
 		if (outcome?.status !== 'committed' && outcome?.status !== 'conflict') {
 			throw new EventStorePersistenceException(

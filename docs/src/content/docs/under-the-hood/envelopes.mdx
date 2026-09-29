@@ -2,8 +2,65 @@
 title: Envelopes
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+The event store stores every event in an `EventEnvelope`: the name of the event, its serialized `payload`, and its `metadata`. The store returns envelopes from `appendEvents`, `getEnvelope(s)` and `readAll`, and the event publishers and subscribers receive them.
 
-<Aside type="caution" title="Under construction">
-This page is under construction.
-</Aside>
+```ts
+const [envelope] = await eventStore.appendEvents(stream, [new AccountOpenedEvent()], {
+	expectedVersion: ExpectedVersion.NoStream,
+});
+
+envelope.event; // 'account-opened'
+envelope.payload; // the serialized event
+envelope.metadata.version; // 1
+envelope.metadata.globalPosition; // 42n
+```
+
+## Metadata [#metadata]
+
+| Field | Type | What it is |
+| --- | --- | --- |
+| `eventId` | `EventId` | The unique id of the event, a ULID generated when it was appended. The ids of one store's appends are generated in order. |
+| `aggregateId` | `string` | The id of the aggregate the stream belongs to. |
+| `version` | `number` | The position of the event in its stream: 1, 2, 3, … |
+| `occurredOn` | `Date` | When the event occurred: the time of its id, unless a pre-built envelope carried its own. |
+| `correlationId` | `string`, optional | The id of the request, message or event the append originates from. |
+| `causationId` | `string`, optional | The id of the message or event that directly caused the append. |
+| `headers` | `EventHeaders`, optional | Key-value metadata stored with the event. See [Headers](#headers). |
+| `eventVersion` | `number`, optional | The version of the event's schema. Only set when a pre-built envelope carried it; reserved for upcasting. |
+| `globalPosition` | `bigint`, optional | The position of the event in its pool, across streams. Set once the event is stored. See [Reading all events](/under-the-hood/event-store#reading-all-events). |
+
+Events stored by 3.x have no headers, event version or (until the schema v2 migration) global position.
+
+## Correlation, causation and headers [#headers]
+
+An append sets the metadata of all its events:
+
+```ts
+await eventStore.appendEvents(stream, events, {
+	expectedVersion: account.version,
+	metadata: {
+		correlationId: request.id,
+		causationId: command.id,
+		headers: { tenant: 'acme', userId: 'u-42', retried: false },
+	},
+});
+```
+
+- `correlationId` and `causationId` are strings of at most 255 characters.
+- `headers` is an object of at most 8 KiB of JSON. Its keys are not empty and don't start with `$`, which is reserved for the library (such as a future `$traceparent`). Its values are strings, finite numbers, booleans or `null`.
+- Invalid metadata is rejected with an `InvalidEventMetadataException` before anything is written.
+- A store without the `headers` capability rejects headers with an `UnsupportedOperationException`, rather than dropping them. The in-memory store supports headers; the database stores support them with schema v2.
+- Events appended without headers read back without the `headers` field, and empty headers (`{}`) are not stored.
+
+[Pre-built envelopes](/under-the-hood/event-store#pre-built-envelopes) keep the metadata they carry, including `$` headers. The metadata of the append only fills the fields they lack; `headers` counts as one field, so the headers of the append are not merged into those of an envelope.
+
+## JSON [#json]
+
+`JSON.stringify(envelope)` writes the envelope through `envelope.toJSON()`, which renders the `globalPosition` (a bigint) as a decimal string instead of throwing:
+
+```ts
+JSON.stringify(envelope);
+// {"event":"account-opened","payload":{...},"metadata":{..., "globalPosition":"42"}}
+```
+
+Parse it back with `BigInt(json.metadata.globalPosition)`.

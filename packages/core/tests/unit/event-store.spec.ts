@@ -1,4 +1,10 @@
-import { Aggregate, EventCollection, type EventEnvelope, EventStore, type IEventCollection } from '@ocoda/event-sourcing';
+import {
+	Aggregate,
+	EventCollection,
+	type EventEnvelope,
+	EventStore,
+	type IEventCollection,
+} from '@ocoda/event-sourcing';
 import { createTestContext } from '@ocoda/event-sourcing-testing/unit';
 
 // INTERIM(H): getYearMonthRange goes with getAllEnvelopes, before 4.0.

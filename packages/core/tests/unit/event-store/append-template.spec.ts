@@ -122,7 +122,10 @@ describe('EventStore.appendEvents', () => {
 		it('publishes nothing when publish is false', async () => {
 			const { store, publishAll } = createStubStore();
 
-			const envelopes = await store.appendEvents(newStream(), events.slice(0, 1), { expectedVersion: 0, publish: false });
+			const envelopes = await store.appendEvents(newStream(), events.slice(0, 1), {
+				expectedVersion: 0,
+				publish: false,
+			});
 
 			expect(envelopes).toHaveLength(1);
 			expect(publishAll).not.toHaveBeenCalled();
@@ -349,26 +352,29 @@ describe('EventStore.appendEvents', () => {
 			['older', 5, 3],
 			['newer (a gap)', 3, 5],
 			['new stream expected, existing stream found', 2, 0],
-		])('throws a conflict when the stream is %s than expected, writing nothing', async (_description, head, expected) => {
-			const { store, publishAll } = createStubStore();
-			const stream = newStream();
-			store.head = head;
+		])(
+			'throws a conflict when the stream is %s than expected, writing nothing',
+			async (_description, head, expected) => {
+				const { store, publishAll } = createStubStore();
+				const stream = newStream();
+				store.head = head;
 
-			const error = await rejectionOf(
-				store.appendEvents(stream, events.slice(0, 1), { expectedVersion: expected, pool: 'p' }),
-			);
+				const error = await rejectionOf(
+					store.appendEvents(stream, events.slice(0, 1), { expectedVersion: expected, pool: 'p' }),
+				);
 
-			expect(error).toBeInstanceOf(EventStoreVersionConflictException);
-			expect(error).toMatchObject({
-				code: EventSourcingErrorCode.EventStoreVersionConflict,
-				streamId: stream.streamId,
-				pool: 'p',
-				expectedVersion: expected,
-				actualVersion: head,
-			});
-			expect(store.persisted).toEqual([]);
-			expect(publishAll).not.toHaveBeenCalled();
-		});
+				expect(error).toBeInstanceOf(EventStoreVersionConflictException);
+				expect(error).toMatchObject({
+					code: EventSourcingErrorCode.EventStoreVersionConflict,
+					streamId: stream.streamId,
+					pool: 'p',
+					expectedVersion: expected,
+					actualVersion: head,
+				});
+				expect(store.persisted).toEqual([]);
+				expect(publishAll).not.toHaveBeenCalled();
+			},
+		);
 
 		it('turns a failure to read the version into a not-persisted persistence exception', async () => {
 			const { store } = createStubStore();
@@ -404,9 +410,7 @@ describe('EventStore.appendEvents', () => {
 				const failure = new EventStorePersistenceException({ collection: 'events', outcome });
 				store.outcome = () => Promise.reject(failure);
 
-				await expect(
-					store.appendEvents(newStream(), events.slice(0, 1), { expectedVersion: 0 }),
-				).rejects.toBe(failure);
+				await expect(store.appendEvents(newStream(), events.slice(0, 1), { expectedVersion: 0 })).rejects.toBe(failure);
 			}
 			expect(publishAll).not.toHaveBeenCalled();
 		});
@@ -566,7 +570,12 @@ describe('EventStore.appendEvents', () => {
 			const envelopes = await store.appendEvents(stream, 5, events.slice(0, 2), 'tenant');
 
 			expect(versionsOf(envelopes)).toEqual([4, 5]);
-			expect(store.persisted[0][1]).toEqual({ stream, collection: 'tenant-events', expectedVersion: 3, pool: 'tenant' });
+			expect(store.persisted[0][1]).toEqual({
+				stream,
+				collection: 'tenant-events',
+				expectedVersion: 3,
+				pool: 'tenant',
+			});
 		});
 
 		it('emits a DeprecationWarning once per process', async () => {

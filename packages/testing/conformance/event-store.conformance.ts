@@ -175,7 +175,8 @@ const versionsOf = (envelopes: readonly EventEnvelope[]): number[] => envelopes.
 const positionsOf = (envelopes: readonly EventEnvelope[]): (bigint | undefined)[] =>
 	envelopes.map(({ metadata }) => metadata.globalPosition);
 
-const idsOf = (envelopes: readonly EventEnvelope[]): string[] => envelopes.map(({ metadata }) => metadata.eventId.value);
+const idsOf = (envelopes: readonly EventEnvelope[]): string[] =>
+	envelopes.map(({ metadata }) => metadata.eventId.value);
 
 /**
  * The parts of an envelope that must survive a round trip through the store.
@@ -267,10 +268,11 @@ export const describeEventStoreConformance = (
 		let handle: EventStoreConformanceHandle<ConformanceEventStore> | undefined;
 		let store: ConformanceEventStore;
 
-		// The pools some cases create for themselves, dropped at the end
+		// The pools some cases create for themselves, dropped at the end. Numbered, so that a repeated case
+		// (CONFORMANCE_REPEAT) gets a fresh pool every time.
 		const createdPools: IEventPool[] = [];
 		const createPool = async (suffix: string): Promise<IEventPool> => {
-			const created = `${pool}-${suffix}`;
+			const created = `${pool}-${suffix}${createdPools.length + 1}`;
 			createdPools.push(created);
 			await store.ensureCollection(created);
 			return created;
@@ -623,7 +625,11 @@ export const describeEventStoreConformance = (
 						await expectRejectionOfClass(
 							append(
 								stream,
-								[new ConformanceRecorded(1), new ConformancePayloadProbed({ poisoned: true }), new ConformanceRecorded(3)],
+								[
+									new ConformanceRecorded(1),
+									new ConformancePayloadProbed({ poisoned: true }),
+									new ConformanceRecorded(3),
+								],
 								ExpectedVersion.NoStream,
 								atomicPool,
 							),
@@ -1090,7 +1096,11 @@ export const describeEventStoreConformance = (
 				async () => {
 					const filter = { pool: unknownPool };
 					const fields = { collection: EventCollection.get(unknownPool), pool: unknownPool };
-					await expectRejectionOfClass(drain(store.getEvents(reference, filter)), EventCollectionNotFoundException, fields);
+					await expectRejectionOfClass(
+						drain(store.getEvents(reference, filter)),
+						EventCollectionNotFoundException,
+						fields,
+					);
 					await expectRejectionOfClass(
 						drain(store.getEnvelopes(reference, filter)),
 						EventCollectionNotFoundException,
@@ -1354,12 +1364,12 @@ export const describeEventStoreConformance = (
 						['an empty header key', { headers: { '': 'a' } }, { field: 'headers', reason: 'empty-key' }],
 						['an object header value', { headers: { a: { b: 1 } } }, { field: 'headers', reason: 'invalid-value' }],
 						['a NaN header value', { headers: { a: Number.NaN } }, { field: 'headers', reason: 'invalid-value' }],
+						['headers over 8 KiB', { headers: { a: 'x'.repeat(8 * 1024) } }, { field: 'headers', reason: 'too-large' }],
 						[
-							'headers over 8 KiB',
-							{ headers: { a: 'x'.repeat(8 * 1024) } },
-							{ field: 'headers', reason: 'too-large' },
+							'a long correlation id',
+							{ correlationId: 'c'.repeat(256) },
+							{ field: 'correlationId', reason: 'too-long' },
 						],
-						['a long correlation id', { correlationId: 'c'.repeat(256) }, { field: 'correlationId', reason: 'too-long' }],
 						['a long causation id', { causationId: 'c'.repeat(256) }, { field: 'causationId', reason: 'too-long' }],
 						['a numeric correlation id', { correlationId: 42 }, { field: 'correlationId', reason: 'invalid-type' }],
 					];
@@ -1434,9 +1444,9 @@ export const describeEventStoreConformance = (
 
 					expectConsecutive(appended, 'the appended positions');
 					expect(positionsOf(await drain(readEnvelopes(stream)))).toEqual(positionsOf(appended));
-					expect(positionsOf(await drain(readEnvelopes(stream, { direction: StreamReadingDirection.BACKWARD })))).toEqual(
-						positionsOf(appended).reverse(),
-					);
+					expect(
+						positionsOf(await drain(readEnvelopes(stream, { direction: StreamReadingDirection.BACKWARD }))),
+					).toEqual(positionsOf(appended).reverse());
 					for (const envelope of appended) {
 						expect((await store.getEnvelope(stream, envelope.metadata.version, pool)).metadata.globalPosition).toBe(
 							envelope.metadata.globalPosition,
@@ -1445,49 +1455,47 @@ export const describeEventStoreConformance = (
 				},
 			);
 
-			test(
-				'read-all-resume',
-				'resumes at every position, inclusive, in batches of any size, per pool',
-				async () => {
-					const [first, second] = [await createPool('resume-a'), await createPool('resume-b')];
-					const [a, b, c] = [newEventStream(), newEventStream(), newEventStream()];
+			test('read-all-resume', 'resumes at every position, inclusive, in batches of any size, per pool', async () => {
+				const [first, second] = [await createPool('resume-a'), await createPool('resume-b')];
+				const [a, b, c] = [newEventStream(), newEventStream(), newEventStream()];
 
-					const appendedFirst: EventEnvelope[] = [];
-					const appendedSecond: EventEnvelope[] = [];
-					appendedFirst.push(...(await append(a, recordedEvents(2), ExpectedVersion.NoStream, first)));
-					appendedSecond.push(...(await append(c, recordedEvents(2), ExpectedVersion.NoStream, second)));
-					appendedFirst.push(...(await append(b, recordedEvents(1), ExpectedVersion.NoStream, first)));
-					appendedFirst.push(...(await append(a, recordedEvents(2, 3), 2, first)));
-					appendedSecond.push(...(await append(c, recordedEvents(1, 3), 2, second)));
+				const appendedFirst: EventEnvelope[] = [];
+				const appendedSecond: EventEnvelope[] = [];
+				appendedFirst.push(...(await append(a, recordedEvents(2), ExpectedVersion.NoStream, first)));
+				appendedSecond.push(...(await append(c, recordedEvents(2), ExpectedVersion.NoStream, second)));
+				appendedFirst.push(...(await append(b, recordedEvents(1), ExpectedVersion.NoStream, first)));
+				appendedFirst.push(...(await append(a, recordedEvents(2, 3), 2, first)));
+				appendedSecond.push(...(await append(c, recordedEvents(1, 3), 2, second)));
 
-					const inFirst = await readAllOf(first);
-					expect(idsOf(inFirst)).toEqual(idsOf(appendedFirst));
-					expect(positionsOf(inFirst)).toEqual(positionsOf(appendedFirst));
-					// The pools are independent
-					const inSecond = await readAllOf(second);
-					expect(idsOf(inSecond)).toEqual(idsOf(appendedSecond));
-					expect(positionsOf(inSecond)[0], 'the first position of the second pool').toBe(1n);
+				const inFirst = await readAllOf(first);
+				expect(idsOf(inFirst)).toEqual(idsOf(appendedFirst));
+				expect(positionsOf(inFirst)).toEqual(positionsOf(appendedFirst));
+				// The pools are independent
+				const inSecond = await readAllOf(second);
+				expect(idsOf(inSecond)).toEqual(idsOf(appendedSecond));
+				expect(positionsOf(inSecond)[0], 'the first position of the second pool').toBe(1n);
 
-					const positions = positionsOf(inFirst) as bigint[];
-					const last = positions[positions.length - 1];
-					for (const fromPosition of [undefined, 0n, ...positions, last + 1n, last + 10n]) {
-						const expected = inFirst.filter(({ metadata }) => (metadata.globalPosition as bigint) >= (fromPosition ?? 0n));
-						for (let batch = 1; batch <= inFirst.length + 1; batch++) {
-							const description = `readAll(${stringify({ fromPosition, batch })})`;
-							const batches = await collectBatches(store.readAll({ pool: first, fromPosition, batch }));
-							expect(idsOf(batches.flat()), `${description}`).toEqual(idsOf(expected));
-							expect(
-								batches.map((read) => read.length),
-								`${description}: batches`,
-							).toEqual(
-								Array.from({ length: Math.ceil(expected.length / batch) }, (_, index) =>
-									Math.min(batch, expected.length - index * batch),
-								),
-							);
-						}
+				const positions = positionsOf(inFirst) as bigint[];
+				const last = positions[positions.length - 1];
+				for (const fromPosition of [undefined, 0n, ...positions, last + 1n, last + 10n]) {
+					const expected = inFirst.filter(
+						({ metadata }) => (metadata.globalPosition as bigint) >= (fromPosition ?? 0n),
+					);
+					for (let batch = 1; batch <= inFirst.length + 1; batch++) {
+						const description = `readAll(${stringify({ fromPosition, batch })})`;
+						const batches = await collectBatches(store.readAll({ pool: first, fromPosition, batch }));
+						expect(idsOf(batches.flat()), `${description}`).toEqual(idsOf(expected));
+						expect(
+							batches.map((read) => read.length),
+							`${description}: batches`,
+						).toEqual(
+							Array.from({ length: Math.ceil(expected.length / batch) }, (_, index) =>
+								Math.min(batch, expected.length - index * batch),
+							),
+						);
 					}
-				},
-			);
+				}
+			});
 
 			test(
 				'read-all-gap-safe',
@@ -1540,10 +1548,12 @@ export const describeEventStoreConformance = (
 					expect(repeated, 'events the tailing reader read more than once').toEqual([]);
 					expect(read).toHaveLength(appended.length);
 
-					const positionById = new Map(appended.map(({ metadata }) => [metadata.eventId.value, metadata.globalPosition]));
-					expect(read.every(({ metadata }) => positionById.get(metadata.eventId.value) === metadata.globalPosition)).toBe(
-						true,
+					const positionById = new Map(
+						appended.map(({ metadata }) => [metadata.eventId.value, metadata.globalPosition]),
 					);
+					expect(
+						read.every(({ metadata }) => positionById.get(metadata.eventId.value) === metadata.globalPosition),
+					).toBe(true);
 				},
 				{
 					timeout: heavyTimeout,

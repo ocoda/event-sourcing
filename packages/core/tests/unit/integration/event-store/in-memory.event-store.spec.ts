@@ -64,8 +64,12 @@ describe(InMemoryEventStore, () => {
 	});
 
 	it('should append event envelopes', async () => {
-		await eventStore.appendEvents(eventStreamAccountA, envelopesAccountA, { expectedVersion: ExpectedVersion.NoStream });
-		await eventStore.appendEvents(eventStreamAccountB, envelopesAccountB, { expectedVersion: ExpectedVersion.NoStream });
+		await eventStore.appendEvents(eventStreamAccountA, envelopesAccountA, {
+			expectedVersion: ExpectedVersion.NoStream,
+		});
+		await eventStore.appendEvents(eventStreamAccountB, envelopesAccountB, {
+			expectedVersion: ExpectedVersion.NoStream,
+		});
 
 		const entities: InMemoryEventEntity[] = eventStore.collections.get('events') || [];
 		const entitiesAccountA = entities.filter(
@@ -424,9 +428,7 @@ describe(`${InMemoryEventStore.name} lifecycle, reads and publishing`, () => {
 
 		expect(error).toBeInstanceOf(EventStoreVersionConflictException);
 		expect(error).toMatchObject({ expectedVersion: 1, actualVersion: 2 });
-		expect((error as Error).cause).toEqual(
-			new Error(`Duplicate key (${stream.streamId}, 2) in the events collection`),
-		);
+		expect((error as Error).cause).toEqual(new Error(`Duplicate key (${stream.streamId}, 2) in the events collection`));
 	});
 
 	it('does not reject the append when publishing fails', async () => {

@@ -211,7 +211,7 @@ describe(conformanceTest, () => {
 		);
 
 		test('broken', 'registers a case that must fail', async () => {
-			expect('the detector').toBe('firing');
+			throw new Error('the detector fired');
 		});
 
 		it('passes because the case failed', ({ task }) => {

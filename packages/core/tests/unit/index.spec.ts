@@ -44,7 +44,9 @@ describe('public entrypoint', () => {
 	it('keeps the internals of the store template out of the exports', () => {
 		expect(
 			Object.keys(EventSourcing).filter((key) =>
-				/normalizeAppendArguments|LegacyEventStore|overriddenTemplateMethods|EVENT_STORE_BASE|PositionalAppend/.test(key),
+				/normalizeAppendArguments|LegacyEventStore|overriddenTemplateMethods|EVENT_STORE_BASE|PositionalAppend/.test(
+					key,
+				),
 			),
 		).toEqual([]);
 	});

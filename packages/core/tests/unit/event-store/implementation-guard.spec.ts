@@ -46,7 +46,10 @@ class DecoratesPersistEvents extends StubEventStore {
 	}
 }
 
-const context = (): EventStoreContext => ({ eventMap: new EventMap(), publisher: { publishAll: async () => undefined } });
+const context = (): EventStoreContext => ({
+	eventMap: new EventMap(),
+	publisher: { publishAll: async () => undefined },
+});
 
 describe(assertEventStoreImplementation, () => {
 	it('accepts a store that only implements the driver methods, also when it decorates persistEvents', () => {
@@ -72,9 +75,7 @@ describe(assertEventStoreImplementation, () => {
 		const store = new StubEventStore(context(), {});
 		Object.defineProperty(store, 'appendEvents', { value: async () => [] });
 
-		expect(() => assertEventStoreImplementation(store)).toThrow(
-			expect.objectContaining({ methods: ['appendEvents'] }),
-		);
+		expect(() => assertEventStoreImplementation(store)).toThrow(expect.objectContaining({ methods: ['appendEvents'] }));
 	});
 
 	it('stops at the base class of another copy of the package', () => {
@@ -152,7 +153,9 @@ describe('EventStoreProvider', () => {
 			}
 		}
 
-		const store = await EventStoreProvider.useFactory(eventMap, eventBus, { eventStore: { driver: LegacyStore as never } });
+		const store = await EventStoreProvider.useFactory(eventMap, eventBus, {
+			eventStore: { driver: LegacyStore as never },
+		});
 
 		expect(isLegacyEventStore(store)).toBe(true);
 	});

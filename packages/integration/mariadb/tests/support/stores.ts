@@ -25,8 +25,7 @@ export const createEventStore = (
 	eventMapOrContext: EventMap | EventStoreContext = getEventMap(),
 ): TestEventStore => {
 	const publish = vi.fn(async (_envelope: EventEnvelope<IEvent>) => undefined);
-	const context =
-		'publisher' in eventMapOrContext ? eventMapOrContext : createTestContext(eventMapOrContext, publish);
+	const context = 'publisher' in eventMapOrContext ? eventMapOrContext : createTestContext(eventMapOrContext, publish);
 	const store = new MariaDBEventStore(context, { driver: undefined as never, ...mariadbTestConfig(), ...overrides });
 
 	return { store, publish, eventMap: context.eventMap };
