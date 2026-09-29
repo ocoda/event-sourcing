@@ -522,7 +522,41 @@ Each driver's schema v2 PR fills its subsection. Until then a driver claims noth
 
 ### PostgreSQL
 
-*Pending.* S1 and S2 results; `read-all-gap-safe` on PostgreSQL 13 to 17 (and 18 once it is in CI); the `relfilenode` check of the type widening.
+**Verdict:** `{ atomicAppend: true, headers: true, globalOrder: 'gap-safe' }`, claimed by the PostgreSQL schema v2 PR. Two techniques differ from §2 and §6 above, as the Wave 0 spikes recommended: the append is one data-modifying CTE (the counter `UPDATE … RETURNING`, then the `unnest` insert with positions `last_position - n + ordinality`) inside `BEGIN ISOLATION LEVEL READ COMMITTED … COMMIT`, and the event migration rewrites the table in place (numbered temporary copy, `TRUNCATE`, re-insert) instead of the backfill `UPDATE`. Both keep the properties the design relies on: the counter update is the first write and its row lock lasts until the transaction ends, and the table keeps its OID.
+
+**S1, position stress** (PostgreSQL 14.20, stock settings, in a 6-CPU colima VM on Apple silicon; data on tmpfs (A) and on disk with fsync (B)):
+
+- The counter-row design delivered every event exactly once, in strictly increasing positions, with no holes and the counter equal to `MAX(global_position)`, in every run: 29 correctness runs per environment (1 and 4 pools, 8 writers × 200 appends of 1–3 events, 20 % of the appends on one hot stream, two tailing keyset readers with batches of 100 and 10), two 40,000-append soaks with over 15,000 rolled-back conflicts each, and 5 + 6 runs of the CTE variant (in a `READ COMMITTED` transaction, and in autocommit) with a 40,000-append soak. A rolled-back append returned its positions every time.
+- The detector fires: a reserve → sleep ≤ 5 ms → commit variant was caught in 16 of 16 runs (≤ 1 ms: 6 of 6, also without holes), and a `nextval()` sequence without sleep in 16 of 16.
+- Explicit `READ COMMITTED` matters: under a `REPEATABLE READ` server default, a plain `BEGIN` got about 1.5 serialization failures per append, and 1 (A) and 5 (B) appends failed after 16 attempts; with the explicit level, none.
+- Why it holds (PostgreSQL `REL_14_STABLE`, `xact.c` 2200–2268): `CommitTransaction` writes the commit record, then leaves the proc array (the commit becomes visible to new snapshots), and only then releases its locks; a waiter on the counter row (`heap_update` → `XactLockTableWait`) wakes after that, so commit visibility follows position order. The abort path has the same order.
+- `ExpectedVersion.Any` under sustained contention on one stream: 12 of about 8,000 hot appends used all 16 attempts in a soak (documented: retry in the application).
+
+Appends per second per pool, 1–3 events per append, 8 writers unless noted (median of 3 runs):
+
+| Variant | A (tmpfs) | B (disk) |
+| --- | --- | --- |
+| §2 as written (4 statements) | 663 | 324 |
+| CTE in a `READ COMMITTED` transaction (implemented) | 1,033 | 390 |
+| The driver's `appendEvents` (with the version read), PostgreSQL 14.20 / 17.8, 1 pool × 1 writer | 331 / 317 | – |
+| The same, 1 pool × 8 writers | 1,053 / 1,057 | – |
+| The same, 4 pools × 8 writers, per pool | 534 / 502 | – |
+
+**S2, migration** (the same machine; the synthetic v1 table has the 3.0.2 DDL, 10 events per stream interleaved over two years, 100–150-byte payloads):
+
+| Rows, procedure | Environment | Total | Under `ACCESS EXCLUSIVE` | WAL | Table after (heap / indexes) |
+| --- | --- | --- | --- | --- | --- |
+| 1M, §6 backfill `UPDATE` | B | 200.1 s | 188.8 s | 3,350 MB | 610 / 133 MB (from 300 / 135) |
+| 1M, rewrite (implemented) | B | 19.5 s | 18.2 s | 516 MB | 300 / 100 MB |
+| 100k, the driver's `migrate()`, PostgreSQL 14.20 | A | 1.29 s | 0.84 s | 36 MB (the table: 33 MB) | 22 / 8 MB |
+| 100k, the driver's `migrate()`, PostgreSQL 17.8 | A | 0.97 s | 0.55 s | 36 MB | 22 / 8 MB |
+| 20k snapshots, the driver's `migrate()`, PostgreSQL 14.20 / 17.8 | A | 0.20 / 0.18 s | 0.08 / 0.07 s | 4 MB | – |
+
+- The runbook figure is about 0.3 minutes per million events, peak disk about 2.2 × the table (the temporary copy is in `temp_tablespaces`), and WAL about the table's size. 10M rows were not measured: the spike's 10M run filled the host disk, and the process rules cap local runs at 1M (and at 100k rows while the host has less than 15 GiB free, as it had for the driver runs).
+- The rewrite keeps the table's OID (grants, views and publication memberships survive); index OIDs and the relfilenode change. For snapshots, the `varchar → text` and `TIMESTAMP → TIMESTAMPTZ` conversion with `legacyTimeZone: 'UTC'` keeps the relfilenode (no rewrite), which `postgres.migration.spec.ts` asserts.
+- Robustness (spike and `postgres.migration.spec.ts`): a session idle in a transaction on the table makes the lock time out (`55P03`) and the table is reported `blocked`; a second migrator is refused by the advisory lock; a backend killed mid-migration, or a crash injected after every step, rolls back to v1, and a rerun ends in the same dump as a clean run. After the migration, a 3.x insert fails with `42703` in milliseconds. With Docker's default 64 MB `/dev/shm`, a parallel `VACUUM` fails with `53100`, so the driver runs `VACUUM (ANALYZE, PARALLEL 0)` after the commit and reports a failure as a warning.
+
+**CI:** *pending the PR's `ci-ok` run.* `read-all-gap-safe` (and the whole conformance suite without skips), the migration specs with crash injection, and the cross-version fixture on PostgreSQL 13 to 18. Locally: PostgreSQL 14.20 and 17.8 green, the concurrency cases (`read-all-gap-safe`, `conflict-concurrent-appends`, `concurrent-any`, `append-atomic-partial-failure`) green 50 times in a row on both, and the cross-version fixture green on both.
 
 ### MariaDB
 

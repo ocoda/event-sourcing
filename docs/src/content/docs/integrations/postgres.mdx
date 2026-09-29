@@ -6,6 +6,189 @@ import { Aside } from '@astrojs/starlight/components';
 
 `@ocoda/event-sourcing-postgres` provides the `PostgresEventStore` and the `PostgresSnapshotStore`. It needs the `pg` and `pg-cursor` drivers, which are peer dependencies: see [Installation](/start/install) and [Database drivers are peer dependencies](/upgrading/v4#drivers).
 
-<Aside type="note" title="Schema v2 lands in a later prerelease">
-This page will describe the 4.0 schema, its limits and capabilities, the privileges the store needs, and how to migrate 3.x tables. Until then, see [PostgreSQL schema v2](/upgrading/v4#postgres-schema-v2) in the 4.0 migration guide.
+<Aside type="caution" title="Coming from 3.x?">
+4.0 stores events and snapshots in a new schema (schema v2). The store refuses a 3.x event table until it is migrated: see [Migrating from 3.x](#migrating-from-3x). PostgreSQL 13 to 18 are tested.
 </Aside>
+
+## Configuration [#configuration]
+
+The config of each store is a [`pg` pool config](https://node-postgres.com/apis/pool) plus the store's own options: `driver`, `useDefaultPool` and `ddl`. The store removes its own options before it creates the pool.
+
+```typescript
+EventSourcingModule.forRoot<PostgresEventStoreConfig, PostgresSnapshotStoreConfig>({
+	eventStore: {
+		driver: PostgresEventStore,
+		connectionString: process.env.DATABASE_URL,
+		max: 20, // connections in the pool
+		ddl: 'auto', // default: create missing tables; 'none' only checks them
+	},
+	snapshotStore: {
+		driver: PostgresSnapshotStore,
+		connectionString: process.env.DATABASE_URL,
+	},
+});
+```
+
+The tables live in the current schema of the connection, the first schema of its `search_path` (usually `public`). To use another schema, set it for the connections: `options: '-c search_path=events_app'`.
+
+`connect()` fails when the database can't be reached. `disconnect()` ends the pool; calling it twice, or before `connect()`, does nothing.
+
+## Schema [#schema]
+
+Every pool has its own table, in the current schema: `events` and `snapshots` for the default pool, `<pool>-events` and `<pool>-snapshots` for the others. A table name is at most 63 bytes, the PostgreSQL limit: `ensureCollection` rejects a longer pool name with an `EventStoreCollectionCreationException` instead of letting PostgreSQL truncate it.
+
+**The catalog.** One table per schema, `event_sourcing_collections`, registers every table the stores use, with its kind and schema version. For an event table it also holds the counter of the pool's global positions. `listCollections()` reads it, so a 3.x table that isn't migrated is not listed.
+
+```sql
+CREATE TABLE event_sourcing_collections (
+	name TEXT PRIMARY KEY,
+	kind TEXT NOT NULL CHECK (kind IN ('events', 'snapshots')),
+	schema_version INTEGER NOT NULL,
+	last_position BIGINT NOT NULL DEFAULT 0 CHECK (last_position >= 0)
+) WITH (fillfactor = 50);
+```
+
+**Events.** The columns that 3.x didn't have come last, so that a created table and a migrated one have the same columns.
+
+```sql
+CREATE TABLE "events" (
+	stream_id TEXT NOT NULL,
+	version INTEGER NOT NULL,
+	event TEXT NOT NULL,
+	payload JSONB NOT NULL,
+	event_id TEXT NOT NULL,
+	aggregate_id TEXT NOT NULL,
+	occurred_on TIMESTAMPTZ NOT NULL,
+	correlation_id TEXT,
+	causation_id TEXT,
+	global_position BIGINT NOT NULL,
+	headers JSONB,
+	event_version INTEGER,
+	PRIMARY KEY (stream_id, version)
+);
+CREATE UNIQUE INDEX "idx_events_global_position" ON "events" (global_position);
+```
+
+**Snapshots.** The last snapshot of a stream is the one with the highest version. It also carries the stream's `latest` flag, which a unique index keeps to one row per stream, and which `SnapshotRepository.loadAll()` pages through in descending binary order of the aggregate ids.
+
+```sql
+CREATE TABLE "snapshots" (
+	stream_id TEXT NOT NULL,
+	version INTEGER NOT NULL,
+	payload JSONB NOT NULL,
+	snapshot_id TEXT NOT NULL,
+	aggregate_id TEXT NOT NULL,
+	registered_on TIMESTAMPTZ NOT NULL,
+	aggregate_name TEXT NOT NULL,
+	latest TEXT COLLATE "C",
+	PRIMARY KEY (stream_id, version)
+);
+CREATE UNIQUE INDEX "idx_snapshots_latest" ON "snapshots" (aggregate_name, latest) WHERE latest IS NOT NULL;
+```
+
+`ensureCollection(pool)` creates the tables of a pool and registers them, and on an existing table only registers it. With `ddl: 'none'` it never creates anything: a missing table or catalog throws, with the statements that create it in the message. Index names that don't fit in 63 bytes are shortened with a hash.
+
+## Capabilities [#capabilities]
+
+`PostgresEventStore` claims every [capability](/under-the-hood/event-store#capabilities):
+
+| Capability | Value | Why |
+| --- | --- | --- |
+| `atomicAppend` | `true` | An append is one transaction. |
+| `headers` | `true` | Stored in the `headers` column. |
+| `globalOrder` | `'gap-safe'` | See below. |
+
+An append first moves the pool's counter row in the catalog, then inserts its events, in one `READ COMMITTED` transaction. The row lock on the counter is held until the transaction ends, so an append that takes later positions waits until the earlier one committed or rolled back. Appends therefore commit in the order of their positions, and a rolled-back append returns its positions, so there are no holes. A reader that tails `readAll()` and resumes after the last position it read never skips an event that commits later. `readAll()` reads in keyset batches (`WHERE global_position >= $1 ORDER BY global_position LIMIT $2`), each its own statement, and holds no connection while you process a batch. The evidence is in [ADR 0002](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0002-schema-v2.md#postgresql).
+
+## Limits and data types [#limits]
+
+- Stream ids, aggregate ids, event names, correlation ids and causation ids are `TEXT`; the core limits them to 255 characters, and headers to 8 KiB (see [Limits](/under-the-hood/event-store#limits)).
+- Payloads are `JSONB`. A `Date` in a payload is stored as an ISO string and read back as a string. A `bigint` in a payload can't be stored: the append fails with an `EventStorePersistenceException` (`outcome: 'not-persisted'`), so store large integers as strings.
+- Global positions are `BIGINT`. The store reads them as text and returns bigints, without a global `pg` type parser.
+- An append sends its events as arrays, so its size isn't limited by the 65,535 parameters of a statement (3.x stopped at about 6,500 events).
+
+## Throughput [#throughput]
+
+Appends to one pool serialize on the pool's counter row, from the counter update to the commit. That caps the appends per second of a pool, whatever the number of connections; appends to different pools don't wait for each other. **Pools are the unit of write scale.**
+
+Appends per second, with 1 to 3 events per append, each writer on streams of its own:
+
+| Setup | 1 pool, 1 writer | 1 pool, 8 writers | 4 pools, 8 writers each (per pool) |
+| --- | --- | --- | --- |
+| PostgreSQL 14 and 17, data on tmpfs, through `appendEvents` | 317–331 | 1,053–1,057 | 502–534 |
+| PostgreSQL 14, data on disk with fsync, the append transaction alone | – | 390 | – |
+
+These are laptop numbers (Apple silicon, PostgreSQL in a 6-CPU VM, all writers in one Node.js process); measure your own setup. The disk figure is dominated by the commit's WAL flush.
+
+`ExpectedVersion.Any` makes up to 16 attempts while concurrent appends take the versions of a stream. Under sustained contention on one stream, an `Any` append can still end in an `EventStoreVersionConflictException` (12 of about 8,000 appends to one hot stream in a soak test), so retry such a conflict in your application.
+
+## Privileges [#privileges]
+
+| Task | Needs |
+| --- | --- |
+| Appending and reading (`ddl: 'none'`) | `SELECT` and `INSERT` on the event tables; `SELECT`, `INSERT` and `UPDATE` on the snapshot tables; `SELECT`, `INSERT` and `UPDATE` on `event_sourcing_collections` |
+| Creating missing tables (`ddl: 'auto'`, the default) | The above, plus `CREATE` on the schema |
+| `migrate()` | Ownership of the tables, `TEMPORARY` on the database, and `CREATE` on the schema if the catalog doesn't exist yet |
+
+The stores also take advisory locks (to create tables, to serialize the snapshot appends of a stream, and to keep two migrations of a table apart), which need no privilege.
+
+With `ddl: 'none'`, create the schema yourself: from the statements in the error of `ensureCollection`, from the `steps` of a dry-run `migrate()`, or, for the default pools of a 3.x database, from `node_modules/@ocoda/event-sourcing-postgres/migrations/4.0.sql`. Then call `ensureCollection`, which registers the tables in the catalog.
+
+## Migrating from 3.x [#migrating-from-3x]
+
+The 3.x tables have an `event_date` column and no global positions. `ensureCollection` refuses a 3.x event table with an `EventStoreSchemaException` (`found: 'v1'`), so an application whose default pool is a 3.x table fails to bootstrap until it is migrated. It never migrates a table by itself. A 3.x snapshot table keeps working, with a warning, until it is migrated.
+
+The migration is **offline**: stop every 3.x instance first.
+
+1. **Take a backup.**
+2. **Run a dry run.** It needs no Nest application and writes nothing:
+
+   ```typescript
+   import { PostgresEventStore, PostgresSnapshotStore } from '@ocoda/event-sourcing-postgres';
+
+   const config = { connectionString: process.env.DATABASE_URL };
+   const events = await PostgresEventStore.migrate(config, { dryRun: true });
+   const snapshots = await PostgresSnapshotStore.migrate(config, {
+   	dryRun: true,
+   	legacyTimeZone: 'Europe/Brussels', // the time zone your 3.x instances ran in
+   });
+   console.log(JSON.stringify([events, snapshots], null, 2));
+   ```
+
+   It finds the tables by their name and columns (`pools` limits it to some pools) and reports, per table:
+   - `action`: `migrate`, `skip` (already migrated) or `blocked`, with the reasons in `blocking`;
+   - `rows`, `bytes`, and in `warnings` the free disk the migration needs;
+   - `gappedStreams`: streams whose versions don't run from 1 without gaps;
+   - `duplicateEventIds` and `nonCrockfordEventIds`, which are migrated as they are;
+   - `dependents` (views, rules, triggers, publications, foreign keys) and `droppedIndexes`;
+   - `steps`: the exact statements the migration runs, with the lock each one takes;
+   - for snapshots, `snapshotFlags`: streams with several snapshots flagged as the latest, or none;
+   - `environment.timeZones`: the time zones of the process, the server and the session.
+3. **Stop every 3.x instance.**
+4. **Migrate the events, then the snapshots**, with the same options without `dryRun`. `onProgress` reports each step. A second run reports every table as `skip`.
+5. **Deploy 4.0.**
+
+**What the migration does to an event table.** One transaction per table, under `ACCESS EXCLUSIVE`:
+
+1. Copy the rows into a temporary table, numbered in 3.x's order: `(event_date, event_id, stream_id, version)`, adjusted so that every stream stays in version order (two events of a stream appended in the same millisecond could be listed in the wrong order by 3.x).
+2. Add `global_position`, `headers` and `event_version`, change the `VARCHAR` columns to `TEXT`, empty the table, drop `event_date` (and with it every index on it), and insert the numbered rows back in position order.
+3. Create the unique index on `global_position`, register the table with its counter at the highest position, and commit. Then run `VACUUM (ANALYZE)`; if that fails, the migration has committed anyway and the report has a warning with the statement to run by hand.
+
+The table keeps its OID, so its grants, its publication memberships, and the views that don't use `event_date` or the changed columns survive. A migration that stops at any point, for instance because its connection is lost, rolls back and leaves the 3.x table as it was: run it again.
+
+**Snapshot tables** are migrated in place, in one transaction: the flags are normalized to exactly one per stream on its highest version, `registered_on` becomes a `TIMESTAMPTZ`, and the unique index on the flags replaces the 3.x index. 3.x stored `registered_on` as the wall time of the process, without a time zone: pass that time zone as `legacyTimeZone` (an IANA name the server knows; default: the time zone of the process that migrates). With `UTC`, the column is converted without rewriting the table.
+
+**What blocks a table.** The migration leaves a table untouched, and reports it as `blocked`, when:
+- a view or rule uses `event_date` or a column whose type changes (drop it, migrate, create it again);
+- a foreign key of another table references it (the migration empties and refills the table);
+- the current role doesn't own it, or may not create temporary tables;
+- another session still uses it after `lockTimeoutMs` (default 10 seconds): a 3.x instance may still be running;
+- another `migrate()` is migrating it.
+
+**Plan for:**
+- **Downtime and disk.** The table is locked for the whole transaction. Expect about 0.3 minutes per million rows on disk (1 million rows took 19.5 seconds, 100,000 rows about 1 second on tmpfs). The migration needs about 2.2 times the table's size in free disk while it runs, part of it in `temp_tablespaces`, and writes about as much WAL as the table's size.
+- **Replication and CDC.** Publications and logical decoding receive a `TRUNCATE` of the table followed by an insert of every row. `INSERT` and `TRUNCATE` triggers fire; disable them for the migration if they must not.
+- **Gapped streams** conflict on their next append, because 4.0 checks that the stream is exactly at the expected version: load the aggregate from its events and append with its actual version.
+- **3.x writers that are still running** fail after the migration with `column "event_date" … does not exist` (`42703`): nothing is written without a position.
+
+**Without `migrate()`.** A DBA can run the statements of the dry run's `steps` instead, in order, or `migrations/4.0.sql` of the package for the default pools of a 3.0.1 or 3.0.2 schema, with psql: `psql -v legacy_time_zone='Europe/Brussels' -f migrations/4.0.sql`.
