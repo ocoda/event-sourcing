@@ -29,7 +29,7 @@ export class EventMap {
 		const { name } = getEventMetadata(cls);
 
 		if (!name) {
-			throw new MissingEventMetadataException(cls);
+			throw new MissingEventMetadataException({ event: cls });
 		}
 
 		this.eventMap.add({ name, cls, serializer });
@@ -46,7 +46,7 @@ export class EventMap {
 			}
 		}
 
-		throw new UnregisteredEventException(target);
+		throw new UnregisteredEventException({ event: target });
 	}
 
 	public has<E extends IEvent>(target: IEventMapTarget<E>): boolean {
@@ -66,7 +66,7 @@ export class EventMap {
 		const { name, serializer } = this.get<E>(event);
 
 		if (!serializer) {
-			throw new UnregisteredSerializerException(name);
+			throw new UnregisteredSerializerException({ eventName: name });
 		}
 
 		return serializer.serialize(event);
@@ -76,7 +76,7 @@ export class EventMap {
 		const { serializer } = this.get<E>(eventName);
 
 		if (!serializer) {
-			throw new UnregisteredSerializerException(eventName);
+			throw new UnregisteredSerializerException({ eventName });
 		}
 
 		return serializer.deserialize(payload);

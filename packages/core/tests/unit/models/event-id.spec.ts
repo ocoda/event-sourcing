@@ -16,7 +16,7 @@ describe(EventId, () => {
 
 	it('should throw when trying to create an EventId from an undefined variable', () => {
 		const value = undefined as unknown as string;
-		expect(() => EventId.from(value)).toThrow(InvalidIdException.becauseEmpty());
+		expect(() => EventId.from(value)).toThrow(new InvalidIdException({ value, idType: 'EventId' }));
 	});
 
 	it('should throw when creating an EventId from an invalid value', () => {
@@ -24,7 +24,7 @@ describe(EventId, () => {
 		expect(generatedEventId.value).toBeDefined();
 
 		const value = '123-abc';
-		expect(() => EventId.from(value)).toThrow(InvalidIdException.becauseInvalid(value));
+		expect(() => EventId.from(value)).toThrow(new InvalidIdException({ value, idType: 'EventId' }));
 	});
 
 	it("should generate different EventId's for different instances", () => {

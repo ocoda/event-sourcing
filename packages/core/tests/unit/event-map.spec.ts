@@ -52,10 +52,10 @@ describe(EventMap, () => {
 		const eventMap = new EventMap();
 
 		expect(() => eventMap.getConstructor('unregistered-event')).toThrow(
-			new UnregisteredEventException('unregistered-event'),
+			new UnregisteredEventException({ event: 'unregistered-event' }),
 		);
 		expect(() => eventMap.getConstructor(new UnregisteredEvent())).toThrow(
-			new UnregisteredEventException('UnregisteredEvent'),
+			new UnregisteredEventException({ event: 'UnregisteredEvent' }),
 		);
 	});
 
@@ -70,9 +70,11 @@ describe(EventMap, () => {
 	it('throws when trying to get the name of an unregistered event by its constructor or an instance', () => {
 		const eventMap = new EventMap();
 
-		expect(() => eventMap.getName(UnregisteredEvent)).toThrow(new UnregisteredEventException(UnregisteredEvent));
+		expect(() => eventMap.getName(UnregisteredEvent)).toThrow(
+			new UnregisteredEventException({ event: UnregisteredEvent }),
+		);
 		expect(() => eventMap.getName(new UnregisteredEvent())).toThrow(
-			new UnregisteredEventException(new UnregisteredEvent()),
+			new UnregisteredEventException({ event: new UnregisteredEvent() }),
 		);
 	});
 
@@ -93,7 +95,9 @@ describe(EventMap, () => {
 
 		const event = new AccountOpenedEvent(new Date());
 
-		expect(() => eventMap.serializeEvent(event)).toThrow(new UnregisteredSerializerException('account-opened'));
+		expect(() => eventMap.serializeEvent(event)).toThrow(
+			new UnregisteredSerializerException({ eventName: 'account-opened' }),
+		);
 	});
 
 	it('deserializes a registered event', () => {
@@ -114,7 +118,7 @@ describe(EventMap, () => {
 		const payload = { opened: new Date() };
 
 		expect(() => eventMap.deserializeEvent('account-opened', payload)).toThrow(
-			new UnregisteredSerializerException('account-opened'),
+			new UnregisteredSerializerException({ eventName: 'account-opened' }),
 		);
 	});
 });

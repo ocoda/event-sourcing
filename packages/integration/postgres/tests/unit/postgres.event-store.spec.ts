@@ -138,10 +138,18 @@ describe(PostgresEventStore, () => {
 		const lastVersion = events.length;
 		const beforeLastVersion = lastVersion - 1;
 		await expect(eventStore.appendEvents(eventStreamAccountA, beforeLastVersion, [lastEvent])).rejects.toThrow(
-			new EventStoreVersionConflictException(eventStreamAccountA, beforeLastVersion, lastVersion),
+			new EventStoreVersionConflictException({
+				stream: eventStreamAccountA,
+				expectedVersion: beforeLastVersion - 1,
+				actualVersion: lastVersion,
+			}),
 		);
 		await expect(eventStore.appendEvents(eventStreamAccountA, lastVersion, [lastEvent])).rejects.toThrow(
-			new EventStoreVersionConflictException(eventStreamAccountA, lastVersion, lastVersion),
+			new EventStoreVersionConflictException({
+				stream: eventStreamAccountA,
+				expectedVersion: lastVersion - 1,
+				actualVersion: lastVersion,
+			}),
 		);
 	});
 
@@ -179,7 +187,9 @@ describe(PostgresEventStore, () => {
 
 	it("should throw when an event isn't found in a specified stream", async () => {
 		const stream = EventStream.for(Account, AccountId.generate());
-		await expect(eventStore.getEvent(stream, 5)).rejects.toThrow(new EventNotFoundException(stream.streamId, 5));
+		await expect(eventStore.getEvent(stream, 5)).rejects.toThrow(
+			new EventNotFoundException({ streamId: stream.streamId, version: 5 }),
+		);
 	});
 
 	it('should retrieve events backwards', async () => {
@@ -338,7 +348,9 @@ describe(PostgresEventStore, () => {
 				'Idle database connection failed: terminating connection due to administrator command',
 			);
 			const stream = EventStream.for(Account, AccountId.generate());
-			await expect(eventStore.getEvent(stream, 1)).rejects.toThrow(new EventNotFoundException(stream.streamId, 1));
+			await expect(eventStore.getEvent(stream, 1)).rejects.toThrow(
+				new EventNotFoundException({ streamId: stream.streamId, version: 1 }),
+			);
 		});
 	});
 
@@ -680,7 +692,13 @@ describe(PostgresEventStore, () => {
 
 				const error = await append;
 				expect(error).toBeInstanceOf(EventStoreVersionConflictException);
-				expect(error).toEqual(new EventStoreVersionConflictException(stream, 3, 1));
+				expect(error).toMatchObject({
+					streamId: stream.streamId,
+					pool: concurrencyPool,
+					expectedVersion: 0,
+					actualVersion: 1,
+					cause: expect.objectContaining({ code: '23505' }),
+				});
 			} finally {
 				await blocker.end();
 			}

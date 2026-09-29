@@ -14,7 +14,7 @@ describe(UUID, () => {
 
 	it('should throw when trying to create a UUID from an undefined variable', () => {
 		const value = undefined as unknown as string;
-		expect(() => UUID.from(value)).toThrow(InvalidIdException.becauseEmpty());
+		expect(() => UUID.from(value)).toThrow(new InvalidIdException({ value, idType: 'UUID' }));
 	});
 
 	it('should throw when creating a UUID from an invalid value', () => {
@@ -22,6 +22,6 @@ describe(UUID, () => {
 		expect(generatedUUID.value).toBeDefined();
 
 		const value = '123-abc';
-		expect(() => UUID.from(value)).toThrow(InvalidIdException.becauseInvalid(value));
+		expect(() => UUID.from(value)).toThrow(new InvalidIdException({ value, idType: 'UUID' }));
 	});
 });

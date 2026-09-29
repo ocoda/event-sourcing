@@ -17,7 +17,7 @@ import {
 	type IEventPool,
 	StreamReadingDirection,
 } from '@ocoda/event-sourcing';
-import { Pool, escapeIdentifier } from 'pg';
+import { DatabaseError, Pool, escapeIdentifier } from 'pg';
 import type { PostgresEventEntity, PostgresEventStoreConfig } from './interfaces/index.js';
 import { UNIQUE_VIOLATION, ensureTable, hasErrorCode, readInBatches } from './postgres.helpers.js';
 
@@ -82,7 +82,7 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 
 			return collection;
 		} catch (error) {
-			throw new EventStoreCollectionCreationException(collection, error);
+			throw new EventStoreCollectionCreationException({ collection }, { cause: error });
 		}
 	}
 
@@ -135,7 +135,7 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 		const entity = entities[0];
 
 		if (!entity) {
-			throw new EventNotFoundException(streamId, version);
+			throw new EventNotFoundException({ streamId, version, pool });
 		}
 
 		return this.eventMap.deserializeEvent(entity.event, entity.payload);
@@ -149,12 +149,19 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 	): Promise<EventEnvelope[]> {
 		const collection = EventCollection.get(pool);
 		const table = escapeIdentifier(collection);
+		// Set once the insert was sent: from then on a failure may have stored the events
+		let writing = false;
 
 		try {
 			const currentVersion = await this.getCurrentVersion(table, stream);
 
 			if (aggregateVersion <= currentVersion) {
-				throw new EventStoreVersionConflictException(stream, aggregateVersion, currentVersion);
+				throw new EventStoreVersionConflictException({
+					stream,
+					expectedVersion: aggregateVersion - events.length,
+					actualVersion: currentVersion,
+					pool,
+				});
 			}
 
 			let version = aggregateVersion - events.length + 1;
@@ -196,6 +203,7 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 				);
 			}
 
+			writing = true;
 			await this.pool.query(`INSERT INTO ${table} (${this.columns.join(', ')}) VALUES ${values.join(',')}`, params);
 
 			return envelopes;
@@ -206,11 +214,17 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 
 			// A concurrent writer appended the same version(s) after the version check
 			if (hasErrorCode(error, UNIQUE_VIOLATION)) {
-				const latestVersion = await this.getCurrentVersion(table, stream).catch(() => aggregateVersion);
-				throw new EventStoreVersionConflictException(stream, aggregateVersion, latestVersion, error);
+				const latestVersion = await this.getCurrentVersion(table, stream).catch(() => undefined);
+				throw new EventStoreVersionConflictException(
+					{ stream, expectedVersion: aggregateVersion - events.length, actualVersion: latestVersion, pool },
+					{ cause: error },
+				);
 			}
 
-			throw new EventStorePersistenceException(collection, error);
+			// The insert is a single statement in autocommit mode: when Postgres rejects it, nothing was stored.
+			// When the connection fails instead, the insert may have committed before the response was lost.
+			const outcome = writing && !(error instanceof DatabaseError) ? 'unknown' : 'not-persisted';
+			throw new EventStorePersistenceException({ collection, outcome }, { cause: error });
 		}
 	}
 
@@ -224,7 +238,7 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 		const entity = entities[0];
 
 		if (!entity) {
-			throw new EventNotFoundException(streamId, version);
+			throw new EventNotFoundException({ streamId, version, pool });
 		}
 
 		return this.toEnvelope(entity);

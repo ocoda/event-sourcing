@@ -26,7 +26,9 @@ describe(EventStream, () => {
 		class FooId extends UUID {}
 		class Foo extends AggregateRoot {}
 
-		expect(() => EventStream.for(Foo, FooId.generate())).toThrow(new MissingAggregateMetadataException(Foo));
+		expect(() => EventStream.for(Foo, FooId.generate())).toThrow(
+			new MissingAggregateMetadataException({ aggregate: Foo }),
+		);
 	});
 
 	it('returns aggregate id and stream id for known aggregate', () => {

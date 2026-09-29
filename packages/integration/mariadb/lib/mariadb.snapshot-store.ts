@@ -57,7 +57,7 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 
 			return collection;
 		} catch (error) {
-			throw new SnapshotStoreCollectionCreationException(collection, error);
+			throw new SnapshotStoreCollectionCreationException({ collection }, { cause: error });
 		}
 	}
 
@@ -127,7 +127,7 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 		);
 
 		if (!entity) {
-			throw new SnapshotNotFoundException(streamId, version);
+			throw new SnapshotNotFoundException({ streamId, version, pool });
 		}
 
 		return entity.payload;
@@ -141,8 +141,6 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 	): Promise<SnapshotEnvelope<A>> {
 		const connection = await this.pool.getConnection();
 		const collection = SnapshotCollection.get(pool);
-
-		let latestVersion = 0;
 
 		try {
 			// Escaped inside the try, so a name the connector refuses to escape still releases the connection
@@ -160,10 +158,13 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 				connection,
 			);
 
-			latestVersion = lastStreamEntity?.version ?? 0;
-
 			if (aggregateVersion <= lastStreamEntity?.version) {
-				throw new SnapshotStoreVersionConflictException(stream, aggregateVersion, lastStreamEntity.version);
+				throw new SnapshotStoreVersionConflictException({
+					stream,
+					version: aggregateVersion,
+					latestVersion: lastStreamEntity.version,
+					pool,
+				});
 			}
 
 			await connection.beginTransaction();
@@ -198,11 +199,14 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 
 			// A concurrent writer committed the same (stream_id, version) between our check and our insert.
 			if (isDuplicateEntryError(error)) {
-				latestVersion = await this.getLatestVersion(collection, stream, connection, latestVersion);
-				throw new SnapshotStoreVersionConflictException(stream, aggregateVersion, latestVersion, error);
+				const latestVersion = await this.getLatestVersion(collection, stream, connection);
+				throw new SnapshotStoreVersionConflictException(
+					{ stream, version: aggregateVersion, latestVersion, pool },
+					{ cause: error },
+				);
 			}
 
-			throw new SnapshotStorePersistenceException(collection, error);
+			throw new SnapshotStorePersistenceException({ collection }, { cause: error });
 		} finally {
 			await connection.release();
 		}
@@ -323,7 +327,7 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 		);
 
 		if (!entity) {
-			throw new SnapshotNotFoundException(streamId, version);
+			throw new SnapshotNotFoundException({ streamId, version, pool });
 		}
 
 		return SnapshotEnvelope.from<A>(entity.payload, {
@@ -439,16 +443,15 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 		collection: ISnapshotCollection,
 		{ streamId }: SnapshotStream,
 		connection: Connection,
-		fallback: number,
-	): Promise<number> {
+	): Promise<number | undefined> {
 		try {
 			const [result] = await connection.query(
 				`SELECT MAX(version) as version FROM ${connection.escapeId(collection)} WHERE stream_id = ?`,
 				[streamId],
 			);
-			return result?.version || fallback;
+			return result?.version ?? undefined;
 		} catch {
-			return fallback;
+			return undefined;
 		}
 	}
 }

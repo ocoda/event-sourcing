@@ -269,7 +269,13 @@ describe(`${MariaDBSnapshotStore.name} resilience`, () => {
 				expect(rejected).toHaveLength(WRITERS - 1);
 				for (const { reason } of rejected) {
 					expect(reason).toBeInstanceOf(SnapshotStoreVersionConflictException);
-					expect(reason.message).toBe(new SnapshotStoreVersionConflictException(stream, version, version).message);
+					expect(reason).toMatchObject({
+						streamId: stream.streamId,
+						aggregateId: stream.aggregateId,
+						pool: snapshotPool,
+						version,
+						latestVersion: version,
+					});
 				}
 
 				const entities = await pool.query<MariaDBSnapshotEntity<Account>[]>(

@@ -1,5 +1,6 @@
 import type { ProviderWrapper } from '@ocoda/event-sourcing';
 import {
+	InvalidQueryHandlerException,
 	MissingQueryHandlerMetadataException,
 	MissingQueryMetadataException,
 	QueryBus,
@@ -53,7 +54,7 @@ describe(QueryBus, () => {
 		const bus = new QueryBus();
 		const wrapper = { metatype: QueryHandlerWithMetadata, instance: undefined } as unknown as ProviderWrapper;
 
-		expect(() => bus.register([wrapper])).toThrow(TypeError);
+		expect(() => bus.register([wrapper])).toThrow(InvalidQueryHandlerException);
 	});
 
 	it('throws when registering a handler without handler metadata', () => {

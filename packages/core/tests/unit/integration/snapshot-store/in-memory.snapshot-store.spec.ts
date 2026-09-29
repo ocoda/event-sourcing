@@ -91,11 +91,21 @@ describe(InMemorySnapshotStore, () => {
 		await expect(
 			snapshotStore.appendSnapshot(snapshotStreamAccountA, beforeLastVersion, lastSnapshotEnvelope),
 		).rejects.toThrow(
-			new SnapshotStoreVersionConflictException(snapshotStreamAccountA, beforeLastVersion, lastVersion),
+			new SnapshotStoreVersionConflictException({
+				stream: snapshotStreamAccountA,
+				version: beforeLastVersion,
+				latestVersion: lastVersion,
+			}),
 		);
 		await expect(
 			snapshotStore.appendSnapshot(snapshotStreamAccountA, lastVersion, lastSnapshotEnvelope),
-		).rejects.toThrow(new SnapshotStoreVersionConflictException(snapshotStreamAccountA, lastVersion, lastVersion));
+		).rejects.toThrow(
+			new SnapshotStoreVersionConflictException({
+				stream: snapshotStreamAccountA,
+				version: lastVersion,
+				latestVersion: lastVersion,
+			}),
+		);
 	});
 
 	it("should throw when a snapshot envelope can't be appended", async () => {
@@ -130,7 +140,9 @@ describe(InMemorySnapshotStore, () => {
 
 	it("should throw when a snapshot isn't found in a specified stream", () => {
 		const stream = SnapshotStream.for(Account, AccountId.generate());
-		expect(() => snapshotStore.getSnapshot(stream, 20)).toThrow(new SnapshotNotFoundException(stream.streamId, 20));
+		expect(() => snapshotStore.getSnapshot(stream, 20)).toThrow(
+			new SnapshotNotFoundException({ streamId: stream.streamId, version: 20 }),
+		);
 	});
 
 	it('should retrieve snapshots backwards', async () => {

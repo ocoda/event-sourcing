@@ -23,7 +23,7 @@ describe(ULID, () => {
 
 	it('should throw when trying to create a ULID from an undefined variable', () => {
 		const value: string | undefined = undefined;
-		expect(() => ULID.from(value as unknown as string)).toThrow(InvalidIdException.becauseEmpty());
+		expect(() => ULID.from(value as unknown as string)).toThrow(new InvalidIdException({ value, idType: 'ULID' }));
 	});
 
 	it('should throw when creating a ULID from an invalid value', () => {
@@ -31,7 +31,7 @@ describe(ULID, () => {
 		expect(generatedULID.value).toBeDefined();
 
 		const value = '123-abc';
-		expect(() => ULID.from(value)).toThrow(InvalidIdException.becauseInvalid(value));
+		expect(() => ULID.from(value)).toThrow(new InvalidIdException({ value, idType: 'ULID' }));
 	});
 
 	it("should generate different ULID's for different instances", () => {

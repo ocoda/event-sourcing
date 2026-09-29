@@ -13,6 +13,7 @@ import {
 	type SnapshotStore,
 	SnapshotStream,
 	UUID,
+	UnsupportedOperationException,
 } from '@ocoda/event-sourcing';
 import type { Mocked } from 'vitest';
 
@@ -326,9 +327,11 @@ describe(SnapshotRepository, () => {
 	it('throws when loading many without store support', async () => {
 		snapshotStore.getManyLastSnapshotEnvelopes = undefined;
 
-		await expect(snapshotRepository.loadMany([account.id])).rejects.toThrow(
-			'The snapshot store does not support method: getManyLastSnapshotEnvelopes.',
-		);
+		await expect(snapshotRepository.loadMany([account.id])).rejects.toThrow(UnsupportedOperationException);
+		await expect(snapshotRepository.loadMany([account.id])).rejects.toMatchObject({
+			operation: 'getManyLastSnapshotEnvelopes',
+			component: 'snapshot store',
+		});
 	});
 
 	it('throws when loading all without store support', async () => {
@@ -336,7 +339,7 @@ describe(SnapshotRepository, () => {
 
 		const iterator = snapshotRepository.loadAll();
 		await expect(iterator.next()).rejects.toThrow(
-			'The snapshot store does not support method: getLastEnvelopesForAggregate.',
+			new UnsupportedOperationException({ operation: 'getLastEnvelopesForAggregate', component: 'snapshot store' }),
 		);
 	});
 });

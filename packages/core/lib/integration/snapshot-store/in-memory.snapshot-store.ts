@@ -53,7 +53,7 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 			}
 			return collection;
 		} catch (error) {
-			throw new SnapshotStoreCollectionCreationException(collection, error);
+			throw new SnapshotStoreCollectionCreationException({ collection }, { cause: error });
 		}
 	}
 
@@ -118,7 +118,7 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 		);
 
 		if (!entity) {
-			throw new SnapshotNotFoundException(streamId, version);
+			throw new SnapshotNotFoundException({ streamId, version, pool });
 		}
 
 		return entity.payload;
@@ -143,7 +143,12 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 				snapshotCollection.find(({ latest }) => latest === `latest#${stream.streamId}`)?.version || 0;
 
 			if (aggregateVersion <= currentVersion) {
-				throw new SnapshotStoreVersionConflictException(stream, aggregateVersion, currentVersion);
+				throw new SnapshotStoreVersionConflictException({
+					stream,
+					version: aggregateVersion,
+					latestVersion: currentVersion,
+					pool,
+				});
 			}
 
 			const envelope = SnapshotEnvelope.create<A>(snapshot, {
@@ -167,12 +172,10 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 
 			return Promise.resolve(envelope);
 		} catch (error) {
-			switch (error.constructor) {
-				case SnapshotStoreVersionConflictException:
-					throw error;
-				default:
-					throw new SnapshotStorePersistenceException(collection, error);
+			if (error instanceof SnapshotStoreVersionConflictException) {
+				throw error;
 			}
+			throw new SnapshotStorePersistenceException({ collection }, { cause: error });
 		}
 	}
 
@@ -273,7 +276,7 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 		);
 
 		if (!entity) {
-			throw new SnapshotNotFoundException(streamId, version);
+			throw new SnapshotNotFoundException({ streamId, version, pool });
 		}
 
 		return SnapshotEnvelope.from(entity.payload, {

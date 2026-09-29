@@ -15,7 +15,7 @@ export const EventHandler = (event: Type<IEvent>): PropertyDecorator => {
 	const { name } = getEventMetadata(event);
 
 	if (!name) {
-		throw new MissingEventMetadataException(event);
+		throw new MissingEventMetadataException({ event });
 	}
 
 	return (propertyParent, propertyKey) => {

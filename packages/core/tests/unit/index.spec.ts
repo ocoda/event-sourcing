@@ -22,6 +22,10 @@ describe('public entrypoint', () => {
 	});
 
 	it('does not expose internal helpers', () => {
-		expect(Object.keys(EventSourcing).filter((key) => /CommittedVersions|isSnapshotDue/.test(key))).toEqual([]);
+		expect(
+			Object.keys(EventSourcing).filter((key) =>
+				/CommittedVersions|isSnapshotDue|brandEventSourcingError|nameOf|EVENT_SOURCING_ERROR/.test(key),
+			),
+		).toEqual([]);
 	});
 });

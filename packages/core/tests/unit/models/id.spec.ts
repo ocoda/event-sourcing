@@ -20,6 +20,6 @@ describe(Id, () => {
 
 	it('should throw when trying to create an id from an undefined variable', () => {
 		const id = undefined as unknown as string;
-		expect(() => DeviceId.from(id)).toThrow(InvalidIdException.becauseEmpty());
+		expect(() => DeviceId.from(id)).toThrow(new InvalidIdException({ value: id, idType: 'DeviceId' }));
 	});
 });

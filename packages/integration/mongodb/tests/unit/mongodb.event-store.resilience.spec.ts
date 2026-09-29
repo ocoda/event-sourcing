@@ -3,6 +3,7 @@ import {
 	EventCollection,
 	type EventEnvelope,
 	EventStorePersistenceException,
+	EventSourcingErrorCode,
 	EventStoreVersionConflictException,
 	EventStream,
 	type IEventPool,
@@ -277,9 +278,14 @@ describe(`${MongoDBEventStore.name} resilience`, () => {
 				expect(rejected).toHaveLength(WRITERS - 1);
 				for (const { reason } of rejected) {
 					expect(reason).toBeInstanceOf(EventStoreVersionConflictException);
-					expect(reason.message).toBe(
-						new EventStoreVersionConflictException(stream, events.length, events.length).message,
-					);
+					expect(reason).toMatchObject({
+						code: EventSourcingErrorCode.EventStoreVersionConflict,
+						streamId: stream.streamId,
+						aggregateId: stream.aggregateId,
+						pool: eventPool,
+						expectedVersion: 0,
+						actualVersion: events.length,
+					});
 				}
 
 				const entities = await database

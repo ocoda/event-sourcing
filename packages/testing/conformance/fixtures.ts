@@ -190,19 +190,20 @@ export const rejectionOf = async (promise: Promise<unknown>): Promise<unknown> =
 	);
 
 /**
- * Asserts that the promise rejects with an instance of exactly the given class (not a subclass or a wrapper).
+ * Asserts that the promise rejects with an instance of exactly the given class (not a subclass or a wrapper), and
+ * optionally with the given fields. Match errors on their fields and `code`, not on their messages.
  */
 export const expectRejectionOfClass = async (
 	promise: Promise<unknown>,
 	exception: abstract new (...args: never[]) => Error,
-	message?: string,
+	fields?: Record<string, unknown>,
 ): Promise<void> => {
 	const error = await rejectionOf(promise);
 
 	expect(error, `expected a rejection with ${exception.name}`).toBeInstanceOf(Error);
 	expect((error as Error).constructor).toBe(exception);
-	if (message) {
-		expect((error as Error).message).toContain(message);
+	if (fields) {
+		expect(error).toMatchObject(fields);
 	}
 };
 

@@ -23,7 +23,7 @@ export class EventStream {
 
 		const { streamName } = getAggregateMetadata(cls);
 		if (!streamName) {
-			throw new MissingAggregateMetadataException(cls);
+			throw new MissingAggregateMetadataException({ aggregate: cls });
 		}
 
 		return new EventStream(streamName, id.value);
