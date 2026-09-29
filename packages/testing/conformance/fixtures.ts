@@ -143,6 +143,11 @@ export const CALL_TIMEOUT = 10_000;
 export const TEST_TIMEOUT = 30_000;
 
 /**
+ * The timeout of the heaviest concurrency cases (`read-all-gap-safe`, `concurrent-any`).
+ */
+export const HEAVY_TEST_TIMEOUT = 60_000;
+
+/**
  * Rejects when the promise doesn't settle in time, so a hanging store fails the test with a clear message
  * instead of running into the test timeout.
  */
@@ -253,6 +258,27 @@ export interface ConformanceTestOptions<TCapabilities> {
 }
 
 /**
+ * Options of a whole conformance suite that shape how its cases are registered.
+ */
+export interface ConformanceSuiteOptions<TCase extends string> {
+	/**
+	 * Registers only these cases.
+	 */
+	only?: readonly TCase[];
+	/**
+	 * Registers every case as a test that must fail (`it.fails`): for negative controls, deliberately broken stores that
+	 * prove a case detects what it checks.
+	 */
+	expectFailure?: boolean;
+}
+
+/**
+ * Whether the case is skipped: it has a reason in `skip`, and `CONFORMANCE_RUN_SKIPPED` isn't `true`.
+ */
+export const isSkippedCase = <TCase extends string>(skip: Partial<Record<TCase, string>> | undefined, id: TCase) =>
+	Boolean(skip?.[id]) && process.env.CONFORMANCE_RUN_SKIPPED !== 'true';
+
+/**
  * Registers a conformance test, or skips it with the reason the store gave for not satisfying it (yet).
  * Set `CONFORMANCE_RUN_SKIPPED=true` to run the skipped cases anyway, e.g. to check whether a skip is still needed.
  *
@@ -264,9 +290,11 @@ export const conformanceTest = <TCase extends string, TCapabilities = never>(
 	skip: Partial<Record<TCase, string>> | undefined,
 	timeout: number,
 	capabilities?: () => TCapabilities,
+	{ only, expectFailure = false }: ConformanceSuiteOptions<TCase> = {},
 ) => {
 	const runSkipped = process.env.CONFORMANCE_RUN_SKIPPED === 'true';
 	const repeats = conformanceRepeat() - 1;
+	const register = expectFailure ? it.fails : it;
 
 	return (
 		id: TCase,
@@ -274,6 +302,9 @@ export const conformanceTest = <TCase extends string, TCapabilities = never>(
 		fn: () => Promise<void>,
 		options: number | ConformanceTestOptions<TCapabilities> = {},
 	): void => {
+		if (only && !only.includes(id)) {
+			return;
+		}
 		const { timeout: testTimeout = timeout, requires } = typeof options === 'number' ? { timeout: options } : options;
 		const reason = skip?.[id];
 		if (reason && !runSkipped) {
@@ -283,7 +314,7 @@ export const conformanceTest = <TCase extends string, TCapabilities = never>(
 		if (requires && !capabilities) {
 			throw new Error(`The conformance case ${id} requires a capability, but the suite has no capabilities to check`);
 		}
-		it(`${title} [${id}]`, { timeout: testTimeout, repeats }, async (context) => {
+		register(`${title} [${id}]`, { timeout: testTimeout, repeats }, async (context) => {
 			const missing = requires?.((capabilities as () => TCapabilities)());
 			if (missing) {
 				context.skip(`capability: ${missing}`);

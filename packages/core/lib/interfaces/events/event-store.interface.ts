@@ -1,7 +1,11 @@
-import type { IEventPool } from './event-pool.type.js';
+import type { EventStore } from '../../event-store.js';
+import type { EventStoreContext } from './event-store-context.interface.js';
 
-export interface EventStoreDriver {
-	connect(): void | Promise<void>;
-	disconnect(): void | Promise<void>;
-	ensureCollection(pool?: IEventPool): unknown | Promise<unknown>;
-}
+/**
+ * An event store class, as `EventStoreConfig.driver` takes it: the module constructs it with the store context and the
+ * driver options (the store config without `driver` and `useDefaultPool`).
+ */
+export type EventStoreDriver<TOptions = any> = new (
+	context: EventStoreContext,
+	options: TOptions,
+) => EventStore<TOptions>;

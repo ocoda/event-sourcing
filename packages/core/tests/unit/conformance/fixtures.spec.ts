@@ -1,5 +1,10 @@
 import type { EventStoreCapabilities } from '@ocoda/event-sourcing';
-import { conformanceRepeat, conformanceTest, stringify } from '@ocoda/event-sourcing-testing/conformance';
+import {
+	conformanceRepeat,
+	conformanceTest,
+	isSkippedCase,
+	stringify,
+} from '@ocoda/event-sourcing-testing/conformance';
 import type { RunnerTestCase } from 'vitest';
 
 // The harness of the conformance suites (packages/testing/conformance/fixtures.ts), which every store's conformance
@@ -178,6 +183,50 @@ describe(conformanceTest, () => {
 		it('ran the case three times', ({ task }) => {
 			expect(runs).toBe(3);
 			expect(resultOf(task, 'repeated')).toMatchObject({ state: 'pass', repeatCount: 2 });
+		});
+	});
+
+	describe('only', () => {
+		const ran: string[] = [];
+		const test = withHarnessEnv({}, () =>
+			conformanceTest<'kept' | 'left-out'>(undefined, 5_000, undefined, { only: ['kept'] }),
+		);
+
+		test('kept', 'registers a listed case', async () => {
+			ran.push('kept');
+		});
+		test('left-out', 'does not register a case that is not listed', async () => {
+			ran.push('left-out');
+		});
+
+		it('registered only the listed case', ({ task }) => {
+			expect(ran).toEqual(['kept']);
+			expect(resultOf(task, 'left-out')).toBeUndefined();
+		});
+	});
+
+	describe('expectFailure', () => {
+		const test = withHarnessEnv({}, () =>
+			conformanceTest<'broken'>(undefined, 5_000, undefined, { expectFailure: true }),
+		);
+
+		test('broken', 'registers a case that must fail', async () => {
+			expect('the detector').toBe('firing');
+		});
+
+		it('passes because the case failed', ({ task }) => {
+			expect(resultOf(task, 'broken')?.state).toBe('pass');
+		});
+	});
+
+	describe(isSkippedCase, () => {
+		it('is true for a case with a reason, unless CONFORMANCE_RUN_SKIPPED is true', () => {
+			const skip = { gap: 'a documented gap' };
+
+			expect(withHarnessEnv({}, () => isSkippedCase(skip, 'gap'))).toBe(true);
+			expect(withHarnessEnv({}, () => isSkippedCase<string>(skip, 'other'))).toBe(false);
+			expect(withHarnessEnv({}, () => isSkippedCase(undefined, 'gap'))).toBe(false);
+			expect(withHarnessEnv({ CONFORMANCE_RUN_SKIPPED: 'true' }, () => isSkippedCase(skip, 'gap'))).toBe(false);
 		});
 	});
 

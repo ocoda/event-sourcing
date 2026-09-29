@@ -241,6 +241,27 @@ async function scenario(variant: string, root: DynamicModule): Promise<void> {
 		`${variant}: version conflict maps to the core exception`,
 	);
 
+	// The v4 form of an append: the expected version is the version of the stream before the append
+	const [appended] = await eventStore.appendEvents(stream, [new AccountCreditedEvent(5)], {
+		expectedVersion: 4,
+		metadata: { correlationId: `consumer-${variant}` },
+	});
+	const position = appended?.metadata.globalPosition;
+	check(
+		appended?.metadata.version === 5 && typeof position === 'bigint',
+		`${variant}: an append with options returns the envelope with its global position`,
+	);
+	const all: EventEnvelope[] = [];
+	for await (const batch of eventStore.readAll({ fromPosition: position })) {
+		all.push(...batch);
+	}
+	check(
+		all.length === 1 &&
+			all[0].metadata.eventId.value === appended.metadata.eventId.value &&
+			all[0].metadata.correlationId === `consumer-${variant}`,
+		`${variant}: readAll resumes at the global position of the append`,
+	);
+
 	await app.close();
 }
 
