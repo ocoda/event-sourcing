@@ -59,8 +59,6 @@ jobs:
               - packages/integration/mongodb/**
             mariadb:
               - packages/integration/mariadb/**
-            dynamodb:
-              - packages/integration/dynamodb/**
             example:
               - example/**
             docs:
@@ -75,7 +73,6 @@ jobs:
           POSTGRES: ${{ steps.filter.outputs.postgres }}
           MONGODB: ${{ steps.filter.outputs.mongodb }}
           MARIADB: ${{ steps.filter.outputs.mariadb }}
-          DYNAMODB: ${{ steps.filter.outputs.dynamodb }}
           EXAMPLE: ${{ steps.filter.outputs.example }}
           DOCS: ${{ steps.filter.outputs.docs }}
         run: |
@@ -84,7 +81,7 @@ jobs:
 
           libraries=false
           if [ "$all" = "true" ] || [ "$CORE" = "true" ] || [ "$POSTGRES" = "true" ] || [ "$MONGODB" = "true" ] \
-            || [ "$MARIADB" = "true" ] || [ "$DYNAMODB" = "true" ] || [ "$EXAMPLE" = "true" ]; then
+            || [ "$MARIADB" = "true" ] || [ "$EXAMPLE" = "true" ]; then
             libraries=true
           fi
 
@@ -102,18 +99,16 @@ jobs:
             {"database":"mongodb","service":"mongodb-7","version":"7"},
             {"database":"mongodb","service":"mongodb-8","version":"8"},
             {"database":"mariadb","service":"mariadb-10","version":"10"},
-            {"database":"mariadb","service":"mariadb-11","version":"11"},
-            {"database":"dynamodb","service":"dynamodb","version":"local"}
+            {"database":"mariadb","service":"mariadb-11","version":"11"}
           ]'
 
           selected=()
           if [ "$all" = "true" ] || [ "$CORE" = "true" ]; then
-            selected=(postgres mongodb mariadb dynamodb)
+            selected=(postgres mongodb mariadb)
           else
             [ "$POSTGRES" = "true" ] && selected+=(postgres)
             [ "$MONGODB" = "true" ] && selected+=(mongodb)
             [ "$MARIADB" = "true" ] && selected+=(mariadb)
-            [ "$DYNAMODB" = "true" ] && selected+=(dynamodb)
           fi
 
           if [ "${#selected[@]}" -eq 0 ]; then

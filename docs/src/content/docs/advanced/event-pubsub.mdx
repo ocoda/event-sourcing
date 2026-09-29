@@ -80,7 +80,7 @@ Since a failure is only logged, handle errors that matter inside your subscriber
 The library doesn't come with an outbox. Publishing happens after the events are stored, and the two aren't part of one transaction: the process can stop in between, and the envelope is lost for your subscribers and publishers. If you need every event to reach an external system, you can add that guarantee yourself:
 
 - **A custom event store that writes an outbox.** Implement your own [event store](/advanced/custom-stores), or extend an existing one and override `appendEvents`, so that the events and the outbox rows are inserted in the same database transaction. A separate process reads the unsent rows, sends them to your broker and marks them as sent.
-- **Change data capture (CDC).** The events table or collection is append-only, so a CDC tool such as Debezium (or the change streams of MongoDB and the streams of DynamoDB) can forward every new row to your broker, without your application being involved in the publishing.
+- **Change data capture (CDC).** The events table or collection is append-only, so a CDC tool such as Debezium (or the change streams of MongoDB) can forward every new row to your broker, without your application being involved in the publishing.
 - **Pull instead of push.** A consumer can catch up, or rebuild a read model, by reading the stored envelopes with `eventStore.getAllEnvelopes()` and keeping track of the last envelope it processed. Bear in mind that this is a way to read the events again and not a delivery guarantee.
 
 Both the outbox and CDC deliver **at-least-once**. Consumers can receive an event more than once, so make them idempotent, for example by remembering the `eventId` of the envelopes they processed.

@@ -33,7 +33,6 @@ try {
 	const dependencies = {
 		...Object.fromEntries(tarballs.map(({ name, tarball }) => [name, `file:${tarball}`])),
 		...pinned('packages/core', ['@nestjs/common', '@nestjs/core', 'reflect-metadata', 'rxjs']),
-		...pinned('packages/integration/dynamodb', ['@aws-sdk/client-dynamodb', '@aws-sdk/util-dynamodb']),
 		...pinned('packages/integration/mariadb', ['mariadb']),
 		...pinned('packages/integration/mongodb', ['mongodb']),
 		...pinned('packages/integration/postgres', ['pg', 'pg-cursor']),

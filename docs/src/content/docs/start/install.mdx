@@ -2,7 +2,7 @@
 title: Installation
 ---
 
-import { Steps, TabItem, Tabs } from '@astrojs/starlight/components';
+import { Aside, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
 
 This library consists of a core module `@ocoda/event-sourcing` that provides the building blocks and can be complemented with an integration library for setting up a persistence layer for your events using a specific database provider.
 
@@ -45,10 +45,6 @@ The database drivers are peer dependencies of the integration libraries, so you 
    <Tabs syncKey="package-manager">
    <TabItem label="pnpm">
 
-   **DynamoDB**
-   ```bash
-   pnpm add @ocoda/event-sourcing-dynamodb @aws-sdk/client-dynamodb @aws-sdk/util-dynamodb
-   ```
    **MariaDB**
    ```bash
    pnpm add @ocoda/event-sourcing-mariadb mariadb
@@ -65,10 +61,6 @@ The database drivers are peer dependencies of the integration libraries, so you 
    </TabItem>
    <TabItem label="npm">
 
-   **DynamoDB**
-   ```bash
-   npm install @ocoda/event-sourcing-dynamodb @aws-sdk/client-dynamodb @aws-sdk/util-dynamodb
-   ```
    **MariaDB**
    ```bash
    npm install @ocoda/event-sourcing-mariadb mariadb
@@ -85,10 +77,6 @@ The database drivers are peer dependencies of the integration libraries, so you 
    </TabItem>
    <TabItem label="yarn">
 
-   **DynamoDB**
-   ```bash
-   yarn add @ocoda/event-sourcing-dynamodb @aws-sdk/client-dynamodb @aws-sdk/util-dynamodb
-   ```
    **MariaDB**
    ```bash
    yarn add @ocoda/event-sourcing-mariadb mariadb
@@ -104,6 +92,10 @@ The database drivers are peer dependencies of the integration libraries, so you 
 
    </TabItem>
    </Tabs>
+
+   <Aside title="DynamoDB">
+   The DynamoDB store is not part of 4.0: DynamoDB can't give the events a gap-free global order, which the 4.0 read side relies on. It remains available on the 3.x line (NestJS 11, CommonJS), which still receives fixes: install `@ocoda/event-sourcing@3` with `@ocoda/event-sourcing-dynamodb@3`. On 3.x the AWS SDK clients ship as dependencies of the integration, so there is no driver peer to add.
+   </Aside>
 
 </Steps>
 

@@ -1,5 +1,6 @@
 {
 	"$schema": "https://turborepo.dev/schema.json",
+	"agentGuidance": false,
 	"tasks": {
 		"build": {
 			"description": "Compile lib/ (src/ for the example) into per-file ESM in dist/ with tsc -p tsconfig.build.json.",

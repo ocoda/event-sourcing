@@ -33,7 +33,6 @@ import {
 	SnapshotStore,
 	UUID,
 } from '@ocoda/event-sourcing';
-import { DynamoDBEventStore, DynamoDBSnapshotStore } from '@ocoda/event-sourcing-dynamodb';
 import { MariaDBEventStore, MariaDBSnapshotStore } from '@ocoda/event-sourcing-mariadb';
 import { MongoDBEventStore, MongoDBSnapshotStore } from '@ocoda/event-sourcing-mongodb';
 import { PostgresEventStore, PostgresSnapshotStore } from '@ocoda/event-sourcing-postgres';
@@ -252,8 +251,6 @@ async function main(): Promise<void> {
 		'the published build carries design:paramtypes metadata',
 	);
 	const drivers = [
-		DynamoDBEventStore,
-		DynamoDBSnapshotStore,
 		MariaDBEventStore,
 		MariaDBSnapshotStore,
 		MongoDBEventStore,
