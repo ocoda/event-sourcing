@@ -1,0 +1,110 @@
+name: Bug report
+description: A published @ocoda package doesn't behave as documented.
+title: "[bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this. Before you start:
+
+        - Questions and usage help go to [Discussions Q&A](https://github.com/ocoda/event-sourcing/discussions/categories/q-a).
+        - Never report a security problem here. See [SECURITY.md](https://github.com/ocoda/event-sourcing/blob/master/SECURITY.md).
+        - A report without a minimal reproduction is hard to act on and may wait until one is added.
+
+  - type: dropdown
+    id: package
+    attributes:
+      label: Affected package
+      description: Select every package involved.
+      multiple: true
+      options:
+        - "@ocoda/event-sourcing (core)"
+        - "@ocoda/event-sourcing-postgres"
+        - "@ocoda/event-sourcing-mariadb"
+        - "@ocoda/event-sourcing-mongodb"
+        - "@ocoda/event-sourcing-dynamodb (3.x only)"
+        - "Not sure"
+    validations:
+      required: true
+
+  - type: input
+    id: package-versions
+    attributes:
+      label: Package versions
+      description: The exact version of each @ocoda package you use, from your lockfile or `npm ls`.
+      placeholder: "@ocoda/event-sourcing 3.0.2, @ocoda/event-sourcing-postgres 3.0.2"
+    validations:
+      required: true
+
+  - type: input
+    id: nestjs-version
+    attributes:
+      label: NestJS version
+      description: The version of `@nestjs/core`.
+      placeholder: "11.1.6"
+    validations:
+      required: true
+
+  - type: input
+    id: node-version
+    attributes:
+      label: Node.js version
+      description: The output of `node --version`.
+      placeholder: "v22.12.0"
+    validations:
+      required: true
+
+  - type: input
+    id: database
+    attributes:
+      label: Database and server version
+      description: Leave empty if you use the in-memory stores.
+      placeholder: "PostgreSQL 17.2"
+    validations:
+      required: false
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did and what went wrong. Include the full error message.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: |
+        A link to a repository, or a code snippet, that shows the problem with as little else as possible.
+        Include the module configuration and the aggregate, event or handler involved.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+      description: What you expected to happen instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Stack trace or relevant log output. It is formatted as code, so no backticks needed.
+      render: shell
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched [existing issues](https://github.com/ocoda/event-sourcing/issues?q=is%3Aissue) and this is not a duplicate.
+          required: true
+        - label: I use 3.x or a 4.0.0-next prerelease. 2.x and older are [not supported](https://github.com/ocoda/event-sourcing/blob/master/SECURITY.md#supported-versions).
+          required: true
