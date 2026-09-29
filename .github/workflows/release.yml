@@ -14,15 +14,17 @@ jobs:
     name: Release
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-      id-token: write
-      pull-requests: write
+      contents: read # check out the repository; the release App token does every write
+      id-token: write # npm trusted publishing (OIDC)
     steps:
-      # changesets/action v1 pushes the release branch and tags with the checkout credentials.
-      - name: Checkout the repository # zizmor: ignore[artipacked]
+      # changesets/action v2 creates the version commit, the changeset-release/master branch, git tags and GitHub
+      # releases through the GitHub API with `github-token` and never pushes with git, so the checkout does not keep
+      # its credentials.
+      - name: Checkout the repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Install pnpm
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
@@ -39,16 +41,39 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Until 4.0 GA, master only ships 4.0.0-next.N prereleases under the `next` dist-tag.
+      # The same script guards the publish path below, right before `changeset publish`.
+      - name: Guard - master only ships 4.0.0-next prereleases
+        run: bash .github/scripts/release-guard.sh plan
+
       - name: Build Packages
         run: pnpm build --filter="./packages/**"
 
+      # A GitHub App installation token, because GITHUB_TOKEN cannot open pull requests here and pull requests it
+      # opens get no CI. It is scoped to this repository, lasts an hour and is revoked when the job ends, so it is
+      # created right before the step that uses it.
+      - name: Create the release App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          # The App ID works here: the action signs its JWT with this value as the issuer, which GitHub accepts as
+          # either the App's client ID or its App ID (`app-id` is the deprecated alias of this input).
+          client-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write # version commit and branch, git tags and GitHub releases
+          permission-pull-requests: write # open and update the version PR
+
+      # Pending changesets: version them onto the changeset-release/master branch and open or update the version PR.
+      # No pending changesets: publish every unpublished version through npm trusted publishing (OIDC).
       - name: Create Release Pull Request or Publish
         id: changesets
-        uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
+        uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
         with:
-          version: pnpm exec changeset version
-          publish: pnpm exec changeset publish
-          commit: "[ci] release"
-          title: "[ci] release"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The action also passes this token to the version and publish scripts as GITHUB_TOKEN, which
+          # @changesets/changelog-github needs to link PRs and authors in the changelog.
+          github-token: ${{ steps.app-token.outputs.token }}
+          version-script: pnpm exec changeset version
+          publish-script: bash .github/scripts/release-guard.sh publish
+          commit-message: "[ci] release"
+          pr-title: "[ci] release"
