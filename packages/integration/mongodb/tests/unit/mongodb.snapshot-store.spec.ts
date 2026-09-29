@@ -44,7 +44,7 @@ describe.each(mongodbTestTopologies())(`${MongoDBSnapshotStore.name} ($name)`, (
 		await snapshotStore.connect();
 		await snapshotStore.ensureCollection();
 
-		client = snapshotStore['client'];
+		client = snapshotStore['client'] as MongoClient;
 
 		await client.db().collection(SnapshotCollection.get()).deleteMany({});
 		await client.db().collection(SnapshotCollection.get('a')).deleteMany({});

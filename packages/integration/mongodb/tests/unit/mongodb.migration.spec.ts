@@ -20,7 +20,7 @@ import {
 	v1SnapshotDocument,
 } from '../fixtures/schema-v1.js';
 import { drain, expectRejectionOfClass } from '../support/assertions.js';
-import { CATALOG, dropCollections } from '../support/catalog.js';
+import { CATALOG, dropCollections, rawCollection } from '../support/catalog.js';
 import { createEventStore, createSnapshotStore } from '../support/stores.js';
 
 // The migration of 3.x collections (ADR 0002 §6, MongoDB). Every test seeds 3.x collections of its own (the 3.0.0 and
@@ -98,7 +98,10 @@ const expectedPositions = (events: readonly V1Event[]): Map<string, number> => {
 	);
 	const rank = new Map(ranked.map((event, index) => [event._id, index + 1]));
 	const key = new Map<string, number>();
-	const byStream = Map.groupBy(events, ({ streamId }) => streamId);
+	const byStream = new Map<string, V1Event[]>();
+	for (const event of events) {
+		byStream.set(event.streamId, [...(byStream.get(event.streamId) ?? []), event]);
+	}
 	for (const streamEvents of byStream.values()) {
 		let max = 0;
 		for (const event of [...streamEvents].sort((x, y) => x.version - y.version)) {
@@ -124,13 +127,13 @@ describe.each(mongodbTestTopologies())('MongoDB migration ($name)', ({ url }) =>
 		collections.push(EventCollection.get(name), SnapshotCollection.get(name));
 		return name;
 	};
-	const catalog = () => database.collection<Document>(CATALOG);
+	const catalog = () => rawCollection(database, CATALOG);
 
 	const seedEvents = async (events: readonly V1Event[], label = 'events') => {
 		const eventPool = pool(label);
 		await createV1EventCollection(database, EventCollection.get(eventPool));
 		if (events.length > 0) {
-			await database.collection(EventCollection.get(eventPool)).insertMany(events.map((event) => ({ ...event })));
+			await rawCollection(database, EventCollection.get(eventPool)).insertMany(events.map((event) => ({ ...event })));
 		}
 		return eventPool;
 	};
@@ -138,10 +141,10 @@ describe.each(mongodbTestTopologies())('MongoDB migration ($name)', ({ url }) =>
 	/** Everything the migration may change: options, indexes, documents (positions as Longs) and catalog documents. */
 	const dump = async (name: string) => {
 		const [info] = await database.listCollections({ name }).toArray();
-		const indexes = (await database.collection(name).indexes())
+		const indexes = (await rawCollection(database, name).indexes())
 			.map(({ name: index, key, unique, partialFilterExpression }) => ({ index, key, unique, partialFilterExpression }))
 			.sort((x, y) => String(x.index).localeCompare(String(y.index)));
-		const documents = await database.collection(name).find({}, { promoteLongs: false }).sort({ _id: 1 }).toArray();
+		const documents = await rawCollection(database, name).find({}, { promoteLongs: false }).sort({ _id: 1 }).toArray();
 		const registered = await catalog()
 			.find({ _id: { $in: [name, `lock:migrate:${name}`] } }, { projection: { _id: 0 } })
 			.toArray();
@@ -239,11 +242,11 @@ describe.each(mongodbTestTopologies())('MongoDB migration ($name)', ({ url }) =>
 
 				// Positions 1..N as D33 prescribes, 64-bit, and 3.x's fields otherwise unchanged except eventDate
 				const expected = expectedPositions(events);
-				const migrated = await database.collection(collection).find({}, { promoteLongs: false }).toArray();
+				const migrated = await rawCollection(database, collection).find({}, { promoteLongs: false }).toArray();
 				expect(
 					Object.fromEntries(migrated.map(({ _id, globalPosition }) => [_id, Number(String(globalPosition))])),
 				).toEqual(Object.fromEntries(expected));
-				expect(await database.collection(collection).countDocuments({ globalPosition: { $type: 'long' } })).toBe(
+				expect(await rawCollection(database, collection).countDocuments({ globalPosition: { $type: 'long' } })).toBe(
 					events.length,
 				);
 				for (const event of events) {
@@ -253,7 +256,7 @@ describe.each(mongodbTestTopologies())('MongoDB migration ($name)', ({ url }) =>
 						globalPosition: expect.anything(),
 					});
 				}
-				expect((await database.collection(collection).indexes()).map(({ key }) => key)).toEqual([
+				expect((await rawCollection(database, collection).indexes()).map(({ key }) => key)).toEqual([
 					{ _id: 1 },
 					{ streamId: 1, version: 1 },
 					{ globalPosition: 1 },
@@ -285,7 +288,9 @@ describe.each(mongodbTestTopologies())('MongoDB migration ($name)', ({ url }) =>
 				expect(first.metadata).not.toHaveProperty('causationId');
 
 				// A 3.x-shaped insert is rejected; 4.0 bootstraps and continues at N + 1
-				await expect(database.collection(collection).insertOne(v1EventDocument(newStream(), 1))).rejects.toMatchObject({
+				await expect(
+					rawCollection(database, collection).insertOne(v1EventDocument(newStream(), 1)),
+				).rejects.toMatchObject({
 					code: 121,
 				});
 				await expect(eventStore.ensureCollection(eventPool)).resolves.toBe(collection);
@@ -324,9 +329,14 @@ describe.each(mongodbTestTopologies())('MongoDB migration ($name)', ({ url }) =>
 					});
 				}
 
+				// A crash after the last step that writes leaves only the release, which the crashed run did on its way out
 				const resumed = await reportOf(migrateEvents(eventPool));
 				expect(resumed.action, `after a crash after ${crashAfter}`).toBe(
-					crashAfter === 'release' ? 'skip' : crashAfter === 'lease' ? 'migrate' : 'resume',
+					crashAfter === 'release' || crashAfter === 'unset-event-date'
+						? 'skip'
+						: crashAfter === 'lease'
+							? 'migrate'
+							: 'resume',
 				);
 				expect(await dump(collection), `after a crash after ${crashAfter}`).toEqual(expected);
 			}
@@ -339,7 +349,9 @@ describe.each(mongodbTestTopologies())('MongoDB migration ($name)', ({ url }) =>
 			const deferred = await reportOf(migrateEvents(eventPool, { unsetEventDate: false }));
 			expect(deferred.steps.find(({ name }) => name === 'unset-event-date')?.status).toBe('skipped');
 			expect(deferred.warnings).toContainEqual(expect.stringContaining('eventDate is kept'));
-			expect(await database.collection(collection).countDocuments({ eventDate: { $exists: true } })).toBeGreaterThan(0);
+			expect(
+				await rawCollection(database, collection).countDocuments({ eventDate: { $exists: true } }),
+			).toBeGreaterThan(0);
 			await expect(eventStore.ensureCollection(eventPool)).resolves.toBe(collection);
 
 			const progress: MigrationProgress[] = [];
@@ -350,7 +362,7 @@ describe.each(mongodbTestTopologies())('MongoDB migration ($name)', ({ url }) =>
 				'unset-event-date',
 				'release',
 			]);
-			expect(await database.collection(collection).countDocuments({ eventDate: { $exists: true } })).toBe(0);
+			expect(await rawCollection(database, collection).countDocuments({ eventDate: { $exists: true } })).toBe(0);
 			expect(progress).toContainEqual({
 				collection,
 				step: 'unset-event-date',
@@ -361,11 +373,16 @@ describe.each(mongodbTestTopologies())('MongoDB migration ($name)', ({ url }) =>
 
 		it('blocks collections it cannot migrate, and writes nothing to them', async () => {
 			const withObjectId = await seedEvents([]);
-			await database
-				.collection(EventCollection.get(withObjectId))
-				.insertOne({ streamId: 's', version: 1, eventDate: '2021-01' });
+			await rawCollection(database, EventCollection.get(withObjectId)).insertOne({
+				streamId: 's',
+				version: 1,
+				eventDate: '2021-01',
+			});
 			const withoutEventDate = await seedEvents([v1EventDocument(newStream(), 1, { eventId: idAt(0).toLowerCase() })]);
-			await database.collection(EventCollection.get(withoutEventDate)).updateMany({}, { $unset: { eventDate: '' } });
+			await rawCollection(database, EventCollection.get(withoutEventDate)).updateMany(
+				{},
+				{ $unset: { eventDate: '' } },
+			);
 			const withValidator = await seedEvents(corpus());
 			await database.command({ collMod: EventCollection.get(withValidator), validator: { version: { $gte: 1 } } });
 
@@ -424,10 +441,10 @@ describe.each(mongodbTestTopologies())('MongoDB migration ($name)', ({ url }) =>
 			const ownDatabase = eventStore['client']?.db(databaseName) as Db;
 			try {
 				await createV1EventCollection(ownDatabase, 'events');
-				await ownDatabase.collection('events').insertMany(corpus());
+				await rawCollection(ownDatabase, 'events').insertMany(corpus());
 				await createV1EventCollection(ownDatabase, 'tenant-events');
-				await ownDatabase.collection('not-an-event-collection').insertOne({ a: 1 });
-				await ownDatabase.collection('other-events').insertOne({ a: 1 });
+				await rawCollection(ownDatabase, 'not-an-event-collection').insertOne({ a: 1 });
+				await rawCollection(ownDatabase, 'other-events').insertOne({ a: 1 });
 				await createV1SnapshotCollection(ownDatabase, 'snapshots');
 
 				const report = await MongoDBEventStore.migrate({ url: own.toString() });
@@ -456,26 +473,23 @@ describe.each(mongodbTestTopologies())('MongoDB migration ($name)', ({ url }) =>
 			const [healthy, duplicate, missing, misflagged] = Array.from({ length: 4 }, () =>
 				SnapshotStream.for(Account, AccountId.generate()),
 			);
-			await database
-				.collection(collection)
-				.insertMany([
-					v1SnapshotDocument(healthy, 1, false),
-					v1SnapshotDocument(healthy, 2, false),
-					v1SnapshotDocument(healthy, 3, true),
-					v1SnapshotDocument(duplicate, 1, true),
-					v1SnapshotDocument(duplicate, 2, true),
-					v1SnapshotDocument(missing, 1, false),
-					v1SnapshotDocument(missing, 2, false),
-					v1SnapshotDocument(misflagged, 1, true),
-					v1SnapshotDocument(misflagged, 2, false),
-				]);
+			await rawCollection(database, collection).insertMany([
+				v1SnapshotDocument(healthy, 1, false),
+				v1SnapshotDocument(healthy, 2, false),
+				v1SnapshotDocument(healthy, 3, true),
+				v1SnapshotDocument(duplicate, 1, true),
+				v1SnapshotDocument(duplicate, 2, true),
+				v1SnapshotDocument(missing, 1, false),
+				v1SnapshotDocument(missing, 2, false),
+				v1SnapshotDocument(misflagged, 1, true),
+				v1SnapshotDocument(misflagged, 2, false),
+			]);
 			return { snapshotPool, collection, streams: { healthy, duplicate, missing, misflagged } };
 		};
 
 		const flags = async (collection: string) =>
 			(
-				await database
-					.collection(collection)
+				await rawCollection(database, collection)
 					.find({ latest: { $exists: true } })
 					.sort({ latest: 1 })
 					.toArray()
@@ -509,13 +523,13 @@ describe.each(mongodbTestTopologies())('MongoDB migration ($name)', ({ url }) =>
 			const report = await reportOf(snapshotStore.migrate({ pools: [snapshotPool] }));
 
 			expect(report.steps.every(({ status }) => status === 'done')).toBe(true);
-			expect(await database.collection(collection).countDocuments({ latest: null })).toBe(0);
+			expect(await rawCollection(database, collection).countDocuments({ latest: { $type: 'null' } })).toBe(0);
 			expect(await flags(collection)).toEqual(
 				Object.values(streams)
 					.map((stream) => [stream.streamId, stream === streams.healthy ? 3 : 2, `latest#${stream.streamId}`])
 					.sort(([x], [y]) => (String(x) < String(y) ? -1 : 1)),
 			);
-			const indexes = await database.collection(collection).indexes();
+			const indexes = await rawCollection(database, collection).indexes();
 			expect(indexes.map(({ name }) => name)).toEqual(['_id_', 'streamId_1_version_1', 'latest_unique']);
 			expect(indexes.find(({ name }) => name === 'latest_unique')).toMatchObject({
 				unique: true,
@@ -549,7 +563,7 @@ describe.each(mongodbTestTopologies())('MongoDB migration ($name)', ({ url }) =>
 					(await flags(collection)).map(([, version]) => version).sort(),
 					`after a crash after ${crashAfter}`,
 				).toEqual([2, 2, 2, 3]);
-				expect((await database.collection(collection).indexes()).map(({ name }) => name)).toEqual([
+				expect((await rawCollection(database, collection).indexes()).map(({ name }) => name)).toEqual([
 					'_id_',
 					'streamId_1_version_1',
 					'latest_unique',

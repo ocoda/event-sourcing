@@ -17,7 +17,7 @@ import { Account, AccountId, getEventMap, getEvents, mongodbTestTopologies } fro
 import { type Db, Long, MongoClient } from 'mongodb';
 import { V1_EVENT_INDEXES, v1EventDocument } from '../fixtures/schema-v1.js';
 import { drain, expectRejectionOfClass } from '../support/assertions.js';
-import { CATALOG, dropCollections } from '../support/catalog.js';
+import { CATALOG, dropCollections, rawCollection } from '../support/catalog.js';
 import { type TestEventStore, createEventStore } from '../support/stores.js';
 
 const uniquePool = (name: string): IEventPool => `mongo-${name}-${randomBytes(4).toString('hex')}`;
@@ -89,8 +89,7 @@ describe.each(mongodbTestTopologies())(`${MongoDBEventStore.name} ($name)`, ({ n
 			expect(envelopes.map(({ metadata }) => metadata.globalPosition)).toEqual(
 				events.map((_, index) => BigInt(index + 1)),
 			);
-			const documents = await database
-				.collection(EventCollection.get(pool))
+			const documents = await rawCollection(database, EventCollection.get(pool))
 				.find({}, { promoteLongs: false })
 				.sort({ globalPosition: 1 })
 				.toArray();
@@ -112,7 +111,7 @@ describe.each(mongodbTestTopologies())(`${MongoDBEventStore.name} ($name)`, ({ n
 				});
 			}
 			expect(
-				await database.collection(EventCollection.get(pool)).countDocuments({ globalPosition: { $type: 'long' } }),
+				await rawCollection(database, EventCollection.get(pool)).countDocuments({ globalPosition: { $type: 'long' } }),
 			).toBe(events.length);
 			expect(publish).toHaveBeenCalledTimes(events.length);
 		});
@@ -130,8 +129,7 @@ describe.each(mongodbTestTopologies())(`${MongoDBEventStore.name} ($name)`, ({ n
 
 			await eventStore.appendEvents(stream, [envelope, events[1]], { expectedVersion: 0, pool });
 
-			const [first, second] = await database
-				.collection(EventCollection.get(pool))
+			const [first, second] = await rawCollection(database, EventCollection.get(pool))
 				.find()
 				.sort({ version: 1 })
 				.toArray();
@@ -252,7 +250,7 @@ describe.each(mongodbTestTopologies())(`${MongoDBEventStore.name} ($name)`, ({ n
 			);
 
 			// A collection that holds events but isn't registered is still unknown when a read finds nothing
-			await database.collection(EventCollection.get(unknown)).insertOne({ streamId: 'x', version: 1 });
+			await rawCollection(database, EventCollection.get(unknown)).insertOne({ streamId: 'x', version: 1 });
 			await expectRejectionOfClass(
 				eventStore.getStreamVersion(stream, unknown),
 				EventCollectionNotFoundException,
@@ -268,7 +266,7 @@ describe.each(mongodbTestTopologies())(`${MongoDBEventStore.name} ($name)`, ({ n
 
 		it('rejects documents without a position (a 3.x collection read without migrating) with a schema error', async () => {
 			const legacy = reservePool('legacy-read');
-			await database.collection(EventCollection.get(legacy)).insertOne(v1EventDocument(stream, 1));
+			await rawCollection(database, EventCollection.get(legacy)).insertOne(v1EventDocument(stream, 1));
 
 			await expectRejectionOfClass(eventStore.getEnvelope(stream, 1, legacy), EventStoreSchemaException, {
 				collection: EventCollection.get(legacy),
@@ -294,7 +292,7 @@ describe.each(mongodbTestTopologies())(`${MongoDBEventStore.name} ($name)`, ({ n
 				validationLevel: 'strict',
 				validationAction: 'error',
 			});
-			const indexes = await database.collection(collection).indexes();
+			const indexes = await rawCollection(database, collection).indexes();
 			expect(indexes.filter(({ unique }) => unique).map(({ key }) => key)).toEqual([
 				{ streamId: 1, version: 1 },
 				{ globalPosition: 1 },
@@ -306,7 +304,9 @@ describe.each(mongodbTestTopologies())(`${MongoDBEventStore.name} ($name)`, ({ n
 				lastPosition: 0,
 			});
 			// A 3.x-shaped insert fails
-			await expect(database.collection(collection).insertOne(v1EventDocument(newStream(), 1))).rejects.toMatchObject({
+			await expect(
+				rawCollection(database, collection).insertOne(v1EventDocument(newStream(), 1)),
+			).rejects.toMatchObject({
 				code: 121,
 			});
 		});
@@ -351,7 +351,7 @@ describe.each(mongodbTestTopologies())(`${MongoDBEventStore.name} ($name)`, ({ n
 
 			await expect(eventStore.ensureCollection(pool)).resolves.toBe(collection);
 
-			expect((await database.collection(collection).indexes()).map(({ key }) => key)).toContainEqual({
+			expect((await rawCollection(database, collection).indexes()).map(({ key }) => key)).toContainEqual({
 				globalPosition: 1,
 			});
 			expect(await catalog().findOne({ _id: collection })).toMatchObject({ kind: 'events', schemaVersion: 2 });
@@ -359,8 +359,8 @@ describe.each(mongodbTestTopologies())(`${MongoDBEventStore.name} ($name)`, ({ n
 
 		it('rejects a 3.x collection, and one whose migration did not finish, without touching them', async () => {
 			const v1 = reservePool('v1');
-			await database.collection(EventCollection.get(v1)).createIndexes([...V1_EVENT_INDEXES]);
-			await database.collection(EventCollection.get(v1)).insertOne(v1EventDocument(newStream(), 1));
+			await rawCollection(database, EventCollection.get(v1)).createIndexes([...V1_EVENT_INDEXES]);
+			await rawCollection(database, EventCollection.get(v1)).insertOne(v1EventDocument(newStream(), 1));
 			await expectRejectionOfClass(eventStore.ensureCollection(v1), EventStoreSchemaException, {
 				collection: EventCollection.get(v1),
 				found: 'v1',
@@ -368,7 +368,7 @@ describe.each(mongodbTestTopologies())(`${MongoDBEventStore.name} ($name)`, ({ n
 			});
 
 			const partial = reservePool('v1-partial');
-			await database.collection(EventCollection.get(partial)).insertOne(v1EventDocument(newStream(), 1));
+			await rawCollection(database, EventCollection.get(partial)).insertOne(v1EventDocument(newStream(), 1));
 			await database.command({
 				collMod: EventCollection.get(partial),
 				validator: {
@@ -386,7 +386,7 @@ describe.each(mongodbTestTopologies())(`${MongoDBEventStore.name} ($name)`, ({ n
 			expect(
 				await catalog().countDocuments({ _id: { $in: [EventCollection.get(v1), EventCollection.get(partial)] } }),
 			).toBe(0);
-			expect(await database.collection(EventCollection.get(v1)).countDocuments()).toBe(1);
+			expect(await rawCollection(database, EventCollection.get(v1)).countDocuments()).toBe(1);
 		});
 
 		it("with ddl: 'none', only checks and registers: a missing collection names the statements that create it", async () => {
@@ -444,7 +444,7 @@ describe.each(mongodbTestTopologies())(`${MongoDBEventStore.name} ($name)`, ({ n
 	it('lists the event collections the catalog registers, and no other', async () => {
 		const pool = await newPool('listed');
 		const legacy = reservePool('listed-v1');
-		await database.collection(EventCollection.get(legacy)).insertOne(v1EventDocument(newStream(), 1));
+		await rawCollection(database, EventCollection.get(legacy)).insertOne(v1EventDocument(newStream(), 1));
 		await catalog().insertOne({ _id: `lock:migrate:${EventCollection.get(legacy)}`, kind: 'lock' });
 
 		const listed = await drain(eventStore.listCollections({ batch: 2 }));

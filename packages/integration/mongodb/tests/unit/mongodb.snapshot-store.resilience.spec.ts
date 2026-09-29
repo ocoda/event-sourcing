@@ -77,7 +77,7 @@ describe.each(mongodbTestTopologies())(`${MongoDBSnapshotStore.name} resilience 
 	beforeAll(async () => {
 		snapshotStore = await newStore();
 
-		client = snapshotStore['client'];
+		client = snapshotStore['client'] as MongoClient;
 		database = snapshotStore['database'];
 	});
 
@@ -277,9 +277,8 @@ describe.each(mongodbTestTopologies())(`${MongoDBSnapshotStore.name} resilience 
 
 			// On a replica set the check, the unflagging and the insert are one transaction, so the writers can't all get past
 			// the check: the first one's unflagging makes the others' transactions conflict and start over
-			it.runIf(name === 'standalone')(
-				'should report a version conflict when the race is lost after the version check passed',
-				async () => {
+			describe.runIf(name === 'standalone')('on a standalone server', () => {
+				it('should report a version conflict when the race is lost after the version check passed', async () => {
 					const snapshotPool = await newPool('concurrent-check');
 					const stream = newStream();
 					await snapshotStore.appendSnapshot(stream, 1, { balance: 0 }, snapshotPool);
@@ -305,8 +304,8 @@ describe.each(mongodbTestTopologies())(`${MongoDBSnapshotStore.name} resilience 
 
 					await expectExactlyOneWinner(await settle(stream, 2, snapshotPool), stream, 2, [1, 2], snapshotPool);
 					expect(insertOneSpy).toHaveBeenCalledTimes(WRITERS);
-				},
-			);
+				});
+			});
 		});
 	});
 });
