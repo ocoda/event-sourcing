@@ -349,10 +349,38 @@ jobs:
           advanced-security: false
           online-audits: false
 
+  changesets:
+    name: Changesets
+    # master only: 3.x PRs run the ci.yml of the 3.x branch.
+    if: ${{ github.event_name == 'pull_request' && github.base_ref == 'master' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read # checkout with history, to diff against the merge base
+      pull-requests: read # read the PR's labels
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # A PR that changes a published package needs a changeset, unless it has the `no-changeset` label.
+      # The script reads the labels through the API, so re-running this job picks up a label added later.
+      - name: Check changesets
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/check-changesets.sh
+
   ci-ok:
     name: ci-ok
     if: ${{ always() }}
-    needs: [changes, lint, build, test-core, test-integration, docs, codeql, dependency-review, workflows]
+    needs: [changes, lint, build, test-core, test-integration, docs, codeql, dependency-review, workflows, changesets]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
