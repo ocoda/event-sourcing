@@ -40,7 +40,8 @@ The repository is a pnpm + turbo monorepo:
 | `docs/`                  | the documentation site                                                       |
 | `example/`               | an example NestJS application                                                |
 | `fixtures/consumers`     | the application `pnpm test:consumers` installs the packed packages into      |
-| `scripts/`               | the package-shape checks (`check:packages`, `test:consumers`)                |
+| `fixtures/cross-version` | the 3.0.2 writer of `pnpm test:cross-version` (npm, outside the workspace)   |
+| `scripts/`               | the package-shape checks (`check:packages`, `test:consumers`) and `test:cross-version` |
 
 ## Databases for integration tests
 
@@ -68,6 +69,12 @@ The MongoDB unit, resilience and conformance specs run on a standalone server an
 ```bash
 docker compose up -d --wait mongodb mongodb-8-rs
 ES_TEST_MONGODB_RS_URL='mongodb://localhost:27018/?replicaSet=rs0' pnpm test:cov --filter=@ocoda/event-sourcing-mongodb
+```
+
+The cross-version test checks that a driver reads what the published 3.0.2 packages wrote: the 3.0.2 writer in `fixtures/cross-version/v3` fills a schema or database of its own, then the driver's `tests/cross-version` specs read it back. CI runs it on the oldest and newest version of each database. It needs npm and the same `ES_TEST_*` settings (for MariaDB also the root password, to create the database):
+
+```bash
+pnpm test:cross-version --database postgres   # or mariadb, mongodb (both topologies with ES_TEST_MONGODB_RS_URL)
 ```
 
 ## Before you open a pull request

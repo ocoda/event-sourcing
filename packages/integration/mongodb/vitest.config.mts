@@ -1,7 +1,7 @@
 import { resolve } from 'node:path';
 
 import base from '@ocoda/event-sourcing-config/vitest/base.mjs';
-import { defineConfig, mergeConfig } from 'vitest/config';
+import { configDefaults, defineConfig, mergeConfig } from 'vitest/config';
 
 export default mergeConfig(
 	base,
@@ -14,6 +14,11 @@ export default mergeConfig(
 				'@ocoda/event-sourcing-mongodb': resolve(import.meta.dirname, 'lib'),
 				'@ocoda/event-sourcing-testing': resolve(import.meta.dirname, '../../testing'),
 			},
+		},
+		test: {
+			// The cross-version specs read a corpus that the published 3.0.2 packages write first:
+			// scripts/test-cross-version.mjs runs them with vitest.cross-version.mts.
+			exclude: [...configDefaults.exclude, 'tests/cross-version/**'],
 		},
 	}),
 );
