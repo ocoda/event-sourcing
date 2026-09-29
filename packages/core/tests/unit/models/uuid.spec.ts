@@ -1,8 +1,13 @@
 import { InvalidIdException, UUID } from '@ocoda/event-sourcing';
 
 describe(UUID, () => {
-	class AccountId extends UUID {}
-	class CustomerId extends UUID {}
+	// The brands keep the classes apart for the type assertions: without members of their own they equal UUID
+	class AccountId extends UUID {
+		declare private readonly brand: 'AccountId';
+	}
+	class CustomerId extends UUID {
+		declare private readonly brand: 'CustomerId';
+	}
 
 	it('should generate a UUID', () => {
 		const generatedUUID = UUID.generate();
@@ -16,8 +21,11 @@ describe(UUID, () => {
 		expect(accountId).toBeInstanceOf(AccountId);
 		expect(accountId).not.toBeInstanceOf(CustomerId);
 		expectTypeOf(accountId).toEqualTypeOf<AccountId>();
+		expectTypeOf(accountId).not.toEqualTypeOf<UUID>();
 		expectTypeOf(AccountId.from(accountId.value)).toEqualTypeOf<AccountId>();
+		expectTypeOf(AccountId.from(accountId.value)).not.toEqualTypeOf<UUID>();
 		expectTypeOf(UUID.generate()).toEqualTypeOf<UUID>();
+		expectTypeOf(UUID.generate()).not.toEqualTypeOf<AccountId>();
 	});
 
 	it('should create a UUID from an existing value', () => {

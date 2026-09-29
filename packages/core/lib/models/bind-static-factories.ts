@@ -1,7 +1,8 @@
 /**
  * Makes the static factories of an id class keep the class they are read from, also when they are passed around
  * detached, as in `values.map(AccountId.from)`: reading `AccountId.from` returns the method bound to `AccountId`, so it
- * creates an `AccountId`, like `AccountId.from(value)` does. The bound function is created once per class.
+ * creates an `AccountId`, like `AccountId.from(value)` does. The bound function is created once per class. Read with
+ * anything else than a class as the receiver, the factory is bound to the class that declares it.
  *
  * Each name must be a static method the class declares itself. A subclass can still declare a static method of the
  * same name, or assign one, which then replaces the bound factory for that subclass.
@@ -20,14 +21,14 @@ export const bindStaticFactories = (cls: Function, names: readonly string[]): vo
 			configurable: true,
 			enumerable: false,
 			get(this: unknown) {
-				if (typeof this !== 'function') {
-					return method;
-				}
-				let factory = bound.get(this);
+				// Read through `super` from a detached override (`values.map(AccountId.from)` where `AccountId.from` calls
+				// `super.from()`), `this` is not a class: bind to the declaring class, which 3.x's factories created.
+				const receiver = typeof this === 'function' ? this : cls;
+				let factory = bound.get(receiver);
 				if (!factory) {
 					// The arrow function keeps the class as `this`; the computed key names it after the method
-					factory = { [name]: (...args: unknown[]) => method.apply(this, args) }[name];
-					bound.set(this, factory);
+					factory = { [name]: (...args: unknown[]) => method.apply(receiver, args) }[name];
+					bound.set(receiver, factory);
 				}
 				return factory;
 			},

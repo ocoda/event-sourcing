@@ -1,14 +1,19 @@
 import { Id, InvalidIdException } from '@ocoda/event-sourcing';
 
 describe(Id, () => {
+	// The brands keep the classes apart for the type assertions: without members of their own they equal Id
 	class DeviceId extends Id {
+		declare private readonly brand: 'DeviceId';
+
 		// A 3.x-style factory of its own keeps compiling and working
 		public static generate(): DeviceId {
 			return new DeviceId('123-abc');
 		}
 	}
 
-	class SerialNumber extends Id {}
+	class SerialNumber extends Id {
+		declare private readonly brand: 'SerialNumber';
+	}
 
 	it('should generate a DeviceId', () => {
 		const generatedDeviceId = DeviceId.generate();
@@ -24,7 +29,10 @@ describe(Id, () => {
 		expect(createdDeviceId).toBeInstanceOf(DeviceId);
 		expect(Id.from(id)).not.toBeInstanceOf(DeviceId);
 		expectTypeOf(createdDeviceId).toEqualTypeOf<DeviceId>();
+		expectTypeOf(createdDeviceId).not.toEqualTypeOf<Id>();
+		expectTypeOf(SerialNumber.from(id)).toEqualTypeOf<SerialNumber>();
 		expectTypeOf(Id.from(id)).toEqualTypeOf<Id>();
+		expectTypeOf(Id.from(id)).not.toEqualTypeOf<DeviceId>();
 	});
 
 	it('should tell ids of different classes apart, even with the same value', () => {
@@ -71,6 +79,20 @@ describe(Id, () => {
 		expect(AssignedId.from).toBe(from);
 		expect(Id.from).not.toBe(from);
 		expect(SerialNumber.from('abc')).toBeInstanceOf(SerialNumber);
+	});
+
+	it('keeps a detached 3.x-style override that calls super.from() working', () => {
+		class TrimmedId extends Id {
+			public static override from(id: string): Id {
+				return super.from(id.trim());
+			}
+		}
+
+		// Detached, `super.from` is read without a class as `this`, and creates an Id, as in 3.x
+		const [trimmed] = [' abc '].map(TrimmedId.from);
+		expect(trimmed.value).toBe('abc');
+		expect(trimmed).toBeInstanceOf(Id);
+		expect(TrimmedId.from(' abc ')).toBeInstanceOf(TrimmedId);
 	});
 
 	it('can be spied on', () => {

@@ -54,7 +54,7 @@ The `AggregateRoot` counts the events of the aggregate, and keeps the ones that 
 | `markCommitted()` | Marks the uncommitted events as committed, once the repository appended them. |
 | `loadFromHistory(events)` | Applies stored events, as committed events: the batches of `eventStore.getEvents()` or an array of events. |
 
-`applyEvent()` runs the event handler first and only then counts the event, so a handler that throws leaves the version and the uncommitted events as they were. `loadFromHistory()` and the `version` setter throw an `UncommittedEventsException` while the aggregate has uncommitted events: the history would otherwise be applied after events that were raised on an older state.
+`applyEvent()` runs the event handler first and only then counts the event, so a handler that throws leaves the version and the uncommitted events as they were. An event handler must not call `applyEvent()` itself: the nested event would be recorded before the event whose handler raised it, and applied a second time when the aggregate is loaded from its events. Raise follow-up events from the method that applied the first one instead. `loadFromHistory()` and the `version` setter throw an `UncommittedEventsException` while the aggregate has uncommitted events: the history would otherwise be applied after events that were raised on an older state.
 
 `commit()`, which returned the uncommitted events and cleared them before they were appended, is deprecated and will be removed in 5.0.
 

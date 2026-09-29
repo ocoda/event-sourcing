@@ -187,6 +187,18 @@ describe(SnapshotRepository, () => {
 			expect(error).toHaveBeenCalledWith(expect.stringContaining('Failed to save the snapshot'), failure.stack);
 		});
 
+		it('logs a failure to build the snapshot stream as an error instead of rejecting', async () => {
+			const error = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+
+			await expect(snapshotRepository.save(undefined as unknown as AccountId, account)).resolves.toBeUndefined();
+
+			expect(snapshotStore.appendSnapshot).not.toHaveBeenCalled();
+			expect(error).toHaveBeenCalledWith(
+				`Failed to save the snapshot of Account undefined at version ${snapshotInterval}; the aggregate still loads from its events.`,
+				expect.any(String),
+			);
+		});
+
 		it('logs a thrown value that is not an error', async () => {
 			const error = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
 			snapshotStore.appendSnapshot.mockRejectedValueOnce('connection reset');
@@ -318,12 +330,6 @@ describe(SnapshotRepository, () => {
 		});
 
 		it('falls back to the interval multiples when markCommitted() was not called', async () => {
-			// Uncommitted events: v9 -> v11, no multiple of the interval
-			const wallet = walletAt(9);
-			wallet.credit(1);
-			wallet.credit(1);
-			await walletSnapshotRepository.save(walletId, wallet);
-
 			// Events from the history: v9 -> v11
 			const loaded = walletAt(9);
 			await loaded.loadFromHistory([new WalletCreditedEvent(1), new WalletCreditedEvent(1)]);
@@ -341,13 +347,25 @@ describe(SnapshotRepository, () => {
 			);
 		});
 
-		it('falls back to the interval multiples when the aggregate changed after markCommitted()', async () => {
-			const wallet = walletAt(9);
-			creditAndCommit(wallet, 2); // v11, crossed the boundary
-			wallet.credit(1); // v12, not committed
+		it('skips the snapshot with a warning while the aggregate has uncommitted events', async () => {
+			const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
 
+			// Uncommitted events that land on a multiple of the interval: v19 -> v20
+			const wallet = walletAt(19);
+			wallet.credit(1);
 			await walletSnapshotRepository.save(walletId, wallet);
+
+			// Changed after markCommitted(): v9 -> v11 committed, v12 uncommitted
+			const changed = walletAt(9);
+			creditAndCommit(changed, 2);
+			changed.credit(1);
+			await walletSnapshotRepository.save(walletId, changed);
+
 			expect(snapshotStore.appendSnapshot).not.toHaveBeenCalled();
+			expect(warn).toHaveBeenCalledTimes(2);
+			expect(warn).toHaveBeenCalledWith(
+				`Skipped the snapshot of Wallet ${walletId.value}: it has 1 uncommitted event(s). Append them and call markCommitted() before save().`,
+			);
 		});
 
 		it('takes no snapshot when markCommitted() committed nothing, even at a multiple of the interval', async () => {

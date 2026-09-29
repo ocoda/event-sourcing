@@ -44,6 +44,7 @@ export class AccountRepository {
 				const id = AccountId.from(metadata.aggregateId);
 				const eventStream = EventStream.for<Account>(Account, id);
 				const account = this.accountSnapshotRepository.deserialize(payload);
+				account.version = metadata.version;
 
 				const eventCursor = this.eventStore.getEvents(eventStream, { pool: 'e2e', fromVersion: metadata.version + 1 });
 				await account.loadFromHistory(eventCursor);

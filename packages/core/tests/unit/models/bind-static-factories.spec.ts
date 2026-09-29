@@ -30,18 +30,20 @@ describe(bindStaticFactories, () => {
 		expect(Factory.create('b')).toEqual({ receiver: Factory, value: 'b' });
 	});
 
-	it('hands out the method unbound when it is read from something else than a class', () => {
+	it('binds a factory to the declaring class when it is read from something else than a class', () => {
 		class Factory {
 			static create(this: unknown) {
 				return this;
 			}
 		}
-		const create = Factory.create;
 		bindStaticFactories(Factory, ['create']);
 
 		const getter = Object.getOwnPropertyDescriptor(Factory, 'create')?.get;
+		const create = getter?.call(undefined) as () => unknown;
 
+		expect(create()).toBe(Factory);
 		expect(getter?.call(undefined)).toBe(create);
+		expect(create).toBe(Factory.create);
 	});
 
 	it('rejects a name the class declares no static method for', () => {

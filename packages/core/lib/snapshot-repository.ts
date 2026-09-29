@@ -13,12 +13,12 @@ import { type AggregateRoot, type Id, type SnapshotEnvelope, SnapshotStream } fr
 import { SnapshotStore } from './snapshot-store.js';
 
 /**
- * Determine whether a snapshot should be taken for the given aggregate.
+ * Determine whether a snapshot should be taken for the given aggregate, which has no uncommitted events.
  *
- * When the aggregate's last `markCommitted()` is known (and the aggregate wasn't changed since), a snapshot is taken
- * when the committed events crossed the first version or an interval boundary, so a save that jumps over a boundary
- * (e.g. from version 9 to 11 with an interval of 10) still produces a snapshot, and a save that committed nothing
- * takes none. Otherwise it falls back to snapshotting at the first version and at every multiple of the interval.
+ * When the aggregate's last `markCommitted()` is known (and no events were loaded since), a snapshot is taken when the
+ * committed events crossed the first version or an interval boundary, so a save that jumps over a boundary (e.g. from
+ * version 9 to 11 with an interval of 10) still produces a snapshot, and a save that committed nothing takes none.
+ * Otherwise it falls back to snapshotting at the first version and at every multiple of the interval.
  */
 const isSnapshotDue = (aggregate: AggregateRoot, interval: number): boolean => {
 	const { version } = aggregate;
@@ -58,25 +58,37 @@ export abstract class SnapshotRepository<A extends AggregateRoot = AggregateRoot
 
 	/**
 	 * Saves a snapshot of the aggregate when one is due: when the events of its last `markCommitted()` crossed a
-	 * multiple of the interval or created the aggregate. Call it after `markCommitted()`.
+	 * multiple of the interval or created the aggregate. Call it after `markCommitted()`: while the aggregate has
+	 * uncommitted events, it logs a warning and takes no snapshot, because a snapshot ahead of the stored events would
+	 * make every later save of the stream conflict.
 	 *
 	 * It never rejects. The events are already stored when it runs, and the aggregate still loads from them without
 	 * the snapshot, so a failure to serialize or store the snapshot is logged instead: a version conflict (a newer
 	 * snapshot of the stream is already stored) as a warning, anything else as an error.
 	 */
 	async save(id: Id, aggregate: A, pool?: ISnapshotPool): Promise<void> {
+		const uncommittedEvents = aggregate.getUncommittedEvents().length;
+		if (uncommittedEvents > 0) {
+			new Logger(this.constructor.name).warn(
+				`Skipped the snapshot of ${aggregate.constructor.name} ${id?.value}: it has ${uncommittedEvents} uncommitted event(s). Append them and call markCommitted() before save().`,
+			);
+			return;
+		}
+
 		if (!isSnapshotDue(aggregate, this.interval)) {
 			return;
 		}
 
 		const { version } = aggregate;
-		const snapshotStream = SnapshotStream.for(aggregate, id);
+		let snapshotStream: SnapshotStream | undefined;
 		try {
+			snapshotStream = SnapshotStream.for(aggregate, id);
 			const payload = this.serialize(aggregate);
 			await this.snapshotStore.appendSnapshot(snapshotStream, version, payload, pool);
 		} catch (error) {
 			const logger = new Logger(this.constructor.name);
-			const target = `the snapshot of ${snapshotStream.streamId} at version ${version}${pool ? ` in the ${pool} pool` : ''}`;
+			const stream = snapshotStream?.streamId ?? `${aggregate.constructor.name} ${id?.value}`;
+			const target = `the snapshot of ${stream} at version ${version}${pool ? ` in the ${pool} pool` : ''}`;
 			if (isEventSourcingError(error, EventSourcingErrorCode.SnapshotStoreVersionConflict)) {
 				logger.warn(`Skipped ${target}: ${error.message}`);
 			} else {

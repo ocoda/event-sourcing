@@ -1,8 +1,13 @@
 import { EventId, InvalidIdException, ULID } from '@ocoda/event-sourcing';
 
 describe(ULID, () => {
-	class OrderId extends ULID {}
-	class InvoiceId extends ULID {}
+	// The brands keep the classes apart for the type assertions: without members of their own they equal ULID
+	class OrderId extends ULID {
+		declare private readonly brand: 'OrderId';
+	}
+	class InvoiceId extends ULID {
+		declare private readonly brand: 'InvoiceId';
+	}
 
 	it('should generate a ULID', () => {
 		const generatedUlid = ULID.generate();
@@ -40,8 +45,12 @@ describe(ULID, () => {
 		expect(next()).toBeInstanceOf(OrderId);
 		expect([orderId.value].map(OrderId.from)[0]).toBeInstanceOf(OrderId);
 		expectTypeOf(orderId).toEqualTypeOf<OrderId>();
+		expectTypeOf(orderId).not.toEqualTypeOf<ULID>();
 		expectTypeOf(OrderId.from(orderId.value)).toEqualTypeOf<OrderId>();
+		expectTypeOf(OrderId.from(orderId.value)).not.toEqualTypeOf<ULID>();
 		expectTypeOf(next).returns.toEqualTypeOf<OrderId>();
+		expectTypeOf(next).returns.not.toEqualTypeOf<ULID>();
+		expectTypeOf(ULID.generate()).not.toEqualTypeOf<OrderId>();
 		// Detached, the type falls back to ULID, which still has the time
 		expectTypeOf([orderId.value].map(ULID.from)).toEqualTypeOf<ULID[]>();
 	});

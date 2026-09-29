@@ -44,11 +44,12 @@ export class OrderId extends ULID {}
 
 const accountId = AccountId.generate(); // an AccountId
 const sameAccountId = AccountId.from(accountId.value); // an AccountId
-const ownerIds = ['b6bca415-b7a6-499c-9f39-bf8fbf980a82'].map(AccountOwnerId.from); // AccountOwnerIds
+const ownerIds = ['b6bca415-b7a6-499c-9f39-bf8fbf980a82'].map(AccountOwnerId.from); // AccountOwnerIds, typed as UUID[]
 ```
 
-- `generate()` and `from()` create an instance of the class they are called on (since 4.0; 3.x returned a `UUID` or `ULID`), also when they are passed around, as in `values.map(AccountOwnerId.from)`. `ULID.factory()` returns a generator of ids that increase monotonically.
+- `generate()` and `from()` create an instance of the class they are called on (since 4.0; 3.x returned a `UUID` or `ULID`), also when they are passed around, as in `values.map(AccountOwnerId.from)`. Passed around, a factory is typed as the base class, so `ownerIds` is a `UUID[]` that holds `AccountOwnerId`s: write `values.map((value) => AccountOwnerId.from(value))` for an `AccountOwnerId[]`. `ULID.factory()` returns a generator of ids that increase monotonically.
 - Ids of different classes are never equal, even with the same value: `AccountId.from(value).equals(AccountOwnerId.from(value))` is `false`.
+- The factories call `new this(value)`. An id class whose constructor takes anything other than the id alone declares its own `generate()` and `from()`, and a constructor of your own is `protected`, not `private`.
 - `from()` throws an `InvalidIdException` for an empty value or a value that doesn't have the format of the class. A `UUID` is 32 hexadecimal digits with its four dashes, in either case. A `ULID` is 26 characters of Crockford's base32 in either case (the digits and the letters without I, L, O and U), starting with 0 to 7 (since 4.0; 3.x accepted any 26 letters and digits).
 
 ## Guidelines for working with Value Objects

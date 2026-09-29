@@ -24,7 +24,7 @@ export class InvalidIdException extends DomainException {
 	readonly code = EventSourcingErrorCode.InvalidId;
 	/** The value the id was created from. */
 	readonly value?: unknown;
-	/** The class name of the id class that rejected the value, such as 'UUID' or 'ULID'. */
+	/** The class name of the id class the value was given to, such as 'AccountId', 'UUID' or 'ULID'. */
 	readonly idType?: string;
 
 	constructor(details?: InvalidIdDetails, options?: ErrorOptions);

@@ -50,6 +50,7 @@ export class BookRepository {
 				const id = BookId.from(metadata.aggregateId);
 				const eventStream = EventStream.for<Book>(Book, id);
 				const book = this.bookSnapshotRepository.deserialize(payload);
+				book.version = metadata.version;
 
 				const eventCursor = this.eventStore.getEvents(eventStream, { fromVersion: metadata.version + 1 });
 				await book.loadFromHistory(eventCursor);

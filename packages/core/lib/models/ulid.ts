@@ -3,6 +3,9 @@ import { InvalidIdException } from '../exceptions/index.js';
 import { bindStaticFactories } from './bind-static-factories.js';
 import { Id } from './id.js';
 
+/**
+ * @deprecated A no-op, kept for compatibility. Use `ULID.factory()` for a generator of ids. Removed in 5.0.
+ */
 export const ulidFactory = () => {};
 
 /**
