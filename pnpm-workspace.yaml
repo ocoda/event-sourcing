@@ -4,6 +4,25 @@ packages:
   - 'packages/*'
   - 'packages/integration/*'
 
+# Versions shared by several workspace packages, referenced as `catalog:` in their package.json (pnpm replaces it
+# with the version on pack and publish). The peer dependency ranges of the published packages stay explicit.
+catalog:
+  '@nestjs/common': 12.1.1
+  '@nestjs/core': 12.1.1
+  '@nestjs/platform-express': 12.1.1
+  '@nestjs/testing': 12.1.1
+  '@types/node': 22.20.4
+  mongodb: ^7.7.0
+  reflect-metadata: 0.2.2
+  rxjs: 7.8.2
+  typescript: 7.0.2
+  vitest: 5.0.2
+
+catalogs:
+  # The docs stay on TypeScript 6: `astro check` (@astrojs/check 0.9) supports typescript ^5 || ^6 only.
+  ts6:
+    typescript: 6.0.3
+
 # Dependency install scripts: `true` runs them, `false` skips them after review. With strictDepBuilds (on by default
 # since pnpm 11), an install fails on any unlisted dependency that has one.
 allowBuilds:
