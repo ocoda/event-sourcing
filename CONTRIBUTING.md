@@ -39,6 +39,8 @@ The repository is a pnpm + turbo monorepo:
 | `packages/config`        | shared TypeScript and Vitest configuration (private)                         |
 | `docs/`                  | the documentation site                                                       |
 | `example/`               | an example NestJS application                                                |
+| `fixtures/consumers`     | the application `pnpm test:consumers` installs the packed packages into      |
+| `scripts/`               | the package-shape checks (`check:packages`, `test:consumers`)                |
 
 ## Databases for integration tests
 
@@ -68,6 +70,8 @@ pnpm run ci --filter="./packages/**"   # oxlint + oxfmt --check (pnpm format fix
 pnpm typecheck
 pnpm build --filter="./packages/**"
 pnpm test:cov --filter=@ocoda/event-sourcing   # coverage thresholds are enforced
+pnpm check:packages    # publint + arethetypeswrong on the packed tarballs
+pnpm test:consumers    # installs the tarballs into an ESM and a CommonJS NestJS 12 app and runs them
 ```
 
 For every integration you changed (all of them if you changed `packages/core` or `packages/testing`), start its database and run:
@@ -77,6 +81,8 @@ pnpm test:cov --filter=@ocoda/event-sourcing-postgres
 ```
 
 Tests run on [Vitest](https://vitest.dev). Vite's Oxc transform applies each package's `tsconfig.json`, including the legacy decorator and `emitDecoratorMetadata` settings Nest needs. A package's tsconfig must therefore include its `tests` folder.
+
+The packages are ESM-only and compiled file by file with TypeScript 7 (`tsc -p tsconfig.build.json`, no bundler), so relative imports spell out the emitted file: `./event-store.js`, `./helpers/index.js`. `pnpm typecheck` reports a missing extension.
 
 ## Changesets
 

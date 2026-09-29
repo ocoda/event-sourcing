@@ -25,6 +25,15 @@ This is a complementing module for `@ocoda/event-sourcing`, a powerful library d
 
 This store-driver library uses [PostgreSQL](https://www.postgresql.org/) as an underlying driver for event- and snapshot-stores, and needs to be installed together with the core module `@ocoda/event-sourcing` in order to get started.
 
+## Installation
+The `pg` (8.15 or later) and `pg-cursor` drivers are peer dependencies, so install them next to the core module. TypeScript projects also need their type definitions:
+```bash
+npm install @ocoda/event-sourcing @ocoda/event-sourcing-postgres pg pg-cursor
+npm install --save-dev @types/pg @types/pg-cursor
+```
+
+Requires Node.js 22.12 or later and NestJS 12. The package is ESM-only; CommonJS applications load it through `require()`, which Node.js supports for ES modules since 22.12.
+
 ## Documentation 📗
 Ready to dive right in? Visit [the documentation](https://ocoda.github.io/event-sourcing) to find out how to get started.
 

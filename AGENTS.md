@@ -22,7 +22,8 @@ The `ci-ok` check is the only required check on `master` and `3.x`. Before openi
 2. `pnpm typecheck`
 3. `pnpm build --filter="./packages/**"`
 4. `pnpm test:cov --filter=@ocoda/event-sourcing`. The coverage thresholds are enforced.
-5. For every integration you touched, and for all of them when core or `packages/testing` changed:
+5. `pnpm check:packages` (publint + arethetypeswrong on the packed tarballs) and `pnpm test:consumers` (installs the tarballs into an ESM and a CommonJS NestJS 12 app and runs them). Both matter whenever a `package.json`, a tsconfig or the public exports change.
+6. For every integration you touched, and for all of them when core or `packages/testing` changed:
    - Start the database: `docker compose up -d --wait <service>`. Service names are in `docker-compose.yml`, e.g. `postgres`, `mongodb`, `mariadb`, `dynamodb`.
    - Then run `pnpm test:cov --filter=@ocoda/event-sourcing-<db>`.
 
@@ -30,6 +31,8 @@ The `ci-ok` check is the only required check on `master` and `3.x`. Before openi
 
 - **DI imports stay value imports.** A class that Nest injects by type must be imported as a value, never with `import type`, or `design:paramtypes` loses it. That is why `typescript/consistent-type-imports` is off.
 - **Import `@nestjs/*` only from the package root.** oxlint rejects deep imports like `@nestjs/core/injector/*`, because they don't resolve through the NestJS 12 exports map.
+- **One ESM build, no bundler.** `tsc -p tsconfig.build.json` (TypeScript 7) compiles each published package file by file into `dist/`, and `exports` points `import`, `require` and `default` at that one file. Never add a second CommonJS build: Nest DI would see two copies of every class. Relative imports spell out the emitted file (`./event-store.js`, `./helpers/index.js`).
+- **DB drivers are peer dependencies** of the integrations, with a devDependency copy for the tests. Widen or narrow a peer range only with a changeset.
 - **Class fields use define semantics.** `useDefineForClassFields` is true, the same as the published build; the tests assert it.
 - **Store drivers share one contract.** `EventStore` and `SnapshotStore` subclasses must map duplicate-key races to `EventStoreVersionConflictException` / `SnapshotStoreVersionConflictException` and release connections and cursors on every path, including an early `break`. A driver change needs a test that fails without it.
 - **Integration tests count rows in the default tables.** Give new tests their own pool name so parallel or leftover data can't skew the counts.

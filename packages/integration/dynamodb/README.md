@@ -25,6 +25,14 @@ This is a complementing module for `@ocoda/event-sourcing`, a powerful library d
 
 This store-driver library uses [DynamoDB](https://aws.amazon.com/dynamodb/) as an underlying driver for event- and snapshot-stores, and needs to be installed together with the core module `@ocoda/event-sourcing` in order to get started.
 
+## Installation
+The AWS SDK clients are peer dependencies, so install them next to the core module:
+```bash
+npm install @ocoda/event-sourcing @ocoda/event-sourcing-dynamodb @aws-sdk/client-dynamodb @aws-sdk/util-dynamodb
+```
+
+Requires Node.js 22.12 or later and NestJS 12. The package is ESM-only; CommonJS applications load it through `require()`, which Node.js supports for ES modules since 22.12.
+
 ## Documentation 📗
 Ready to dive right in? Visit [the documentation](https://ocoda.github.io/event-sourcing) to find out how to get started.
 

@@ -10,6 +10,10 @@ This library consists of a core module `@ocoda/event-sourcing` that provides the
 
 By default the core library will use an in-memory event- and snapshot-store, which is useful for testing and prototyping, but not recommended for production use.
 
+The packages require Node.js 22.12 or later and NestJS 12. They are published as ES modules only: CommonJS applications can keep using `require()` (or TypeScript's CommonJS output), which Node.js supports for ES modules since 22.12.
+
+The database drivers are peer dependencies of the integration libraries, so you install the driver next to the integration and choose its version yourself. TypeScript projects using PostgreSQL also need `@types/pg` and `@types/pg-cursor`.
+
 <Tabs items={['pnpm', 'npm', 'yarn']}>
   <Tabs.Tab>
     <Steps>
@@ -21,19 +25,19 @@ By default the core library will use an in-memory event- and snapshot-store, whi
         ### Install one of the integration libraries:
         **DynamoDB**
         ```bash copy
-        pnpm add @ocoda/event-sourcing-dynamodb
+        pnpm add @ocoda/event-sourcing-dynamodb @aws-sdk/client-dynamodb @aws-sdk/util-dynamodb
         ```
         **MariaDB**
         ```bash copy
-        pnpm add @ocoda/event-sourcing-mariadb
+        pnpm add @ocoda/event-sourcing-mariadb mariadb
         ```
         **MongoDB**
         ```bash copy
-        pnpm add @ocoda/event-sourcing-mongodb
+        pnpm add @ocoda/event-sourcing-mongodb mongodb
         ```
         **PostgreSQL**
         ```bash copy
-        pnpm add @ocoda/event-sourcing-postgres
+        pnpm add @ocoda/event-sourcing-postgres pg pg-cursor
         ```
     </Steps>
   </Tabs.Tab>
@@ -47,19 +51,19 @@ By default the core library will use an in-memory event- and snapshot-store, whi
         ### Install one of the integration libraries:
         **DynamoDB**
         ```bash copy
-        npm install @ocoda/event-sourcing-dynamodb
+        npm install @ocoda/event-sourcing-dynamodb @aws-sdk/client-dynamodb @aws-sdk/util-dynamodb
         ```
         **MariaDB**
         ```bash copy
-        npm install @ocoda/event-sourcing-mariadb
+        npm install @ocoda/event-sourcing-mariadb mariadb
         ```
         **MongoDB**
         ```bash copy
-        npm install @ocoda/event-sourcing-mongodb
+        npm install @ocoda/event-sourcing-mongodb mongodb
         ```
         **PostgreSQL**
         ```bash copy
-        npm install @ocoda/event-sourcing-postgres
+        npm install @ocoda/event-sourcing-postgres pg pg-cursor
         ```
     </Steps>
   </Tabs.Tab>
@@ -73,19 +77,19 @@ By default the core library will use an in-memory event- and snapshot-store, whi
         ### Install one of the integration libraries:
         **DynamoDB**
         ```bash copy
-        yarn add @ocoda/event-sourcing-dynamodb
+        yarn add @ocoda/event-sourcing-dynamodb @aws-sdk/client-dynamodb @aws-sdk/util-dynamodb
         ```
         **MariaDB**
         ```bash copy
-        yarn add @ocoda/event-sourcing-mariadb
+        yarn add @ocoda/event-sourcing-mariadb mariadb
         ```
         **MongoDB**
         ```bash copy
-        yarn add @ocoda/event-sourcing-mongodb
+        yarn add @ocoda/event-sourcing-mongodb mongodb
         ```
         **PostgreSQL**
         ```bash copy
-        yarn add @ocoda/event-sourcing-postgres
+        yarn add @ocoda/event-sourcing-postgres pg pg-cursor
         ```
     </Steps>
   </Tabs.Tab>
