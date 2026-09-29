@@ -5,6 +5,9 @@ import { nameOf } from '../internal.js';
 
 /**
  * Thrown when a command class has no metadata, which `@CommandHandler()` assigns: no handler was ever declared for it.
+ *
+ * @deprecated The `CommandBus` no longer throws it: it keys its handlers by class, and rejects with a
+ * `CommandHandlerNotFoundException` for a command without a handler. Removed in 5.0.
  */
 export class MissingCommandMetadataException extends EventSourcingError {
 	override readonly name = 'MissingCommandMetadataException';

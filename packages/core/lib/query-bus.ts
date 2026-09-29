@@ -4,18 +4,23 @@ import { Injectable, type Type } from '@nestjs/common';
 import {
 	InvalidQueryHandlerException,
 	MissingQueryHandlerMetadataException,
-	MissingQueryMetadataException,
 	QueryHandlerNotFoundException,
 } from './exceptions/index.js';
-import { DefaultQueryPubSub, ObservableBus, getQueryHandlerMetadata, getQueryMetadata } from './helpers/index.js';
+import { DefaultQueryPubSub, ObservableBus, getQueryHandlerMetadata } from './helpers/index.js';
 import type { IQuery, IQueryBus, IQueryHandler, IQueryPublisher, ProviderWrapper } from './interfaces/index.js';
+import type { ResultOf } from './models/index.js';
+
+/** The class of a query; `undefined` for `null`, `undefined` and null-prototype objects. */
+const classOf = (message: unknown): Function | undefined =>
+	message === null || message === undefined ? undefined : Object.getPrototypeOf(message)?.constructor;
 
 @Injectable()
 export class QueryBus<QueryBase extends IQuery = IQuery>
 	extends ObservableBus<QueryBase>
 	implements IQueryBus<QueryBase>
 {
-	private handlers = new Map<string, IQueryHandler<QueryBase>>();
+	// Keyed by the query class itself, not by metadata on it: a subclass needs its own handler.
+	private readonly handlers = new Map<Function, IQueryHandler<any, unknown>>();
 	private _publisher: IQueryPublisher<QueryBase> = new DefaultQueryPubSub<QueryBase>(this.subject$);
 
 	get publisher(): IQueryPublisher<QueryBase> {
@@ -26,30 +31,35 @@ export class QueryBus<QueryBase extends IQuery = IQuery>
 		this._publisher = _publisher;
 	}
 
-	execute<T extends QueryBase, R = any>(query: T): Promise<R> {
-		const queryId = this.getQueryId(query);
-		const handler = this.handlers.get(queryId);
+	/**
+	 * Executes a query with the handler registered for its class, and resolves to what the handler resolves to.
+	 *
+	 * The result type is inferred from a `Query<TResult>`; for a plain query class it is `any`, or the second type
+	 * argument: `execute<GetAccountsQuery, Account[]>(query)`.
+	 *
+	 * @param options Reserved for request-scoped handlers, which a later 4.0 prerelease resolves per request. Until
+	 * then it is ignored.
+	 * @throws {QueryHandlerNotFoundException} (as a rejection) when no handler is registered for the query's class.
+	 * Nothing is published then.
+	 */
+	async execute<TQuery extends QueryBase, TResult = ResultOf<TQuery>>(
+		query: TQuery,
+		options?: { request?: unknown },
+	): Promise<NoInfer<TResult>> {
+		const queryType = classOf(query);
+		const handler = queryType && this.handlers.get(queryType);
 		if (!handler) {
-			const { constructor: queryType } = Object.getPrototypeOf(query);
-			throw new QueryHandlerNotFoundException({ query: queryType });
+			throw new QueryHandlerNotFoundException({ query: queryType ?? query });
 		}
 		this._publisher.publish(query);
-		return handler.execute(query);
+		return (await handler.execute(query)) as NoInfer<TResult>;
 	}
 
-	bind<T extends QueryBase>(handler: IQueryHandler<T>, id: string) {
-		this.handlers.set(id, handler);
-	}
-
-	private getQueryId(query: QueryBase): string {
-		const { constructor: queryType } = Object.getPrototypeOf(query);
-		const { id } = getQueryMetadata(queryType);
-
-		if (!id) {
-			throw new MissingQueryMetadataException({ query: queryType });
-		}
-
-		return id;
+	/**
+	 * Routes the instances of `query` to `handler`, replacing a handler registered for it before.
+	 */
+	bind<TQuery extends QueryBase>(handler: IQueryHandler<TQuery, unknown>, query: Type<TQuery>) {
+		this.handlers.set(query, handler);
 	}
 
 	register(handlers: ProviderWrapper<IQueryHandler>[] = []) {
@@ -65,23 +75,15 @@ export class QueryBus<QueryBase extends IQuery = IQuery>
 			throw new InvalidQueryHandlerException({ handler: instance });
 		}
 
-		// check if the handler is a query handler
+		// get the query the handler handles
 		const { query } = getQueryHandlerMetadata(metatype as Type<IQueryHandler>);
 
-		// if not, throw an error
-		if (!query) {
+		// if there is none, the class is not a query handler
+		if (typeof query !== 'function') {
 			throw new MissingQueryHandlerMetadataException({ handler: metatype });
 		}
 
-		// get the query id
-		const { id } = getQueryMetadata(query);
-
-		// if the query id is not defined, throw an error
-		if (!id) {
-			throw new MissingQueryMetadataException({ query });
-		}
-
-		// bind the handler to the query id
-		this.bind(instance as IQueryHandler, id);
+		// bind the handler to the query class
+		this.bind(instance, query as Type<QueryBase>);
 	}
 }

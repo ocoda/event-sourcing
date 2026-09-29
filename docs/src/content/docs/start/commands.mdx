@@ -10,20 +10,24 @@ Commands should clearly indicate the **intent** and ideally refer to the aggrega
 
 ## Creating a Command [#creating-a-command]
 
-Commands are simple objects that typically carry the data required to perform an action. They are implemented by implementing the `ICommand` interface from the library:
+Commands are simple objects that typically carry the data required to perform an action. They extend the `Command` class from the library, with the type of the command's result as its type argument (see [Returning a value](#returning-a-value)). A command that returns nothing extends `Command` without a type argument:
 
 ```typescript
-import { ICommand } from '@ocoda/event-sourcing';
+import { Command } from '@ocoda/event-sourcing';
 
-export class CreditAccountCommand implements ICommand {
+export class CreditAccountCommand extends Command {
 	constructor(
 		public readonly accountId: string,
 		public readonly amount: number,
-	) {}
+	) {
+		super();
+	}
 }
 ```
 
 In this example, the CreditAccountCommand represents the intent to credit an account with a specific amount.
+
+The result type exists for the compiler only: `Command` adds no property to the command, so its payload stays the same. Extending it is optional. Any class works as a command, such as a class that implements the `ICommand` interface, as in 3.x, but the result of executing it is then typed `any`.
 
 ## Creating a Command Handler [#creating-a-command-handler]
 
@@ -33,7 +37,7 @@ A **CommandHandler** is responsible for executing the logic associated with a sp
 import { CommandHandler, type ICommandHandler } from '@ocoda/event-sourcing';
 
 @CommandHandler(CreditAccountCommand)
-export class CreditAccountCommandHandler implements ICommandHandler<CreditAccountCommand, void> {
+export class CreditAccountCommandHandler implements ICommandHandler<CreditAccountCommand> {
 	constructor(private readonly accountRepository: AccountRepository) {}
 
 	async execute(command: CreditAccountCommand): Promise<void> {
@@ -51,17 +55,19 @@ In this example, the CreditAccountCommandHandler handles the execution of the Cr
 
 ### Returning a value [#returning-a-value]
 
-The `execute()` method of a command handler returns a promise, and whatever it resolves to is handed back to the code that executed the command. Commands usually return the identifier of what they created, so the caller knows where to find it. The second type parameter of `ICommandHandler` describes the type of that result:
+The `execute()` method of a command handler returns a promise, and whatever it resolves to is handed back to the code that executed the command. Commands usually return the identifier of what they created, so the caller knows where to find it. The type argument of `Command` is the type of that result. `ICommandHandler` takes it from the command, and `@CommandHandler()` only accepts a handler whose `execute()` resolves to it:
 
-```typescript {8,11,17}
-import { CommandHandler, type ICommand, type ICommandHandler } from '@ocoda/event-sourcing';
+```typescript {3,10,13,19}
+import { Command, CommandHandler, type ICommandHandler } from '@ocoda/event-sourcing';
 
-export class OpenAccountCommand implements ICommand {
-	constructor(public readonly accountOwnerIds?: string[]) {}
+export class OpenAccountCommand extends Command<string> {
+	constructor(public readonly accountOwnerIds?: string[]) {
+		super();
+	}
 }
 
 @CommandHandler(OpenAccountCommand)
-export class OpenAccountCommandHandler implements ICommandHandler<OpenAccountCommand, string> {
+export class OpenAccountCommandHandler implements ICommandHandler<OpenAccountCommand> {
 	constructor(private readonly accountRepository: AccountRepository) {}
 
 	async execute(command: OpenAccountCommand): Promise<string> {
@@ -74,6 +80,8 @@ export class OpenAccountCommandHandler implements ICommandHandler<OpenAccountCom
 	}
 }
 ```
+
+For a command class that doesn't extend `Command`, the second type parameter of `ICommandHandler` describes the result, as in 3.x: `ICommandHandler<OpenAccountCommand, string>`.
 
 ## Registering the Command Handler [#registering-a-command-handler]
 
@@ -92,9 +100,9 @@ The handlers are discovered when the application bootstraps, no matter in which 
 
 ## Executing a Command [#executing-a-command]
 
-Commands are executed through the `CommandBus`. It's available for injection in any provider of your application, see [Module configuration](/start/module-configuration#global-module). The bus looks up the handler that is registered for the command and returns the result of that handler.
+Commands are executed through the `CommandBus`. It's available for injection in any provider of your application, see [Module configuration](/start/module-configuration#global-module). The bus looks up the handler that is registered for the class of the command and resolves to the result of that handler.
 
-```typescript {11-13,20}
+```typescript {10-11,18}
 import { Body, Controller, Param, Post } from '@nestjs/common';
 import { CommandBus } from '@ocoda/event-sourcing';
 
@@ -104,10 +112,8 @@ export class AccountController {
 
 	@Post()
 	async open(@Body('accountOwnerIds') accountOwnerIds?: string[]): Promise<{ accountId: string }> {
-		// The first type parameter is the command, the second one the type of the result
-		const accountId = await this.commandBus.execute<OpenAccountCommand, string>(
-			new OpenAccountCommand(accountOwnerIds),
-		);
+		// OpenAccountCommand extends Command<string>, so accountId is a string
+		const accountId = await this.commandBus.execute(new OpenAccountCommand(accountOwnerIds));
 
 		return { accountId };
 	}
@@ -119,7 +125,9 @@ export class AccountController {
 }
 ```
 
-If there's no handler registered for a command, `execute()` throws a `CommandHandlerNotFoundException`.
+For a command class that doesn't extend `Command`, `execute()` resolves to `any`. Pass the command and the result type as type arguments to type it, as in 3.x: `this.commandBus.execute<OpenAccountCommand, string>(command)`.
+
+The handlers are registered by class: a subclass of a command is another command, and needs a handler of its own. If there's no handler registered for the class of a command, the promise that `execute()` returns rejects with a `CommandHandlerNotFoundException`.
 
 <Aside type="caution">
 Inject the `CommandBus` as a regular class, so don't use `import type` for it. NestJS needs the class at runtime to be able to resolve it.
