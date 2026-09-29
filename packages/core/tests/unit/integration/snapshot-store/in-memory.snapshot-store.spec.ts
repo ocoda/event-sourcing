@@ -88,7 +88,7 @@ describe(InMemorySnapshotStore, () => {
 		const lastSnapshotEnvelope = snapshotEnvelopesAccountA[snapshotEnvelopesAccountA.length - 1];
 		const lastVersion = lastSnapshotEnvelope.metadata.version;
 		const beforeLastVersion = lastVersion - 10;
-		expect(
+		await expect(
 			snapshotStore.appendSnapshot(snapshotStreamAccountA, beforeLastVersion, lastSnapshotEnvelope),
 		).rejects.toThrow(
 			new SnapshotStoreVersionConflictException(snapshotStreamAccountA, beforeLastVersion, lastVersion),
@@ -99,7 +99,7 @@ describe(InMemorySnapshotStore, () => {
 	});
 
 	it("should throw when a snapshot envelope can't be appended", async () => {
-		expect(() =>
+		await expect(() =>
 			snapshotStore.appendSnapshot(snapshotStreamAccountA, 1, snapshotsAccountA[0], 'not-a-pool'),
 		).rejects.toThrow(SnapshotStorePersistenceException);
 	});

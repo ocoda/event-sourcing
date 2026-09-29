@@ -47,7 +47,6 @@ describe(MongoDBEventStore, () => {
 		envelopesAccountA = getAccountAEventEnvelopes(eventMap, events);
 		envelopesAccountB = getAccountBEventEnvelopes(eventMap, events);
 
-		// biome-ignore lint/complexity/useLiteralKeys: Needed to check the internal workings of the event store
 		client = eventStore['client'];
 
 		await client.db().collection(EventCollection.get()).deleteMany({});

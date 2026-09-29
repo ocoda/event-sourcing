@@ -22,6 +22,7 @@ describe('EventBus isolation', () => {
 	class AccountOpenedEvent implements IEvent {}
 
 	@Event('isolation-account-closed')
+	// oxlint-disable-next-line no-unused-vars -- only declared to run its decorators
 	class AccountClosedEvent implements IEvent {}
 
 	const envelopeFor = (event: string, version = 1) =>

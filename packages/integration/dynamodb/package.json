@@ -11,9 +11,9 @@
 		"test": "jest --config jest.config.js",
 		"test:cov": "jest --config jest.config.js --coverage",
 		"test:cov:check": "jest --config jest.config.js --coverage --coverageThreshold='{'\"global\"':{'\"lines\"':90}}'",
-		"ci": "biome ci",
-		"format": "biome format --write",
-		"lint": "biome check --write",
+		"ci": "oxlint --deny-warnings && oxfmt --check",
+		"format": "oxfmt",
+		"lint": "oxlint",
 		"typecheck": "tsc --noEmit -p tsconfig.json"
 	},
 	"bugs": {
@@ -33,7 +33,6 @@
 		"rxjs": "^7.2.0"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "1.9.4",
 		"@faker-js/faker": "^10.2.0",
 		"@nestjs/common": "11.1.6",
 		"@nestjs/core": "11.1.6",

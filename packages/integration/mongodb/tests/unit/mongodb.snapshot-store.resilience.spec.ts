@@ -78,9 +78,7 @@ describe(`${MongoDBSnapshotStore.name} resilience`, () => {
 	beforeAll(async () => {
 		snapshotStore = await newStore();
 
-		// biome-ignore lint/complexity/useLiteralKeys: Needed to check the internal workings of the snapshot store
 		client = snapshotStore['client'];
-		// biome-ignore lint/complexity/useLiteralKeys: Needed to check the internal workings of the snapshot store
 		database = snapshotStore['database'];
 	});
 
@@ -188,7 +186,6 @@ describe(`${MongoDBSnapshotStore.name} resilience`, () => {
 				const otherStore = await newStore();
 
 				try {
-					// biome-ignore lint/complexity/useLiteralKeys: Needed to check the internal workings of the snapshot store
 					const listCollections = jest.spyOn(otherStore['database'], 'listCollections');
 
 					const stream = newStream();

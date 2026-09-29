@@ -4,6 +4,9 @@
 	"private": true,
 	"license": "MIT",
 	"scripts": {
+		"ci": "oxlint --deny-warnings && oxfmt --check",
+		"format": "oxfmt",
+		"lint": "oxlint",
 		"typecheck": "tsc --noEmit -p tsconfig.json"
 	},
 	"devDependencies": {

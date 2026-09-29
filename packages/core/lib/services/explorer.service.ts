@@ -1,5 +1,4 @@
 import { Injectable, type Type } from '@nestjs/common';
-// biome-ignore lint/style/useImportType: DI
 import { DiscoveryService } from '@nestjs/core';
 
 import {

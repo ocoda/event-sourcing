@@ -10,9 +10,9 @@
 		"docs:build": "next build",
 		"postdocs:build": "next-sitemap",
 		"docs:start": "next start",
-		"ci": "biome ci",
-		"format": "biome format --write",
-		"lint": "biome check --write"
+		"ci": "oxlint --deny-warnings && oxfmt --check",
+		"format": "oxfmt",
+		"lint": "oxlint"
 	},
 	"dependencies": {
 		"next": "^15.2.0",

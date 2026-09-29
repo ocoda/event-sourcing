@@ -8,7 +8,6 @@ import {
 	AccountTransferFailedEvent,
 	AccountTransferSucceededEvent,
 } from '../../domain';
-// biome-ignore lint/style/useImportType: DI
 import { AccountRepository } from '../repositories';
 
 export class TransferBetweenAccountsCommand implements ICommand {

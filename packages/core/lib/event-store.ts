@@ -1,5 +1,4 @@
 import { Logger } from '@nestjs/common';
-// biome-ignore lint/style/useImportType: DI
 import { EventMap } from './event-map';
 import type {
 	EventSourcingModuleOptions,
@@ -29,7 +28,6 @@ export abstract class EventStore<TOptions = Omit<EventSourcingModuleOptions['eve
 		protected readonly eventMap: EventMap,
 		protected readonly options: TOptions,
 	) {
-		// biome-ignore lint/correctness/noConstructorReturn:
 		return new Proxy(this, {
 			get(target, propKey) {
 				if (propKey === 'appendEvents') {

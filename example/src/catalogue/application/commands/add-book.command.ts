@@ -1,7 +1,6 @@
 import { CommandHandler, type ICommand, type ICommandHandler } from '@ocoda/event-sourcing';
 
 import { AuthorId, Book, BookId, Isbn } from '../../domain/models';
-// biome-ignore lint/style/useImportType: DI
 import { BookRepository } from '../repositories';
 
 export class AddBookCommand implements ICommand {

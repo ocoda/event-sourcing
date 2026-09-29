@@ -11,9 +11,10 @@
 		"test": "turbo test",
 		"test:cov": "turbo test:cov",
 		"ci": "turbo ci",
-		"lint": "turbo lint",
+		"lint": "oxlint",
 		"typecheck": "turbo typecheck",
-		"format": "turbo format",
+		"format": "oxfmt",
+		"format:check": "oxfmt --check",
 		"benchmark": "turbo benchmark --",
 		"benchmark:report": "turbo benchmark:report"
 	},
@@ -27,7 +28,6 @@
 		"rxjs": "^7.2.0"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "1.9.4",
 		"@changesets/changelog-github": "^0.5.1",
 		"@changesets/cli": "^2.29.6",
 		"@faker-js/faker": "^10.2.0",
@@ -42,6 +42,8 @@
 		"@types/node": "22.13.4",
 		"jest": "30.1.3",
 		"jest-mock": "30.0.5",
+		"oxfmt": "0.71.0",
+		"oxlint": "1.86.0",
 		"reflect-metadata": "0.2.2",
 		"rxjs": "7.8.2",
 		"turbo": "^2.5.6",

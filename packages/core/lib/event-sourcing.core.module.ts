@@ -20,9 +20,7 @@ import { EventBus } from './event-bus';
 import { EventMap } from './event-map';
 import { QueryBus } from './query-bus';
 
-// biome-ignore lint/style/useImportType: used in di
 import { EventStore } from './event-store';
-// biome-ignore lint/style/useImportType: used in di
 import { SnapshotStore } from './snapshot-store';
 
 import { InjectEventSourcingOptions } from './decorators';

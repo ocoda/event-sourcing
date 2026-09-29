@@ -52,7 +52,6 @@ describe(MariaDBEventStore, () => {
 		envelopesAccountA = getAccountAEventEnvelopes(eventMap, events);
 		envelopesAccountB = getAccountBEventEnvelopes(eventMap, events);
 
-		// biome-ignore lint/complexity/useLiteralKeys: Needed to check the internal workings of the event store
 		pool = eventStore['pool'];
 	});
 

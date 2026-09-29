@@ -68,7 +68,6 @@ export const runAccountLifecycleE2E = async <
 	let accountOwnerIds: AccountOwnerId[] = [];
 	let balance = 0;
 	let expectedVersion = 0;
-	let openedOn: Date;
 	let account2Id: AccountId;
 	let account3Id: AccountId;
 	let cleanupContext: TCleanup;
@@ -107,7 +106,6 @@ export const runAccountLifecycleE2E = async <
 		expect(customEventPublisher.publish).toHaveBeenCalledTimes(1);
 
 		const account = await accountRepository.getById(accountId);
-		openedOn = account.openedOn;
 
 		expect(account.version).toBe(expectedVersion);
 		expect(account.id).toEqual(accountId);
@@ -233,7 +231,6 @@ export const runAccountLifecycleE2E = async <
 			commandBus.execute(new TransferBetweenAccountsCommand(accountId.value, account2Id.value, balance + 999)),
 		).rejects.toThrow('Insufficient funds');
 
-		const account = await accountRepository.getById(accountId);
 		expect(customEventPublisher.publish).toHaveBeenCalled();
 	});
 

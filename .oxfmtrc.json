@@ -1,0 +1,35 @@
+{
+	"$schema": "./node_modules/oxfmt/configuration_schema.json",
+	"useTabs": true,
+	"tabWidth": 2,
+	"printWidth": 120,
+	"singleQuote": true,
+	"jsxSingleQuote": false,
+	"quoteProps": "as-needed",
+	"trailingComma": "all",
+	"semi": true,
+	"arrowParens": "always",
+	"bracketSameLine": false,
+	"bracketSpacing": true,
+	"sortPackageJson": false,
+	"sortImports": {
+		"partitionByNewline": true,
+		"newlinesBetween": false,
+		"groups": ["builtin", "external", ["internal", "subpath"], "parent", ["sibling", "index"], "unknown"]
+	},
+	"ignorePatterns": [
+		"dist",
+		"coverage",
+		".next",
+		".turbo",
+		"pnpm-lock.yaml",
+		"**/*.md",
+		"**/*.mdx",
+		"**/*.yml",
+		"**/*.yaml",
+		"docs/next-env.d.ts",
+		"packages/core/index.js",
+		"packages/integration/*/index.js",
+		"benchmarks/report"
+	]
+}

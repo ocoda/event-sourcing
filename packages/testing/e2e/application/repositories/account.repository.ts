@@ -1,7 +1,5 @@
 import { Injectable } from '@nestjs/common';
-// biome-ignore lint/style/useImportType: DI
 import { EventStore, EventStream } from '@ocoda/event-sourcing';
-// biome-ignore lint/style/useImportType: DI
 import { Account, AccountId, AccountSnapshotRepository } from '../../domain/models';
 
 @Injectable()

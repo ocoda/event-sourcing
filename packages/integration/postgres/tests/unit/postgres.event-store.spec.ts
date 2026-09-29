@@ -55,7 +55,6 @@ describe(PostgresEventStore, () => {
 		envelopesAccountA = getAccountAEventEnvelopes(eventMap, events);
 		envelopesAccountB = getAccountBEventEnvelopes(eventMap, events);
 
-		// biome-ignore lint/complexity/useLiteralKeys: Needed to check the internal workings of the event store
 		pool = eventStore['pool'];
 	});
 
@@ -320,7 +319,6 @@ describe(PostgresEventStore, () => {
 		});
 
 		it('should discard idle connections that fail instead of crashing', async () => {
-			// biome-ignore lint/complexity/useLiteralKeys: Needed to check the logged error
 			const error = jest.spyOn(eventStore['logger'], 'error').mockImplementation(() => undefined);
 
 			// Make sure the pool holds more than the connection that terminates the others
@@ -569,7 +567,6 @@ describe(PostgresEventStore, () => {
 			beforeEach(async () => {
 				smallStore = new PostgresEventStore(eventMap, { driver: undefined as never, ...connectionOptions, max: 2 });
 				await smallStore.connect();
-				// biome-ignore lint/complexity/useLiteralKeys: Needed to check the connections of the store
 				smallPool = smallStore['pool'];
 			});
 
@@ -764,7 +761,6 @@ describe(PostgresEventStore, () => {
 		});
 
 		it('should not build a missing index on an existing collection but log how to create it', async () => {
-			// biome-ignore lint/complexity/useLiteralKeys: Needed to check the logged warning
 			const warn = jest.spyOn(eventStore['logger'], 'warn').mockImplementation(() => undefined);
 			const table = EventCollection.get('postgres-existing');
 			const statement =
@@ -787,7 +783,6 @@ describe(PostgresEventStore, () => {
 		});
 
 		it('should accept an existing index on the same columns regardless of its name', async () => {
-			// biome-ignore lint/complexity/useLiteralKeys: Needed to check the logged warning
 			const warn = jest.spyOn(eventStore['logger'], 'warn').mockImplementation(() => undefined);
 			const table = EventCollection.get('postgres-existing-indexed');
 
@@ -803,7 +798,6 @@ describe(PostgresEventStore, () => {
 		});
 
 		it('should log how to create the index of a new collection when the role may not create it', async () => {
-			// biome-ignore lint/complexity/useLiteralKeys: Needed to check the logged warning
 			const warn = jest.spyOn(eventStore['logger'], 'warn').mockImplementation(() => undefined);
 			const query = Client.prototype.query;
 			jest.spyOn(Client.prototype, 'query').mockImplementation(function (this: Client, ...args: unknown[]) {

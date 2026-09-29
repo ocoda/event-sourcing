@@ -456,7 +456,6 @@ export const createBankingProductionScenario = (): BankingScenario => {
 
 	const baseDate = new Date('2024-05-06T08:15:00Z');
 	const transferCorrelationId = EventId.generate(addMinutes(baseDate, 90)).value;
-	const transfer2CorrelationId = EventId.generate(addMinutes(baseDate, 420)).value;
 	const disputeCorrelationId = EventId.generate(addMinutes(baseDate, 860)).value;
 
 	const customerEvents: IEvent[] = [

@@ -28,9 +28,7 @@ describe('EventSourcingModule - e2e', () => {
 				snapshotStore: appRef.get<DynamoDBSnapshotStore>(SnapshotStore),
 			}),
 			getCleanupContext: (eventStore, snapshotStore) => ({
-				// biome-ignore lint/complexity/useLiteralKeys: Needed to clear the event collection
 				eventStoreClient: eventStore['client'] as DynamoDBClient,
-				// biome-ignore lint/complexity/useLiteralKeys: Needed to clear the snapshot collection
 				snapshotStoreClient: snapshotStore['client'] as DynamoDBClient,
 			}),
 			cleanup: async (context) =>

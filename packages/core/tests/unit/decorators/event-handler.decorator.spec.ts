@@ -45,6 +45,7 @@ describe('@EventHandler', () => {
 			class UndecoratedEvent implements IEvent {}
 
 			@Aggregate()
+			// oxlint-disable-next-line no-unused-vars -- only declared to run its decorators
 			class InvalidHandlerAggregate extends AggregateRoot {
 				@EventHandler(UndecoratedEvent)
 				applyUndecoratedEvent() {}

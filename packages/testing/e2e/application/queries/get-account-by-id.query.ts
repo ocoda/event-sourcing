@@ -1,7 +1,6 @@
 import { type IQuery, type IQueryHandler, QueryHandler } from '@ocoda/event-sourcing';
 import { AccountId } from '../../domain/models';
 import { AccountDto } from '../account.dtos';
-// biome-ignore lint/style/useImportType: DI
 import { AccountRepository } from '../repositories';
 
 export class GetAccountByIdQuery implements IQuery {

@@ -28,9 +28,7 @@ describe('EventSourcingModule - e2e', () => {
 				snapshotStore: appRef.get<MongoDBSnapshotStore>(SnapshotStore),
 			}),
 			getCleanupContext: (eventStore, snapshotStore) => ({
-				// biome-ignore lint/complexity/useLiteralKeys: Needed to clear the event collection
 				eventStoreClient: eventStore['client'] as MongoClient,
-				// biome-ignore lint/complexity/useLiteralKeys: Needed to clear the snapshot collection
 				snapshotStoreClient: snapshotStore['client'] as MongoClient,
 			}),
 			cleanup: async (context) => defaultCleanup.mongodb(context.eventStoreClient, context.snapshotStoreClient),

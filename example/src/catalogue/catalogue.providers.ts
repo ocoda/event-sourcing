@@ -1,5 +1,4 @@
 import type { Type } from '@nestjs/common';
-import type { Controller } from '@nestjs/common/interfaces';
 import type {
 	ICommandHandler,
 	IEvent,
@@ -45,4 +44,4 @@ export const Events: Type<IEvent>[] = [BookAddedEvent, BookAuthorAddedEvent, Boo
 
 export const AggregateRepositories = [BookRepository];
 
-export const Controllers: Type<Controller>[] = [BookController];
+export const Controllers: Type<object>[] = [BookController];

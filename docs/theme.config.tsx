@@ -15,7 +15,6 @@ const config: DocsThemeConfig = {
 		content: (
 			<span>
 				MIT {new Date().getFullYear()} ©{' '}
-				{/* biome-ignore lint/a11y/noBlankTarget: link to ocoda.be */}
         <a href="https://www.ocoda.be/en" target="_blank">
 					Ocoda
 				</a>
