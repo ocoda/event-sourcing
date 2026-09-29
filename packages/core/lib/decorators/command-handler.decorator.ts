@@ -7,8 +7,8 @@ import { COMMAND_HANDLER_METADATA, COMMAND_METADATA } from './constants.js';
 /**
  * Decorator that marks a class as a command handler. A command handler handles commands (actions) executed by your application code.
  * @description The decorated class must implement `ICommandHandler`: its `execute` takes the command and resolves to
- * the command's result type (see `Command<TResult>`). The `CommandBus` routes the instances of exactly this command
- * class to it.
+ * the command's result type (see `Command<TResult>`). The `CommandBus` routes the instances of this command class to
+ * it, and those of its subclasses that have no handler of their own.
  * @param command The command class handled by this handler.
  * @example `@CommandHandler(OpenAccountCommand)`
  */

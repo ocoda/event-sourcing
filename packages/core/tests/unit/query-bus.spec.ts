@@ -207,13 +207,51 @@ describe(QueryBus, () => {
 	});
 
 	describe('handlers are keyed by class', () => {
-		it('does not route a subclass to the handler of its parent', async () => {
+		it('routes a subclass without a handler of its own to the handler of its nearest parent, as 3.x did', async () => {
 			class GetClosedAccountQuery extends GetAccountQuery {}
+			class GetArchivedAccountQuery extends GetClosedAccountQuery {}
+			const bus = busWithHandlers();
 
-			await expect(busWithHandlers().execute(new GetClosedAccountQuery('account-1'))).rejects.toMatchObject({
-				code: EventSourcingErrorCode.QueryHandlerNotFound,
-				queryName: 'GetClosedAccountQuery',
+			// The subclass inherits the result type of its parent, so the parent's handler fits it
+			expectTypeOf(bus.execute(new GetClosedAccountQuery('account-2'))).toEqualTypeOf<
+				Promise<AccountDto | undefined>
+			>();
+			await expect(bus.execute(new GetClosedAccountQuery('account-2'))).resolves.toEqual({
+				...account,
+				id: 'account-2',
 			});
+			await expect(bus.execute(new GetArchivedAccountQuery('account-3'))).resolves.toEqual({
+				...account,
+				id: 'account-3',
+			});
+		});
+
+		it('routes a subclass with a handler of its own to that handler, and its parent to the parent handler', async () => {
+			// 3.x gave the subclass the id it inherited from its parent, so both handlers shared one id
+			class ParentQuery {}
+			class ChildQuery extends ParentQuery {}
+			class GrandchildQuery extends ChildQuery {}
+			@QueryHandler(ParentQuery)
+			class ParentHandler {
+				async execute() {
+					return 'parent';
+				}
+			}
+			@QueryHandler(ChildQuery)
+			class ChildHandler {
+				async execute() {
+					return 'child';
+				}
+			}
+			const bus = new QueryBus();
+			bus.register([
+				{ metatype: ParentHandler, instance: new ParentHandler() },
+				{ metatype: ChildHandler, instance: new ChildHandler() },
+			] as ProviderWrapper<IQueryHandler>[]);
+
+			await expect(bus.execute(new ParentQuery())).resolves.toBe('parent');
+			await expect(bus.execute(new ChildQuery())).resolves.toBe('child');
+			await expect(bus.execute(new GrandchildQuery())).resolves.toBe('child');
 		});
 
 		it('ignores the id metadata on the query class', async () => {

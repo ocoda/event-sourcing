@@ -4,6 +4,10 @@ title: Commands & Command Handlers
 
 import { Aside, Steps } from '@astrojs/starlight/components';
 
+<Aside type="note" title="4.0 prerelease">
+This page describes the command bus of the 4.0 prereleases. The `Command` base class, the typed results and the rejecting `execute()` ship in a later prerelease. Until then, and in 3.x, implement `ICommand` and pass the result type to `execute<OpenAccountCommand, string>()`. See [Typed command and query buses](/upgrading/v4#typed-buses).
+</Aside>
+
 A **Command** represents a user or system's intent to perform a specific action within your domain. Commands are part of the **CQRS** pattern, where they express actions that change the state of the system. Each command is handled by a **CommandHandler**, which contains the logic for executing the command, such as interacting with the domain's aggregates and repositories.
 
 Commands should clearly indicate the **intent** and ideally refer to the aggregate they operate on. The name of a command should use imperative language to describe the action, such as `OpenAccountCommand` or `CreditAccountCommand`.
@@ -127,7 +131,7 @@ export class AccountController {
 
 For a command class that doesn't extend `Command`, `execute()` resolves to `any`. Pass the command and the result type as type arguments to type it, as in 3.x: `this.commandBus.execute<OpenAccountCommand, string>(command)`.
 
-The handlers are registered by class: a subclass of a command is another command, and needs a handler of its own. If there's no handler registered for the class of a command, the promise that `execute()` returns rejects with a `CommandHandlerNotFoundException`.
+The handlers are registered by class. A subclass of a command reaches the handler of its parent, unless it has a handler of its own. If there's no handler registered for the class of a command or any of its parent classes, the promise that `execute()` returns rejects with a `CommandHandlerNotFoundException`.
 
 <Aside type="caution">
 Inject the `CommandBus` as a regular class, so don't use `import type` for it. NestJS needs the class at runtime to be able to resolve it.

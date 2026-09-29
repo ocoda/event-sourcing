@@ -7,19 +7,16 @@ import {
 	QueryHandlerNotFoundException,
 } from './exceptions/index.js';
 import { DefaultQueryPubSub, ObservableBus, getQueryHandlerMetadata } from './helpers/index.js';
+import { classOf, handlerFor } from './helpers/message-handlers.js';
 import type { IQuery, IQueryBus, IQueryHandler, IQueryPublisher, ProviderWrapper } from './interfaces/index.js';
 import type { ResultOf } from './models/index.js';
-
-/** The class of a query; `undefined` for `null`, `undefined` and null-prototype objects. */
-const classOf = (message: unknown): Function | undefined =>
-	message === null || message === undefined ? undefined : Object.getPrototypeOf(message)?.constructor;
 
 @Injectable()
 export class QueryBus<QueryBase extends IQuery = IQuery>
 	extends ObservableBus<QueryBase>
 	implements IQueryBus<QueryBase>
 {
-	// Keyed by the query class itself, not by metadata on it: a subclass needs its own handler.
+	// Keyed by the query class itself, not by an id stored on it, which a subclass would inherit.
 	private readonly handlers = new Map<Function, IQueryHandler<any, unknown>>();
 	private _publisher: IQueryPublisher<QueryBase> = new DefaultQueryPubSub<QueryBase>(this.subject$);
 
@@ -32,22 +29,23 @@ export class QueryBus<QueryBase extends IQuery = IQuery>
 	}
 
 	/**
-	 * Executes a query with the handler registered for its class, and resolves to what the handler resolves to.
+	 * Executes a query with the handler registered for its class, or for its nearest parent class that has one, and
+	 * resolves to what the handler resolves to.
 	 *
 	 * The result type is inferred from a `Query<TResult>`; for a plain query class it is `any`, or the second type
 	 * argument: `execute<GetAccountsQuery, Account[]>(query)`.
 	 *
 	 * @param options Reserved for request-scoped handlers, which a later 4.0 prerelease resolves per request. Until
 	 * then it is ignored.
-	 * @throws {QueryHandlerNotFoundException} (as a rejection) when no handler is registered for the query's class.
-	 * Nothing is published then.
+	 * @throws {QueryHandlerNotFoundException} (as a rejection) when no handler is registered for the query's class
+	 * or any of its parent classes. Nothing is published then.
 	 */
 	async execute<TQuery extends QueryBase, TResult = ResultOf<TQuery>>(
 		query: TQuery,
 		options?: { request?: unknown },
 	): Promise<NoInfer<TResult>> {
 		const queryType = classOf(query);
-		const handler = queryType && this.handlers.get(queryType);
+		const handler = handlerFor(this.handlers, queryType);
 		if (!handler) {
 			throw new QueryHandlerNotFoundException({ query: queryType ?? query });
 		}
@@ -56,7 +54,8 @@ export class QueryBus<QueryBase extends IQuery = IQuery>
 	}
 
 	/**
-	 * Routes the instances of `query` to `handler`, replacing a handler registered for it before.
+	 * Routes the instances of `query`, and of its subclasses without a handler of their own, to `handler`, replacing a
+	 * handler registered for it before.
 	 */
 	bind<TQuery extends QueryBase>(handler: IQueryHandler<TQuery>, query: Type<TQuery>) {
 		this.handlers.set(query, handler);

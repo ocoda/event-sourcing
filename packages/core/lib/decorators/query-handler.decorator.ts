@@ -7,7 +7,8 @@ import { QUERY_HANDLER_METADATA, QUERY_METADATA } from './constants.js';
 /**
  * Decorator that marks a class as a query handler. A query handler handles queries executed by your application code.
  * @description The decorated class must implement `IQueryHandler`: its `execute` takes the query and resolves to the
- * query's result type (see `Query<TResult>`). The `QueryBus` routes the instances of exactly this query class to it.
+ * query's result type (see `Query<TResult>`). The `QueryBus` routes the instances of this query class to it, and
+ * those of its subclasses that have no handler of their own.
  * @param query The query class handled by this handler.
  * @example `@QueryHandler(GetAccountByIdQuery)`
  */

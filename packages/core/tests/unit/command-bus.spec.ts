@@ -257,20 +257,22 @@ describe(CommandBus, () => {
 			await expect(bus.execute(new Second())).resolves.toBe('second');
 		});
 
-		it('does not route a subclass to the handler of its parent', async () => {
+		it('routes a subclass without a handler of its own to the handler of its nearest parent, as 3.x did', async () => {
 			class SpecialOpenAccountCommand extends OpenAccountCommand {}
+			class VerySpecialOpenAccountCommand extends SpecialOpenAccountCommand {}
 			const bus = busWithHandlers();
 
-			await expect(bus.execute(new SpecialOpenAccountCommand())).rejects.toMatchObject({
-				code: EventSourcingErrorCode.CommandHandlerNotFound,
-				commandName: 'SpecialOpenAccountCommand',
-			});
+			// The subclass inherits the result type of its parent, so the parent's handler fits it
+			expectTypeOf(bus.execute(new SpecialOpenAccountCommand())).toEqualTypeOf<Promise<AccountId>>();
+			await expect(bus.execute(new SpecialOpenAccountCommand())).resolves.toEqual(new AccountId('account-1'));
+			await expect(bus.execute(new VerySpecialOpenAccountCommand())).resolves.toEqual(new AccountId('account-1'));
 		});
 
 		it('routes a subclass with a handler of its own to that handler, and its parent to the parent handler', async () => {
 			// 3.x gave the subclass the id it inherited from its parent, so both handlers shared one id
 			class ParentCommand {}
 			class ChildCommand extends ParentCommand {}
+			class GrandchildCommand extends ChildCommand {}
 			@CommandHandler(ParentCommand)
 			class ParentHandler {
 				async execute() {
@@ -291,6 +293,7 @@ describe(CommandBus, () => {
 
 			await expect(bus.execute(new ParentCommand())).resolves.toBe('parent');
 			await expect(bus.execute(new ChildCommand())).resolves.toBe('child');
+			await expect(bus.execute(new GrandchildCommand())).resolves.toBe('child');
 		});
 
 		it('ignores the id metadata on the command class', async () => {

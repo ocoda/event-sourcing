@@ -7,19 +7,16 @@ import {
 	MissingCommandHandlerMetadataException,
 } from './exceptions/index.js';
 import { DefaultCommandPubSub, ObservableBus, getCommandHandlerMetadata } from './helpers/index.js';
+import { classOf, handlerFor } from './helpers/message-handlers.js';
 import type { ICommand, ICommandBus, ICommandHandler, ICommandPublisher, ProviderWrapper } from './interfaces/index.js';
 import type { ResultOf } from './models/index.js';
-
-/** The class of a command; `undefined` for `null`, `undefined` and null-prototype objects. */
-const classOf = (message: unknown): Function | undefined =>
-	message === null || message === undefined ? undefined : Object.getPrototypeOf(message)?.constructor;
 
 @Injectable()
 export class CommandBus<CommandBase extends ICommand = ICommand>
 	extends ObservableBus<CommandBase>
 	implements ICommandBus<CommandBase>
 {
-	// Keyed by the command class itself, not by metadata on it: a subclass needs its own handler.
+	// Keyed by the command class itself, not by an id stored on it, which a subclass would inherit.
 	private readonly handlers = new Map<Function, ICommandHandler<any, unknown>>();
 	private _publisher: ICommandPublisher<CommandBase> = new DefaultCommandPubSub<CommandBase>(this.subject$);
 
@@ -31,22 +28,23 @@ export class CommandBus<CommandBase extends ICommand = ICommand>
 	}
 
 	/**
-	 * Executes a command with the handler registered for its class, and resolves to what the handler resolves to.
+	 * Executes a command with the handler registered for its class, or for its nearest parent class that has one, and
+	 * resolves to what the handler resolves to.
 	 *
 	 * The result type is inferred from a `Command<TResult>`; for a plain command class it is `any`, or the second
 	 * type argument: `execute<OpenAccountCommand, AccountId>(command)`.
 	 *
 	 * @param options Reserved for request-scoped handlers, which a later 4.0 prerelease resolves per request. Until
 	 * then it is ignored.
-	 * @throws {CommandHandlerNotFoundException} (as a rejection) when no handler is registered for the command's class.
-	 * Nothing is published then.
+	 * @throws {CommandHandlerNotFoundException} (as a rejection) when no handler is registered for the command's class
+	 * or any of its parent classes. Nothing is published then.
 	 */
 	async execute<TCommand extends CommandBase, TResult = ResultOf<TCommand>>(
 		command: TCommand,
 		options?: { request?: unknown },
 	): Promise<NoInfer<TResult>> {
 		const commandType = classOf(command);
-		const handler = commandType && this.handlers.get(commandType);
+		const handler = handlerFor(this.handlers, commandType);
 		if (!handler) {
 			throw new CommandHandlerNotFoundException({ command: commandType ?? command });
 		}
@@ -55,7 +53,8 @@ export class CommandBus<CommandBase extends ICommand = ICommand>
 	}
 
 	/**
-	 * Routes the instances of `command` to `handler`, replacing a handler registered for it before.
+	 * Routes the instances of `command`, and of its subclasses without a handler of their own, to `handler`, replacing a
+	 * handler registered for it before.
 	 */
 	bind<TCommand extends CommandBase>(handler: ICommandHandler<TCommand>, command: Type<TCommand>) {
 		this.handlers.set(command, handler);
