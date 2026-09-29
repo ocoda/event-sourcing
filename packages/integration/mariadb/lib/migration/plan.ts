@@ -147,7 +147,9 @@ export const planEventMigration = (input: EventPlanInput, options: PlanOptions):
 	const dropBackup = step<EventStepName>('drop-backup', dropBackupSql(table), LOCKS.exclusiveMetadata);
 	const withBackup = (steps: PlannedStep<EventStepName>[]) => {
 		if (options.keepBackup) {
-			warnings.push(`The 3.x table is kept as ${backupTableName(table)}; drop it when satisfied: ${dropBackupSql(table)}`);
+			warnings.push(
+				`The 3.x table is kept as ${backupTableName(table)}; drop it when satisfied: ${dropBackupSql(table)}`,
+			);
 			return steps;
 		}
 		return [...steps, dropBackup];

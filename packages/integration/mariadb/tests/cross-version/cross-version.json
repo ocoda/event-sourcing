@@ -1,4 +1,4 @@
 {
 	"$comment": "How scripts/test-cross-version.mjs checks a 3.0.2 append after this driver read the corpus (fixtures/cross-version/v3/append-after.mjs): \"succeeds\" while the driver keeps the 3.x schema, \"fails\" once it migrates to schema v2 (the fence).",
-	"appendAfter": "succeeds"
+	"appendAfter": "fails"
 }

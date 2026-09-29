@@ -84,8 +84,7 @@ export const v1Events = (): V1EventRow[] => [
 ];
 
 /** A 3.x row that 3.x wrote after the copy read the table (the catch-up). */
-export const lateV1Event = (): V1EventRow =>
-	row('account-a', 4, ulidAt(t0 + 11 * HOUR, 'A4'), t0 + 11 * HOUR + 300);
+export const lateV1Event = (): V1EventRow => row('account-a', 4, ulidAt(t0 + 11 * HOUR, 'A4'), t0 + 11 * HOUR + 300);
 
 const ULID_TIME = /^[0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{10}[0-9A-Za-z]{16}$/;
 const CANONICAL = /^[0-9A-HJKMNP-TV-Z]{26}$/;

@@ -1,5 +1,6 @@
 import {
 	EventCollection,
+	type EventEnvelope,
 	EventSourcingErrorCode,
 	Id,
 	EventStoreSchemaException,
@@ -50,8 +51,10 @@ describe('MariaDB migration from 3.x to schema v2', () => {
 
 	const migrateEvents = (options: Parameters<typeof MariaDBEventStore.migrate>[1] = {}, hooks?: MigrationHooks) =>
 		hooks ? runMigration(config(), 'events', options, hooks) : MariaDBEventStore.migrate(config(), options);
-	const migrateSnapshots = (options: Parameters<typeof MariaDBSnapshotStore.migrate>[1] = {}, hooks?: MigrationHooks) =>
-		hooks ? runMigration(config(), 'snapshots', options, hooks) : MariaDBSnapshotStore.migrate(config(), options);
+	const migrateSnapshots = (
+		options: Parameters<typeof MariaDBSnapshotStore.migrate>[1] = {},
+		hooks?: MigrationHooks,
+	) => (hooks ? runMigration(config(), 'snapshots', options, hooks) : MariaDBSnapshotStore.migrate(config(), options));
 
 	const only = (report: MigrationReport, name: string): MigrationCollectionReport => {
 		const collection = report.collections.find((candidate) => candidate.name === name);
@@ -62,7 +65,11 @@ describe('MariaDB migration from 3.x to schema v2', () => {
 	/** Creates a 3.x event table the way a server before MariaDB 10.10 did (ON UPDATE), with the corpus in it. */
 	const seedEvents = async (
 		pool: string,
-		{ tableOptions = '', rows = v1Events(), legacy = true }: { tableOptions?: string; rows?: V1EventRow[]; legacy?: boolean } = {},
+		{
+			tableOptions = '',
+			rows = v1Events(),
+			legacy = true,
+		}: { tableOptions?: string; rows?: V1EventRow[]; legacy?: boolean } = {},
 	) => {
 		const table = EventCollection.get(pool);
 		if (legacy) {
@@ -96,9 +103,11 @@ describe('MariaDB migration from 3.x to schema v2', () => {
 
 	/** The schema and a checksum of every table of the database. */
 	const schemaDump = async () => {
-		const tables = (await root.query<{ TABLE_NAME: string }[]>(
-			"SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE' ORDER BY TABLE_NAME",
-		)).map(({ TABLE_NAME }) => TABLE_NAME);
+		const tables = (
+			await root.query<{ TABLE_NAME: string }[]>(
+				"SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE' ORDER BY TABLE_NAME",
+			)
+		).map(({ TABLE_NAME }) => TABLE_NAME);
 		const dump: Record<string, { ddl: string; checksum: string }> = {};
 		for (const table of tables) {
 			const [{ Checksum }] = await root.query<{ Checksum: bigint | null }[]>(`CHECKSUM TABLE ${escapeId(table)}`);
@@ -147,7 +156,9 @@ describe('MariaDB migration from 3.x to schema v2', () => {
 	describe('events', () => {
 		it('creates the fixture tables with the legacy ON UPDATE attribute', async () => {
 			const table = await seedEvents(nextPool('fixture'));
-			expect(await showCreate(table)).toMatch(/`occurred_on` timestamp NOT NULL DEFAULT current_timestamp\(\) ON UPDATE/i);
+			expect(await showCreate(table)).toMatch(
+				/`occurred_on` timestamp NOT NULL DEFAULT current_timestamp\(\) ON UPDATE/i,
+			);
 		});
 
 		it('reports what a migration does in a dry run, and writes nothing', async () => {
@@ -254,9 +265,10 @@ describe('MariaDB migration from 3.x to schema v2', () => {
 
 				// The catalog counts the positions, and the backup keeps the 3.x rows as they were
 				expect(
-					await root.query(`SELECT kind, schema_version, CAST(last_position AS CHAR) AS last FROM ${CATALOG} WHERE name = ?`, [
-						table,
-					]),
+					await root.query(
+						`SELECT kind, schema_version, CAST(last_position AS CHAR) AS last FROM ${CATALOG} WHERE name = ?`,
+						[table],
+					),
 				).toEqual([{ kind: 'events', schema_version: 2, last: String(events.length) }]);
 				expect(await root.query(`SELECT * FROM ${escapeId(`${table}__es_v1`)} ORDER BY stream_id, version`)).toEqual(
 					legacyRows,
@@ -278,11 +290,13 @@ describe('MariaDB migration from 3.x to schema v2', () => {
 				await store.connect();
 				try {
 					await store.ensureCollection(pool);
-					const all = [];
+					const all: EventEnvelope[] = [];
 					for await (const batch of store.readAll({ pool })) {
 						all.push(...batch);
 					}
-					expect(all.map(({ metadata }) => metadata.globalPosition)).toEqual(order.map((_, index) => BigInt(index + 1)));
+					expect(all.map(({ metadata }) => metadata.globalPosition)).toEqual(
+						order.map((_, index) => BigInt(index + 1)),
+					);
 					expect(all[0].payload).toEqual(order[0].payload);
 					expect(all[0].metadata.occurredOn.toISOString()).toBe(repairOf(order[0]).occurredOn);
 
@@ -339,8 +353,12 @@ describe('MariaDB migration from 3.x to schema v2', () => {
 			expect(row.global_position).toBe(String(v1Events().length + 1));
 			expect(`${row.occurred_on.replace(' ', 'T')}Z`).toBe(repairOf(late).occurredOn);
 			expect(
-				(await root.query<{ last: string }[]>(`SELECT CAST(last_position AS CHAR) AS last FROM ${CATALOG} WHERE name = ?`, [table]))[0]
-					.last,
+				(
+					await root.query<{ last: string }[]>(
+						`SELECT CAST(last_position AS CHAR) AS last FROM ${CATALOG} WHERE name = ?`,
+						[table],
+					)
+				)[0].last,
 			).toBe(String(v1Events().length + 1));
 		});
 
@@ -496,7 +514,10 @@ describe('MariaDB migration from 3.x to schema v2', () => {
 			try {
 				await expect(store.ensureCollection(pool)).rejects.toBeInstanceOf(EventStoreSchemaException);
 				await expect(store.ensureCollection(pool)).rejects.toMatchObject({ found: 'v1-partial' });
-				expect(only(await store.migrate({ pools: [pool] }), table)).toMatchObject({ from: 'v1-partial', action: 'resume' });
+				expect(only(await store.migrate({ pools: [pool] }), table)).toMatchObject({
+					from: 'v1-partial',
+					action: 'resume',
+				});
 				await expect(store.ensureCollection(pool)).resolves.toBe(table);
 			} finally {
 				await store.disconnect();
@@ -523,7 +544,9 @@ describe('MariaDB migration from 3.x to schema v2', () => {
 		it('reports the flag damage in a dry run, and writes nothing', async () => {
 			const pool = nextPool('sdry');
 			const table = await seedSnapshots(pool);
-			expect(await showCreate(table)).toMatch(/`registered_on` timestamp NOT NULL DEFAULT current_timestamp\(\) ON UPDATE/i);
+			expect(await showCreate(table)).toMatch(
+				/`registered_on` timestamp NOT NULL DEFAULT current_timestamp\(\) ON UPDATE/i,
+			);
 			const before = await schemaDump();
 
 			const report = await migrateSnapshots({ dryRun: true, pools: [pool] });
@@ -575,14 +598,9 @@ describe('MariaDB migration from 3.x to schema v2', () => {
 			>(
 				`SELECT stream_id, version, CAST(registered_on AS CHAR) AS registered_on, latest FROM ${escapeId(table)} ORDER BY CAST(stream_id AS BINARY), version`,
 			);
-			expect(rows.filter(({ latest }) => latest !== null).map(({ stream_id, version }) => `${stream_id}@${version}`)).toEqual([
-				'account-S5@1',
-				'account-s1@3',
-				'account-s2@2',
-				'account-s3@2',
-				'account-s4@3',
-				'account-s5@2',
-			]);
+			expect(
+				rows.filter(({ latest }) => latest !== null).map(({ stream_id, version }) => `${stream_id}@${version}`),
+			).toEqual(['account-S5@1', 'account-s1@3', 'account-s2@2', 'account-s3@2', 'account-s4@3', 'account-s5@2']);
 			for (const row of rows) {
 				expect(row.latest === null || row.latest === `latest#${row.stream_id}`).toBe(true);
 				const seeded = v1Snapshots().find(
@@ -655,7 +673,7 @@ describe('MariaDB migration from 3.x to schema v2', () => {
 				const last = await store.getLastEnvelope(stream, pool);
 				expect(last?.metadata.version).toBe(4);
 				expect(last?.payload).toEqual({ balance: 42 });
-				const listed = [];
+				const listed: string[] = [];
 				for await (const batch of store.listCollections()) {
 					listed.push(...batch);
 				}
@@ -671,7 +689,9 @@ describe('MariaDB migration from 3.x to schema v2', () => {
 		it('blocks a snapshot table with a trigger, and discovers snapshot tables by name and columns', async () => {
 			const pool = nextPool('strig');
 			const table = await seedSnapshots(pool);
-			await root.query(`CREATE TRIGGER ${escapeId(`${table}-t`)} BEFORE INSERT ON ${escapeId(table)} FOR EACH ROW SET @x = 1`);
+			await root.query(
+				`CREATE TRIGGER ${escapeId(`${table}-t`)} BEFORE INSERT ON ${escapeId(table)} FOR EACH ROW SET @x = 1`,
+			);
 
 			const report = await migrateSnapshots({ dryRun: true });
 

@@ -130,17 +130,21 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 			const none = this.options?.ddl === 'none';
 			if (none) {
 				if (!(await catalogExists(db))) {
-					throw new Error(`The catalog ${CATALOG_TABLE} doesn't exist and ddl is 'none'. ${snapshotSchemaRemedy(collection)}`);
+					throw new Error(
+						`The catalog ${CATALOG_TABLE} doesn't exist and ddl is 'none'. ${snapshotSchemaRemedy(collection)}`,
+					);
 				}
 			} else {
 				await db.query(catalogDdl());
 			}
 
-			const { state } = await inspectSnapshotTable(db, collection);
+			const { state, columns } = await inspectSnapshotTable(db, collection);
 			let version: SchemaVersion = 2;
 			if (state === 'absent') {
 				if (none) {
-					throw new Error(`The ${collection} table doesn't exist and ddl is 'none'. ${snapshotSchemaRemedy(collection)}`);
+					throw new Error(
+						`The ${collection} table doesn't exist and ddl is 'none'. ${snapshotSchemaRemedy(collection)}`,
+					);
 				}
 				await db.query(snapshotTableDdl(collection));
 			} else if (state !== 'v2') {
@@ -150,7 +154,8 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 				);
 			}
 			await db.query(registerSnapshotTableSql(collection, version));
-			this.schemaVersions.set(collection, version);
+			// How registered_on is read and written follows its type: a table that a migration stopped in may have converted it
+			this.schemaVersions.set(collection, columns.get('registered_on')?.dataType === 'timestamp' ? 1 : 2);
 
 			return collection;
 		} catch (error) {
@@ -393,9 +398,7 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 			ORDER BY latest DESC
 			LIMIT ?
 		`;
-		const params = aggregateId
-			? [streamName, `latest#${streamName}-${aggregateId}`, limit]
-			: [streamName, limit];
+		const params = aggregateId ? [streamName, `latest#${streamName}-${aggregateId}`, limit] : [streamName, limit];
 
 		yield* inBatches(this.envelopesOf<A>(streamRows<Entity<A>>(this.connected(), query, params)), batch);
 	}
@@ -461,7 +464,9 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 		return version;
 	}
 
-	private async *envelopesOf<A extends AggregateRoot>(rows: AsyncIterable<Entity<A>>): AsyncGenerator<SnapshotEnvelope<A>> {
+	private async *envelopesOf<A extends AggregateRoot>(
+		rows: AsyncIterable<Entity<A>>,
+	): AsyncGenerator<SnapshotEnvelope<A>> {
 		for await (const row of rows) {
 			yield toSnapshotEnvelope(row);
 		}

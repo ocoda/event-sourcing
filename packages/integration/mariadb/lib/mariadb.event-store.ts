@@ -164,7 +164,11 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 			switch (state) {
 				case 'absent':
 					if (this.options?.ddl === 'none') {
-						throw new EventStoreSchemaException({ collection, found: 'missing', remedy: eventSchemaRemedy(collection) });
+						throw new EventStoreSchemaException({
+							collection,
+							found: 'missing',
+							remedy: eventSchemaRemedy(collection),
+						});
 					}
 					await db.query(eventTableDdl(collection));
 					break;
@@ -310,9 +314,13 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 			// The first position isn't the next one: wait for the committed high-water mark, then everything up to it is
 			// visible, and what is missing below it is gone for good
 			const highWaterMark = await this.readHighWaterMark(collection, pool);
-			const settled = await this.readPositions(collection, pool, from, batch, highWaterMark);
+			let settled = await this.readPositions(collection, pool, from, batch, highWaterMark);
 			if (settled.length === 0) {
-				return;
+				// Stored positions above the counter: drift, which ensureCollection() heals. The rows are committed.
+				this.logger.warn(
+					`${collection} holds global positions above its counter (${highWaterMark}); ensureCollection() heals it`,
+				);
+				settled = rows;
 			}
 			yield settled.map(toEnvelope);
 			from = BigInt(settled[settled.length - 1].global_position) + 1n;
@@ -430,7 +438,9 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 			);
 		}
 		const cause =
-			errorNumberOf(error) === MariaDBErrorNumber.NoSuchTable ? new EventCollectionNotFoundException({ collection, pool }, { cause: error }) : error;
+			errorNumberOf(error) === MariaDBErrorNumber.NoSuchTable
+				? new EventCollectionNotFoundException({ collection, pool }, { cause: error })
+				: error;
 		throw new EventStorePersistenceException({ collection, outcome: 'not-persisted' }, { cause });
 	}
 

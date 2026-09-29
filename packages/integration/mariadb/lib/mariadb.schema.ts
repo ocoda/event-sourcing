@@ -334,7 +334,11 @@ export const classifySnapshotTable = (
 	if (columns.size === 0) {
 		return 'absent';
 	}
-	if (snapshotColumnsAreV2(columns) && latestIndexes(indexes).every(({ unique }) => unique) && hasUniqueLatest(indexes)) {
+	if (
+		snapshotColumnsAreV2(columns) &&
+		latestIndexes(indexes).every(({ unique }) => unique) &&
+		hasUniqueLatest(indexes)
+	) {
 		return 'v2';
 	}
 	if (columns.get('registered_on')?.dataType === 'timestamp') {
@@ -359,8 +363,7 @@ export const snapshotColumnsAreV2 = (columns: ReadonlyMap<string, ColumnInfo>): 
 export const latestIndexes = (indexes: readonly IndexInfo[]): IndexInfo[] =>
 	indexes.filter(({ columns }) => columns.join(',') === 'aggregate_name,latest');
 
-const hasUniqueLatest = (indexes: readonly IndexInfo[]): boolean =>
-	latestIndexes(indexes).some(({ unique }) => unique);
+const hasUniqueLatest = (indexes: readonly IndexInfo[]): boolean => latestIndexes(indexes).some(({ unique }) => unique);
 
 /** What the stores and the migration know about an event table. */
 export interface EventTableInspection {

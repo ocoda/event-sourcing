@@ -42,7 +42,8 @@
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
 	"files": [
-		"dist"
+		"dist",
+		"migrations"
 	],
 	"scripts": {
 		"build": "rm -rf dist && tsc -p tsconfig.build.json",
@@ -52,7 +53,8 @@
 		"format": "oxfmt",
 		"format:check": "oxfmt --check",
 		"lint": "oxlint",
-		"typecheck": "tsc --noEmit -p tsconfig.json"
+		"typecheck": "tsc --noEmit -p tsconfig.json",
+		"gen:migration-sql": "UPDATE_MIGRATION_SQL=1 vitest run tests/unit/mariadb.migration-sql.spec.ts"
 	},
 	"engines": {
 		"node": ">=22.12"

@@ -11,7 +11,7 @@ import { type MariaDBSnapshotEntity, MariaDBSnapshotStore } from '@ocoda/event-s
 import { Account, AccountId } from '@ocoda/event-sourcing-testing/unit';
 import type { Pool, PoolConnection } from 'mariadb';
 import type { MockInstance } from 'vitest';
-import { createSnapshotStore } from '../support/stores.js';
+import { createSnapshotStore, poolOf } from '../support/stores.js';
 
 // Pool exhaustion and concurrency scenarios: allow slow tests and setup/teardown hooks.
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
@@ -97,7 +97,7 @@ describe(`${MariaDBSnapshotStore.name} resilience`, () => {
 		snapshotStore = createSnapshotStore({ connectionLimit: POOL_SIZE, acquireTimeout: 3_000 });
 		await snapshotStore.connect();
 
-		pool = snapshotStore['pool'];
+		pool = poolOf(snapshotStore);
 	});
 
 	afterAll(async () => {
@@ -308,7 +308,7 @@ describe(`${MariaDBSnapshotStore.name} resilience`, () => {
 			it('should report a version conflict when racing appends to a new stream all passed the version check', async () => {
 				const concurrentStore = await newConcurrentStore();
 
-				const concurrentPool: Pool = concurrentStore['pool'];
+				const concurrentPool: Pool = poolOf(concurrentStore);
 				const getConnection = concurrentPool.getConnection.bind(concurrentPool);
 
 				// Hold every writer right after its version check until all of them have passed it. A new stream has no
@@ -341,7 +341,13 @@ describe(`${MariaDBSnapshotStore.name} resilience`, () => {
 					const snapshotPool = await newPool('concurrent-check');
 					const stream = newStream();
 
-					await expectExactlyOneWinner(await append(concurrentStore, stream, 1, snapshotPool), stream, 1, [1], snapshotPool);
+					await expectExactlyOneWinner(
+						await append(concurrentStore, stream, 1, snapshotPool),
+						stream,
+						1,
+						[1],
+						snapshotPool,
+					);
 					expect(versionChecks).toBe(WRITERS);
 				} finally {
 					getConnectionSpy.mockRestore();

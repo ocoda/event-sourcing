@@ -12,7 +12,13 @@ import {
 	type IEventPool,
 } from '@ocoda/event-sourcing';
 import { MariaDBEventStore } from '@ocoda/event-sourcing-mariadb';
-import { Account, AccountId, getAccountEventEnvelopes, getEventMap, getEvents } from '@ocoda/event-sourcing-testing/unit';
+import {
+	Account,
+	AccountId,
+	getAccountEventEnvelopes,
+	getEventMap,
+	getEvents,
+} from '@ocoda/event-sourcing-testing/unit';
 import type { Pool } from 'mariadb';
 import { v1EventTableDdl } from '../fixtures/schema-v1.js';
 import { CATALOG, createEventStore, createTestDatabase, dropTables, poolOf } from '../support/stores.js';
@@ -204,7 +210,11 @@ describe(MariaDBEventStore, () => {
 			expect((await drain(store.readAll({ pool: eventPool }))).map(({ metadata }) => metadata.globalPosition)).toEqual([
 				3n,
 			]);
-			expect((await drain(store.readAll({ pool: eventPool, fromPosition: 2n }))).map(({ metadata }) => metadata.globalPosition)).toEqual([3n]);
+			expect(
+				(await drain(store.readAll({ pool: eventPool, fromPosition: 2n }))).map(
+					({ metadata }) => metadata.globalPosition,
+				),
+			).toEqual([3n]);
 		});
 
 		it('finishes a creation that crashed before the table was registered', async () => {
@@ -241,7 +251,9 @@ describe(MariaDBEventStore, () => {
 				const noCatalog = await none.ensureCollection('tenant').catch((error: unknown) => error);
 				expect(noCatalog).toBeInstanceOf(EventStoreSchemaException);
 				expect(noCatalog).toMatchObject({ found: 'missing', collection: 'tenant-events' });
-				expect((noCatalog as EventStoreSchemaException).remedy).toMatch(/CREATE TABLE IF NOT EXISTS `event_sourcing_collections`/);
+				expect((noCatalog as EventStoreSchemaException).remedy).toMatch(
+					/CREATE TABLE IF NOT EXISTS `event_sourcing_collections`/,
+				);
 				expect(await drain(none.listCollections())).toEqual([]);
 
 				// A catalog, no table
@@ -378,7 +390,7 @@ describe(MariaDBEventStore, () => {
 			const batchesOf = async (hidden: bigint[]) => {
 				const spy = tearNextBatch(store, hidden);
 				try {
-					const batches = [];
+					const batches: (bigint | undefined)[][] = [];
 					for await (const batch of store.readAll({ pool: eventPool, batch: 10 })) {
 						batches.push(batch.map(({ metadata }) => metadata.globalPosition));
 					}
@@ -438,6 +450,22 @@ describe(MariaDBEventStore, () => {
 			await expect(drain(store.readAll({ pool: eventPool }))).rejects.toBeInstanceOf(EventCollectionNotFoundException);
 		});
 
+		it('reads positions above a counter that drifted behind them, and warns', async () => {
+			const eventPool = await seedPool(3);
+			const collection = EventCollection.get(eventPool);
+			await pool.query(`DELETE FROM ${pool.escapeId(collection)} WHERE global_position = 1`);
+			await pool.query(`UPDATE ${CATALOG} SET last_position = 0 WHERE name = ?`, [collection]);
+			const warn = vi.spyOn(store['logger'], 'warn').mockImplementation(() => undefined);
+			try {
+				expect(
+					(await drain(store.readAll({ pool: eventPool }))).map(({ metadata }) => metadata.globalPosition),
+				).toEqual([2n, 3n]);
+				expect(warn).toHaveBeenCalledWith(expect.stringMatching(/above its counter \(0\)/));
+			} finally {
+				warn.mockRestore();
+			}
+		});
+
 		it('rejects an invalid batch or position before it reads', async () => {
 			await expect(drain(store.readAll({ batch: 0 }))).rejects.toThrow(RangeError);
 			await expect(drain(store.readAll({ fromPosition: -1n }))).rejects.toThrow(RangeError);
@@ -489,10 +517,18 @@ describe(MariaDBEventStore, () => {
 				const stream = newStream();
 				const appended = await Promise.all(
 					Array.from({ length: 8 }, () =>
-						isolated.appendEvents(stream, events.slice(0, 1), { expectedVersion: ExpectedVersion.Any, pool: eventPool }),
+						isolated.appendEvents(stream, events.slice(0, 1), {
+							expectedVersion: ExpectedVersion.Any,
+							pool: eventPool,
+						}),
 					),
 				);
-				expect(appended.flat().map(({ metadata }) => metadata.version).sort()).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+				expect(
+					appended
+						.flat()
+						.map(({ metadata }) => metadata.version)
+						.sort(),
+				).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
 				expect(
 					(await drain(isolated.readAll({ pool: eventPool }))).map(({ metadata }) => metadata.globalPosition),
 				).toEqual([1n, 2n, 3n, 4n, 5n, 6n, 7n, 8n]);

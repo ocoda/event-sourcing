@@ -360,14 +360,12 @@ const gappedStreamsOf = async (db: Queryable, table: string): Promise<MigrationC
 	]);
 	return {
 		total,
-		sample: sample.map(
-			(row): MigrationGappedStream => ({
-				streamId: row.stream_id,
-				events: Number(row.events),
-				minVersion: Number(row.min_version),
-				maxVersion: Number(row.max_version),
-			}),
-		),
+		sample: sample.map((row): MigrationGappedStream => ({
+			streamId: row.stream_id,
+			events: Number(row.events),
+			minVersion: Number(row.min_version),
+			maxVersion: Number(row.max_version),
+		})),
 	};
 };
 
@@ -394,13 +392,15 @@ const eventTableMigration: TableMigration = {
 				if (inspection.state !== 'v1') {
 					return { ...size, dependents };
 				}
-				const [gappedStreams, caseVariantStreams, duplicateEventIds, nonCrockfordEventIds, indexes] = await Promise.all([
-					gappedStreamsOf(db, table),
-					countOf(db, caseVariantStreamsSql(table)),
-					countOf(db, duplicateEventIdsSql(table)),
-					countOf(db, nonCrockfordEventIdsSql(table)),
-					tableIndexes(db, table),
-				]);
+				const [gappedStreams, caseVariantStreams, duplicateEventIds, nonCrockfordEventIds, indexes] = await Promise.all(
+					[
+						gappedStreamsOf(db, table),
+						countOf(db, caseVariantStreamsSql(table)),
+						countOf(db, duplicateEventIdsSql(table)),
+						countOf(db, nonCrockfordEventIdsSql(table)),
+						tableIndexes(db, table),
+					],
+				);
 				const warnings: string[] = [];
 				if (caseVariantStreams > 0) {
 					warnings.push(
@@ -415,7 +415,9 @@ const eventTableMigration: TableMigration = {
 				const droppedIndexes = indexes.filter(({ name }) => name !== 'PRIMARY').map(({ name }) => name);
 				for (const index of indexes) {
 					if (index.name !== 'PRIMARY' && index.columns.join(',') !== 'event_date,event_id') {
-						warnings.push(`The index ${index.name} (${index.columns.join(', ')}) is not recreated on the migrated table`);
+						warnings.push(
+							`The index ${index.name} (${index.columns.join(', ')}) is not recreated on the migrated table`,
+						);
 					}
 				}
 				return {
@@ -446,9 +448,9 @@ const occurredOnRepairOf = async (
 	table: string,
 	options: PlanOptions,
 ): Promise<NonNullable<MigrationCollectionReport['occurredOnRepair']>> => {
-	const [row] = await db.query<
-		{ exact: unknown; precision_only: unknown; tz_shifted: unknown; kept: unknown }[]
-	>(occurredOnRepairSql(table));
+	const [row] = await db.query<{ exact: unknown; precision_only: unknown; tz_shifted: unknown; kept: unknown }[]>(
+		occurredOnRepairSql(table),
+	);
 	const counts = {
 		exact: Number(row?.exact ?? 0),
 		precisionOnly: Number(row?.precision_only ?? 0),
@@ -457,7 +459,12 @@ const occurredOnRepairOf = async (
 	};
 	return options.repairOccurredOn
 		? counts
-		: { exact: 0, precisionOnly: 0, tzShifted: 0, kept: counts.exact + counts.precisionOnly + counts.tzShifted + counts.kept };
+		: {
+				exact: 0,
+				precisionOnly: 0,
+				tzShifted: 0,
+				kept: counts.exact + counts.precisionOnly + counts.tzShifted + counts.kept,
+			};
 };
 
 const snapshotTableMigration: TableMigration = {
@@ -492,7 +499,9 @@ const snapshotTableMigration: TableMigration = {
 				const misplaced = Number(row?.misplaced_latest ?? 0);
 				const warnings: string[] = [];
 				if (misplaced > 0) {
-					warnings.push(`${misplaced} stream(s) flag a snapshot other than their highest version: the flag moves to it`);
+					warnings.push(
+						`${misplaced} stream(s) flag a snapshot other than their highest version: the flag moves to it`,
+					);
 				}
 				if (inspection.columns.get('registered_on')?.extra.includes('on update')) {
 					warnings.push(
