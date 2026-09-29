@@ -134,12 +134,13 @@ export class InMemoryEventStore extends EventStore<InMemoryEventStoreConfig> {
 				.filter(({ streamId: eventStreamId }) => eventStreamId === stream.streamId)
 				.reduce((max, { version }) => Math.max(max, version), 0);
 
-			// Ensure the current version matches the aggregateVersion for optimistic locking
-			if (aggregateVersion <= currentVersion) {
+			let version = aggregateVersion - events.length + 1;
+
+			// Ensure the current version matches the aggregateVersion for optimistic locking.
+			// Like a unique (stream, version) key in a database, none of the appended versions may exist already.
+			if (aggregateVersion <= currentVersion || version <= currentVersion) {
 				throw new EventStoreVersionConflictException(stream, aggregateVersion, currentVersion);
 			}
-
-			let version = aggregateVersion - events.length + 1;
 
 			const envelopes: EventEnvelope[] = [];
 			const eventIdFactory = EventId.factory();
