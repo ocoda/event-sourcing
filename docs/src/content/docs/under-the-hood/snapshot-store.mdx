@@ -4,6 +4,67 @@ title: Snapshot Store
 
 import { Aside } from '@astrojs/starlight/components';
 
-<Aside type="caution" title="Under construction">
-This page is under construction.
+The snapshot store keeps the [snapshots](/start/snapshots) of your aggregates. A `SnapshotRepository` uses it behind the scenes, so you rarely call it yourself, unless you [build your own store](/advanced/custom-stores#how-to-create-your-own-snapshot-store).
+
+Every store extends the abstract `SnapshotStore` class and is registered as the `snapshotStore` of the module. The library ships an in-memory store, and PostgreSQL, MariaDB and MongoDB stores in their own packages.
+
+## Promises only
+
+Every method of a snapshot store returns a promise, or an async generator for the reads that hand out batches. A failure is a rejection, never a synchronous throw. This holds for the in-memory store too: `getSnapshot`, `getLastSnapshot`, `getEnvelope` and the other reads used to return their result directly, and now have to be awaited.
+
+| Method | Returns |
+| --- | --- |
+| `connect()`, `disconnect()` | `Promise<void>` |
+| `ensureCollection(pool?)` | `Promise<ISnapshotCollection>`: creates the collection of the pool if it doesn't exist yet, and never wipes it |
+| `listCollections(filter?)` | `AsyncGenerator<ISnapshotCollection[]>` |
+| `appendSnapshot(stream, version, snapshot, pool?)` | `Promise<SnapshotEnvelope>` |
+| `getSnapshot(stream, version, pool?)`, `getEnvelope(stream, version, pool?)` | the snapshot or its envelope; rejects with a `SnapshotNotFoundException` when there is none at that version |
+| `getSnapshots(stream, filter?)`, `getEnvelopes(stream, filter?)` | `AsyncGenerator` of batches, filtered by `fromVersion`, `direction`, `limit` and `batch` |
+| `getLastSnapshot(stream, pool?)`, `getLastEnvelope(stream, pool?)` | the last snapshot or its envelope, or `undefined` when the stream has none |
+| `getLastSnapshots(streams, pool?)`, `getManyLastSnapshotEnvelopes(streams, pool?)` | a `Map` of the streams that have a snapshot to their last one |
+| `getLastEnvelopesForAggregate(aggregate, filter?)` | `AsyncGenerator` of batches of the last envelopes of every stream of the aggregate, see [paging](#paging-through-an-aggregate) |
+
+## The last snapshot of a stream
+
+The last snapshot of a stream is the one with the **highest version**. `appendSnapshot` only accepts a version higher than that: a snapshot at or below it rejects with a `SnapshotStoreVersionConflictException` and writes nothing. When appends to the same stream race each other, each one either wins or rejects with a version conflict, and the stream keeps exactly one latest snapshot: the one with the highest version.
+
+A store may flag the latest snapshot of each stream, to list the streams of an aggregate quickly. The reads of a single stream (`getLastSnapshot`, `getLastEnvelope` and their bulk forms) don't rely on that flag: they read the highest version.
+
+<Aside type="note" title="Database stores">
+The in-memory store works this way. The PostgreSQL, MariaDB and MongoDB stores follow with their [schema v2](/upgrading/v4#store-and-schema), in a later prerelease, which enforces one flagged snapshot per stream with a unique index. Until then they read the last snapshot through the flag, and on MariaDB and MongoDB racing appends to one stream can leave more than one flagged snapshot.
 </Aside>
+
+## Paging through an aggregate
+
+`getLastEnvelopesForAggregate`, and so `SnapshotRepository.loadAll()`, reads the last snapshot of every stream of an aggregate, in **descending binary order** of the aggregate ids. The order is case-sensitive: uppercase letters come before lowercase ones, so `b…` comes first, then `a…`, `B…` and `A…`.
+
+The `aggregateId` of the filter is an **exclusive cursor**: only the streams whose aggregate id comes after it in that order are read. It doesn't have to be the id of an existing stream. To read page after page, pass the aggregate id of the last envelope of a page as the cursor of the next one:
+
+```typescript
+import { Id, type SnapshotEnvelope } from '@ocoda/event-sourcing';
+
+let cursor: Id | undefined;
+do {
+	const page: SnapshotEnvelope<Account>[] = [];
+	for await (const envelopes of accountSnapshotRepository.loadAll({ aggregateId: cursor, limit: 100 })) {
+		page.push(...envelopes);
+	}
+	// ...process the page
+	cursor = page.length ? Id.from(page[page.length - 1].metadata.aggregateId) : undefined;
+} while (cursor);
+```
+
+The in-memory store pages this way. The PostgreSQL, MariaDB and MongoDB stores get the same cursor and order with their schema v2, in a later prerelease.
+
+## Defaults for custom stores
+
+The `SnapshotStore` base class implements two methods, which a store overrides when its database can do better:
+
+- `getManyLastSnapshotEnvelopes` reads the streams one after the other with `getLastEnvelope`, so `SnapshotRepository.loadMany()` works with every store.
+- `getLastEnvelopesForAggregate` rejects with an `UnsupportedOperationException` (`operation: 'getLastEnvelopesForAggregate'`) when it's read, so `SnapshotRepository.loadAll()` rejects with it on a store that can't list the streams of an aggregate.
+
+Every other method is abstract. See [How to create your own snapshot store](/advanced/custom-stores#how-to-create-your-own-snapshot-store).
+
+## Pools
+
+A pool is a separate collection of snapshots, for example per tenant: `SnapshotCollection.get(pool)` names it `<pool>-snapshots`, and the default pool is `snapshots`. `ensureCollection(pool)` creates it. Appending to a pool whose collection doesn't exist rejects with a `SnapshotStorePersistenceException` and creates nothing. Reads from such a pool keep their 3.x behaviour, which differs per store: the SQL stores reject, the in-memory and MongoDB stores read nothing.

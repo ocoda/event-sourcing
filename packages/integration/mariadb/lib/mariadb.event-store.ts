@@ -57,7 +57,7 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 
 			return collection;
 		} catch (error) {
-			throw new EventStoreCollectionCreationException(collection, error);
+			throw new EventStoreCollectionCreationException({ collection }, { cause: error });
 		}
 	}
 
@@ -124,7 +124,7 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 		);
 
 		if (!entity) {
-			throw new EventNotFoundException(streamId, version);
+			throw new EventNotFoundException({ streamId, version, pool });
 		}
 
 		return this.eventMap.deserializeEvent(entity.event, entity.payload);
@@ -140,6 +140,8 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 		const collection = EventCollection.get(pool);
 
 		let currentVersion = 0;
+		// Set once the commit was sent: from then on a failure may have stored the events
+		let committing = false;
 
 		try {
 			// Escaped inside the try, so a name the connector refuses to escape still releases the connection
@@ -155,7 +157,12 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 
 			// Step 2: Check if the aggregateVersion is greater than the current version
 			if (aggregateVersion <= currentVersion) {
-				throw new EventStoreVersionConflictException(stream, aggregateVersion, currentVersion);
+				throw new EventStoreVersionConflictException({
+					stream,
+					expectedVersion: aggregateVersion - events.length,
+					actualVersion: currentVersion,
+					pool,
+				});
 			}
 
 			// Step 3: Prepare the events for insertion
@@ -195,6 +202,7 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 					metadata.causationId ?? null,
 				]),
 			);
+			committing = true;
 			await connection.commit();
 
 			return envelopes;
@@ -207,11 +215,16 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 
 			// A concurrent writer committed the same (stream_id, version) between our check and our insert.
 			if (isDuplicateEntryError(error)) {
-				const latestVersion = await this.getLatestVersion(collection, stream, connection, currentVersion);
-				throw new EventStoreVersionConflictException(stream, aggregateVersion, latestVersion, error);
+				const latestVersion = await this.getLatestVersion(collection, stream, connection);
+				throw new EventStoreVersionConflictException(
+					{ stream, expectedVersion: aggregateVersion - events.length, actualVersion: latestVersion, pool },
+					{ cause: error },
+				);
 			}
 
-			throw new EventStorePersistenceException(collection, error);
+			// Until the commit is sent, the transaction is rolled back (or dropped with the connection)
+			const outcome = committing ? 'unknown' : 'not-persisted';
+			throw new EventStorePersistenceException({ collection, outcome }, { cause: error });
 		} finally {
 			await connection.release();
 		}
@@ -226,7 +239,7 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 		);
 
 		if (!entity) {
-			throw new EventNotFoundException(streamId, version);
+			throw new EventNotFoundException({ streamId, version, pool });
 		}
 
 		return EventEnvelope.from(entity.event, entity.payload, {
@@ -342,16 +355,15 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 		collection: IEventCollection,
 		{ streamId }: EventStream,
 		connection: PoolConnection,
-		fallback: number,
-	): Promise<number> {
+	): Promise<number | undefined> {
 		try {
 			const [result] = await connection.query(
 				`SELECT MAX(version) as version FROM ${connection.escapeId(collection)} WHERE stream_id = ?`,
 				[streamId],
 			);
-			return result?.version || fallback;
+			return result?.version ?? undefined;
 		} catch {
-			return fallback;
+			return undefined;
 		}
 	}
 }

@@ -6,7 +6,7 @@ export class UUID extends Id {
 	protected constructor(id: string = randomUUID()) {
 		const format = /^[0-9a-fA-F]{8}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{12}$/gi;
 		if (!format.test(id)) {
-			throw InvalidIdException.becauseInvalid(id);
+			throw new InvalidIdException({ value: id, idType: new.target.name });
 		}
 		super(id);
 	}
@@ -17,7 +17,7 @@ export class UUID extends Id {
 
 	public static from(id: string): UUID {
 		if (!id) {
-			throw InvalidIdException.becauseEmpty();
+			throw new InvalidIdException({ value: id, idType: UUID.name });
 		}
 		return new UUID(id);
 	}

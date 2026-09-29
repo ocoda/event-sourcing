@@ -39,7 +39,7 @@
 			"cache": false
 		},
 		"test": {
-			"description": "vitest run. Specs alias core and the shared suite to their sources. DB-backed packages disable caching in their own turbo.json.",
+			"description": "vitest run. Specs alias core and the shared suite to their sources. DB-backed packages disable caching in their own turbo.json. ES_TEST_* set the test databases (packages/testing/unit/db.ts).",
 			"inputs": [
 				"$TURBO_DEFAULT$",
 				"$TURBO_ROOT$/packages/config/typescript/**",
@@ -48,7 +48,8 @@
 				"$TURBO_ROOT$/packages/testing/**/*.ts",
 				"!$TURBO_ROOT$/packages/testing/node_modules/**"
 			],
-			"env": ["CONFORMANCE_RUN_SKIPPED"],
+			"env": ["CONFORMANCE_RUN_SKIPPED", "ES_TEST_*"],
+			"passThroughEnv": ["CI"],
 			"outputs": []
 		},
 		"test:cov": {
@@ -61,7 +62,8 @@
 				"$TURBO_ROOT$/packages/testing/**/*.ts",
 				"!$TURBO_ROOT$/packages/testing/node_modules/**"
 			],
-			"env": ["CONFORMANCE_RUN_SKIPPED"],
+			"env": ["CONFORMANCE_RUN_SKIPPED", "ES_TEST_*"],
+			"passThroughEnv": ["CI"],
 			"outputs": ["coverage/**"]
 		},
 		"dev": {

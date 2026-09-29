@@ -1,18 +1,26 @@
+import { randomUUID } from 'node:crypto';
 import {
+	Aggregate,
+	AggregateRoot,
+	EventSourcingErrorCode,
 	type ILatestSnapshotFilter,
+	type ISnapshotCollection,
 	type ISnapshotFilter,
+	type ISnapshotPool,
 	SnapshotCollection,
 	SnapshotEnvelope,
 	SnapshotNotFoundException,
 	type SnapshotStore,
 	SnapshotStorePersistenceException,
 	SnapshotStoreVersionConflictException,
-	type SnapshotStream,
+	SnapshotStream,
 	StreamReadingDirection,
+	isEventSourcingError,
 } from '@ocoda/event-sourcing';
 import {
 	CALL_TIMEOUT,
 	ConformanceAudit,
+	ConformanceId,
 	ConformanceLedger,
 	type ConformanceSnapshot,
 	LEAK_PROBE_ITERATIONS,
@@ -32,15 +40,9 @@ import {
 import type { ConformanceStoreHandle } from './types.js';
 
 /**
- * A snapshot store with the optional envelope and bulk methods, which every store in this repository implements.
+ * The snapshot store under test. Every method of a snapshot store is required, or has a default in the base class.
  */
-export type ConformanceSnapshotStore = SnapshotStore<unknown> &
-	Required<
-		Pick<
-			SnapshotStore<unknown>,
-			'getEnvelope' | 'getEnvelopes' | 'getLastEnvelopesForAggregate' | 'getManyLastSnapshotEnvelopes'
-		>
-	>;
+export type ConformanceSnapshotStore = SnapshotStore<unknown>;
 
 /**
  * Creates a connected snapshot store.
@@ -68,6 +70,7 @@ export const SNAPSHOT_STORE_CONFORMANCE_CASES = [
 	'last-snapshots-many-streams',
 	'conflict-stale-version',
 	'conflict-concurrent-appends',
+	'latest-unique-concurrent',
 	'aggregate-latest-only',
 	'aggregate-limit',
 	'aggregate-batch',
@@ -115,6 +118,29 @@ const MANY_STREAMS = 120;
  * The versions of the snapshots in the reference stream.
  */
 const REFERENCE_VERSIONS = [10, 20, 30, 40, 50, 60, 70];
+
+/**
+ * The versions that the writers of the 'latest' race append, one each. Out of order, so that a lower version can
+ * arrive after a higher one has been appended.
+ */
+const RACING_VERSIONS = [3, 8, 1, 6, 2, 7, 4, 5];
+
+/**
+ * The first characters of the aggregate ids that the cursor paging case pages through. In binary order, uppercase
+ * letters come before lowercase ones: `0 < A < B < F < a < b < f`. Ignoring case, `a` and `A` would tie instead.
+ */
+const CURSOR_ID_PREFIXES = ['0', 'A', 'B', 'F', 'a', 'b', 'f'];
+
+/**
+ * The aggregate of the streams the cursor paging case writes, so that the other cases never read them.
+ */
+@Aggregate({ streamName: 'conformance-cursor' })
+class ConformanceCursor extends AggregateRoot {}
+
+/**
+ * Sorts strings in descending binary order: code unit by code unit, so case-sensitively.
+ */
+const descendingBinary = (values: string[]): string[] => [...values].sort().reverse();
 
 const snapshotAt = (version: number, extra: Record<string, unknown> = {}): ConformanceSnapshot => ({
 	state: { version, ...extra },
@@ -167,8 +193,21 @@ export const describeSnapshotStoreConformance = (
 		const ledgerStreams = Array.from({ length: 7 }, () => newSnapshotStream(ConformanceLedger));
 		const auditStreams = Array.from({ length: 2 }, () => newSnapshotStream(ConformanceAudit));
 		const ledgerIds = ledgerStreams.map(({ aggregateId }) => aggregateId);
-		// Ordered like the 'latest' key of the streams, descending
-		const ledgerIdsDescending = [...ledgerIds].sort().reverse();
+		// Ordered like the 'latest' key of the streams: descending, binary
+		const ledgerIdsDescending = descendingBinary(ledgerIds);
+
+		// The collections of the pools that single cases create for themselves, handed to cleanup with the others
+		const casePoolCollections: ISnapshotCollection[] = [];
+
+		/**
+		 * Creates a pool of its own for a case, so that what it writes is all that an aggregate-wide read of that pool
+		 * returns, also when the case is repeated.
+		 */
+		const ensureCasePool = async (name: string): Promise<ISnapshotPool> => {
+			const casePool = `${pool}-${name}${casePoolCollections.length + 1}`;
+			casePoolCollections.push(await store.ensureCollection(casePool));
+			return casePool;
+		};
 
 		const readSnapshots = (stream: SnapshotStream, filter: Omit<ISnapshotFilter, 'pool'> = {}) =>
 			store.getSnapshots<ConformanceLedger>(stream, { ...filter, pool });
@@ -254,7 +293,12 @@ export const describeSnapshotStoreConformance = (
 		}, timeout);
 
 		afterAll(async () => {
-			await handle?.cleanup([collection, listingCollection, SnapshotCollection.get(unknownPool)]);
+			await handle?.cleanup([
+				collection,
+				listingCollection,
+				SnapshotCollection.get(unknownPool),
+				...casePoolCollections,
+			]);
 		}, timeout);
 
 		describe('appending and reading', () => {
@@ -503,7 +547,7 @@ export const describeSnapshotStoreConformance = (
 						await expectRejectionOfClass(
 							call(() => store.appendSnapshot(stream, version, snapshotAt(version, { stale: true }), pool)),
 							SnapshotStoreVersionConflictException,
-							`Expected to append version ${version}, but latest is 10`,
+							{ streamId: stream.streamId, aggregateId: stream.aggregateId, pool, version, latestVersion: 10 },
 						);
 					}
 
@@ -558,6 +602,76 @@ export const describeSnapshotStoreConformance = (
 					},
 				);
 			}
+
+			/**
+			 * Asserts that the stream has one latest snapshot, the one with the given version, however it's read.
+			 */
+			const expectSingleLatest = async (stream: SnapshotStream, version: number, racePool: ISnapshotPool) => {
+				await expect(call(() => store.getLastSnapshot(stream, racePool))).resolves.toStrictEqual(snapshotAt(version));
+				expect((await call(() => store.getLastEnvelope<ConformanceLedger>(stream, racePool)))?.metadata.version).toBe(
+					version,
+				);
+				expect([...(await call(() => store.getLastSnapshots([stream], racePool))).values()]).toStrictEqual([
+					snapshotAt(version),
+				]);
+				const many = await call(() => store.getManyLastSnapshotEnvelopes<ConformanceLedger>([stream], racePool));
+				expect([...many.values()].map(({ metadata }) => metadata.version)).toEqual([version]);
+
+				// The pool holds this stream only, so the aggregate-wide read returns its latest snapshots: exactly one
+				const latest = await drain(
+					store.getLastEnvelopesForAggregate<ConformanceLedger>(ConformanceLedger, { pool: racePool }),
+				);
+				expect(latest.map(({ metadata }) => [metadata.aggregateId, metadata.version])).toEqual([
+					[stream.aggregateId, version],
+				]);
+			};
+
+			for (const seeded of [false, true]) {
+				test(
+					'latest-unique-concurrent',
+					`keeps one latest snapshot, the highest version, when ${CONCURRENT_WRITERS} appends of different versions to ${seeded ? 'an existing' : 'a new'} stream race`,
+					async () => {
+						const racePool = await ensureCasePool('latest');
+						const stream = newSnapshotStream();
+						const seed = seeded ? 1 : 0;
+						if (seeded) {
+							await call(() => store.appendSnapshot(stream, seed, snapshotAt(seed), racePool));
+						}
+						const racing = RACING_VERSIONS.slice(0, CONCURRENT_WRITERS).map((version) => version + seed);
+
+						const results = await withinTimeout(
+							Promise.allSettled(
+								racing.map((version) =>
+									call(() => store.appendSnapshot(stream, version, snapshotAt(version), racePool)),
+								),
+							),
+							'Concurrent appends',
+						);
+
+						// Every append that failed lost the race with a version conflict
+						const otherFailures = results.flatMap((result) =>
+							result.status === 'rejected' &&
+							!isEventSourcingError(result.reason, EventSourcingErrorCode.SnapshotStoreVersionConflict)
+								? [String(result.reason)]
+								: [],
+						);
+						expect(otherFailures).toEqual([]);
+						const appended = racing.filter((_, writer) => results[writer].status === 'fulfilled');
+						expect(appended.length, 'the number of appends that succeeded').toBeGreaterThan(0);
+
+						// Exactly the snapshots of the appends that succeeded are stored
+						const stored = [...(seeded ? [seed] : []), ...appended].sort((a, b) => a - b);
+						expect((await drain(store.getSnapshots(stream, { pool: racePool }))).map(versionOf)).toEqual(stored);
+
+						const highest = Math.max(...appended);
+						await expectSingleLatest(stream, highest, racePool);
+
+						// The next version is accepted, and becomes the only latest snapshot
+						await call(() => store.appendSnapshot(stream, highest + 1, snapshotAt(highest + 1), racePool));
+						await expectSingleLatest(stream, highest + 1, racePool);
+					},
+				);
+			}
 		});
 
 		describe('latest snapshots of an aggregate', () => {
@@ -597,7 +711,7 @@ export const describeSnapshotStoreConformance = (
 				expect(limited.map((batch) => batch.length)).toEqual([3, 2]);
 			});
 
-			test('aggregate-order', 'reads the streams in descending order of their id', async () => {
+			test('aggregate-order', 'reads the streams in descending binary order of their id', async () => {
 				const envelopes = await drain(readLatestOfAggregate(ConformanceLedger));
 				expect(envelopes.map(({ metadata }) => metadata.aggregateId)).toEqual(ledgerIdsDescending);
 
@@ -607,22 +721,67 @@ export const describeSnapshotStoreConformance = (
 
 			test(
 				'aggregate-cursor-paging',
-				'pages through the streams with the aggregateId of the last snapshot as an exclusive cursor',
+				'pages through the streams in descending binary order, with the aggregateId of the last snapshot as an exclusive cursor',
 				async () => {
+					const cursorPool = await ensureCasePool('cursor');
+					// Ids that differ in their first character only, in upper and lower case
+					const suffix = randomUUID().slice(1);
+					const ids = CURSOR_ID_PREFIXES.map((prefix) => `${prefix}${suffix}`);
+					for (const id of ids) {
+						const stream = SnapshotStream.for(ConformanceCursor, ConformanceId.from(id));
+						for (const version of [1, 2]) {
+							await call(() => store.appendSnapshot(stream, version, snapshotAt(version, { id }), cursorPool));
+						}
+					}
+					// Streams of other aggregates in the same pool, which no page may hold, with or without a cursor. Their
+					// 'latest' keys sort before ('conformance-audit') and after ('conformance-ledger') the keys of the cursor
+					// streams, and their id sorts between the cursor ids
+					for (const aggregate of [ConformanceAudit, ConformanceLedger]) {
+						const stream = SnapshotStream.for(aggregate, ConformanceId.from(`c${suffix}`));
+						await call(() => store.appendSnapshot(stream, 1, snapshotAt(1), cursorPool));
+					}
+					const idsDescending = descendingBinary(ids);
+					expect(idsDescending.map((id) => id[0])).toEqual(['f', 'b', 'a', 'F', 'B', 'A', '0']);
+
+					const readAfter = (aggregateId: string | undefined, limit?: number) =>
+						drain(
+							store.getLastEnvelopesForAggregate<ConformanceCursor>(ConformanceCursor, {
+								pool: cursorPool,
+								aggregateId,
+								limit,
+							}),
+						);
+
 					const pages: string[][] = [];
 					let cursor: string | undefined;
-					for (let page = 0; page <= ledgerIds.length; page++) {
-						const envelopes = await drain(readLatestOfAggregate(ConformanceLedger, { limit: 3, aggregateId: cursor }));
+					for (let page = 0; page <= ids.length; page++) {
+						const envelopes = await readAfter(cursor, 3);
 						if (envelopes.length === 0) {
 							break;
 						}
 						pages.push(envelopes.map(({ metadata }) => metadata.aggregateId));
 						cursor = envelopes[envelopes.length - 1].metadata.aggregateId;
+
+						// Only the latest snapshot of every stream
+						for (const { payload, metadata } of envelopes) {
+							expect(metadata.version).toBe(2);
+							expect(payload).toStrictEqual(snapshotAt(2, { id: metadata.aggregateId }));
+						}
 					}
 
-					// Disjoint pages that together hold every stream once
+					// Disjoint pages that together hold every stream once, in binary order: uppercase before lowercase
 					expect(pages.map((page) => page.length)).toEqual([3, 3, 1]);
-					expect(pages.flat()).toEqual(ledgerIdsDescending);
+					expect(pages.flat()).toEqual(idsDescending);
+
+					// A cursor needn't be the id of a stream: the streams whose id comes after it are read
+					const after = (prefix: string) => idsDescending.filter((id) => id < `${prefix}${suffix}`);
+					for (const prefix of ['c', 'C', 'a', 'A', '1', '0', 'g']) {
+						const envelopes = await readAfter(`${prefix}${suffix}`);
+						expect(
+							envelopes.map(({ metadata }) => metadata.aggregateId),
+							`the streams after the cursor ${prefix}${suffix}`,
+						).toEqual(after(prefix));
+					}
 				},
 			);
 		});

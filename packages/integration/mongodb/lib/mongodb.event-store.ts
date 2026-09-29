@@ -57,7 +57,7 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 
 			return collection;
 		} catch (error) {
-			throw new EventStoreCollectionCreationException(collection, error);
+			throw new EventStoreCollectionCreationException({ collection }, { cause: error });
 		}
 	}
 
@@ -110,7 +110,7 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 		);
 
 		if (!entity) {
-			throw new EventNotFoundException(streamId, version);
+			throw new EventNotFoundException({ streamId, version, pool });
 		}
 
 		return this.eventMap.deserializeEvent(entity.event, entity.payload);
@@ -123,6 +123,8 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 		pool?: IEventPool,
 	): Promise<EventEnvelope[]> {
 		const collection = EventCollection.get(pool);
+		// Set once the insert was sent: it is ordered but not atomic, so a failure may have stored some of the events
+		let writing = false;
 
 		try {
 			const currentVersionResult = await this.database
@@ -137,7 +139,12 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 
 			// Step 2: Check if the aggregateVersion is valid
 			if (aggregateVersion <= currentVersion) {
-				throw new EventStoreVersionConflictException(stream, aggregateVersion, currentVersion);
+				throw new EventStoreVersionConflictException({
+					stream,
+					expectedVersion: aggregateVersion - events.length,
+					actualVersion: currentVersion,
+					pool,
+				});
 			}
 
 			let version = aggregateVersion - events.length + 1;
@@ -175,29 +182,48 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 			});
 
 			const eventCollection = this.database.collection<MongoDBEventEntity>(collection);
+			writing = true;
 			try {
 				await eventCollection.insertMany(entities);
 			} catch (error) {
 				if (isDuplicateKeyError(error)) {
 					// The insert is ordered and not atomic: take back the events that made it in before the conflict
-					await this.discardInsertedEvents(eventCollection, entities, error);
+					const cleanupError = await this.discardInsertedEvents(eventCollection, entities, error);
+					if (cleanupError !== undefined) {
+						// A conflict promises that nothing was stored, but a part of the events stays behind
+						throw new EventStorePersistenceException(
+							{ collection, outcome: 'unknown' },
+							{
+								cause: new AggregateError(
+									[error, cleanupError],
+									'The append lost a race on the unique key, and the events it stored before could not be removed',
+								),
+							},
+						);
+					}
 				}
 				throw error;
 			}
 
 			return envelopes;
 		} catch (error) {
-			if (error instanceof EventStoreVersionConflictException) {
+			if (error instanceof EventStoreVersionConflictException || error instanceof EventStorePersistenceException) {
 				throw error;
 			}
 
 			// A concurrent writer stored the same (streamId, version) between our check and our insert.
 			if (isDuplicateKeyError(error)) {
-				const latestVersion = await this.getLatestVersion(collection, stream, aggregateVersion - events.length);
-				throw new EventStoreVersionConflictException(stream, aggregateVersion, latestVersion, error);
+				const latestVersion = await this.getLatestVersion(collection, stream);
+				throw new EventStoreVersionConflictException(
+					{ stream, expectedVersion: aggregateVersion - events.length, actualVersion: latestVersion, pool },
+					{ cause: error },
+				);
 			}
 
-			throw new EventStorePersistenceException(collection, error);
+			throw new EventStorePersistenceException(
+				{ collection, outcome: writing ? 'unknown' : 'not-persisted' },
+				{ cause: error },
+			);
 		}
 	}
 
@@ -232,7 +258,7 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 			);
 
 		if (!entity) {
-			throw new EventNotFoundException(streamId, version);
+			throw new EventNotFoundException({ streamId, version, pool });
 		}
 
 		return EventEnvelope.from(entity.event, entity.payload, {
@@ -357,33 +383,30 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 
 	/**
 	 * Removes the events of a failed ordered `insertMany` that were already stored.
-	 * Only events that this very call inserted are removed. This is a best effort clean-up.
+	 * Only events that this very call inserted are removed. Resolves with the error of a failed clean-up, if any.
 	 */
 	private async discardInsertedEvents(
 		eventCollection: Collection<MongoDBEventEntity>,
 		entities: MongoDBEventEntity[],
 		error: unknown,
-	): Promise<void> {
+	): Promise<unknown> {
 		const { insertedCount } = error as { insertedCount?: number };
 		if (!insertedCount) {
-			return;
+			return undefined;
 		}
 
 		try {
 			await eventCollection.deleteMany({ _id: { $in: entities.slice(0, insertedCount).map(({ _id }) => _id) } });
+			return undefined;
 		} catch (cleanupError) {
-			this.logger.error(`Failed to remove the events of a conflicting append: ${cleanupError.message}`);
+			return cleanupError ?? new Error('The clean-up failed without an error');
 		}
 	}
 
 	/**
 	 * Best effort lookup of the latest version of a stream, used to report a conflict.
 	 */
-	private async getLatestVersion(
-		collection: IEventCollection,
-		{ streamId }: EventStream,
-		fallback: number,
-	): Promise<number> {
+	private async getLatestVersion(collection: IEventCollection, { streamId }: EventStream): Promise<number | undefined> {
 		try {
 			const [latest] = await this.database
 				.collection<MongoDBEventEntity>(collection)
@@ -392,9 +415,9 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 				.limit(1)
 				.project({ version: 1 })
 				.toArray();
-			return latest?.version ?? fallback;
+			return latest?.version;
 		} catch {
-			return fallback;
+			return undefined;
 		}
 	}
 }

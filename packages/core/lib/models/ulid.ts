@@ -8,7 +8,7 @@ export class ULID extends Id {
 	protected constructor(id: string) {
 		const format = /^[0-9a-z]{26}$/gi;
 		if (!format.test(id)) {
-			throw InvalidIdException.becauseInvalid(id);
+			throw new InvalidIdException({ value: id, idType: new.target.name });
 		}
 		super(id);
 	}
@@ -20,7 +20,7 @@ export class ULID extends Id {
 
 	public static from(id: string): ULID {
 		if (!id) {
-			throw InvalidIdException.becauseEmpty();
+			throw new InvalidIdException({ value: id, idType: ULID.name });
 		}
 		return new ULID(id);
 	}

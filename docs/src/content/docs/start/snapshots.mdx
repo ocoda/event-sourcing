@@ -16,7 +16,7 @@ The base class provides the following methods:
 - `save(id: Id, aggregate: A, pool?: ISnapshotPool): Promise<void>`: Saves a snapshot of the aggregate when one is due, see [when snapshots are taken](#when-snapshots-are-taken).
 - `load(id: Id, pool?: ISnapshotPool): Promise<A>`: Loads the latest snapshot of the aggregate or returns a blank aggregate.
 - `loadMany(ids: Id[], pool?: ISnapshotPool): Promise<A[]>`: Loads the latest snapshots of multiple aggregates.
-- `*loadAll(filter?: { aggregateId?: Id; limit?: number; pool?: string }): AsyncGenerator<SnapshotEnvelope<A>[]>`: Search all latest snapshots from the store. Returns an async iterator.
+- `*loadAll(filter?: { aggregateId?: Id; limit?: number; pool?: string }): AsyncGenerator<SnapshotEnvelope<A>[]>`: Reads the latest snapshot of every aggregate, in descending binary order of their ids, as an async iterator of batches. `aggregateId` is an exclusive cursor: pass the id of the last aggregate of a page to read the next page (see [paging](/under-the-hood/snapshot-store#paging-through-an-aggregate)).
 
 The two methods you will need to implement are **`serialize`** and **`deserialize`**.
 

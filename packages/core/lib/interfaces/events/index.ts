@@ -1,3 +1,4 @@
+export type * from './append-options.interface.js';
 export type * from './event-bus.interface.js';
 export type * from './event-collection.type.js';
 export type * from './event-envelope-metadata.interface.js';
@@ -9,8 +10,11 @@ export type * from './event-publisher-metadata.interface.js';
 export type * from './event-publisher.interface.js';
 export type * from './event-serializer-metadata.interface.js';
 export type * from './event-serializer.interface.js';
+export type * from './event-store-capabilities.interface.js';
 export type * from './event-store-config.interface.js';
+export type * from './event-store-context.interface.js';
 export type * from './event-store.interface.js';
 export type * from './event-subscriber-metadata.interface.js';
 export type * from './event-subscriber.interface.js';
 export type * from './event.interface.js';
+export type * from './persist-outcome.type.js';

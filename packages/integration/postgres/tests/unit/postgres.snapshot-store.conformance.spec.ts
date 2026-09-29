@@ -1,19 +1,12 @@
 import { PostgresSnapshotStore } from '@ocoda/event-sourcing-postgres';
 import { describeSnapshotStoreConformance } from '@ocoda/event-sourcing-testing/conformance';
 import { escapeIdentifier } from 'pg';
+import { createSnapshotStore } from '../support/stores.js';
 
 describeSnapshotStoreConformance(
 	PostgresSnapshotStore.name,
 	async () => {
-		const store = new PostgresSnapshotStore({
-			driver: undefined as never,
-			host: '127.0.0.1',
-			port: 5432,
-			user: 'postgres',
-			password: 'postgres',
-			database: 'postgres',
-			application_name: 'postgres-snapshot-store-conformance',
-		});
+		const store = createSnapshotStore({ application_name: 'postgres-snapshot-store-conformance' });
 		await store.connect();
 
 		return {
@@ -28,10 +21,11 @@ describeSnapshotStoreConformance(
 	},
 	{
 		skip: {
-			// TODO: getLastEnvelopesForAggregate() compares the raw aggregateId with the 'latest#<streamId>' keys
-			// (`latest >= $2`), which every key passes, so the filter is a no-op. Making it an exclusive cursor changes
-			// what the filter returns, which needs its own change (together with the other stores).
-			'aggregate-cursor-paging': 'the aggregateId filter is not a cursor, so every page repeats the first one',
+			// TODO(G-pg): getLastEnvelopesForAggregate() compares the raw aggregateId with the 'latest#<streamId>' keys
+			// (`latest >= $2`), which every key passes, so the filter is a no-op, and it orders by the collation of the
+			// database. Schema v2 makes the aggregateId an exclusive cursor in binary order.
+			'aggregate-cursor-paging':
+				'schema v2 (G): the aggregateId filter is not a cursor, so every page repeats the first one',
 		},
 	},
 );

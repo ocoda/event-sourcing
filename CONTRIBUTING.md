@@ -42,7 +42,8 @@ The repository is a pnpm + turbo monorepo:
 | `docs/`                  | the documentation site                                                       |
 | `example/`               | an example NestJS application                                                |
 | `fixtures/consumers`     | the application `pnpm test:consumers` installs the packed packages into      |
-| `scripts/`               | the package-shape checks (`check:packages`, `test:consumers`)                |
+| `fixtures/cross-version` | the 3.0.2 writer of `pnpm test:cross-version` (npm, outside the workspace)   |
+| `scripts/`               | the package-shape checks (`check:packages`, `test:consumers`) and `test:cross-version` |
 
 ## Databases for integration tests
 
@@ -50,9 +51,10 @@ Core tests need no database. Integration tests run against the services in `dock
 
 | Service              | Versions                                        |
 | -------------------- | ----------------------------------------------- |
-| `postgres`           | `postgres-13` … `postgres-17` (`postgres` is 14) |
+| `postgres`           | `postgres-13` … `postgres-18` (`postgres` is 14) |
 | `mongodb`            | `mongodb-6`, `mongodb-7`, `mongodb-8` (`mongodb` is 8) |
-| `mariadb`            | `mariadb-10` (10.11), `mariadb-11` (11.4)        |
+| MongoDB replica sets | `mongodb-6-rs`, `mongodb-7-rs`, `mongodb-8-rs` (port 27018) |
+| `mariadb`            | `mariadb-10` (10.11), `mariadb-11` (11.4), `mariadb-11-8` (11.8) |
 
 Start one and wait until it is healthy:
 
@@ -61,6 +63,23 @@ docker compose up -d --wait postgres
 ```
 
 Versions of the same database share a port, so run one version at a time.
+
+The specs connect with the settings in `packages/testing/unit/db.ts`, whose defaults match these services. Override them with `ES_TEST_PG_*`, `ES_TEST_MARIADB_*` and `ES_TEST_MONGODB_URL`, for example to use a database of your own on a shared server (the specs use fixed table names, so two runs must not share a database).
+
+The MongoDB unit, resilience and conformance specs run on a standalone server and, when `ES_TEST_MONGODB_RS_URL` is set, on a replica set too; the e2e suite runs on the standalone server only. CI runs both topologies in every MongoDB job and fails if `ES_TEST_MONGODB_RS_URL` is missing:
+
+```bash
+docker compose up -d --wait mongodb mongodb-8-rs
+ES_TEST_MONGODB_RS_URL='mongodb://localhost:27018/?replicaSet=rs0' pnpm test:cov --filter=@ocoda/event-sourcing-mongodb
+```
+
+The cross-version test checks that a driver reads what the published 3.0.2 packages wrote: the 3.0.2 writer in `fixtures/cross-version/v3` fills a schema or database of its own, then the driver's `tests/cross-version` specs read it back. CI runs it on the oldest and newest version of each database, and on PostgreSQL 17 and MariaDB 11.4. It needs npm and the same `ES_TEST_*` settings (for MariaDB also the root password, to create the database):
+
+```bash
+pnpm test:cross-version --database postgres   # or mariadb, mongodb (both topologies with ES_TEST_MONGODB_RS_URL)
+```
+
+`KEEP_XV=1` keeps the namespaces and the manifests (what 3.0.2 wrote and read back) for a look afterwards; a failed run keeps the manifests.
 
 ## Before you open a pull request
 

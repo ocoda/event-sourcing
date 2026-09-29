@@ -18,7 +18,11 @@ export const Aggregate = (options?: AggregateMetadata): ClassDecorator => {
 		const metadata: AggregateMetadata = { streamName: name.toLowerCase(), ...options };
 
 		if ((metadata.streamName?.length || 0) > 50) {
-			throw InvalidAggregateStreamNameException.becauseExceedsMaxLength(name, 50);
+			throw new InvalidAggregateStreamNameException({
+				aggregate: name,
+				streamName: metadata.streamName,
+				maxLength: 50,
+			});
 		}
 
 		Reflect.defineMetadata(AGGREGATE_METADATA, metadata, target);

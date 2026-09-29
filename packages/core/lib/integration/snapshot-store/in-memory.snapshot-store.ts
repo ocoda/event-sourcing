@@ -53,7 +53,7 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 			}
 			return collection;
 		} catch (error) {
-			throw new SnapshotStoreCollectionCreationException(collection, error);
+			throw new SnapshotStoreCollectionCreationException({ collection }, { cause: error });
 		}
 	}
 
@@ -104,11 +104,11 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 		}
 	}
 
-	getSnapshot<A extends AggregateRoot>(
+	async getSnapshot<A extends AggregateRoot>(
 		{ streamId }: SnapshotStream,
 		version: number,
 		pool?: ISnapshotPool,
-	): ISnapshot<A> {
+	): Promise<ISnapshot<A>> {
 		const collection = SnapshotCollection.get(pool);
 		const snapshotCollection = this.collections.get(collection) || [];
 
@@ -118,7 +118,7 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 		);
 
 		if (!entity) {
-			throw new SnapshotNotFoundException(streamId, version);
+			throw new SnapshotNotFoundException({ streamId, version, pool });
 		}
 
 		return entity.payload;
@@ -132,6 +132,8 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 	): Promise<SnapshotEnvelope<A>> {
 		const collection = SnapshotCollection.get(pool);
 
+		// Everything from the version check to the push runs without awaiting, so concurrent appends to a stream can't
+		// interleave: one of them wins, the others conflict, and the stream keeps a single latest snapshot.
 		try {
 			const snapshotCollection = this.collections.get(collection);
 
@@ -139,11 +141,15 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 				throw new Error('Snapshot collection not found');
 			}
 
-			const currentVersion =
-				snapshotCollection.find(({ latest }) => latest === `latest#${stream.streamId}`)?.version || 0;
+			const currentVersion = this.getLastStreamEntity(snapshotCollection, stream)?.version ?? 0;
 
 			if (aggregateVersion <= currentVersion) {
-				throw new SnapshotStoreVersionConflictException(stream, aggregateVersion, currentVersion);
+				throw new SnapshotStoreVersionConflictException({
+					stream,
+					version: aggregateVersion,
+					latestVersion: currentVersion,
+					pool,
+				});
 			}
 
 			const envelope = SnapshotEnvelope.create<A>(snapshot, {
@@ -165,53 +171,51 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 				...envelope.metadata,
 			});
 
-			return Promise.resolve(envelope);
+			return envelope;
 		} catch (error) {
-			switch (error.constructor) {
-				case SnapshotStoreVersionConflictException:
-					throw error;
-				default:
-					throw new SnapshotStorePersistenceException(collection, error);
+			if (error instanceof SnapshotStoreVersionConflictException) {
+				throw error;
 			}
+			throw new SnapshotStorePersistenceException({ collection }, { cause: error });
 		}
 	}
 
-	getLastSnapshot<A extends AggregateRoot>(stream: SnapshotStream, pool?: ISnapshotPool): ISnapshot<A> | void {
+	async getLastSnapshot<A extends AggregateRoot>(
+		stream: SnapshotStream,
+		pool?: ISnapshotPool,
+	): Promise<ISnapshot<A> | void> {
 		const collection = SnapshotCollection.get(pool);
 		const snapshotCollection = this.collections.get(collection) || [];
 
-		const [entity] = this.getLastStreamEntities<A>(snapshotCollection, [stream]);
-
-		if (entity) {
-			return entity.payload;
-		}
+		return this.getLastStreamEntity<A>(snapshotCollection, stream)?.payload;
 	}
 
-	getLastSnapshots<A extends AggregateRoot>(
+	async getLastSnapshots<A extends AggregateRoot>(
 		streams: SnapshotStream[],
 		pool?: ISnapshotPool,
-	): Map<SnapshotStream, ISnapshot<A>> {
+	): Promise<Map<SnapshotStream, ISnapshot<A>>> {
 		const collection = SnapshotCollection.get(pool);
 		const snapshotCollection = this.collections.get(collection) || [];
 
-		const entities = this.getLastStreamEntities<A>(snapshotCollection, streams);
-
-		return entities.reduce((acc, { streamId, payload }) => {
-			const stream = streams.find(({ streamId: currentStreamId }) => currentStreamId === streamId);
-
-			if (stream) {
-				acc.set(stream, payload);
+		const snapshots = new Map<SnapshotStream, ISnapshot<A>>();
+		for (const stream of streams) {
+			const entity = this.getLastStreamEntity<A>(snapshotCollection, stream);
+			if (entity) {
+				snapshots.set(stream, entity.payload);
 			}
+		}
 
-			return acc;
-		}, new Map<SnapshotStream, ISnapshot<A>>());
+		return snapshots;
 	}
 
-	getLastEnvelope<A extends AggregateRoot>(stream: SnapshotStream, pool?: ISnapshotPool): SnapshotEnvelope<A> | void {
+	async getLastEnvelope<A extends AggregateRoot>(
+		stream: SnapshotStream,
+		pool?: ISnapshotPool,
+	): Promise<SnapshotEnvelope<A> | void> {
 		const collection = SnapshotCollection.get(pool);
 		const snapshotCollection = this.collections.get(collection) || [];
 
-		const [entity] = this.getLastStreamEntities<A>(snapshotCollection, [stream]);
+		const entity = this.getLastStreamEntity<A>(snapshotCollection, stream);
 
 		if (entity) {
 			return SnapshotEnvelope.from(entity.payload, {
@@ -259,11 +263,11 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 		}
 	}
 
-	getEnvelope<A extends AggregateRoot>(
+	async getEnvelope<A extends AggregateRoot>(
 		{ streamId }: SnapshotStream,
 		version: number,
 		pool?: ISnapshotPool,
-	): SnapshotEnvelope<A> {
+	): Promise<SnapshotEnvelope<A>> {
 		const collection = SnapshotCollection.get(pool);
 		const snapshotCollection = this.collections.get(collection) || [];
 
@@ -273,7 +277,7 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 		);
 
 		if (!entity) {
-			throw new SnapshotNotFoundException(streamId, version);
+			throw new SnapshotNotFoundException({ streamId, version, pool });
 		}
 
 		return SnapshotEnvelope.from(entity.payload, {
@@ -288,7 +292,7 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 		aggregate: Type<A>,
 		filter?: ILatestSnapshotFilter,
 	): AsyncGenerator<SnapshotEnvelope<A>[]> {
-		let entities: InMemorySnapshotEntity<any>[] = [];
+		let entities: (InMemorySnapshotEntity<any> & { latest: string })[] = [];
 		const { streamName: aggregateName } = getAggregateMetadata(aggregate);
 
 		const collection = SnapshotCollection.get(filter?.pool);
@@ -296,22 +300,19 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 		const limit = filter?.limit || Number.MAX_SAFE_INTEGER;
 		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
-		const sortKey = (latest: string | null) => latest?.toLowerCase() || '';
-
-		// The latest snapshot of every stream of this aggregate, ordered by their 'latest' key (descending)
+		// The latest snapshot of every stream of this aggregate, in descending binary order of their 'latest' key. The
+		// keys only differ in the aggregate id, and compare case-sensitively, code unit by code unit.
 		entities = (this.collections.get(collection) || [])
-			.filter(({ aggregateName: name, latest }) => name === aggregateName && latest)
-			.sort((envelopeA, envelopeB) => {
-				const textA = sortKey(envelopeA.latest);
-				const textB = sortKey(envelopeB.latest);
-				return textA < textB ? -1 : textA > textB ? 1 : 0;
-			})
-			.reverse();
+			.filter(
+				(entity): entity is InMemorySnapshotEntity<any> & { latest: string } =>
+					entity.aggregateName === aggregateName && entity.latest !== null,
+			)
+			.sort(({ latest: keyA }, { latest: keyB }) => (keyA < keyB ? 1 : keyA > keyB ? -1 : 0));
 
-		// The aggregateId acts as an exclusive cursor: only return the entities that come after it in the same order
+		// The aggregateId is an exclusive cursor: only the streams that come after it in that order are read
 		if (aggregateId) {
-			const cursor = sortKey(`latest#${aggregateName}-${aggregateId}`);
-			entities = entities.filter(({ latest }) => sortKey(latest) < cursor);
+			const cursor = `latest#${aggregateName}-${aggregateId}`;
+			entities = entities.filter(({ latest }) => latest < cursor);
 		}
 
 		if (limit) {
@@ -326,39 +327,41 @@ export class InMemorySnapshotStore extends SnapshotStore<InMemorySnapshotStoreCo
 		}
 	}
 
-	getManyLastSnapshotEnvelopes<A extends AggregateRoot>(
+	async getManyLastSnapshotEnvelopes<A extends AggregateRoot>(
 		streams: SnapshotStream[],
 		pool?: ISnapshotPool,
-	): Map<SnapshotStream, SnapshotEnvelope<A>> {
+	): Promise<Map<SnapshotStream, SnapshotEnvelope<A>>> {
 		const collection = SnapshotCollection.get(pool);
 		const snapshotCollection = this.collections.get(collection) || [];
 
-		const entities = this.getLastStreamEntities<A>(snapshotCollection, streams);
-
-		return entities.reduce((acc, { streamId, payload, aggregateId, registeredOn, snapshotId, version }) => {
-			const stream = streams.find(({ streamId: currentStreamId }) => currentStreamId === streamId);
-
-			if (stream) {
-				acc.set(
+		const envelopes = new Map<SnapshotStream, SnapshotEnvelope<A>>();
+		for (const stream of streams) {
+			const entity = this.getLastStreamEntity<A>(snapshotCollection, stream);
+			if (entity) {
+				const { payload, aggregateId, registeredOn, snapshotId, version } = entity;
+				envelopes.set(
 					stream,
-					SnapshotEnvelope.from<A>(payload, {
-						aggregateId,
-						registeredOn: new Date(registeredOn),
-						snapshotId,
-						version,
-					}),
+					SnapshotEnvelope.from<A>(payload, { aggregateId, registeredOn: new Date(registeredOn), snapshotId, version }),
 				);
 			}
+		}
 
-			return acc;
-		}, new Map<SnapshotStream, SnapshotEnvelope<A>>());
+		return envelopes;
 	}
 
-	private getLastStreamEntities<A extends AggregateRoot>(
+	/**
+	 * The snapshot of the stream with the highest version, whichever snapshot carries the 'latest' key.
+	 */
+	private getLastStreamEntity<A extends AggregateRoot>(
 		collection: InMemorySnapshotEntity<any>[],
-		streams: SnapshotStream[],
-	): InMemorySnapshotEntity<A>[] {
-		const latestIds = streams.map(({ streamId }) => `latest#${streamId}`);
-		return collection.filter(({ latest }) => latestIds.includes(latest || ''));
+		{ streamId }: SnapshotStream,
+	): InMemorySnapshotEntity<A> | undefined {
+		let last: InMemorySnapshotEntity<A> | undefined;
+		for (const entity of collection) {
+			if (entity.streamId === streamId && (!last || entity.version > last.version)) {
+				last = entity;
+			}
+		}
+		return last;
 	}
 }

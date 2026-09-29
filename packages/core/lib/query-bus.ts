@@ -31,7 +31,7 @@ export class QueryBus<QueryBase extends IQuery = IQuery>
 		const handler = this.handlers.get(queryId);
 		if (!handler) {
 			const { constructor: queryType } = Object.getPrototypeOf(query);
-			throw new QueryHandlerNotFoundException(queryType);
+			throw new QueryHandlerNotFoundException({ query: queryType });
 		}
 		this._publisher.publish(query);
 		return handler.execute(query);
@@ -46,7 +46,7 @@ export class QueryBus<QueryBase extends IQuery = IQuery>
 		const { id } = getQueryMetadata(queryType);
 
 		if (!id) {
-			throw new MissingQueryMetadataException(queryType);
+			throw new MissingQueryMetadataException({ query: queryType });
 		}
 
 		return id;
@@ -62,7 +62,7 @@ export class QueryBus<QueryBase extends IQuery = IQuery>
 
 		// check
 		if (!metatype || !instance) {
-			throw new InvalidQueryHandlerException(instance);
+			throw new InvalidQueryHandlerException({ handler: instance });
 		}
 
 		// check if the handler is a query handler
@@ -70,7 +70,7 @@ export class QueryBus<QueryBase extends IQuery = IQuery>
 
 		// if not, throw an error
 		if (!query) {
-			throw new MissingQueryHandlerMetadataException(metatype);
+			throw new MissingQueryHandlerMetadataException({ handler: metatype });
 		}
 
 		// get the query id
@@ -78,7 +78,7 @@ export class QueryBus<QueryBase extends IQuery = IQuery>
 
 		// if the query id is not defined, throw an error
 		if (!id) {
-			throw new MissingQueryMetadataException(query);
+			throw new MissingQueryMetadataException({ query });
 		}
 
 		// bind the handler to the query id

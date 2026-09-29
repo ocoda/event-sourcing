@@ -4,6 +4,19 @@
 	baseBranchPatterns: ['master', '3.x'],
 	labels: ['dependencies'],
 	semanticCommits: 'enabled',
+	// The preset's list (:ignoreModulesAndTests, which this setting replaces) plus the cross-version writer: it pins the
+	// published 3.0.2 packages and their NestJS 11 peers on purpose (scripts/test-cross-version.mjs).
+	ignorePaths: [
+		'**/node_modules/**',
+		'**/bower_components/**',
+		'**/vendor/**',
+		'**/examples/**',
+		'**/__tests__/**',
+		'**/test/**',
+		'**/tests/**',
+		'**/__fixtures__/**',
+		'fixtures/cross-version/v3/**',
+	],
 	// Every update waits for approval on the Dependency Dashboard while master moves to v4;
 	// switched off for the dependency-freshness pass before 4.0.0 GA.
 	dependencyDashboard: true,

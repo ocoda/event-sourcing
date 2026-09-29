@@ -2,6 +2,7 @@ import type { ProviderWrapper } from '@ocoda/event-sourcing';
 import {
 	CommandBus,
 	CommandHandlerNotFoundException,
+	InvalidCommandHandlerException,
 	MissingCommandHandlerMetadataException,
 	MissingCommandMetadataException,
 } from '@ocoda/event-sourcing';
@@ -53,7 +54,7 @@ describe(CommandBus, () => {
 		const bus = new CommandBus();
 		const wrapper = { metatype: CommandHandlerWithMetadata, instance: undefined } as unknown as ProviderWrapper;
 
-		expect(() => bus.register([wrapper])).toThrow(TypeError);
+		expect(() => bus.register([wrapper])).toThrow(InvalidCommandHandlerException);
 	});
 
 	it('throws when registering a handler without handler metadata', () => {

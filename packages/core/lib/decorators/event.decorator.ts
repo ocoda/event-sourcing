@@ -21,7 +21,7 @@ export const Event = (name?: string): ClassDecorator => {
 		const metadata: EventMetadata = { id: randomUUID(), name: name || target.name };
 
 		if (metadata.name.length > 80) {
-			throw InvalidEventStreamNameException.becauseExceedsMaxLength(target.name, 80);
+			throw new InvalidEventStreamNameException({ event: target, maxLength: 80 });
 		}
 
 		Reflect.defineMetadata(EVENT_METADATA, metadata, target);

@@ -59,7 +59,7 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 
 			return collection;
 		} catch (error) {
-			throw new SnapshotStoreCollectionCreationException(collection, error);
+			throw new SnapshotStoreCollectionCreationException({ collection }, { cause: error });
 		}
 	}
 
@@ -120,7 +120,7 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 		);
 
 		if (!entity) {
-			throw new SnapshotNotFoundException(streamId, version);
+			throw new SnapshotNotFoundException({ streamId, version, pool });
 		}
 
 		return entity.payload;
@@ -149,7 +149,12 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 			);
 
 			if (aggregateVersion <= lastStreamEntity?.version) {
-				throw new SnapshotStoreVersionConflictException(stream, aggregateVersion, lastStreamEntity.version);
+				throw new SnapshotStoreVersionConflictException({
+					stream,
+					version: aggregateVersion,
+					latestVersion: lastStreamEntity.version,
+					pool,
+				});
 			}
 
 			if (lastStreamEntity) {
@@ -176,10 +181,13 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 			// A concurrent writer stored the same (streamId, version) between our check and our insert.
 			if (isDuplicateKeyError(error)) {
 				const latestVersion = await this.getLatestVersion(collection, stream);
-				throw new SnapshotStoreVersionConflictException(stream, aggregateVersion, latestVersion, error);
+				throw new SnapshotStoreVersionConflictException(
+					{ stream, version: aggregateVersion, latestVersion, pool },
+					{ cause: error },
+				);
 			}
 
-			throw new SnapshotStorePersistenceException(collection, error);
+			throw new SnapshotStorePersistenceException({ collection }, { cause: error });
 		}
 	}
 
@@ -289,7 +297,7 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 			);
 
 		if (!entity) {
-			throw new SnapshotNotFoundException(streamId, version);
+			throw new SnapshotNotFoundException({ streamId, version, pool });
 		}
 
 		return SnapshotEnvelope.from<A>(entity.payload, {
@@ -406,7 +414,10 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 	/**
 	 * Best effort lookup of the latest snapshot version of a stream, used to report a conflict.
 	 */
-	private async getLatestVersion(collection: ISnapshotCollection, { streamId }: SnapshotStream): Promise<number> {
+	private async getLatestVersion(
+		collection: ISnapshotCollection,
+		{ streamId }: SnapshotStream,
+	): Promise<number | undefined> {
 		try {
 			const [latest] = await this.database
 				.collection<MongoDBSnapshotEntity<AggregateRoot>>(collection)
@@ -415,9 +426,9 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 				.limit(1)
 				.project({ version: 1 })
 				.toArray();
-			return latest?.version ?? 0;
+			return latest?.version;
 		} catch {
-			return 0;
+			return undefined;
 		}
 	}
 }

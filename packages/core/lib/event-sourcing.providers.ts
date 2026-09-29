@@ -1,6 +1,7 @@
 import type { InjectionToken, OptionalFactoryDependency, Provider } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { EVENT_SOURCING_OPTIONS } from './constants.js';
+import { EventBus } from './event-bus.js';
 import { EventMap } from './event-map.js';
 import { EventStore } from './event-store.js';
 import { InMemoryEventStore, type InMemoryEventStoreConfig } from './integration/event-store/index.js';
@@ -13,14 +14,22 @@ import type {
 	SnapshotStoreConfig,
 } from './interfaces/index.js';
 import { SnapshotStore } from './snapshot-store.js';
+import { assertEventStoreImplementation } from './stores/implementation-guard.js';
+import { isLegacyEventStore } from './stores/legacy-event-store.js';
 
 export const EventStoreProvider = {
 	provide: EventStore,
-	useFactory: async (eventMap: EventMap, { eventStore }: EventSourcingModuleOptions) => {
-		const { driver, ...config } = eventStore ?? { driver: InMemoryEventStore };
-		return new driver(eventMap, config);
+	useFactory: async (eventMap: EventMap, eventBus: EventBus, { eventStore }: EventSourcingModuleOptions) => {
+		// The driver options are the rest of the config: the module handles useDefaultPool
+		const { driver, useDefaultPool: _, ...options } = eventStore ?? { driver: InMemoryEventStore };
+		const store = new driver({ eventMap, publisher: eventBus }, options);
+		// INTERIM(H): stores that still override appendEvents run on the legacy path; from 4.0 every store is checked
+		if (!isLegacyEventStore(store)) {
+			assertEventStoreImplementation(store);
+		}
+		return store;
 	},
-	inject: [EventMap, EVENT_SOURCING_OPTIONS],
+	inject: [EventMap, EventBus, EVENT_SOURCING_OPTIONS],
 };
 
 export const SnapshotStoreProvider = {

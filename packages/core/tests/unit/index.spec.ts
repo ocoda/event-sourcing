@@ -10,9 +10,10 @@ describe('public entrypoint', () => {
 	});
 
 	it('can use the exported in-memory stores as drivers', async () => {
-		const eventStore = new EventSourcing.InMemoryEventStore(new EventSourcing.EventMap(), {
-			driver: EventSourcing.InMemoryEventStore,
-		} satisfies EventSourcing.InMemoryEventStoreConfig);
+		const eventStore = new EventSourcing.InMemoryEventStore(
+			{ eventMap: new EventSourcing.EventMap(), publisher: { publishAll: async () => undefined } },
+			{ driver: EventSourcing.InMemoryEventStore } satisfies EventSourcing.InMemoryEventStoreConfig,
+		);
 		const snapshotStore = new EventSourcing.InMemorySnapshotStore({
 			driver: EventSourcing.InMemorySnapshotStore,
 		} satisfies EventSourcing.InMemorySnapshotStoreConfig);
@@ -22,6 +23,31 @@ describe('public entrypoint', () => {
 	});
 
 	it('does not expose internal helpers', () => {
-		expect(Object.keys(EventSourcing).filter((key) => /CommittedVersions|isSnapshotDue/.test(key))).toEqual([]);
+		expect(
+			Object.keys(EventSourcing).filter((key) =>
+				/CommittedVersions|isSnapshotDue|brandEventSourcingError|nameOf|describeValue|EVENT_SOURCING_ERROR|^validate/.test(
+					key,
+				),
+			),
+		).toEqual([]);
+	});
+
+	it('exports the helpers and constants of the store contract', () => {
+		expect(EventSourcing.ANY_MAX_ATTEMPTS).toBe(16);
+		expect(EventSourcing.EVENT_STORE_LIMITS.headersBytes).toBe(8192);
+		expect(EventSourcing.DEFAULT_EVENT_STORE_CAPABILITIES.globalOrder).toBe('best-effort');
+		expect(EventSourcing.resolveCapabilities).toEqual(expect.any(Function));
+		expect(EventSourcing.toPosition).toEqual(expect.any(Function));
+		expect(EventSourcing.assertEventStoreImplementation).toEqual(expect.any(Function));
+	});
+
+	it('keeps the internals of the store template out of the exports', () => {
+		expect(
+			Object.keys(EventSourcing).filter((key) =>
+				/normalizeAppendArguments|LegacyEventStore|overriddenTemplateMethods|EVENT_STORE_BASE|PositionalAppend/.test(
+					key,
+				),
+			),
+		).toEqual([]);
 	});
 });

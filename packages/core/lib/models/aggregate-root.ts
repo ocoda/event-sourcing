@@ -36,7 +36,7 @@ export abstract class AggregateRoot {
 		const { method } = getEventHandlerMetadata(this, eventClass);
 
 		if (!method) {
-			throw new MissingEventHandlerException(this.constructor as Type<AggregateRoot>, eventClass);
+			throw new MissingEventHandlerException({ aggregate: this.constructor, event: eventClass });
 		}
 
 		return this[method];

@@ -11,6 +11,7 @@
 		"test": "turbo test",
 		"test:cov": "turbo test:cov",
 		"test:consumers": "turbo build --filter=\"./packages/**\" --output-logs=errors-only && node scripts/test-consumers.mjs",
+		"test:cross-version": "node scripts/test-cross-version.mjs",
 		"ci": "turbo ci",
 		"lint": "oxlint",
 		"typecheck": "turbo typecheck",

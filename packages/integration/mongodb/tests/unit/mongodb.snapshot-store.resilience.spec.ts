@@ -8,26 +8,23 @@ import {
 	SnapshotStream,
 } from '@ocoda/event-sourcing';
 import { type MongoDBSnapshotEntity, MongoDBSnapshotStore } from '@ocoda/event-sourcing-mongodb';
-import { Account, AccountId } from '@ocoda/event-sourcing-testing/unit';
+import { Account, AccountId, mongodbTestTopologies } from '@ocoda/event-sourcing-testing/unit';
 import { AbstractCursor, Collection, type Db, type MongoClient } from 'mongodb';
+import { createSnapshotStore } from '../support/stores.js';
 
 // Pool exhaustion and concurrency scenarios: allow slow tests and setup/teardown hooks.
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
-type Config = ConstructorParameters<typeof MongoDBSnapshotStore>[0];
-
-const config = () => ({ url: 'mongodb://localhost:27017' }) as unknown as Config;
-
 const uniquePool = (name: string): ISnapshotPool => `mongofix-${name}-${randomBytes(4).toString('hex')}`;
 
-describe(`${MongoDBSnapshotStore.name} resilience`, () => {
+describe.each(mongodbTestTopologies())(`${MongoDBSnapshotStore.name} resilience ($name)`, ({ url }) => {
 	let snapshotStore: MongoDBSnapshotStore;
 	let client: MongoClient;
 	let database: Db;
 	const pools: ISnapshotPool[] = [];
 
 	const newStore = async () => {
-		const store = new MongoDBSnapshotStore(config());
+		const store = createSnapshotStore({ url });
 		await store.connect();
 		return store;
 	};
@@ -250,7 +247,13 @@ describe(`${MongoDBSnapshotStore.name} resilience`, () => {
 				expect(rejected).toHaveLength(WRITERS - 1);
 				for (const { reason } of rejected) {
 					expect(reason).toBeInstanceOf(SnapshotStoreVersionConflictException);
-					expect(reason.message).toBe(new SnapshotStoreVersionConflictException(stream, version, version).message);
+					expect(reason).toMatchObject({
+						streamId: stream.streamId,
+						aggregateId: stream.aggregateId,
+						pool: snapshotPool,
+						version,
+						latestVersion: version,
+					});
 				}
 
 				const entities = await database

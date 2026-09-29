@@ -20,6 +20,12 @@ describe(Id, () => {
 
 	it('should throw when trying to create an id from an undefined variable', () => {
 		const id = undefined as unknown as string;
-		expect(() => DeviceId.from(id)).toThrow(InvalidIdException.becauseEmpty());
+		// idType names the id class that rejected the value
+		expect(() => DeviceId.from(id)).toThrow(new InvalidIdException({ value: id, idType: 'Id' }));
+	});
+
+	it('should throw an InvalidIdException when from() is called detached', () => {
+		expect(() => [''].map(DeviceId.from)).toThrow(InvalidIdException);
+		expect(['123-abc'].map(DeviceId.from)[0].value).toBe('123-abc');
 	});
 });

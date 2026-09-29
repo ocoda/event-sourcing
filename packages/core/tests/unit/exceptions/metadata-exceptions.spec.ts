@@ -6,19 +6,19 @@ import {
 
 describe('metadata exceptions', () => {
 	it('formats MissingEventPublisherMetadataException', () => {
-		const exception = new MissingEventPublisherMetadataException(class ExamplePublisher {} as any);
+		const exception = new MissingEventPublisherMetadataException({ publisher: class ExamplePublisher {} });
 
 		expect(exception.message).toContain('ExamplePublisher');
 	});
 
 	it('formats MissingEventSerializerMetadataException', () => {
-		const exception = new MissingEventSerializerMetadataException(class ExampleSerializer {} as any);
+		const exception = new MissingEventSerializerMetadataException({ serializer: class ExampleSerializer {} });
 
 		expect(exception.message).toContain('ExampleSerializer');
 	});
 
 	it('formats MissingSnapshotMetadataException', () => {
-		const exception = new MissingSnapshotMetadataException(class ExampleSnapshotRepository {} as any);
+		const exception = new MissingSnapshotMetadataException({ repository: class ExampleSnapshotRepository {} });
 
 		expect(exception.message).toContain('ExampleSnapshotRepository');
 	});

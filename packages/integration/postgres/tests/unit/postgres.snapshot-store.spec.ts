@@ -19,6 +19,7 @@ import {
 	Account,
 	AccountId,
 	customerSnapshot,
+	postgresTestConfig,
 	snapshotEnvelopesAccountA,
 	snapshotEnvelopesAccountB,
 	snapshotStreamAccountA,
@@ -28,13 +29,10 @@ import {
 	snapshotsAccountB,
 } from '@ocoda/event-sourcing-testing/unit';
 import { Client, type Pool, escapeIdentifier } from 'pg';
+import { createSnapshotStore } from '../support/stores.js';
 
 const connectionOptions = {
-	host: '127.0.0.1',
-	port: 5432,
-	user: 'postgres',
-	password: 'postgres',
-	database: 'postgres',
+	...postgresTestConfig(),
 	application_name: 'postgres-snapshot-store-spec',
 };
 
@@ -46,7 +44,7 @@ describe(PostgresSnapshotStore, () => {
 	let pool: Pool;
 
 	beforeAll(async () => {
-		snapshotStore = new PostgresSnapshotStore({ driver: undefined as never, ...connectionOptions });
+		snapshotStore = createSnapshotStore(connectionOptions);
 
 		await snapshotStore.connect();
 		await snapshotStore.ensureCollection();
@@ -115,11 +113,21 @@ describe(PostgresSnapshotStore, () => {
 		await expect(
 			snapshotStore.appendSnapshot(snapshotStreamAccountA, beforeLastVersion, lastSnapshotEnvelope),
 		).rejects.toThrow(
-			new SnapshotStoreVersionConflictException(snapshotStreamAccountA, beforeLastVersion, lastVersion),
+			new SnapshotStoreVersionConflictException({
+				stream: snapshotStreamAccountA,
+				version: beforeLastVersion,
+				latestVersion: lastVersion,
+			}),
 		);
 		await expect(
 			snapshotStore.appendSnapshot(snapshotStreamAccountA, lastVersion, lastSnapshotEnvelope),
-		).rejects.toThrow(new SnapshotStoreVersionConflictException(snapshotStreamAccountA, lastVersion, lastVersion));
+		).rejects.toThrow(
+			new SnapshotStoreVersionConflictException({
+				stream: snapshotStreamAccountA,
+				version: lastVersion,
+				latestVersion: lastVersion,
+			}),
+		);
 	});
 
 	it("should throw when a snapshot envelope can't be appended", async () => {
@@ -157,7 +165,7 @@ describe(PostgresSnapshotStore, () => {
 	it("should throw when a snapshot isn't found in a specified stream", async () => {
 		const stream = SnapshotStream.for(Account, AccountId.generate());
 		await expect(snapshotStore.getSnapshot(stream, 20)).rejects.toThrow(
-			new SnapshotNotFoundException(stream.streamId, 20),
+			new SnapshotNotFoundException({ streamId: stream.streamId, version: 20 }),
 		);
 	});
 
@@ -377,7 +385,7 @@ describe(PostgresSnapshotStore, () => {
 		afterEach(() => vi.restoreAllMocks());
 
 		it('should fail to connect when the database is unreachable', async () => {
-			const unreachableStore = new PostgresSnapshotStore({ driver: undefined as never, ...connectionOptions, port: 1 });
+			const unreachableStore = createSnapshotStore({ ...connectionOptions, port: 1 });
 
 			await expect(unreachableStore.connect()).rejects.toMatchObject({ code: 'ECONNREFUSED' });
 			await unreachableStore.disconnect();
@@ -390,7 +398,7 @@ describe(PostgresSnapshotStore, () => {
 			await Promise.all([pool.query('SELECT pg_sleep(0.05)'), pool.query('SELECT pg_sleep(0.05)')]);
 			const { rows } = await pool.query<{ terminated: boolean }>(
 				`SELECT pg_terminate_backend(pid) AS terminated FROM pg_stat_activity
-				WHERE application_name = $1 AND state = 'idle' AND pid <> pg_backend_pid()`,
+				WHERE datname = current_database() AND application_name = $1 AND state = 'idle' AND pid <> pg_backend_pid()`,
 				[connectionOptions.application_name],
 			);
 			expect(rows.length).toBeGreaterThan(0);
@@ -599,7 +607,7 @@ describe(PostgresSnapshotStore, () => {
 			let smallPool: Pool;
 
 			beforeEach(async () => {
-				smallStore = new PostgresSnapshotStore({ driver: undefined as never, ...connectionOptions, max: 2 });
+				smallStore = createSnapshotStore({ ...connectionOptions, max: 2 });
 				await smallStore.connect();
 				smallPool = smallStore['pool'];
 			});
@@ -737,7 +745,7 @@ describe(PostgresSnapshotStore, () => {
 			}
 
 			await expect(snapshotStore.appendSnapshot(stream, 20, { balance: 20 }, appendPool)).rejects.toThrow(
-				new SnapshotStoreVersionConflictException(stream, 20, 20),
+				new SnapshotStoreVersionConflictException({ stream, version: 20, latestVersion: 20, pool: appendPool }),
 			);
 			await snapshotStore.appendSnapshot(stream, 30, { balance: 30 }, appendPool);
 
@@ -768,7 +776,13 @@ describe(PostgresSnapshotStore, () => {
 
 				const error = await append;
 				expect(error).toBeInstanceOf(SnapshotStoreVersionConflictException);
-				expect(error).toEqual(new SnapshotStoreVersionConflictException(stream, 10, 10));
+				expect(error).toMatchObject({
+					streamId: stream.streamId,
+					pool: appendPool,
+					version: 10,
+					latestVersion: 10,
+					cause: expect.objectContaining({ code: '23505' }),
+				});
 				expect(await getStoredVersions(appendCollection, stream)).toEqual({ versions: [10], latest: [10] });
 			} finally {
 				await blocker.end();

@@ -4,6 +4,7 @@ import {
 	type EventEnvelope,
 	EventId,
 	EventStorePersistenceException,
+	EventSourcingErrorCode,
 	EventStoreVersionConflictException,
 	EventStream,
 	type IEventPool,
@@ -19,22 +20,10 @@ import {
 } from '@ocoda/event-sourcing-testing/unit';
 import type { Pool, PoolConnection } from 'mariadb';
 import type { MockInstance } from 'vitest';
+import { createEventStore } from '../support/stores.js';
 
 // Pool exhaustion and concurrency scenarios: allow slow tests and setup/teardown hooks.
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
-
-type Config = ConstructorParameters<typeof MariaDBEventStore>[1];
-
-const config = (overrides: Record<string, unknown> = {}) =>
-	({
-		driver: undefined,
-		host: '127.0.0.1',
-		port: 3306,
-		user: 'mariadb',
-		password: 'mariadb',
-		database: 'mariadb',
-		...overrides,
-	}) as unknown as Config;
 
 const uniquePool = (name: string): IEventPool => `mdbfix-${name}-${randomBytes(4).toString('hex')}`;
 
@@ -100,8 +89,7 @@ describe(`${MariaDBEventStore.name} resilience`, () => {
 	};
 
 	beforeAll(async () => {
-		eventStore = new MariaDBEventStore(eventMap, config({ connectionLimit: POOL_SIZE, acquireTimeout: 3_000 }));
-		eventStore.publish = vi.fn(async () => Promise.resolve());
+		({ store: eventStore } = createEventStore({ connectionLimit: POOL_SIZE, acquireTimeout: 3_000 }, eventMap));
 		await eventStore.connect();
 
 		pool = eventStore['pool'];
@@ -224,16 +212,80 @@ describe(`${MariaDBEventStore.name} resilience`, () => {
 
 	describe('appending', () => {
 		it('should append nothing and throw a persistence exception when the collection does not exist', async () => {
-			await expect(eventStore.appendEvents(newStream(), 1, events.slice(0, 1), uniquePool('missing'))).rejects.toThrow(
-				EventStorePersistenceException,
-			);
+			await expect(
+				eventStore.appendEvents(newStream(), 1, events.slice(0, 1), uniquePool('missing')),
+			).rejects.toMatchObject({
+				name: EventStorePersistenceException.name,
+				outcome: 'not-persisted',
+				cause: expect.any(Error),
+			});
 			expect(pool.activeConnections()).toBe(0);
 		});
 
 		it('should throw a persistence exception and release the connection when the collection name cannot be escaped', async () => {
-			await expect(eventStore.appendEvents(newStream(), 1, events.slice(0, 1), 'nul\u0000pool')).rejects.toThrow(
-				EventStorePersistenceException,
-			);
+			await expect(eventStore.appendEvents(newStream(), 1, events.slice(0, 1), 'nul\u0000pool')).rejects.toMatchObject({
+				name: EventStorePersistenceException.name,
+				outcome: 'not-persisted',
+				cause: expect.any(Error),
+			});
+			expect(pool.activeConnections()).toBe(0);
+		});
+
+		/** Makes the next connection the store takes from the pool fail the given method with the given error. */
+		const failNextConnection = (method: 'batch' | 'commit', error: Error) => {
+			const getConnection = pool.getConnection.bind(pool);
+			const failures: MockInstance[] = [];
+			const getConnectionSpy = vi.spyOn(pool, 'getConnection').mockImplementationOnce(async () => {
+				const connection: PoolConnection = await getConnection();
+				failures.push(vi.spyOn(connection, method).mockRejectedValue(error));
+				return connection;
+			});
+			return {
+				failures,
+				restore: () => {
+					getConnectionSpy.mockRestore();
+					for (const failure of failures) {
+						failure.mockRestore();
+					}
+				},
+			};
+		};
+
+		it("should report a 'not-persisted' outcome when the insert fails before the commit", async () => {
+			const eventPool = await newPool('batch-fails');
+			const stream = newStream();
+			const cause = new Error('batch failure');
+			const { failures, restore } = failNextConnection('batch', cause);
+
+			try {
+				await expect(eventStore.appendEvents(stream, 1, events.slice(0, 1), eventPool)).rejects.toMatchObject({
+					code: EventSourcingErrorCode.EventStorePersistence,
+					collection: EventCollection.get(eventPool),
+					outcome: 'not-persisted',
+					cause,
+				});
+				expect(failures[0]).toHaveBeenCalled();
+			} finally {
+				restore();
+			}
+			expect(pool.activeConnections()).toBe(0);
+		});
+
+		it("should report an 'unknown' outcome when the commit fails", async () => {
+			const eventPool = await newPool('commit-fails');
+			const cause = new Error('commit failure');
+			const { failures, restore } = failNextConnection('commit', cause);
+
+			try {
+				await expect(eventStore.appendEvents(newStream(), 1, events.slice(0, 1), eventPool)).rejects.toMatchObject({
+					code: EventSourcingErrorCode.EventStorePersistence,
+					outcome: 'unknown',
+					cause,
+				});
+				expect(failures[0]).toHaveBeenCalled();
+			} finally {
+				restore();
+			}
 			expect(pool.activeConnections()).toBe(0);
 		});
 
@@ -247,9 +299,12 @@ describe(`${MariaDBEventStore.name} resilience`, () => {
 			});
 
 			try {
-				await expect(
-					eventStore.appendEvents(newStream(), 1, events.slice(0, 1), uniquePool('missing')),
-				).rejects.toThrow(EventStorePersistenceException);
+				const error = await eventStore
+					.appendEvents(newStream(), 1, events.slice(0, 1), uniquePool('missing'))
+					.catch((e: unknown) => e);
+				expect(error).toBeInstanceOf(EventStorePersistenceException);
+				expect((error as Error).cause).toBeInstanceOf(Error);
+				expect(((error as Error).cause as Error).message).not.toBe('rollback failure');
 				expect(rollbacks).toHaveLength(1);
 				expect(rollbacks[0]).toHaveBeenCalled();
 			} finally {
@@ -287,9 +342,14 @@ describe(`${MariaDBEventStore.name} resilience`, () => {
 				expect(rejected).toHaveLength(WRITERS - 1);
 				for (const { reason } of rejected) {
 					expect(reason).toBeInstanceOf(EventStoreVersionConflictException);
-					expect(reason.message).toBe(
-						new EventStoreVersionConflictException(stream, events.length, events.length).message,
-					);
+					expect(reason).toMatchObject({
+						code: EventSourcingErrorCode.EventStoreVersionConflict,
+						streamId: stream.streamId,
+						aggregateId: stream.aggregateId,
+						pool: eventPool,
+						expectedVersion: 0,
+						actualVersion: events.length,
+					});
 				}
 
 				const entities = await pool.query<MariaDBEventEntity[]>(
@@ -300,8 +360,7 @@ describe(`${MariaDBEventStore.name} resilience`, () => {
 			};
 
 			it('should let exactly one writer win and report a version conflict to the others', async () => {
-				const concurrentStore = new MariaDBEventStore(eventMap, config({ connectionLimit: WRITERS + 2 }));
-				concurrentStore.publish = vi.fn(async () => Promise.resolve());
+				const { store: concurrentStore } = createEventStore({ connectionLimit: WRITERS + 2 }, eventMap);
 				await concurrentStore.connect();
 
 				try {
@@ -316,8 +375,7 @@ describe(`${MariaDBEventStore.name} resilience`, () => {
 			});
 
 			it('should report a version conflict when the race is lost after the version check passed', async () => {
-				const concurrentStore = new MariaDBEventStore(eventMap, config({ connectionLimit: WRITERS + 2 }));
-				concurrentStore.publish = vi.fn(async () => Promise.resolve());
+				const { store: concurrentStore } = createEventStore({ connectionLimit: WRITERS + 2 }, eventMap);
 				await concurrentStore.connect();
 
 				const concurrentPool: Pool = concurrentStore['pool'];

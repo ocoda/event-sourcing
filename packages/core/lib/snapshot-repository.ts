@@ -1,4 +1,4 @@
-import { Inject, NotImplementedException, type Type } from '@nestjs/common';
+import { Inject, type Type } from '@nestjs/common';
 import { MissingAggregateMetadataException, MissingSnapshotMetadataException } from './exceptions/index.js';
 import { getAggregateMetadata, getSnapshotMetadata } from './helpers/index.js';
 import type { ISnapshot } from './interfaces/aggregate/snapshot.interface.js';
@@ -35,13 +35,13 @@ export abstract class SnapshotRepository<A extends AggregateRoot = AggregateRoot
 		const { aggregate, interval } = getSnapshotMetadata<A>(this.constructor as Type<ISnapshotRepository<A>>);
 
 		if (!(aggregate && interval)) {
-			throw new MissingSnapshotMetadataException(this.constructor);
+			throw new MissingSnapshotMetadataException({ repository: this.constructor });
 		}
 
 		const { streamName } = getAggregateMetadata(aggregate);
 
 		if (!streamName) {
-			throw new MissingAggregateMetadataException(aggregate);
+			throw new MissingAggregateMetadataException({ aggregate });
 		}
 
 		this.aggregate = aggregate;
@@ -71,10 +71,6 @@ export abstract class SnapshotRepository<A extends AggregateRoot = AggregateRoot
 	}
 
 	async loadMany(ids: Id[], pool?: ISnapshotPool): Promise<A[]> {
-		if (!this.snapshotStore.getManyLastSnapshotEnvelopes) {
-			throw new NotImplementedException('The snapshot store does not support method: getManyLastSnapshotEnvelopes.');
-		}
-
 		const snapshotStreams = ids.map((id) => SnapshotStream.for<A>(this.aggregate, id));
 
 		const envelopes = await this.snapshotStore.getManyLastSnapshotEnvelopes<A>(snapshotStreams, pool);
@@ -89,11 +85,12 @@ export abstract class SnapshotRepository<A extends AggregateRoot = AggregateRoot
 		return aggregates;
 	}
 
+	/**
+	 * Reads the last snapshot envelope of every stream of the aggregate, in descending binary order of the aggregate ids.
+	 * `filter.aggregateId` is an exclusive cursor: pass the aggregate id of the last envelope of a page to read the next.
+	 * Rejects with an `UnsupportedOperationException` when the snapshot store can't list the streams of an aggregate.
+	 */
 	async *loadAll(filter?: { aggregateId?: Id; limit?: number; pool?: string }): AsyncGenerator<SnapshotEnvelope<A>[]> {
-		if (!this.snapshotStore.getLastEnvelopesForAggregate) {
-			throw new NotImplementedException('The snapshot store does not support method: getLastEnvelopesForAggregate.');
-		}
-
 		const id = filter?.aggregateId?.value;
 		for await (const envelopes of this.snapshotStore.getLastEnvelopesForAggregate<A>(this.aggregate, {
 			...filter,

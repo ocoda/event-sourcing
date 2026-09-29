@@ -134,7 +134,5 @@ export class EventSourcingCoreModule implements OnModuleInit, OnModuleDestroy, O
 		this.eventBus.registerSubscribers(eventSubscribers);
 		this.eventMap.registerSerializers(events, eventSerializers);
 		this._logger.debug('Event handlers registered successfully.');
-
-		this.eventStore.publish = this.eventBus.publish;
 	}
 }

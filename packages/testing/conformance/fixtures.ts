@@ -10,6 +10,7 @@ import {
 	type ISnapshot,
 	SnapshotStream,
 	UUID,
+	isEventSourcingError,
 } from '@ocoda/event-sourcing';
 
 export class ConformanceId extends UUID {}
@@ -142,6 +143,11 @@ export const CALL_TIMEOUT = 10_000;
 export const TEST_TIMEOUT = 30_000;
 
 /**
+ * The timeout of the heaviest concurrency cases (`read-all-gap-safe`, `concurrent-any`).
+ */
+export const HEAVY_TEST_TIMEOUT = 60_000;
+
+/**
  * Rejects when the promise doesn't settle in time, so a hanging store fails the test with a clear message
  * instead of running into the test timeout.
  */
@@ -190,19 +196,23 @@ export const rejectionOf = async (promise: Promise<unknown>): Promise<unknown> =
 	);
 
 /**
- * Asserts that the promise rejects with an instance of exactly the given class (not a subclass or a wrapper).
+ * Asserts that the promise rejects with the library error of the given class (not a wrapper), and optionally with the
+ * given fields. Match errors on their fields and `code`, not on their messages.
+ *
+ * It checks the brand and the literal `name` rather than the constructor, so a store that resolves another copy of
+ * `@ocoda/event-sourcing` passes too.
  */
 export const expectRejectionOfClass = async (
 	promise: Promise<unknown>,
 	exception: abstract new (...args: never[]) => Error,
-	message?: string,
+	fields?: Record<string, unknown>,
 ): Promise<void> => {
 	const error = await rejectionOf(promise);
 
-	expect(error, `expected a rejection with ${exception.name}`).toBeInstanceOf(Error);
-	expect((error as Error).constructor).toBe(exception);
-	if (message) {
-		expect((error as Error).message).toContain(message);
+	expect(isEventSourcingError(error), `expected a rejection with ${exception.name}, got ${String(error)}`).toBe(true);
+	expect((error as Error).name).toBe(exception.name);
+	if (fields) {
+		expect(error).toMatchObject(fields);
 	}
 };
 
@@ -215,21 +225,149 @@ export const expectRejection = async (promise: Promise<unknown>, description: st
 };
 
 /**
+ * `JSON.stringify` for assertion messages: bigints (global positions) are written as `123n` instead of making it throw.
+ */
+export const stringify = (value: unknown): string => {
+	const json = JSON.stringify(value, (_key, item: unknown) => (typeof item === 'bigint' ? `${item}n` : item));
+	return json === undefined ? String(value) : json;
+};
+
+/**
+ * How often every conformance case runs: `CONFORMANCE_REPEAT=n` runs each case n times, to soak out flaky
+ * concurrency. Defaults to once.
+ */
+export const conformanceRepeat = (value = process.env.CONFORMANCE_REPEAT): number => {
+	const repeat = Number(value);
+	return Number.isSafeInteger(repeat) && repeat > 1 ? repeat : 1;
+};
+
+/**
+ * The part of the Vitest test context that conformance cases get.
+ */
+export interface ConformanceTestContext {
+	/**
+	 * Adds a note to the result of the case, for instance for a part of it that didn't run.
+	 */
+	annotate(message: string): Promise<unknown>;
+}
+
+/**
+ * The options of a single conformance case.
+ */
+export interface ConformanceTestOptions<TCapabilities> {
+	/**
+	 * The timeout of the case, in milliseconds.
+	 */
+	timeout?: number;
+	/**
+	 * Gates the case on the capabilities of the store: returns the capability the store lacks (the case is then skipped
+	 * with `capability: <what it returned>`), or undefined to run the case. It is evaluated when the case runs, once
+	 * the store is connected, because a store's capabilities are only final then.
+	 */
+	requires?: (capabilities: TCapabilities) => string | undefined;
+}
+
+/**
+ * Options of a whole conformance suite that shape how its cases are registered.
+ */
+export interface ConformanceSuiteOptions<TCase extends string> {
+	/**
+	 * Registers only these cases.
+	 */
+	only?: readonly TCase[];
+	/**
+	 * Registers every case as a test that passes only when the case fails: for negative controls, deliberately broken
+	 * stores that prove a case detects what it checks. `true` accepts any failure; a pattern per case requires the
+	 * message of the failure to match it, so that the control fails if the case fails for another reason than the
+	 * defect. A case that the store's capabilities gate off fails too, rather than being skipped.
+	 */
+	expectFailure?: boolean | Partial<Record<TCase, RegExp>>;
+}
+
+const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+
+/**
+ * Runs the case of a negative control: throws unless the case fails, with a message that matches the pattern.
+ */
+const expectCaseToFail = async (
+	id: string,
+	run: () => Promise<void>,
+	pattern: RegExp | undefined,
+	gatedOff: string | undefined,
+): Promise<void> => {
+	if (gatedOff) {
+		throw new Error(`The negative control ${id} is gated off by the capability ${gatedOff}, so it proves nothing`);
+	}
+	let failure: { error: unknown } | undefined;
+	try {
+		await run();
+	} catch (error) {
+		failure = { error };
+	}
+	if (!failure) {
+		throw new Error(`The negative control ${id} passed: the case did not detect the defect of the store`);
+	}
+	if (pattern && !pattern.test(messageOf(failure.error))) {
+		throw new Error(
+			`The negative control ${id} failed for another reason than the defect (expected a failure matching ${pattern}): ${messageOf(failure.error)}`,
+			{ cause: failure.error },
+		);
+	}
+};
+
+/**
+ * Whether the case is skipped: it has a reason in `skip`, and `CONFORMANCE_RUN_SKIPPED` isn't `true`.
+ */
+export const isSkippedCase = <TCase extends string>(skip: Partial<Record<TCase, string>> | undefined, id: TCase) =>
+	Boolean(skip?.[id]) && process.env.CONFORMANCE_RUN_SKIPPED !== 'true';
+
+/**
  * Registers a conformance test, or skips it with the reason the store gave for not satisfying it (yet).
  * Set `CONFORMANCE_RUN_SKIPPED=true` to run the skipped cases anyway, e.g. to check whether a skip is still needed.
+ *
+ * `capabilities` returns the capabilities of the connected store, for the cases gated with `requires`. Unlike a skip,
+ * a capability gate is not a gap, so `CONFORMANCE_RUN_SKIPPED` doesn't lift it. `CONFORMANCE_REPEAT=n` runs every
+ * case n times.
  */
-export const conformanceTest = <TCase extends string>(
+export const conformanceTest = <TCase extends string, TCapabilities = never>(
 	skip: Partial<Record<TCase, string>> | undefined,
 	timeout: number,
+	capabilities?: () => TCapabilities,
+	{ only, expectFailure = false }: ConformanceSuiteOptions<TCase> = {},
 ) => {
 	const runSkipped = process.env.CONFORMANCE_RUN_SKIPPED === 'true';
+	const repeats = conformanceRepeat() - 1;
+	const register = it;
 
-	return (id: TCase, title: string, fn: () => Promise<void>, testTimeout = timeout): void => {
+	return (
+		id: TCase,
+		title: string,
+		fn: (context: ConformanceTestContext) => Promise<void>,
+		options: number | ConformanceTestOptions<TCapabilities> = {},
+	): void => {
+		if (only && !only.includes(id)) {
+			return;
+		}
+		const { timeout: testTimeout = timeout, requires } = typeof options === 'number' ? { timeout: options } : options;
 		const reason = skip?.[id];
 		if (reason && !runSkipped) {
 			it.skip(`${title} [${id}] (skipped: ${reason})`, fn);
 			return;
 		}
-		it(`${title} [${id}]`, fn, testTimeout);
+		if (requires && !capabilities) {
+			throw new Error(`The conformance case ${id} requires a capability, but the suite has no capabilities to check`);
+		}
+		register(`${title} [${id}]`, { timeout: testTimeout, repeats }, async (context) => {
+			const missing = requires?.((capabilities as () => TCapabilities)());
+			if (expectFailure) {
+				const pattern = typeof expectFailure === 'object' ? expectFailure[id] : undefined;
+				await expectCaseToFail(id, () => fn(context), pattern, missing);
+				return;
+			}
+			if (missing) {
+				context.skip(`capability: ${missing}`);
+			}
+			await fn(context);
+		});
 	};
 };

@@ -79,6 +79,24 @@ export class AccountModule {}
 3. ### Use Event Streams for Versioning
    Event streams ensure that changes to aggregates are versioned properly. When saving an aggregate, always include its current version, as shown in account.version. This prevents concurrency issues, ensuring that multiple users don't overwrite each other's changes when working with the same aggregate.
 
+   When another writer got there first, `appendEvents` rejects with an `EventStoreVersionConflictException` and stores nothing. Match it on its `code` rather than its message, then reload the aggregate and retry, or report the conflict:
+
+   ```typescript
+   import { EventSourcingErrorCode, isEventSourcingError } from '@ocoda/event-sourcing';
+
+   try {
+   	await this.accountRepository.save(account);
+   } catch (error) {
+   	if (isEventSourcingError(error, EventSourcingErrorCode.EventStoreVersionConflict)) {
+   		// error is narrowed to EventStoreVersionConflictException:
+   		// error.streamId, error.expectedVersion and error.actualVersion describe the conflict
+   	}
+   	throw error;
+   }
+   ```
+
+   Every exception class the library exports has a stable `code` from `EventSourcingErrorCode` and the fields that describe it; the original error, if any, is its `cause` (since 4.0).
+
 4. ### Lazy Loading of Events
    While fetching aggregates, events should be loaded lazily or in a paginated fashion, especially for aggregates with long histories. This example uses `eventStore.getEvents(eventStream, { fromVersion: account.version + 1 })` to only fetch events after the aggregate's current version, optimizing performance and ensuring only relevant events are processed.
    When aggregates start containing a lot of events and this becomes a performance bottleneck, you can consider using [snapshots](/start/snapshots) to optimize the loading process.

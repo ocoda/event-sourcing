@@ -14,7 +14,7 @@ describe(UUID, () => {
 
 	it('should throw when trying to create a UUID from an undefined variable', () => {
 		const value = undefined as unknown as string;
-		expect(() => UUID.from(value)).toThrow(InvalidIdException.becauseEmpty());
+		expect(() => UUID.from(value)).toThrow(new InvalidIdException({ value, idType: 'UUID' }));
 	});
 
 	it('should throw when creating a UUID from an invalid value', () => {
@@ -22,6 +22,15 @@ describe(UUID, () => {
 		expect(generatedUUID.value).toBeDefined();
 
 		const value = '123-abc';
-		expect(() => UUID.from(value)).toThrow(InvalidIdException.becauseInvalid(value));
+		expect(() => UUID.from(value)).toThrow(new InvalidIdException({ value, idType: 'UUID' }));
+	});
+
+	it('should throw an InvalidIdException when from() is called detached', () => {
+		class AccountId extends UUID {}
+
+		expect(() => [''].map(UUID.from)).toThrow(InvalidIdException);
+		// idType names the id class that rejected the value, for an empty and a malformed value alike
+		expect(() => [''].map(AccountId.from)).toThrow(new InvalidIdException({ value: '', idType: 'UUID' }));
+		expect(() => AccountId.from('123-abc')).toThrow(new InvalidIdException({ value: '123-abc', idType: 'UUID' }));
 	});
 });

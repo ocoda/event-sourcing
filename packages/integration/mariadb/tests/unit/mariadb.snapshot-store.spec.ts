@@ -27,6 +27,7 @@ import {
 	snapshotsAccountB,
 } from '@ocoda/event-sourcing-testing/unit';
 import type { Pool } from 'mariadb';
+import { createSnapshotStore } from '../support/stores.js';
 
 describe(MariaDBSnapshotStore, () => {
 	let snapshotStore: MariaDBSnapshotStore;
@@ -36,14 +37,7 @@ describe(MariaDBSnapshotStore, () => {
 	let pool: Pool;
 
 	beforeAll(async () => {
-		snapshotStore = new MariaDBSnapshotStore({
-			driver: undefined as never,
-			host: '127.0.0.1',
-			port: 3306,
-			user: 'mariadb',
-			password: 'mariadb',
-			database: 'mariadb',
-		});
+		snapshotStore = createSnapshotStore();
 
 		await snapshotStore.connect();
 		await snapshotStore.ensureCollection();
@@ -112,11 +106,21 @@ describe(MariaDBSnapshotStore, () => {
 		await expect(
 			snapshotStore.appendSnapshot(snapshotStreamAccountA, beforeLastVersion, lastSnapshotEnvelope),
 		).rejects.toThrow(
-			new SnapshotStoreVersionConflictException(snapshotStreamAccountA, beforeLastVersion, lastVersion),
+			new SnapshotStoreVersionConflictException({
+				stream: snapshotStreamAccountA,
+				version: beforeLastVersion,
+				latestVersion: lastVersion,
+			}),
 		);
 		await expect(
 			snapshotStore.appendSnapshot(snapshotStreamAccountA, lastVersion, lastSnapshotEnvelope),
-		).rejects.toThrow(new SnapshotStoreVersionConflictException(snapshotStreamAccountA, lastVersion, lastVersion));
+		).rejects.toThrow(
+			new SnapshotStoreVersionConflictException({
+				stream: snapshotStreamAccountA,
+				version: lastVersion,
+				latestVersion: lastVersion,
+			}),
+		);
 	});
 
 	it("should throw when a snapshot envelope can't be appended", async () => {
@@ -154,7 +158,7 @@ describe(MariaDBSnapshotStore, () => {
 	it("should throw when a snapshot isn't found in a specified stream", async () => {
 		const stream = SnapshotStream.for(Account, AccountId.generate());
 		await expect(snapshotStore.getSnapshot(stream, 20)).rejects.toThrow(
-			new SnapshotNotFoundException(stream.streamId, 20),
+			new SnapshotNotFoundException({ streamId: stream.streamId, version: 20 }),
 		);
 	});
 

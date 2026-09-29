@@ -29,7 +29,7 @@ export class CommandBus<CommandBase extends ICommand = ICommand>
 		const commandId = this.getCommandId(command);
 		const handler = this.handlers.get(commandId);
 		if (!handler) {
-			throw new CommandHandlerNotFoundException(commandId);
+			throw new CommandHandlerNotFoundException({ command });
 		}
 		this._publisher.publish(command);
 		return handler.execute(command);
@@ -43,7 +43,7 @@ export class CommandBus<CommandBase extends ICommand = ICommand>
 		const { id } = getCommandMetadata(commandType);
 
 		if (!id) {
-			throw new MissingCommandMetadataException(commandType);
+			throw new MissingCommandMetadataException({ command: commandType });
 		}
 
 		return id;
@@ -60,7 +60,7 @@ export class CommandBus<CommandBase extends ICommand = ICommand>
 
 		// if the handler is not a command handler, return
 		if (!metatype || !instance) {
-			throw new InvalidCommandHandlerException(instance);
+			throw new InvalidCommandHandlerException({ handler: instance });
 		}
 
 		// get the command metadata
@@ -68,7 +68,7 @@ export class CommandBus<CommandBase extends ICommand = ICommand>
 
 		// check the command metadata
 		if (!command) {
-			throw new MissingCommandHandlerMetadataException(metatype);
+			throw new MissingCommandHandlerMetadataException({ handler: metatype });
 		}
 
 		// get the command id
@@ -76,7 +76,7 @@ export class CommandBus<CommandBase extends ICommand = ICommand>
 
 		// check the command id
 		if (!id) {
-			throw new MissingCommandMetadataException(command);
+			throw new MissingCommandMetadataException({ command });
 		}
 
 		// bind the handler to the command id

@@ -3,6 +3,7 @@ import {
 	EventCollection,
 	type EventEnvelope,
 	EventStorePersistenceException,
+	EventSourcingErrorCode,
 	EventStoreVersionConflictException,
 	EventStream,
 	type IEventPool,
@@ -15,19 +16,17 @@ import {
 	getAccountEventEnvelopes,
 	getEventMap,
 	getEvents,
+	mongodbTestTopologies,
 } from '@ocoda/event-sourcing-testing/unit';
 import { AbstractCursor, Collection, type Db, type MongoClient } from 'mongodb';
+import { createEventStore } from '../support/stores.js';
 
 // Pool exhaustion and concurrency scenarios: allow slow tests and setup/teardown hooks.
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
-type Config = ConstructorParameters<typeof MongoDBEventStore>[1];
-
-const config = () => ({ url: 'mongodb://localhost:27017' }) as unknown as Config;
-
 const uniquePool = (name: string): IEventPool => `mongofix-${name}-${randomBytes(4).toString('hex')}`;
 
-describe(`${MongoDBEventStore.name} resilience`, () => {
+describe.each(mongodbTestTopologies())(`${MongoDBEventStore.name} resilience ($name)`, ({ url }) => {
 	const eventMap = getEventMap();
 	const events = getEvents();
 	const credited = events[1];
@@ -38,8 +37,7 @@ describe(`${MongoDBEventStore.name} resilience`, () => {
 	const pools: IEventPool[] = [];
 
 	const newStore = async () => {
-		const store = new MongoDBEventStore(eventMap, config());
-		store.publish = vi.fn(async () => Promise.resolve());
+		const { store } = createEventStore({ url }, eventMap);
 		await store.connect();
 		return store;
 	};
@@ -225,6 +223,34 @@ describe(`${MongoDBEventStore.name} resilience`, () => {
 			});
 		});
 
+		describe('failing', () => {
+			it("should report an 'unknown' outcome when the insert fails, because it isn't atomic", async () => {
+				const eventPool = await newPool('insert-fails');
+				const cause = new Error('connection reset');
+				vi.spyOn(Collection.prototype, 'insertMany').mockRejectedValueOnce(cause);
+
+				await expect(eventStore.appendEvents(newStream(), 2, events.slice(0, 2), eventPool)).rejects.toMatchObject({
+					name: EventStorePersistenceException.name,
+					code: EventSourcingErrorCode.EventStorePersistence,
+					collection: EventCollection.get(eventPool),
+					outcome: 'unknown',
+					cause,
+				});
+			});
+
+			it("should report a 'not-persisted' outcome when the version check fails", async () => {
+				const eventPool = await newPool('check-fails');
+				const cause = new Error('connection reset');
+				vi.spyOn(AbstractCursor.prototype, 'toArray').mockRejectedValueOnce(cause);
+
+				await expect(eventStore.appendEvents(newStream(), 2, events.slice(0, 2), eventPool)).rejects.toMatchObject({
+					code: EventSourcingErrorCode.EventStorePersistence,
+					outcome: 'not-persisted',
+					cause,
+				});
+			});
+		});
+
 		describe('to unknown collections', () => {
 			it('should keep rejecting them and check the server each time', async () => {
 				const eventPool = uniquePool('unknown');
@@ -277,9 +303,14 @@ describe(`${MongoDBEventStore.name} resilience`, () => {
 				expect(rejected).toHaveLength(WRITERS - 1);
 				for (const { reason } of rejected) {
 					expect(reason).toBeInstanceOf(EventStoreVersionConflictException);
-					expect(reason.message).toBe(
-						new EventStoreVersionConflictException(stream, events.length, events.length).message,
-					);
+					expect(reason).toMatchObject({
+						code: EventSourcingErrorCode.EventStoreVersionConflict,
+						streamId: stream.streamId,
+						aggregateId: stream.aggregateId,
+						pool: eventPool,
+						expectedVersion: 0,
+						actualVersion: events.length,
+					});
 				}
 
 				const entities = await database
@@ -361,6 +392,45 @@ describe(`${MongoDBEventStore.name} resilience`, () => {
 				const entities = await collection.find({ streamId: stream.streamId }).sort({ version: 1 }).toArray();
 				expect(entities.map(({ version }) => version)).toEqual([1, 2, 3, 5]);
 				expect(entities.map(({ _id }) => _id)).not.toContain(fourth.metadata.eventId.value);
+			});
+
+			it("should report an 'unknown' persistence outcome instead of a conflict when a lost race can't be cleaned up", async () => {
+				const eventPool = await newPool('partial-cleanup');
+				const stream = newStream();
+				const accountId = AccountId.from(stream.aggregateId);
+				const [first, second, third, fourth, fifth, sixth] = getAccountEventEnvelopes(accountId, eventMap, events);
+				await eventStore.appendEvents(stream, 3, [first, second, third], eventPool);
+
+				const raced = getAccountEventEnvelopes(accountId, eventMap, events)[4];
+				const collection = database.collection<MongoDBEventEntity>(EventCollection.get(eventPool));
+				const insertMany = Collection.prototype.insertMany;
+				vi.spyOn(Collection.prototype, 'insertMany').mockImplementationOnce(async function (
+					this: Collection,
+					...args: Parameters<Collection['insertMany']>
+				) {
+					await collection.insertOne({
+						_id: raced.metadata.eventId.value,
+						streamId: stream.streamId,
+						event: raced.event,
+						payload: raced.payload,
+						eventDate: raced.metadata.eventId.yearMonth,
+						aggregateId: raced.metadata.aggregateId,
+						version: raced.metadata.version,
+						occurredOn: raced.metadata.occurredOn,
+					});
+					return insertMany.apply(this, args);
+				});
+				const cleanupError = new Error('cleanup failure');
+				vi.spyOn(Collection.prototype, 'deleteMany').mockRejectedValueOnce(cleanupError);
+
+				const error = await eventStore.appendEvents(stream, 6, [fourth, fifth, sixth], eventPool).catch((e) => e);
+
+				// Version 4 of the losing writer stays behind, so the append can't be reported as a clean conflict
+				expect(error).toBeInstanceOf(EventStorePersistenceException);
+				expect(error).toMatchObject({ outcome: 'unknown', cause: expect.any(AggregateError) });
+				expect(error.cause.errors).toEqual([expect.objectContaining({ code: 11000 }), cleanupError]);
+				const entities = await collection.find({ streamId: stream.streamId }).sort({ version: 1 }).toArray();
+				expect(entities.map(({ version }) => version)).toEqual([1, 2, 3, 4, 5]);
 			});
 		});
 	});

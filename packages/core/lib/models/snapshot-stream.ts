@@ -27,7 +27,7 @@ export class SnapshotStream {
 
 		const { streamName } = getAggregateMetadata(cls);
 		if (!streamName) {
-			throw new MissingAggregateMetadataException(cls);
+			throw new MissingAggregateMetadataException({ aggregate: cls });
 		}
 
 		return new SnapshotStream(streamName, id.value);
