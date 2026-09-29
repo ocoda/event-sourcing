@@ -1,6 +1,13 @@
 import { EventSourcingError, EventSourcingErrorCode } from '../event-sourcing-error.js';
 import { nameOf } from '../internal.js';
 
+/** How the message names the operations of `AggregateRoot` that refuse uncommitted events. */
+const OPERATIONS = new Map<string | undefined, string>([
+	['loadFromHistory', 'loadFromHistory()'],
+	['applyEvent', 'applying an event from the history'],
+	['version', 'setting the version'],
+]);
+
 /**
  * Thrown when an aggregate that has uncommitted events is loaded from history or given a version, for example when
  * `loadFromHistory()` runs after `applyEvent()` without `markCommitted()` in between. The history would be applied
@@ -22,8 +29,9 @@ export class UncommittedEventsException extends EventSourcingError {
 		options?: ErrorOptions,
 	) {
 		const aggregateName = nameOf(details?.aggregate);
+		const operation = OPERATIONS.get(details?.operation) ?? details?.operation ?? 'this operation';
 		super(
-			`${aggregateName ?? 'The aggregate'} has ${details?.uncommittedEvents ?? 'some'} uncommitted event(s), so ${details?.operation ?? 'this operation'} is not allowed: append them and call markCommitted() first.`,
+			`${aggregateName ?? 'The aggregate'} has ${details?.uncommittedEvents ?? 'some'} uncommitted event(s), so ${operation} is not allowed: append them and call markCommitted() first.`,
 			options,
 		);
 		this.aggregateName = aggregateName;

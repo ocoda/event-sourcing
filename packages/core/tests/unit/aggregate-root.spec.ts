@@ -148,6 +148,11 @@ describe(AggregateRoot, () => {
 			expect(() => {
 				wallet.version = 10;
 			}).toThrow(new UncommittedEventsException({ aggregate: Wallet, operation: 'version', uncommittedEvents: 1 }));
+			expect(() => {
+				wallet.version = 10;
+			}).toThrow(
+				'Wallet has 1 uncommitted event(s), so setting the version is not allowed: append them and call markCommitted() first.',
+			);
 			expect(wallet.version).toBe(1);
 			expect(wallet.committedVersion).toBe(0);
 		});
