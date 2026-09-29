@@ -41,15 +41,15 @@ The core and its integrations are released together and always share the same ve
 
 ## Tested versions [#tested-versions]
 
-CI runs the tests of the core on Node.js 22 and 24, and the tests of each store against every database version listed below. The same applies to both lines.
+CI runs the tests of the core on Node.js 22 and 24, and the tests of each store against every database version listed below for its line.
 
 | | 4.x | 3.x |
 | --- | --- | --- |
 | NestJS | 12 | 11 |
 | Node.js | 22.12 or later (tested on 22 and 24) | 20 or later (tested on 22 and 24) |
 | Module format | ES modules only; CommonJS applications load them through `require()` | CommonJS |
-| PostgreSQL | 13, 14, 15, 16, 17 | 13, 14, 15, 16, 17 |
-| MariaDB | 10.11, 11.4 | 10.11, 11.4 |
+| PostgreSQL | 13, 14, 15, 16, 17, 18 | 13, 14, 15, 16, 17 |
+| MariaDB | 10.11, 11.4, 11.8 | 10.11, 11.4 |
 | MongoDB | 6, 7, 8 | 6, 7, 8 |
 | DynamoDB | Not available | DynamoDB Local 3.3.1 |
 | Database drivers | Peer dependencies, installed by you | Installed by the integration |
