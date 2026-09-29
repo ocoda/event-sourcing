@@ -377,6 +377,28 @@ jobs:
         with:
           fail-on-severity: moderate
 
+  osv-scanner:
+    name: OSV scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Fails on every known vulnerability (osv.dev) in the whole lockfile, where dependency-review only fails on the
+      # ones a pull request adds. Accept a finding in osv-scanner.toml next to the lockfile, as an [[IgnoredVulns]]
+      # entry with a reason and an ignoreUntil date. osv-scanner 2.6 reads every YAML document of pnpm-lock.yaml
+      # (google/osv-scalibr#2385), so a pnpm 12 lockfile that records the pnpm version first is scanned in full.
+      - name: Scan pnpm-lock.yaml
+        uses: google/osv-scanner-action/osv-scanner-action@a345acffa64b0eaede81a3d9aae6141214d9c8fc # v2.6.0
+        with:
+          scan-args: |-
+            --lockfile=pnpm-lock.yaml
+
   workflows:
     name: Lint workflows
     runs-on: ubuntu-latest
@@ -429,7 +451,8 @@ jobs:
   ci-ok:
     name: ci-ok
     if: ${{ always() }}
-    needs: [changes, lint, build, test-core, test-integration, docs, codeql, dependency-review, workflows, changesets]
+    needs:
+      [changes, lint, build, test-core, test-integration, docs, codeql, dependency-review, osv-scanner, workflows, changesets]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
