@@ -4,7 +4,7 @@
 - **Date:** 2026-09-29
 - **Scope:** plan milestone M6 (b–f), plus the store contract that M7 (schema v2, `global_position`) implements
 - **Baseline:** `origin/v4/platform-esm` (#543), which already includes the 3.0.1 fixes
-- **Amendments:** 2026-09-29: DynamoDB leaves v4 (#550; 3.x only) because it has no gap-free global order. Its `maxEventsPerAppend` and `globalOrder: 'none'` go too, and `readAll` over a store-assigned `global_position` replaces the year-month API in 4.0 (§9). 2026-09-29, with the §5 PR (pending owner confirmation): `InvalidIdException` keeps `DomainException` as its parent and is branded instead, so `instanceof EventSourcingError` is a brand check; `isEventSourcingError(error, code)` narrows to the class of the code; §1 step 5 keeps a driver's own `outcome` (§5, §1). 2026-09-29, store contract (pending owner confirmation, non-blocking): D1–D32 in [Amendments (store contract)](#amendments-store-contract), and the schema v2 design in [ADR 0002](./0002-schema-v2.md).
+- **Amendments:** 2026-09-29: DynamoDB leaves v4 (#550; 3.x only) because it has no gap-free global order. Its `maxEventsPerAppend` and `globalOrder: 'none'` go too, and `readAll` over a store-assigned `global_position` replaces the year-month API in 4.0 (§9). 2026-09-29, with the §5 PR (pending owner confirmation): `InvalidIdException` keeps `DomainException` as its parent and is branded instead, so `instanceof EventSourcingError` is a brand check; `isEventSourcingError(error, code)` narrows to the class of the code; §1 step 5 keeps a driver's own `outcome` (§5, §1). 2026-09-29, store contract (pending owner confirmation, non-blocking): D1–D35 in [Amendments (store contract)](#amendments-store-contract), and the schema v2 design in [ADR 0002](./0002-schema-v2.md). 2026-09-29, publishing and buses (pending owner confirmation, non-blocking): D36 (§2, publishing order) and D37 (§7, handler lookup and the return type of `execute`), in the same list.
 
 ## Context
 
@@ -108,8 +108,8 @@ export interface EnvelopePublisher {
 	publishAll(envelopes: readonly EventEnvelope[]): Promise<void>; // never rejects
 }
 export interface IEventPublisher {
-	publish(envelope: EventEnvelope): void | Promise<void>;
-	publishAll?(envelopes: readonly EventEnvelope[]): Promise<void>; // optional batch form
+	publish(envelope: EventEnvelope): void | Promise<void>; // amended by D36: returns unknown; a promise is awaited
+	publishAll?(envelopes: readonly EventEnvelope[]): Promise<void>; // optional batch form (amended by D36: unknown)
 }
 export interface EventDeliveryError { kind: 'publisher' | 'subscriber'; handler: string; envelope: EventEnvelope; error: unknown }
 
@@ -124,8 +124,8 @@ export class EventBus extends ObservableBus<EventEnvelope> implements EnvelopePu
 
 - **Wiring.** The store gets the bus through `EventStoreContext` at construction. The `Proxy`, the `publish` setter and the "appended before bootstrap" warning go away.
 - **Publishers** get an append's envelopes in commit order (one call each, or one `publishAll`) and run concurrently under `Promise.allSettled`. Every call races `publisherTimeout` (default 30 s; `0` disables it). Failures and timeouts are logged and emitted on `deliveryErrors$`, and later envelopes still flow. Async publishers are now **awaited** (3.0.1 fired and forgot), for backpressure and deterministic tests.
-- **Guarantee.** Delivery is in-process, at-most-once and ordered per publisher. The 4.x outbox adds at-least-once.
-- **Subscribers** stay `mergeMap` (parallel) with 3.0.1's isolation; appends don't await them, and their failures also go to `deliveryErrors$`. This keeps `@EventSubscriber({ events, ordering })` additive in 4.x.
+- **Guarantee.** Delivery is in-process, at-most-once and ordered per publisher (*amended by D36:* per publisher and per stream). The 4.x outbox adds at-least-once.
+- **Subscribers** stay `mergeMap` (parallel) with 3.0.1's isolation; appends don't await them, and their failures also go to `deliveryErrors$`. This keeps `@EventSubscriber({ events, ordering })` additive in 4.x. (*Amended by D36:* the subscribers get an append after the publishers were handed it.)
 - **Shutdown.** `beforeApplicationShutdown` awaits `whenIdle({ timeout: shutdownTimeout })` (default 10 s), then `onApplicationShutdown` unsubscribes. 3.x unsubscribed in `onModuleDestroy`, dropping deliveries in flight.
 
 ### 3. Module configuration
@@ -276,7 +276,7 @@ export type IQuery = object;
 
 export interface ICommandHandler<C extends ICommand = any, R = ResultOf<C>> { execute(command: C): Promise<R> }
 export class CommandBus {
-	execute<C extends ICommand, R = ResultOf<C>>(command: C, options?: { request?: unknown }): Promise<R>;
+	execute<C extends ICommand, R = ResultOf<C>>(command: C, options?: { request?: unknown }): Promise<R>; // amended by D37: Promise<NoInfer<R>>
 }
 export function CommandHandler<C extends ICommand>(command: Type<C>): (target: Type<ICommandHandler<C>>) => void;
 // QueryBus/@QueryHandler mirror this; @EventSubscriber and @EventSerializer take classes
@@ -284,7 +284,7 @@ export function CommandHandler<C extends ICommand>(command: Type<C>): (target: T
 
 One generic signature keeps every 3.x call form compiling: `execute(new Open())` infers its result, `execute<AddBookCommand>(cmd)` (the example app) returns `any`, and `execute<OpenAccountCommand, AccountId>(cmd)` (docs, e2e) works unchanged. The proposals' overloads broke the last two.
 
-`execute` becomes async, so a missing handler rejects instead of throwing. Handlers are keyed by class. `declare` emits nothing, so payloads do not change.
+`execute` becomes async, so a missing handler rejects instead of throwing. Handlers are keyed by class (*amended by D37:* a class without a handler of its own reaches the handler of its nearest parent class that has one). `declare` emits nothing, so payloads do not change.
 
 ### 8. Envelope metadata
 
@@ -344,6 +344,7 @@ account.markCommitted();
 - 3.x repositories compile through the shims. Migrate anyway, because `commit()` still loses events when an append fails.
 - **Appends.** Saving an unchanged aggregate is a no-op, and gap appends now conflict. Conflict messages changed, so match on `code` and the error fields instead.
 - **Publishing.** `eventBus.publish()` returns a Promise, async publishers are awaited, and `store.publish = …` is gone. In tests, `await eventBus.whenIdle()` instead of sleeping.
+- **Buses.** `execute()` rejects instead of throwing, so assert a missing handler as a rejection. Extending `Command<R>` or `Query<R>` types the result. The type declarations use `NoInfer`, so consumers need TypeScript 5.4 or later (D37).
 - **Bootstrap.** Duplicates now fail bootstrap, as do request-scoped subscribers, publishers and serializers. Request-scoped command and query handlers now work. Appending from a provider factory throws.
 - **Events with class-transformer decorators** need `defaultEventSerializer: ClassTransformerEventSerializer`.
 - **Ids.** `AccountId.generate()` returns an `AccountId`, and ids of different types are no longer equal. For `ULID.yearMonth`, use `id.date.toISOString().slice(0, 7)`.
@@ -377,7 +378,7 @@ account.markCommitted();
 **Negative**
 
 - Custom stores must be rewritten, mostly by deleting code.
-- Slow publishers slow commands, up to the timeout.
+- Slow publishers slow commands, up to the timeout (*amended by D36:* per call, and an append also waits for the calls of the earlier appends to its stream that the publisher still handles).
 - Nest 12 runs `onModuleDestroy` before `beforeApplicationShutdown`, so in-flight subscribers can hit torn-down user providers. Call `await eventBus.whenIdle()` before `app.close()`.
 - 3.x accepted gap appends. On gapped streams the counted version drifts and saves conflict. M7's `migrate()` dry run must report them; 4.x `loadFromEnvelopes` fixes the version.
 - Appends within a pool serialize on its position counter, and the backfill rewrites every event row.
@@ -416,7 +417,7 @@ account.markCommitted();
 
 ## Amendments (store contract)
 
-*2026-09-29, pending owner confirmation, non-blocking.* Implementing §1, §8 and §9 raised the questions below. Where an amendment changes the text above, the amendment wins. The schema, the position technique and `migrate()` are in [ADR 0002](./0002-schema-v2.md).
+*2026-09-29, pending owner confirmation, non-blocking.* Implementing §1, §8 and §9 raised the questions below; D36 and D37 record where the publishing and typed-bus PRs departed from §2 and §7. Where an amendment changes the text above, the amendment wins. The schema, the position technique and `migrate()` are in [ADR 0002](./0002-schema-v2.md).
 
 1. **D1, intermediate states.** The template lands with an interim legacy path. A driver that still overrides `appendEvents` is wrapped by the 3.x `Proxy`, which publishes through `context.publisher`, and interim SPI methods that throw, plus a deprecated `eventMap` accessor, keep it compiling. Each driver then goes native together with schema v2 and `migrate()`, in one PR, and a finalize PR deletes the interim path. `getAllEnvelopes`, `IAllEventsFilter`, `getYearMonthRange` and `ULID.yearMonth` are gone before any GA, so "removed, not deprecated" holds for 4.0.0. No `'none'` capability comes back.
 2. **D2, `Any` retries.** Up to **16 attempts** (was 3 retries), with a jittered backoff of `random(0, min(100, 2 ** attempt))` ms, keeping the event ids and `occurredOn` and renumbering the versions. A writer loses at most once per competing commit, so 16 attempts cover 16 concurrent writers per stream.
@@ -453,6 +454,14 @@ account.markCommitted();
 33. **D33, backfill order keeps each stream in version order.** 3.x data can list a stream's later version first in `(event_date, event_id)` order: two appends in the same millisecond get random ULIDs, and MongoDB compares non-canonical (lower-case) ids byte-wise. Numbering in that raw order would give the later version the lower global position. The backfill therefore numbers rows by `(key, version)`, where `r` is the row's rank in 3.x's order `(event_date, event_id, stream_id, version)` (MongoDB: `eventDate, _id, streamId, version`) and `key` is the running maximum of `r` over the row's stream ordered by version. A stream's `key` values are ranks of its own rows, so ties only occur within one stream and the order is total and deterministic. Where a stream was already in order, the result equals 3.x's order. The MariaDB catch-up numbers its rows by the same rule. The cross-version fixture (`invertedStreams`, `nonCanonicalEventIds`) proves it for every driver. [ADR 0002](./0002-schema-v2.md) defers to this rule.
 34. **D34, an empty append still validates.** The template validates the options (`expectedVersion`, `pool`) and the metadata before it returns `[]` for an empty append; it still does no I/O and publishes nothing. Invalid input fails the same way whether or not there are events. This reorders step 1 and step 2 of the `appendEvents` template.
 35. **D35, owners of loose ends.** The aggregate PR makes `SnapshotRepository.save` log snapshot-store failures instead of rejecting (§4). The module PR strips `useDefaultPool` in the snapshot store provider too (D32). The MongoDB migration picks its numbering strategy per collection, so a pool with non-canonical ids takes the fallback key while the others sort by `_id`.
+36. **D36, publishing order per publisher and per stream.** The publishing PR (#569) orders the deliveries to each publisher per stream, keyed by the envelopes' aggregate id, instead of per publisher only. While a publisher still handles an append, the next append to the same stream waits for it, for that publisher only; appends to other streams don't wait. A batch published directly that spans several streams waits for each of them. So a slow publisher holds back one stream, not every aggregate (the queued design that §2 rejected stalled them all), and an append to another stream waits at most `publisherTimeout` per call. An append to the same stream also waits for the calls of the earlier appends that the publisher still handles, each one bounded by the timeout. Strict order across streams would need an unbounded wait; `readAll` gives that order.
+    - **Subscribers start last.** The default publisher, which feeds the subscribers, is handed each append after the other publishers: they are called first, or queued behind the earlier append to that stream. What a subscriber appends in reaction then reaches the publishers after the event that caused it.
+    - **Re-entrant publishers.** A publisher that appends or publishes from inside its own call gets those envelopes at once instead of waiting for itself; the bus tracks the running publisher with `AsyncLocalStorage`. The subscriber feed runs outside that tracking, so what a subscriber appends waits its turn.
+    - **Known limit.** Two publishers that each append to the same stream from inside their own call, and await it, can wait on each other until their timeouts (with `publisherTimeout: 0`, for good).
+    - **Types.** `IEventPublisher.publish` and `publishAll` return `unknown`: a returned promise is awaited, anything else is ignored. `IEventBus.publish` returns `Promise<void>`.
+37. **D37, typed buses: handler lookup and `execute`'s return type.** Two departures from §7 in the typed-bus PR (#568), both on the `CommandBus` and the `QueryBus`.
+    - **Nearest parent's handler.** Handlers are still stored by class, but `execute` looks up the message's class and then its parent classes, and runs the handler of the nearest class that has one (`handlerFor` in `helpers/message-handlers.ts`). 3.x found the handler id with `Reflect.getMetadata`, which follows the prototype chain, so a subclass without a handler of its own reached its parent's handler. Matching the exact class only would make such 3.x applications reject at runtime with a not-found exception that no compiler flags, against principle 3. A subclass with a handler of its own reaches that handler, which fixes the 3.x bug where the handler registered last handled both classes. The types agree: a subclass inherits its parent's `ResultOf`.
+    - **`Promise<NoInfer<R>>`.** `execute` returns `Promise<NoInfer<R>>` on both buses and both bus interfaces. Without `NoInfer`, TypeScript infers `R` from the type the result is assigned to, so a call site could retype a typed result. The three 3.x call forms still compile. `NoInfer` is in the published type declarations, so consumers need TypeScript 5.4 or later: an older compiler reports `Cannot find name 'NoInfer'`, or, with `skipLibCheck`, types every result as `any`.
 
 ### Outcome classification (D3)
 
