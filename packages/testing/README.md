@@ -13,14 +13,17 @@ import { describeEventStoreConformance } from '@ocoda/event-sourcing-testing/con
 
 describeEventStoreConformance(
 	PostgresEventStore.name,
-	async (eventMap) => {
-		const store = new PostgresEventStore(eventMap, { driver: undefined as never, ...connectionOptions });
+	// The suite hands over the store context: the conformance event map and a RecordingPublisher
+	async (context) => {
+		const store = new PostgresEventStore(context, { driver: undefined as never, ...connectionOptions });
 		await store.connect();
 
 		return {
 			store,
-			// Drop the collections the suite created (some may not exist) and disconnect
+			// Drop the collections the suite created (some may not exist), their catalog rows, and disconnect
 			cleanup: async (collections) => { /* ... */ },
+			// Optional: make inserts of an event fail from inside the database, for append-atomic-partial-failure
+			faults: { failInsertOf: async (collection, eventName) => async () => { /* remove the fault */ } },
 		};
 	},
 	{
@@ -32,13 +35,22 @@ describeEventStoreConformance(
 );
 ```
 
-`describeSnapshotStoreConformance(name, factory, options)` works the same way; its factory takes no event map.
+`describeSnapshotStoreConformance(name, factory, options)` works the same way; its factory takes no context.
+
+- The event store suite covers the v4 store contract (ADR 0001 §1, §8 and §9): expected versions, `ExpectedVersion.Any`,
+  pre-built envelopes, validation without I/O, publishing, metadata and headers, global positions and `readAll`. It reads
+  the capabilities of the store once the factory resolved, and skips the cases of a capability the store doesn't claim.
+- `LEGACY_DRIVER_SKIPS` (interim, removed with the finalize PR) lists the cases that a store which still overrides
+  `appendEvents` can't pass; the database stores spread it into their `skip` until they move to schema v2. The readAll
+  parts of `envelope-metadata-round-trip` and `conflict-concurrent-appends` are skipped along with `read-all-order`.
+- `{ only, expectFailure: true }` registers selected cases as tests that must fail, for negative controls: deliberately
+  broken stores that prove a case detects its defect (`packages/core/tests/unit/conformance/negative-controls.spec.ts`).
 
 - The suites create their own pools, named after `options.pool`, which defaults to a name unique to the run. Parallel
   runs and leftovers of earlier runs therefore can't affect the results.
 - They cover appends and reads with every filter (`fromVersion`, `direction`, `limit`, `batch`), version conflicts
   (stale, overlapping and concurrent appends, with the exact exception class), not-found errors, unknown pools,
-  `ensureCollection` and `listCollections`, `getAllEnvelopes` month ranges, consumers that stop early or throw, payload
+  `ensureCollection` and `listCollections`, `readAll`, consumers that stop early or throw, payload
   fidelity, and for snapshots the bulk reads and the latest snapshots of an aggregate.
 - The case ids are listed in `EVENT_STORE_CONFORMANCE_CASES` and `SNAPSHOT_STORE_CONFORMANCE_CASES`. Only skip a case
   with a reason and a TODO in the spec. Run with `CONFORMANCE_RUN_SKIPPED=true` to check whether a skip is still needed,

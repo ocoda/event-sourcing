@@ -1,12 +1,14 @@
 import { Logger } from '@nestjs/common';
 import {
 	EventBus,
+	EventCollectionNotFoundException,
 	type EventEnvelope,
 	EventId,
 	EventNotFoundException,
 	EventStorePersistenceException,
 	EventStoreVersionConflictException,
 	EventStream,
+	ExpectedVersion,
 	type IEvent,
 	type IEventCollection,
 	StreamReadingDirection,
@@ -14,6 +16,7 @@ import {
 import {
 	Account,
 	AccountId,
+	createTestContext,
 	eventStreamAccountA,
 	eventStreamAccountB,
 	getAccountAEventEnvelopes,
@@ -25,21 +28,30 @@ import {
 import { type InMemoryEventEntity, InMemoryEventStore } from '@ocoda/event-sourcing/integration/event-store';
 import type { MockInstance } from 'vitest';
 
+const drain = async <T>(generator: AsyncGenerator<T[]>): Promise<T[]> => {
+	const items: T[] = [];
+	for await (const batch of generator) {
+		items.push(...batch);
+	}
+	return items;
+};
+
+const newStream = () => EventStream.for(Account, AccountId.generate());
+
 describe(InMemoryEventStore, () => {
 	let eventStore: InMemoryEventStore;
 	let envelopesAccountA: EventEnvelope[];
 	let envelopesAccountB: EventEnvelope[];
-	const publish = vi.fn(async () => Promise.resolve());
+	const publish = vi.fn(async (_envelope: EventEnvelope) => undefined);
 
 	const eventMap = getEventMap();
 	const events = getEvents();
 
-	beforeAll(() => {
-		eventStore = new InMemoryEventStore(eventMap, { driver: InMemoryEventStore });
-		eventStore.publish = publish;
+	beforeAll(async () => {
+		eventStore = new InMemoryEventStore(createTestContext(eventMap, publish), { driver: InMemoryEventStore });
 
-		eventStore.connect();
-		eventStore.ensureCollection();
+		await eventStore.connect();
+		await eventStore.ensureCollection();
 
 		envelopesAccountA = getAccountAEventEnvelopes(eventMap, events);
 		envelopesAccountB = getAccountBEventEnvelopes(eventMap, events);
@@ -47,9 +59,17 @@ describe(InMemoryEventStore, () => {
 
 	afterAll(() => eventStore.disconnect());
 
+	it('claims atomic appends, headers and a gap-safe global order', () => {
+		expect(eventStore.capabilities).toEqual({ atomicAppend: true, headers: true, globalOrder: 'gap-safe' });
+	});
+
 	it('should append event envelopes', async () => {
-		await eventStore.appendEvents(eventStreamAccountA, envelopesAccountA.length, envelopesAccountA);
-		await eventStore.appendEvents(eventStreamAccountB, envelopesAccountB.length, envelopesAccountB);
+		await eventStore.appendEvents(eventStreamAccountA, envelopesAccountA, {
+			expectedVersion: ExpectedVersion.NoStream,
+		});
+		await eventStore.appendEvents(eventStreamAccountB, envelopesAccountB, {
+			expectedVersion: ExpectedVersion.NoStream,
+		});
 
 		const entities: InMemoryEventEntity[] = eventStore.collections.get('events') || [];
 		const entitiesAccountA = entities.filter(
@@ -71,6 +91,7 @@ describe(InMemoryEventStore, () => {
 			expect(entity.eventId).toBeInstanceOf(EventId);
 			expect(entity.occurredOn).toEqual(envelopesAccountA[index].metadata.occurredOn);
 			expect(entity.version).toEqual(envelopesAccountA[index].metadata.version);
+			expect(entity.globalPosition).toBe(BigInt(index + 1));
 		}
 
 		for (const [index, entity] of entitiesAccountB.entries()) {
@@ -81,6 +102,7 @@ describe(InMemoryEventStore, () => {
 			expect(entity.eventId).toBeInstanceOf(EventId);
 			expect(entity.occurredOn).toEqual(envelopesAccountB[index].metadata.occurredOn);
 			expect(entity.version).toEqual(envelopesAccountB[index].metadata.version);
+			expect(entity.globalPosition).toBe(BigInt(events.length + index + 1));
 		}
 
 		expect(publish).toHaveBeenCalledTimes(events.length * 2);
@@ -92,10 +114,14 @@ describe(InMemoryEventStore, () => {
 		const envelopesAccountC = getAccountEventEnvelopes(accountId, eventMap, events);
 
 		await eventStore.ensureCollection('test-singular-events');
-		await eventStore.appendEvents(eventStreamAccountC, envelopesAccountC.length, events, 'test-singular-events');
+		await eventStore.appendEvents(eventStreamAccountC, events, {
+			expectedVersion: ExpectedVersion.NoStream,
+			pool: 'test-singular-events',
+		});
 
-		const entities: InMemoryEventEntity[] = eventStore.collections.get('test-singular-events') || [];
+		const entities: InMemoryEventEntity[] = eventStore.collections.get('test-singular-events-events') || [];
 
+		expect(entities).toHaveLength(events.length);
 		for (const [index, entity] of entities.entries()) {
 			expect(entity.streamId).toEqual(eventStreamAccountC.streamId);
 			expect(entity.event).toEqual(envelopesAccountC[index].event);
@@ -104,6 +130,8 @@ describe(InMemoryEventStore, () => {
 			expect(entity.eventId).toBeInstanceOf(EventId);
 			expect(entity.occurredOn).toBeInstanceOf(Date);
 			expect(entity.version).toEqual(envelopesAccountC[index].metadata.version);
+			// Positions are per pool
+			expect(entity.globalPosition).toBe(BigInt(index + 1));
 		}
 	});
 
@@ -128,86 +156,70 @@ describe(InMemoryEventStore, () => {
 	});
 
 	it("should throw when event envelopes can't be appended", async () => {
-		await expect(eventStore.appendEvents(eventStreamAccountA, 3, events.slice(0, 3), 'not-a-pool')).rejects.toThrow(
-			EventStorePersistenceException,
-		);
+		const error = await eventStore
+			.appendEvents(eventStreamAccountA, events.slice(0, 3), {
+				expectedVersion: ExpectedVersion.NoStream,
+				pool: 'not-a-pool',
+			})
+			.catch((caught: unknown) => caught);
+
+		expect(error).toBeInstanceOf(EventStorePersistenceException);
+		expect(error).toMatchObject({ collection: 'not-a-pool-events', outcome: 'not-persisted' });
+		expect((error as Error).cause).toBeInstanceOf(EventCollectionNotFoundException);
+		expect(eventStore.collections.has('not-a-pool-events')).toBe(false);
 	});
 
-	it('should retrieve a single event from a specified stream', () => {
-		const resolvedEvent = eventStore.getEvent(eventStreamAccountA, envelopesAccountA[3].metadata.version);
+	it('should retrieve a single event from a specified stream', async () => {
+		const resolvedEvent = await eventStore.getEvent(eventStreamAccountA, envelopesAccountA[3].metadata.version);
 
 		expect(resolvedEvent).toEqual(events[3]);
 	});
 
 	it('should filter events by stream', async () => {
-		const resolvedEvents: IEvent[] = [];
-		for await (const events of eventStore.getEvents(eventStreamAccountA)) {
-			resolvedEvents.push(...events);
-		}
-
-		expect(resolvedEvents).toEqual(events);
+		expect(await drain(eventStore.getEvents(eventStreamAccountA))).toEqual(events);
 	});
 
 	it('should filter events by stream and version', async () => {
-		const resolvedEvents: IEvent[] = [];
-		for await (const events of eventStore.getEvents(eventStreamAccountA, { fromVersion: 3 })) {
-			resolvedEvents.push(...events);
-		}
-
-		expect(resolvedEvents).toEqual(events.slice(2));
+		expect(await drain(eventStore.getEvents(eventStreamAccountA, { fromVersion: 3 }))).toEqual(events.slice(2));
 	});
 
-	it("should throw when an event isn't found in a specified stream", () => {
-		const stream = EventStream.for(Account, AccountId.generate());
-		expect(() => eventStore.getEvent(stream, 5)).toThrow(
+	it("should throw when an event isn't found in a specified stream", async () => {
+		const stream = newStream();
+		await expect(eventStore.getEvent(stream, 5)).rejects.toThrow(
 			new EventNotFoundException({ streamId: stream.streamId, version: 5 }),
 		);
 	});
 
 	it('should retrieve events backwards', async () => {
-		const resolvedEvents: IEvent[] = [];
-		for await (const events of eventStore.getEvents(eventStreamAccountA, {
-			direction: StreamReadingDirection.BACKWARD,
-		})) {
-			resolvedEvents.push(...events);
-		}
-
-		expect(resolvedEvents).toEqual(events.slice().reverse());
+		expect(
+			await drain(eventStore.getEvents(eventStreamAccountA, { direction: StreamReadingDirection.BACKWARD })),
+		).toEqual(events.slice().reverse());
 	});
 
 	it('should retrieve events backwards from a certain version', async () => {
-		const resolvedEvents: IEvent[] = [];
-		for await (const events of eventStore.getEvents(eventStreamAccountA, {
-			fromVersion: 4,
-			direction: StreamReadingDirection.BACKWARD,
-		})) {
-			resolvedEvents.push(...events);
-		}
-
-		expect(resolvedEvents).toEqual(events.slice(3).reverse());
+		expect(
+			await drain(
+				eventStore.getEvents(eventStreamAccountA, { fromVersion: 4, direction: StreamReadingDirection.BACKWARD }),
+			),
+		).toEqual(events.slice(3).reverse());
 	});
 
 	it('should limit the returned events', async () => {
-		const resolvedEvents: IEvent[] = [];
-		for await (const events of eventStore.getEvents(eventStreamAccountA, { limit: 3 })) {
-			resolvedEvents.push(...events);
-		}
-
-		expect(resolvedEvents).toEqual(events.slice(0, 3));
+		expect(await drain(eventStore.getEvents(eventStreamAccountA, { limit: 3 }))).toEqual(events.slice(0, 3));
 	});
 
 	it('should batch the returned events', async () => {
 		const resolvedEvents: IEvent[] = [];
-		for await (const events of eventStore.getEvents(eventStreamAccountA, { batch: 2 })) {
-			expect(events.length).toBe(2);
-			resolvedEvents.push(...events);
+		for await (const batch of eventStore.getEvents(eventStreamAccountA, { batch: 2 })) {
+			expect(batch.length).toBe(2);
+			resolvedEvents.push(...batch);
 		}
 
 		expect(resolvedEvents).toEqual(events);
 	});
 
-	it('should retrieve a single event-envelope', () => {
-		const { event, metadata, payload } = eventStore.getEnvelope(
+	it('should retrieve a single event-envelope', async () => {
+		const { event, metadata, payload } = await eventStore.getEnvelope(
 			eventStreamAccountA,
 			envelopesAccountA[3].metadata.version,
 		);
@@ -217,13 +229,11 @@ describe(InMemoryEventStore, () => {
 		expect(metadata.aggregateId).toEqual(envelopesAccountA[3].metadata.aggregateId);
 		expect(metadata.occurredOn).toBeInstanceOf(Date);
 		expect(metadata.version).toEqual(envelopesAccountA[3].metadata.version);
+		expect(metadata.globalPosition).toBe(4n);
 	});
 
 	it('should retrieve event-envelopes', async () => {
-		const resolvedEnvelopes: EventEnvelope[] = [];
-		for await (const envelopes of eventStore.getEnvelopes(eventStreamAccountA)) {
-			resolvedEnvelopes.push(...envelopes);
-		}
+		const resolvedEnvelopes = await drain(eventStore.getEnvelopes(eventStreamAccountA));
 
 		expect(resolvedEnvelopes).toHaveLength(envelopesAccountA.length);
 
@@ -233,48 +243,32 @@ describe(InMemoryEventStore, () => {
 			expect(envelope.metadata.aggregateId).toEqual(envelopesAccountA[index].metadata.aggregateId);
 			expect(envelope.metadata.occurredOn).toBeInstanceOf(Date);
 			expect(envelope.metadata.version).toEqual(envelopesAccountA[index].metadata.version);
+			expect(envelope.metadata.globalPosition).toBe(BigInt(index + 1));
 		}
 	});
 
-	it('should retrieve all event-envelopes since a specified time', async () => {
-		const seedAllEnvelopes = [...envelopesAccountA, ...envelopesAccountB].sort((a, b) =>
-			a.metadata.eventId.value < b.metadata.eventId.value ? -1 : 1,
+	it('should read all envelopes of a pool in the order they were appended', async () => {
+		const resolved = await drain(eventStore.readAll());
+
+		expect(resolved.map(({ metadata }) => metadata.eventId.value)).toEqual(
+			[...envelopesAccountA, ...envelopesAccountB].map(({ metadata }) => metadata.eventId.value),
 		);
-
-		const resolvedAllEnvelopes: EventEnvelope[] = [];
-		for await (const envelopes of eventStore.getAllEnvelopes({ since: { year: 2021, month: 1 } })) {
-			resolvedAllEnvelopes.push(...envelopes);
-		}
-
-		expect(resolvedAllEnvelopes).toHaveLength(envelopesAccountA.length + envelopesAccountB.length);
-
-		for (const [index, envelope] of resolvedAllEnvelopes.entries()) {
-			expect(envelope.event).toEqual(seedAllEnvelopes[index].event);
-			expect(envelope.payload).toEqual(seedAllEnvelopes[index].payload);
-			expect(envelope.metadata.aggregateId).toEqual(seedAllEnvelopes[index].metadata.aggregateId);
-			expect(envelope.metadata.eventId.value).toEqual(seedAllEnvelopes[index].metadata.eventId.value);
-			expect(envelope.metadata.version).toEqual(seedAllEnvelopes[index].metadata.version);
-		}
+		expect(resolved.map(({ metadata }) => metadata.globalPosition)).toEqual(
+			resolved.map((_, index) => BigInt(index + 1)),
+		);
 	});
 
-	it('should retrieve all event-envelopes batched', async () => {
-		const resolvedBatchedEnvelopes: EventEnvelope[] = [];
-		for await (const envelopes of eventStore.getAllEnvelopes({ since: { year: 2021, month: 1 }, batch: 2 })) {
-			expect(envelopes.length).toBe(2);
-			resolvedBatchedEnvelopes.push(...envelopes);
-		}
-	});
-
-	it('should retrieve all event-envelopes until a given date', async () => {
-		const resolvedAllEnvelopes: EventEnvelope[] = [];
-		for await (const envelopes of eventStore.getAllEnvelopes({
-			since: { year: 2021, month: 1 },
-			until: { year: 2021, month: 3 },
-		})) {
-			resolvedAllEnvelopes.push(...envelopes);
+	it('should read all envelopes from a position, in batches', async () => {
+		const batches: EventEnvelope[][] = [];
+		for await (const batch of eventStore.readAll({ fromPosition: 5n, batch: 3 })) {
+			batches.push(batch);
 		}
 
-		expect(resolvedAllEnvelopes.length).toBeGreaterThan(0);
+		expect(batches.map((batch) => batch.map(({ metadata }) => metadata.globalPosition))).toEqual([
+			[5n, 6n, 7n],
+			[8n, 9n, 10n],
+			[11n, 12n],
+		]);
 	});
 
 	it('should list collections', async () => {
@@ -284,10 +278,7 @@ describe(InMemoryEventStore, () => {
 			eventStore.ensureCollection('c'),
 		]);
 
-		const resolvedCollections: IEventCollection[] = [];
-		for await (const collections of eventStore.listCollections()) {
-			resolvedCollections.push(...collections);
-		}
+		const resolvedCollections: IEventCollection[] = await drain(eventStore.listCollections());
 
 		expect(resolvedCollections.includes('a-events')).toBe(true);
 		expect(resolvedCollections.includes('b-events')).toBe(true);
@@ -295,20 +286,18 @@ describe(InMemoryEventStore, () => {
 	});
 });
 
-describe(`${InMemoryEventStore.name} lifecycle and publishing`, () => {
+describe(`${InMemoryEventStore.name} lifecycle, reads and publishing`, () => {
 	const eventMap = getEventMap();
 	const events = getEvents();
 
 	let eventStore: InMemoryEventStore;
-	let loggerWarn: MockInstance;
 	let loggerError: MockInstance;
 
 	beforeEach(async () => {
 		vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
-		loggerWarn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
 		loggerError = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
 
-		eventStore = new InMemoryEventStore(eventMap, { driver: InMemoryEventStore });
+		eventStore = new InMemoryEventStore(createTestContext(eventMap), { driver: InMemoryEventStore });
 		await eventStore.connect();
 		await eventStore.ensureCollection();
 	});
@@ -319,14 +308,14 @@ describe(`${InMemoryEventStore.name} lifecycle and publishing`, () => {
 	});
 
 	it('does not throw when disconnecting before connecting', async () => {
-		const unconnectedStore = new InMemoryEventStore(eventMap, { driver: InMemoryEventStore });
+		const unconnectedStore = new InMemoryEventStore(createTestContext(eventMap), { driver: InMemoryEventStore });
 
 		await expect(unconnectedStore.disconnect()).resolves.toBeUndefined();
+		await expect(drain(unconnectedStore.listCollections())).resolves.toEqual([]);
 	});
 
 	it('does not wipe existing events when ensuring an existing collection', async () => {
-		eventStore.publish = vi.fn();
-		const stream = EventStream.for(Account, AccountId.generate());
+		const stream = newStream();
 
 		await eventStore.ensureCollection('tenant-1');
 		await eventStore.appendEvents(stream, 2, events.slice(0, 2), 'tenant-1');
@@ -337,53 +326,142 @@ describe(`${InMemoryEventStore.name} lifecycle and publishing`, () => {
 
 		expect(eventStore.collections.get('tenant-1-events')).toHaveLength(2);
 		expect(eventStore.collections.get('events')).toHaveLength(2);
-		expect(eventStore.getEvent(stream, 2, 'tenant-1')).toEqual(events[1]);
+		await expect(eventStore.getEvent(stream, 2, 'tenant-1')).resolves.toEqual(events[1]);
 	});
 
-	it('persists and returns the envelopes when events are appended before a publish function is set', async () => {
-		const stream = EventStream.for(Account, AccountId.generate());
+	it('forgets the events and restarts the positions when connecting again', async () => {
+		await eventStore.appendEvents(newStream(), events.slice(0, 2), { expectedVersion: ExpectedVersion.NoStream });
 
-		const firstEnvelopes = await eventStore.appendEvents(stream, 2, events.slice(0, 2));
-		const secondEnvelopes = await eventStore.appendEvents(stream, 3, events.slice(2, 3));
+		await eventStore.connect();
+		await eventStore.ensureCollection();
+		const [envelope] = await eventStore.appendEvents(newStream(), events.slice(0, 1), {
+			expectedVersion: ExpectedVersion.NoStream,
+		});
 
-		expect(firstEnvelopes.map(({ metadata }) => metadata.version)).toEqual([1, 2]);
-		expect(secondEnvelopes.map(({ metadata }) => metadata.version)).toEqual([3]);
-		expect(eventStore.collections.get('events')).toHaveLength(3);
+		expect(envelope.metadata.globalPosition).toBe(1n);
+		expect(eventStore.collections.get('events')).toHaveLength(1);
+	});
 
-		// the missing publisher is only reported once per store
-		expect(loggerWarn).toHaveBeenCalledTimes(1);
-		expect(loggerWarn).toHaveBeenCalledWith(
-			'Events were appended before a publish function was set on the event store (is the application bootstrapped?). They were persisted but not published.',
+	it('throws an EventCollectionNotFoundException from every read of an unknown pool', async () => {
+		const stream = newStream();
+		const pool = 'unknown';
+
+		await expect(eventStore.getStreamVersion(stream, pool)).rejects.toBeInstanceOf(EventCollectionNotFoundException);
+		await expect(eventStore.getEnvelope(stream, 1, pool)).rejects.toBeInstanceOf(EventCollectionNotFoundException);
+		await expect(eventStore.getEvent(stream, 1, pool)).rejects.toBeInstanceOf(EventCollectionNotFoundException);
+		await expect(drain(eventStore.getEnvelopes(stream, { pool }))).rejects.toBeInstanceOf(
+			EventCollectionNotFoundException,
 		);
+		await expect(drain(eventStore.getEvents(stream, { pool }))).rejects.toBeInstanceOf(
+			EventCollectionNotFoundException,
+		);
+		await expect(drain(eventStore.readAll({ pool }))).rejects.toMatchObject({
+			collection: 'unknown-events',
+			pool,
+		});
 	});
 
-	it('does not reject the append nor skip the remaining envelopes when publishing fails', async () => {
-		const publish = vi
-			.fn()
-			.mockImplementationOnce(() => {
-				throw new Error('sync publish failure');
-			})
-			.mockImplementationOnce(() => Promise.reject(new Error('async publish failure')))
-			.mockImplementation(() => undefined);
-		eventStore.publish = publish;
-		const stream = EventStream.for(Account, AccountId.generate());
+	it('reads the version of a stream', async () => {
+		const stream = newStream();
+		await expect(eventStore.getStreamVersion(stream)).resolves.toBe(0);
 
-		const envelopes = await eventStore.appendEvents(stream, 3, events.slice(0, 3));
+		await eventStore.appendEvents(stream, events.slice(0, 3), { expectedVersion: ExpectedVersion.NoStream });
+
+		await expect(eventStore.getStreamVersion(stream)).resolves.toBe(3);
+		await expect(eventStore.getStreamVersion(newStream())).resolves.toBe(0);
+	});
+
+	it('reads the events appended while reading all', async () => {
+		await eventStore.appendEvents(newStream(), events.slice(0, 2), { expectedVersion: ExpectedVersion.NoStream });
+
+		const positions: bigint[] = [];
+		for await (const batch of eventStore.readAll({ batch: 2 })) {
+			positions.push(...batch.map(({ metadata }) => metadata.globalPosition as bigint));
+			if (positions.length === 2) {
+				await eventStore.appendEvents(newStream(), events.slice(0, 3), { expectedVersion: ExpectedVersion.NoStream });
+			}
+		}
+
+		expect(positions).toEqual([1n, 2n, 3n, 4n, 5n]);
+	});
+
+	it('reads all from a position given as a number, and rejects an invalid one', async () => {
+		await eventStore.appendEvents(newStream(), events.slice(0, 3), { expectedVersion: ExpectedVersion.NoStream });
+
+		const fromNumber = await drain(eventStore.readAll({ fromPosition: 2 as unknown as bigint }));
+		expect(fromNumber.map(({ metadata }) => metadata.globalPosition)).toEqual([2n, 3n]);
+		await expect(drain(eventStore.readAll({ fromPosition: -1n }))).rejects.toThrow(RangeError);
+	});
+
+	it('rejects a batch size that is not a positive integer, rather than stopping early', async () => {
+		await eventStore.appendEvents(newStream(), events.slice(0, 3), { expectedVersion: ExpectedVersion.NoStream });
+
+		for (const batch of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, '2' as unknown as number]) {
+			await expect(drain(eventStore.readAll({ batch })), `batch ${String(batch)}`).rejects.toThrow(
+				`Not a batch size: ${String(batch)}`,
+			);
+		}
+		const sizes: number[] = [];
+		for await (const batch of eventStore.readAll({ batch: 1 })) {
+			sizes.push(batch.length);
+		}
+		expect(sizes).toEqual([1, 1, 1]);
+		expect(await drain(eventStore.readAll({ batch: undefined }))).toHaveLength(3);
+	});
+
+	it('stores headers and the event version, as a copy of the appended headers', async () => {
+		const stream = newStream();
+		const headers = { tenant: 'acme' };
+
+		const [appended] = await eventStore.appendEvents(stream, events.slice(0, 1), {
+			expectedVersion: ExpectedVersion.NoStream,
+			metadata: { headers, correlationId: 'correlation', causationId: 'causation' },
+		});
+		(headers as Record<string, string>).tenant = 'changed';
+
+		const read = await eventStore.getEnvelope(stream, 1);
+		expect(read.metadata).toEqual({
+			eventId: appended.metadata.eventId,
+			aggregateId: stream.aggregateId,
+			version: 1,
+			occurredOn: appended.metadata.occurredOn,
+			correlationId: 'correlation',
+			causationId: 'causation',
+			headers: { tenant: 'acme' },
+			globalPosition: 1n,
+		});
+		expect(Object.isFrozen(read.metadata.headers)).toBe(true);
+	});
+
+	it('reports a taken version as a conflict with the version of the stream and a cause', async () => {
+		const stream = newStream();
+		await eventStore.appendEvents(stream, events.slice(0, 2), { expectedVersion: ExpectedVersion.NoStream });
+		vi.spyOn(eventStore, 'getStreamVersion').mockResolvedValueOnce(1);
+
+		const error = await eventStore
+			.appendEvents(stream, events.slice(1, 2), { expectedVersion: 1 })
+			.catch((caught: unknown) => caught);
+
+		expect(error).toBeInstanceOf(EventStoreVersionConflictException);
+		expect(error).toMatchObject({ expectedVersion: 1, actualVersion: 2 });
+		expect((error as Error).cause).toEqual(new Error(`Duplicate key (${stream.streamId}, 2) in the events collection`));
+	});
+
+	it('does not reject the append when publishing fails', async () => {
+		const publishAll = vi.fn().mockRejectedValue(new Error('publish failure'));
+		const store = new InMemoryEventStore({ eventMap, publisher: { publishAll } }, { driver: InMemoryEventStore });
+		await store.connect();
+		await store.ensureCollection();
+
+		const envelopes = await store.appendEvents(newStream(), 3, events.slice(0, 3));
 
 		expect(envelopes).toHaveLength(3);
-		expect(eventStore.collections.get('events')).toHaveLength(3);
-		expect(publish.mock.calls).toEqual(envelopes.map((envelope) => [envelope]));
-
-		expect(loggerError).toHaveBeenCalledTimes(2);
-		expect(loggerError).toHaveBeenNthCalledWith(
-			1,
-			`Failed to publish event "${envelopes[0].event}" after it was appended`,
-			expect.stringContaining('sync publish failure'),
-		);
-		expect(loggerError).toHaveBeenNthCalledWith(
-			2,
-			`Failed to publish event "${envelopes[1].event}" after it was appended`,
-			expect.stringContaining('async publish failure'),
+		expect(store.collections.get('events')).toHaveLength(3);
+		expect(publishAll).toHaveBeenCalledWith(envelopes);
+		expect(loggerError).toHaveBeenCalledTimes(1);
+		expect(loggerError).toHaveBeenCalledWith(
+			'Failed to publish 3 appended event(s)',
+			expect.stringContaining('publish failure'),
 		);
 	});
 
@@ -402,10 +480,11 @@ describe(`${InMemoryEventStore.name} lifecycle and publishing`, () => {
 		eventBus.addPublisher(throwingPublisher);
 		eventBus.addPublisher(healthyPublisher);
 		eventBus.bind(subscriber, '');
-		eventStore.publish = eventBus.publish;
+		const store = new InMemoryEventStore({ eventMap, publisher: eventBus }, { driver: InMemoryEventStore });
+		await store.connect();
+		await store.ensureCollection();
 
-		const stream = EventStream.for(Account, AccountId.generate());
-		const envelopes = await eventStore.appendEvents(stream, 2, events.slice(0, 2));
+		const envelopes = await store.appendEvents(newStream(), 2, events.slice(0, 2));
 		await new Promise((resolve) => setTimeout(resolve, 10));
 
 		const expectedCalls = envelopes.map((envelope) => [envelope]);
@@ -413,39 +492,8 @@ describe(`${InMemoryEventStore.name} lifecycle and publishing`, () => {
 		expect(throwingPublisher.publish.mock.calls).toEqual(expectedCalls);
 		expect(healthyPublisher.publish.mock.calls).toEqual(expectedCalls);
 		expect(subscriber.handle.mock.calls).toEqual(expectedCalls);
-		expect(eventStore.collections.get('events')).toHaveLength(2);
+		expect(store.collections.get('events')).toHaveLength(2);
 		// 2 envelopes x 2 failing publishers
 		expect(loggerError).toHaveBeenCalledTimes(4);
-	});
-
-	it('includes the events of the current UTC month when no until date is given', async () => {
-		// 2024-02-01T00:30Z is still January in a UTC-10 timezone (e.g. Pacific/Honolulu)
-		vi.useFakeTimers({
-			now: new Date('2024-02-01T00:30:00Z'),
-			toNotFake: ['nextTick', 'setImmediate', 'queueMicrotask'],
-		});
-		const shift = (date: Date) => new Date(date.getTime() - 10 * 60 * 60 * 1000);
-		vi.spyOn(Date.prototype, 'getFullYear').mockImplementation(function (this: Date) {
-			return shift(this).getUTCFullYear();
-		});
-		vi.spyOn(Date.prototype, 'getMonth').mockImplementation(function (this: Date) {
-			return shift(this).getUTCMonth();
-		});
-
-		try {
-			eventStore.publish = vi.fn();
-			const stream = EventStream.for(Account, AccountId.generate());
-			await eventStore.appendEvents(stream, 1, events.slice(0, 1));
-
-			const resolvedEnvelopes: EventEnvelope[] = [];
-			for await (const envelopes of eventStore.getAllEnvelopes({ since: { year: 2024, month: 1 } })) {
-				resolvedEnvelopes.push(...envelopes);
-			}
-
-			expect(resolvedEnvelopes).toHaveLength(1);
-			expect(resolvedEnvelopes[0].metadata.occurredOn).toEqual(new Date('2024-02-01T00:30:00Z'));
-		} finally {
-			vi.useRealTimers();
-		}
 	});
 });

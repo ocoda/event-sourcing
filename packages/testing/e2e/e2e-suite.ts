@@ -1,5 +1,5 @@
 import type { INestApplication } from '@nestjs/common';
-import type { EventStoreDriver, SnapshotStore } from '@ocoda/event-sourcing';
+import type { EventStore, SnapshotStore } from '@ocoda/event-sourcing';
 import {
 	CommandBus,
 	EventCollection,
@@ -25,7 +25,7 @@ import {
 import { type Account, type AccountId, AccountOwnerId } from './domain/index.js';
 
 export interface E2EStoreSetup<
-	TEventStore extends EventStoreDriver,
+	TEventStore extends EventStore<any>,
 	TSnapshotStore extends SnapshotStore<unknown>,
 	TCleanup,
 > {
@@ -35,7 +35,7 @@ export interface E2EStoreSetup<
 }
 
 export interface E2ETestSuiteOptions<
-	TEventStore extends EventStoreDriver,
+	TEventStore extends EventStore<any>,
 	TSnapshotStore extends SnapshotStore<unknown>,
 	TCleanup,
 > {
@@ -44,7 +44,7 @@ export interface E2ETestSuiteOptions<
 }
 
 export const createDefaultStoreSetup = <
-	TEventStore extends EventStoreDriver,
+	TEventStore extends EventStore<any>,
 	TSnapshotStore extends SnapshotStore<unknown>,
 	TCleanup,
 >(
@@ -52,7 +52,7 @@ export const createDefaultStoreSetup = <
 ) => options;
 
 export const runAccountLifecycleE2E = async <
-	TEventStore extends EventStoreDriver,
+	TEventStore extends EventStore<any>,
 	TSnapshotStore extends SnapshotStore<unknown>,
 	TCleanup,
 >(

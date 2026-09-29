@@ -1,6 +1,6 @@
-import type { EventEnvelope, EventMap, IEvent } from '@ocoda/event-sourcing';
+import type { EventEnvelope, EventMap, EventStoreContext, IEvent } from '@ocoda/event-sourcing';
 import { MariaDBEventStore, MariaDBSnapshotStore } from '@ocoda/event-sourcing-mariadb';
-import { getEventMap, mariadbTestConfig } from '@ocoda/event-sourcing-testing/unit';
+import { createTestContext, getEventMap, mariadbTestConfig } from '@ocoda/event-sourcing-testing/unit';
 import type { Mock } from 'vitest';
 
 type EventStoreOptions = Omit<ConstructorParameters<typeof MariaDBEventStore>[1], 'driver'>;
@@ -8,24 +8,27 @@ type SnapshotStoreOptions = Omit<ConstructorParameters<typeof MariaDBSnapshotSto
 
 export interface TestEventStore {
 	store: MariaDBEventStore;
-	/** The publish function set on the store. */
+	/**
+	 * Receives every envelope the store publishes, in order, unless the store was built with a context of its own.
+	 */
 	publish: Mock<(envelope: EventEnvelope<IEvent>) => Promise<void>>;
 	eventMap: EventMap;
 }
 
 /**
  * Builds an event store (not connected) on the test database (`mariadbTestConfig()`), the way the module does.
+ * `eventMapOrContext` is the event map, or a whole store context (the one the conformance suite builds).
  * This is the one place the driver specs construct event stores.
  */
 export const createEventStore = (
 	overrides: Partial<EventStoreOptions> = {},
-	eventMap: EventMap = getEventMap(),
+	eventMapOrContext: EventMap | EventStoreContext = getEventMap(),
 ): TestEventStore => {
-	const store = new MariaDBEventStore(eventMap, { driver: undefined as never, ...mariadbTestConfig(), ...overrides });
 	const publish = vi.fn(async (_envelope: EventEnvelope<IEvent>) => undefined);
-	store.publish = publish;
+	const context = 'publisher' in eventMapOrContext ? eventMapOrContext : createTestContext(eventMapOrContext, publish);
+	const store = new MariaDBEventStore(context, { driver: undefined as never, ...mariadbTestConfig(), ...overrides });
 
-	return { store, publish, eventMap };
+	return { store, publish, eventMap: context.eventMap };
 };
 
 /**

@@ -2,4 +2,5 @@
 // EventStore base class runs them.
 export { EVENT_STORE_LIMITS } from './append-validation.js';
 export * from './capabilities.js';
+export { assertEventStoreImplementation } from './implementation-guard.js';
 export * from './positions.js';

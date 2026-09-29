@@ -1,24 +1,35 @@
 import {
 	EventCollection,
+	EventCollectionNotFoundException,
 	EventEnvelope,
 	EventId,
-	type EventMap,
 	EventNotFoundException,
 	EventSourcingErrorCode,
-	type EventStore,
+	EventStore,
+	type EventStoreCapabilities,
+	type EventStoreContext,
 	EventStorePersistenceException,
 	EventStoreVersionConflictException,
 	type EventStream,
-	type IAllEventsFilter,
+	ExpectedVersion,
 	type IEvent,
 	type IEventFilter,
+	type IEventPool,
+	InvalidAppendOptionsException,
 	StreamReadingDirection,
 	UnregisteredEventException,
+	UnsupportedOperationException,
+	assertEventStoreImplementation,
+	isEventSourcingError,
+	resolveCapabilities,
 } from '@ocoda/event-sourcing';
+import type { MockInstance } from 'vitest';
 import {
 	CALL_TIMEOUT,
+	type ConformanceTestContext,
 	ConformancePayloadProbed,
 	ConformanceRecorded,
+	HEAVY_TEST_TIMEOUT,
 	LEAK_PROBE_ITERATIONS,
 	TEST_TIMEOUT,
 	UNREGISTERED_EVENT_NAME,
@@ -29,33 +40,43 @@ import {
 	createDatePayloadProbe,
 	createJsonPayloadProbe,
 	drain,
-	expectRejection,
 	expectRejectionOfClass,
 	newEventStream,
 	recordedEvents,
+	rejectionOf,
 	stringify,
 	uniquePoolName,
 	withinTimeout,
 } from './fixtures.js';
+import { RecordingPublisher } from './recording-publisher.js';
 import type { EventStoreConformanceHandle } from './types.js';
 
 /**
- * An event store with the optional envelope methods, which every store in this repository implements.
+ * The event store the conformance suite tests.
  */
-export type ConformanceEventStore = EventStore<unknown> &
-	Required<Pick<EventStore<unknown>, 'getEnvelope' | 'getEnvelopes'>>;
+export type ConformanceEventStore = EventStore<unknown>;
 
 /**
- * Creates a connected event store for the given event map.
+ * Creates a connected event store with the given context (the conformance event map and a recording publisher).
  */
 export type EventStoreConformanceFactory = (
-	eventMap: EventMap,
+	context: EventStoreContext,
 ) => EventStoreConformanceHandle<ConformanceEventStore> | Promise<EventStoreConformanceHandle<ConformanceEventStore>>;
 
 export const EVENT_STORE_CONFORMANCE_CASES = [
 	'append-returns-envelopes',
 	'append-sizes',
 	'append-continues-stream',
+	'append-empty-noop',
+	'append-envelope-contiguity',
+	'append-envelope-preserved',
+	'append-deprecated-positional',
+	'append-atomic-partial-failure',
+	'expected-exact',
+	'expected-stale',
+	'expected-gap',
+	'no-stream-on-existing',
+	'expected-invalid',
 	'read-round-trip',
 	'envelope-metadata-round-trip',
 	'occurred-on-milliseconds',
@@ -68,17 +89,31 @@ export const EVENT_STORE_CONFORMANCE_CASES = [
 	'conflict-stale-version',
 	'conflict-overlapping-versions',
 	'conflict-concurrent-appends',
+	'conflict-fields',
+	'concurrent-any',
 	'not-found',
 	'unknown-pool-append',
 	'unknown-pool-read',
 	'ensure-collection-idempotent',
 	'list-collections',
-	'all-envelopes-order',
-	'all-envelopes-month-range',
-	'all-envelopes-batch',
-	'all-envelopes-full-batches',
+	'template-not-overridden',
+	'publish-committed-once',
+	'publish-false-skips-publisher',
+	'conflict-publishes-nothing',
+	'publisher-failure-does-not-reject',
+	'metadata-round-trip',
+	'headers-round-trip',
+	'headers-unsupported-rejects',
+	'metadata-validation-no-io',
+	'read-all-order',
+	'read-all-positions-on-reads',
+	'read-all-resume',
+	'read-all-gap-safe',
+	'read-all-best-effort',
 	'early-break',
 	'consumer-throws',
+	'read-all-early-break',
+	'read-all-consumer-throws',
 	'store-throws-mid-stream',
 	'nested-calls-during-iteration',
 	'payload-json-fidelity',
@@ -100,6 +135,17 @@ export interface EventStoreConformanceOptions {
 	 * The timeout of a single test, in milliseconds.
 	 */
 	timeout?: number;
+	/**
+	 * Registers only these cases.
+	 */
+	only?: readonly EventStoreConformanceCase[];
+	/**
+	 * Registers every case as a test that passes only when the case fails: for negative controls, deliberately broken
+	 * stores that prove the cases detect what they check. Pass a pattern per case to require the failure message to
+	 * match it, so that a case that fails for another reason than the defect doesn't count. A case that the store's
+	 * capabilities gate off fails.
+	 */
+	expectFailure?: boolean | Partial<Record<EventStoreConformanceCase, RegExp>>;
 }
 
 /**
@@ -107,12 +153,32 @@ export interface EventStoreConformanceOptions {
  */
 const CONCURRENT_WRITERS = 8;
 
+/**
+ * The number of appends of every writer of `read-all-gap-safe`.
+ */
+const GAP_SAFE_APPENDS_PER_WRITER = 25;
+
+type Capabilities = Required<EventStoreCapabilities>;
+
+/**
+ * The methods of the store contract a store implements, which the no-I/O cases spy on.
+ */
+type SpiMethod = 'getStreamVersion' | 'persistEvents';
+
 const range = (from: number, to: number): number[] =>
 	from <= to
 		? Array.from({ length: to - from + 1 }, (_, index) => from + index)
 		: Array.from({ length: from - to + 1 }, (_, index) => from - index);
 
 const seqOf = (event: IEvent): number => (event as ConformanceRecorded).seq;
+
+const versionsOf = (envelopes: readonly EventEnvelope[]): number[] => envelopes.map(({ metadata }) => metadata.version);
+
+const positionsOf = (envelopes: readonly EventEnvelope[]): (bigint | undefined)[] =>
+	envelopes.map(({ metadata }) => metadata.globalPosition);
+
+const idsOf = (envelopes: readonly EventEnvelope[]): string[] =>
+	envelopes.map(({ metadata }) => metadata.eventId.value);
 
 /**
  * The parts of an envelope that must survive a round trip through the store.
@@ -128,80 +194,145 @@ const describeEnvelope = ({ event, payload, metadata }: EventEnvelope) => ({
 });
 
 /**
- * Events of three streams, spread over the months of 2021 and appended out of chronological order.
+ * Everything an envelope carries once it is stored, including the v4 metadata.
  */
-const createMonthlyEnvelopes = (eventMap: EventMap) => {
-	const layout = [
-		['2021-01-15T08:00:00.000Z', '2021-03-02T12:00:00.000Z', '2021-05-20T18:30:00.000Z'],
-		['2021-01-20T00:00:00.000Z', '2021-02-10T09:15:00.000Z', '2021-05-01T00:00:00.000Z'],
-		// Straddles the boundary between January and February (UTC)
-		['2021-01-31T23:59:59.999Z', '2021-02-01T00:00:00.000Z'],
-	];
+const describeStored = (envelope: EventEnvelope) => ({
+	...describeEnvelope(envelope),
+	occurredOn: envelope.metadata.occurredOn?.toISOString(),
+	headers: envelope.metadata.headers,
+	eventVersion: envelope.metadata.eventVersion,
+	globalPosition: envelope.metadata.globalPosition,
+});
 
-	const streams = layout.map((dates) => {
-		const stream = newEventStream();
-		const envelopes = dates.map((date, index) => {
-			const event = new ConformanceRecorded(index + 1, 'monthly');
-			return EventEnvelope.create(eventMap.getName(event), eventMap.serializeEvent(event), {
-				aggregateId: stream.aggregateId,
-				version: index + 1,
-				eventId: EventId.generate(new Date(date)),
-			});
-		});
-		return { stream, envelopes };
-	});
+/**
+ * Asserts that the positions are bigints that strictly increase.
+ */
+const expectStrictlyIncreasing = (positions: readonly (bigint | undefined)[], description: string) => {
+	for (const [index, position] of positions.entries()) {
+		expect(typeof position, `${description}: the position at index ${index}`).toBe('bigint');
+		if (index > 0) {
+			expect(
+				(position as bigint) > (positions[index - 1] as bigint),
+				`${description}: position ${stringify(position)} follows ${stringify(positions[index - 1])}`,
+			).toBe(true);
+		}
+	}
+};
 
-	const chronological = streams
-		.flatMap(({ envelopes }) => envelopes)
-		.sort((a, b) => a.metadata.occurredOn.getTime() - b.metadata.occurredOn.getTime());
-
-	const inMonths = (...yearMonths: string[]) =>
-		chronological.filter(({ metadata }) => yearMonths.includes(metadata.occurredOn.toISOString().substring(0, 7)));
-
-	return { streams, chronological, inMonths };
+/**
+ * Asserts that the positions of the envelopes of one append are consecutive bigints.
+ */
+const expectConsecutive = (envelopes: readonly EventEnvelope[], description: string) => {
+	const positions = positionsOf(envelopes);
+	expectStrictlyIncreasing(positions, description);
+	if (positions.length > 0) {
+		const first = positions[0] as bigint;
+		expect(positions, `${description}: consecutive positions`).toEqual(
+			positions.map((_, index) => first + BigInt(index)),
+		);
+	}
 };
 
 /**
  * Registers the event store conformance suite: the contract that every event store has to satisfy,
  * independent of the database behind it.
  *
- * The suite creates its own pools (named after `options.pool`, unique by default) and hands their collections to
- * `cleanup` once it is done. It sets a no-op publish function on the store.
+ * The suite creates the store through `factory`, with a context that holds the conformance event map and a
+ * `RecordingPublisher`. It creates its own pools (named after `options.pool`, unique by default) and hands their
+ * collections to `cleanup` once it is done. Cases that need a capability the store doesn't claim are skipped with
+ * `capability: <what is missing>`.
  */
+/**
+ * Waits for every promise, then fails with the first rejection, if any. Unlike `Promise.all`, no writer is still
+ * appending when a case ends, so a failing case doesn't leave writes (or unhandled rejections) to the next one.
+ */
+const allSettledOrThrow = async <T>(promises: readonly Promise<T>[]): Promise<T[]> => {
+	const results = await Promise.allSettled(promises);
+	const rejected = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
+	if (rejected) {
+		throw rejected.reason;
+	}
+	return results.map((result) => (result as PromiseFulfilledResult<T>).value);
+};
+
+/**
+ * Yields to the event loop, so that other tasks (a tailing reader) run even between appends that wait for no I/O.
+ */
+const yieldToEventLoop = () => new Promise<void>((resolve) => setImmediate(resolve));
+
 export const describeEventStoreConformance = (
 	name: string,
 	factory: EventStoreConformanceFactory,
 	options: EventStoreConformanceOptions = {},
 ): void => {
 	const timeout = options.timeout ?? TEST_TIMEOUT;
-	const test = conformanceTest<EventStoreConformanceCase>(options.skip, timeout);
+	const heavyTimeout = Math.max(timeout, HEAVY_TEST_TIMEOUT);
+	let capabilities: Capabilities;
+	const test = conformanceTest<EventStoreConformanceCase, Capabilities>(options.skip, timeout, () => capabilities, {
+		only: options.only,
+		expectFailure: options.expectFailure,
+	});
+
+	// A suite that registers only some cases doesn't group them, since a group without tests fails
+	const group = options.only ? (_name: string, fn: () => void) => fn() : describe;
 
 	describe(`${name} event store conformance`, () => {
 		const eventMap = createConformanceEventMap();
+		const publisher = new RecordingPublisher();
+		const context: EventStoreContext = { eventMap, publisher };
 
 		const pool = options.pool ?? uniquePoolName();
-		const allPool = `${pool}-all`;
 		const unknownPool = `${pool}-unknown`;
 		const collection = EventCollection.get(pool);
-		const allCollection = EventCollection.get(allPool);
 
 		let handle: EventStoreConformanceHandle<ConformanceEventStore> | undefined;
 		let store: ConformanceEventStore;
+
+		// The pools some cases create for themselves, dropped at the end. Numbered, so that a repeated case
+		// (CONFORMANCE_REPEAT) gets a fresh pool every time.
+		const createdPools: IEventPool[] = [];
+		const createPool = async (suffix: string): Promise<IEventPool> => {
+			const created = `${pool}-${suffix}${createdPools.length + 1}`;
+			createdPools.push(created);
+			await store.ensureCollection(created);
+			return created;
+		};
 
 		// A stream of 7 events (versions 1 to 7, 'seq' equals the version), written in two appends
 		const reference = newEventStream();
 		const referenceEvents = recordedEvents(7);
 		let referenceEnvelopes: EventEnvelope[] = [];
 
-		// The only events in the 'all' pool, which getAllEnvelopes() reads
-		const monthly = createMonthlyEnvelopes(eventMap);
+		/**
+		 * Whether the cases can read with readAll: the readAll parts of other cases are skipped along with read-all-order,
+		 * for stores that can't read all yet. Also with `CONFORMANCE_RUN_SKIPPED`, which then shows exactly the skipped
+		 * cases failing; read-all-order itself runs then.
+		 */
+		const readsAll = () => !options.skip?.['read-all-order'];
+
+		/**
+		 * Runs the readAll part of a case, or annotates the case with why it didn't.
+		 */
+		const readAllPart = async (context: ConformanceTestContext, fn: () => Promise<void>) => {
+			if (readsAll()) {
+				await fn();
+			} else {
+				await context.annotate('readAll part skipped: read-all-order is skipped for this store');
+			}
+		};
 
 		const readEvents = (stream: EventStream, filter: Omit<IEventFilter, 'pool'> = {}) =>
 			store.getEvents(stream, { ...filter, pool });
 		const readEnvelopes = (stream: EventStream, filter: Omit<IEventFilter, 'pool'> = {}) =>
 			store.getEnvelopes(stream, { ...filter, pool });
-		const readAllEnvelopes = (filter: Omit<IAllEventsFilter, 'pool'>) =>
-			store.getAllEnvelopes({ ...filter, pool: allPool });
+		const readAllOf = (readPool: IEventPool, fromPosition?: bigint, batch?: number) =>
+			drain(store.readAll({ pool: readPool, fromPosition, batch }));
+		const append = (
+			stream: EventStream,
+			events: readonly (IEvent | EventEnvelope)[],
+			expectedVersion: ExpectedVersion,
+			appendPool: IEventPool = pool,
+		) => store.appendEvents(stream, events, { expectedVersion, pool: appendPool });
 
 		const envelopeFor = (stream: EventStream, event: IEvent, version: number, eventId?: EventId) =>
 			EventEnvelope.create(eventMap.getName(event), eventMap.serializeEvent(event), {
@@ -209,6 +340,59 @@ export const describeEventStoreConformance = (
 				version,
 				eventId,
 			});
+
+		/**
+		 * Spies on a method of the store contract where the store defines it (the store itself, or the first class of its
+		 * prototype chain that does), so that the base class's calls (`this.persistEvents(...)`) go through the spy.
+		 */
+		const spyOnStore = (method: SpiMethod): MockInstance => {
+			let owner: object | null = store;
+			while (owner && !Object.hasOwn(owner, method)) {
+				owner = Object.getPrototypeOf(owner);
+			}
+			return vi.spyOn(owner as Record<string, never>, method as never);
+		};
+
+		/**
+		 * INTERIM(H): spies on the `appendEvents` of a store that overrides it (the interim legacy path), where its class
+		 * defines it. The legacy wrapper calls it for every append that passed the checks, instead of the driver methods.
+		 */
+		const spyOnOverriddenAppend = (): MockInstance[] => {
+			let owner: object | null = Object.getPrototypeOf(store);
+			while (owner && owner !== EventStore.prototype) {
+				if (Object.hasOwn(owner, 'appendEvents')) {
+					return [vi.spyOn(owner as Record<string, never>, 'appendEvents' as never)];
+				}
+				owner = Object.getPrototypeOf(owner);
+			}
+			return [];
+		};
+
+		/**
+		 * Runs `fn` and asserts that it called neither getStreamVersion nor persistEvents (nor the store's own
+		 * appendEvents), nor the publisher.
+		 */
+		const expectNoIo = async (description: string, fn: () => Promise<void>) => {
+			const spies = [spyOnStore('getStreamVersion'), spyOnStore('persistEvents'), ...spyOnOverriddenAppend()];
+			const mark = publisher.mark();
+			try {
+				await fn();
+				for (const spy of spies) {
+					expect(spy, `${description}: ${spy.getMockName()}`).not.toHaveBeenCalled();
+				}
+				expect(publisher.callsSince(mark), `${description}: publishAll`).toEqual([]);
+			} finally {
+				for (const spy of spies) {
+					spy.mockRestore();
+				}
+			}
+		};
+
+		/**
+		 * The global position of the last event of a pool, 0n for an empty pool.
+		 */
+		const lastPositionOf = async (readPool: IEventPool): Promise<bigint> =>
+			(await readAllOf(readPool)).at(-1)?.metadata.globalPosition ?? 0n;
 
 		/**
 		 * Asserts the versions that getEvents() and getEnvelopes() read from the reference stream, per batch.
@@ -244,46 +428,75 @@ export const describeEventStoreConformance = (
 		/**
 		 * Asserts that the store still serves reads and writes, within a timeout.
 		 */
-		const expectStoreToBeUsable = (context: string) =>
+		const expectStoreToBeUsable = (description: string) =>
 			withinTimeout(
 				(async () => {
 					await expect(call(() => store.getEvent(reference, 7, pool))).resolves.toEqual(referenceEvents[6]);
 					expect((await drain(readEvents(reference))).map(seqOf)).toEqual(range(1, 7));
 					await expect(store.appendEvents(newEventStream(), 1, recordedEvents(1), pool)).resolves.toHaveLength(1);
 				})(),
-				`Store calls ${context}`,
+				`Store calls ${description}`,
 			);
 
-		const readers: [string, () => AsyncGenerator<unknown[]>][] = [
-			['getEvents', () => readEvents(reference, { batch: 1 })],
-			['getEnvelopes', () => readEnvelopes(reference, { batch: 1 })],
-			['getAllEnvelopes', () => readAllEnvelopes({ since: { year: 2021, month: 1 }, batch: 1 })],
-			['listCollections', () => store.listCollections({ batch: 1 })],
-		];
+		/**
+		 * Asserts that consumers that stop early, or throw, leave the store usable.
+		 */
+		const expectReadersToRelease = async (
+			readers: [string, () => AsyncGenerator<unknown[]>][],
+			stop: 'break' | 'throw',
+		) => {
+			for (const [method, read] of readers) {
+				for (let iteration = 0; iteration < LEAK_PROBE_ITERATIONS; iteration++) {
+					if (stop === 'break') {
+						await withinTimeout(
+							(async () => {
+								for await (const batch of read()) {
+									expect(batch.length).toBeGreaterThan(0);
+									break;
+								}
+							})(),
+							`Breaking out of ${method}()`,
+						);
+					} else {
+						const failure = new Error(`Consumer of ${method}() failed`);
+						const consume = async () => {
+							for await (const _batch of read()) {
+								throw failure;
+							}
+						};
+						await expect(withinTimeout(consume(), `Throwing out of ${method}()`)).rejects.toBe(failure);
+					}
+				}
+				await expectStoreToBeUsable(`after ${stop === 'break' ? 'breaking' : 'throwing'} out of ${method}()`);
+			}
+		};
 
 		beforeAll(async () => {
-			handle = await factory(eventMap);
+			handle = await factory(context);
 			store = handle.store;
-			store.publish = async () => undefined;
+			capabilities = resolveCapabilities(store.capabilities);
 
 			await store.ensureCollection(pool);
-			await store.ensureCollection(allPool);
 
 			referenceEnvelopes = [
 				...(await store.appendEvents(reference, 4, referenceEvents.slice(0, 4), pool)),
 				...(await store.appendEvents(reference, 7, referenceEvents.slice(4), pool)),
 			];
-
-			for (const { stream, envelopes } of monthly.streams) {
-				await store.appendEvents(stream, envelopes.length, envelopes, allPool);
-			}
 		}, timeout);
+
+		afterEach(() => {
+			publisher.failWith(undefined);
+		});
 
 		afterAll(async () => {
-			await handle?.cleanup([collection, allCollection, EventCollection.get(unknownPool)]);
+			await handle?.cleanup([
+				collection,
+				...createdPools.map((createdPool) => EventCollection.get(createdPool)),
+				EventCollection.get(unknownPool),
+			]);
 		}, timeout);
 
-		describe('appending', () => {
+		group('appending', () => {
 			test('append-returns-envelopes', 'returns an envelope per appended event', async () => {
 				const stream = newEventStream();
 				const events = recordedEvents(3);
@@ -301,7 +514,7 @@ export const describeEventStoreConformance = (
 				}
 
 				// Event ids are unique and ordered like the events
-				const eventIds = envelopes.map(({ metadata }) => metadata.eventId.value);
+				const eventIds = idsOf(envelopes);
 				expect([...eventIds].sort()).toEqual(eventIds);
 				expect(new Set(eventIds).size).toBe(3);
 			});
@@ -312,9 +525,9 @@ export const describeEventStoreConformance = (
 
 					const envelopes = await store.appendEvents(stream, count, recordedEvents(count), pool);
 
-					expect(envelopes.map(({ metadata }) => metadata.version)).toEqual(range(1, count));
+					expect(versionsOf(envelopes)).toEqual(range(1, count));
 					expect((await drain(readEvents(stream))).map(seqOf)).toEqual(range(1, count));
-					expect((await drain(readEnvelopes(stream))).map(({ metadata }) => metadata.version)).toEqual(range(1, count));
+					expect(versionsOf(await drain(readEnvelopes(stream)))).toEqual(range(1, count));
 					await expect(call(() => store.getEvent(stream, count, pool))).resolves.toEqual(
 						new ConformanceRecorded(count),
 					);
@@ -322,14 +535,276 @@ export const describeEventStoreConformance = (
 			}
 
 			test('append-continues-stream', 'continues a stream where the previous append ended', async () => {
-				expect(referenceEnvelopes.map(({ metadata }) => metadata.version)).toEqual(range(1, 7));
+				expect(versionsOf(referenceEnvelopes)).toEqual(range(1, 7));
 				expect((await drain(readEnvelopes(reference))).map(describeEnvelope)).toEqual(
 					referenceEnvelopes.map(describeEnvelope),
 				);
 			});
+
+			test('append-empty-noop', 'returns no envelopes for an empty append, without any I/O', async () => {
+				const stream = newEventStream();
+				await append(stream, recordedEvents(2), ExpectedVersion.NoStream);
+
+				await expectNoIo('an empty append', async () => {
+					// The expected version isn't checked: there is nothing to append
+					for (const expectedVersion of [ExpectedVersion.NoStream, 2, 5, ExpectedVersion.Any]) {
+						await expect(append(stream, [], expectedVersion)).resolves.toEqual([]);
+					}
+					await expect(append(newEventStream(), [], ExpectedVersion.NoStream)).resolves.toEqual([]);
+				});
+				expect(versionsOf(await drain(readEnvelopes(stream)))).toEqual([1, 2]);
+			});
+
+			test(
+				'append-envelope-contiguity',
+				'rejects pre-built envelopes that do not continue the stream, without any I/O',
+				async () => {
+					const stream = newEventStream();
+					await append(stream, recordedEvents(2), ExpectedVersion.NoStream);
+					const other = newEventStream();
+					const envelope = (version: number, target = stream) =>
+						envelopeFor(target, new ConformanceRecorded(version), version);
+
+					await expectNoIo('non-contiguous envelopes', async () => {
+						const cases: [string, (IEvent | EventEnvelope)[], ExpectedVersion, Record<string, unknown>][] = [
+							['another aggregate', [envelope(3, other)], 2, { reason: 'aggregate-id', index: 0 }],
+							['a version gap', [envelope(4)], 2, { reason: 'version', index: 0, expected: 3, actual: 4 }],
+							['a taken version', [envelope(2)], 2, { reason: 'version', expected: 3, actual: 2 }],
+							['versions out of order', [envelope(4), envelope(3)], 2, { reason: 'version', index: 0 }],
+							[
+								'a mixed array with a gap',
+								[new ConformanceRecorded(3), envelope(5)],
+								2,
+								{ reason: 'version', index: 1, expected: 4, actual: 5 },
+							],
+							['ExpectedVersion.Any', [envelope(3)], ExpectedVersion.Any, { reason: 'expected-version-any' }],
+						];
+						for (const [description, items, expectedVersion, fields] of cases) {
+							const error = await rejectionOf(append(stream, items, expectedVersion));
+							expect(isEventSourcingError(error, EventSourcingErrorCode.InvalidEventEnvelope), `${description}`).toBe(
+								true,
+							);
+							expect(error, `${description}`).toMatchObject({ streamId: stream.streamId, ...fields });
+						}
+					});
+					expect(versionsOf(await drain(readEnvelopes(stream)))).toEqual([1, 2]);
+
+					// A mixed array that continues the stream is accepted, whatever the order of its events and envelopes
+					const appended = await append(stream, [new ConformanceRecorded(3), envelope(4)], 2);
+					expect(versionsOf(appended)).toEqual([3, 4]);
+					const envelopeFirst = await append(stream, [envelope(5), new ConformanceRecorded(6)], 4);
+					expect(versionsOf(envelopeFirst)).toEqual([5, 6]);
+					expect((await drain(readEvents(stream))).map(seqOf)).toEqual(range(1, 6));
+				},
+			);
+
+			test(
+				'append-envelope-preserved',
+				'keeps the id, time and metadata of a pre-built envelope, and leaves the envelope as it was',
+				async () => {
+					const stream = newEventStream();
+					const occurredOn = new Date('2021-03-04T05:06:07.089Z');
+					const event = new ConformanceRecorded(1, 'imported');
+					const input = EventEnvelope.create(eventMap.getName(event), eventMap.serializeEvent(event), {
+						aggregateId: stream.aggregateId,
+						version: 1,
+						eventId: EventId.generate(occurredOn),
+						correlationId: 'imported-correlation',
+						causationId: 'imported-causation',
+						eventVersion: 2,
+						...(capabilities.headers ? { headers: { $traceparent: '00-abc-def-01', tenant: 'acme' } } : {}),
+					}).withGlobalPosition(987_654_321n);
+					const snapshot = describeStored(input);
+
+					const [stored] = await append(stream, [input], ExpectedVersion.NoStream);
+
+					// The input is left as it was
+					expect(describeStored(input)).toEqual(snapshot);
+					expect(stored).not.toBe(input);
+
+					// The store assigns the position, whatever the envelope carried
+					expect(typeof stored.metadata.globalPosition).toBe('bigint');
+					expect(stored.metadata.globalPosition).not.toBe(987_654_321n);
+					const expected = { ...snapshot, globalPosition: stored.metadata.globalPosition };
+					expect(describeStored(stored)).toEqual(expected);
+					expect(describeStored(await store.getEnvelope(stream, 1, pool))).toEqual(expected);
+					expect((await drain(readEnvelopes(stream))).map(describeStored)).toEqual([describeStored(stored)]);
+				},
+			);
+
+			test(
+				'append-deprecated-positional',
+				'keeps the deprecated positional form working like the options form',
+				async () => {
+					const positional = newEventStream();
+					const withOptions = newEventStream();
+
+					const fromPositional = await store.appendEvents(positional, 2, recordedEvents(2), pool);
+					const fromOptions = await append(withOptions, recordedEvents(2), ExpectedVersion.NoStream);
+					expect(versionsOf(fromPositional)).toEqual(versionsOf(fromOptions));
+					expect(fromPositional.map(({ event, payload }) => ({ event, payload }))).toEqual(
+						fromOptions.map(({ event, payload }) => ({ event, payload })),
+					);
+					expect(versionsOf(await store.appendEvents(positional, 3, recordedEvents(1, 3), pool))).toEqual([3]);
+
+					// An empty append does nothing
+					await expect(store.appendEvents(positional, 3, [], pool)).resolves.toEqual([]);
+					// The version of the aggregate after the append leaves a gap: expected 4, the stream is at 3
+					await expectRejectionOfClass(
+						store.appendEvents(positional, 5, recordedEvents(1, 5), pool),
+						EventStoreVersionConflictException,
+						{ expectedVersion: 4, actualVersion: 3 },
+					);
+					expect(versionsOf(await drain(readEnvelopes(positional)))).toEqual([1, 2, 3]);
+				},
+			);
+
+			test(
+				'append-atomic-partial-failure',
+				'stores nothing of an append that fails halfway, and burns no positions',
+				async () => {
+					const faults = handle?.faults;
+					if (!faults) {
+						throw new Error(
+							"The store claims atomicAppend, but its conformance handle injects no write failures: provide `faults`, or skip 'append-atomic-partial-failure' with a reason",
+						);
+					}
+					const atomicPool = await createPool('atomic');
+					const [probe] = await append(newEventStream(), recordedEvents(1), ExpectedVersion.NoStream, atomicPool);
+
+					const stream = newEventStream();
+					const removeFault = await faults.failInsertOf(
+						EventCollection.get(atomicPool),
+						eventMap.getName(new ConformancePayloadProbed({})),
+					);
+					try {
+						await expectRejectionOfClass(
+							append(
+								stream,
+								[
+									new ConformanceRecorded(1),
+									new ConformancePayloadProbed({ poisoned: true }),
+									new ConformanceRecorded(3),
+								],
+								ExpectedVersion.NoStream,
+								atomicPool,
+							),
+							EventStorePersistenceException,
+							{ outcome: 'not-persisted' },
+						);
+					} finally {
+						await removeFault();
+					}
+
+					expect(
+						await drain(store.getEnvelopes(stream, { pool: atomicPool })),
+						'the events of the failed append',
+					).toEqual([]);
+					await expect(store.getStreamVersion(stream, atomicPool)).resolves.toBe(0);
+					const read = await readAllOf(atomicPool);
+					expect(idsOf(read)).toEqual(idsOf([probe]));
+
+					// The next append continues right after the last stored position
+					const next = await append(stream, recordedEvents(2), ExpectedVersion.NoStream, atomicPool);
+					expect(positionsOf(next)).toEqual([
+						(probe.metadata.globalPosition as bigint) + 1n,
+						(probe.metadata.globalPosition as bigint) + 2n,
+					]);
+				},
+				{ requires: ({ atomicAppend }) => (atomicAppend ? undefined : 'atomicAppend') },
+			);
 		});
 
-		describe('reading', () => {
+		group('expected versions', () => {
+			test('expected-exact', 'appends when the stream is at the expected version', async () => {
+				const stream = newEventStream();
+
+				expect(versionsOf(await append(stream, recordedEvents(2), ExpectedVersion.NoStream))).toEqual([1, 2]);
+				expect(versionsOf(await append(stream, recordedEvents(1, 3), 2))).toEqual([3]);
+				expect(versionsOf(await append(stream, recordedEvents(2, 4), 3))).toEqual([4, 5]);
+
+				expect((await drain(readEvents(stream))).map(seqOf)).toEqual(range(1, 5));
+				await expect(store.getStreamVersion(stream, pool)).resolves.toBe(5);
+				await expect(store.getStreamVersion(newEventStream(), pool)).resolves.toBe(0);
+			});
+
+			test('expected-stale', 'rejects an append that expects an older version, and writes nothing', async () => {
+				const stream = newEventStream();
+				await append(stream, recordedEvents(3), ExpectedVersion.NoStream);
+
+				for (const expectedVersion of [2, 1]) {
+					await expectRejectionOfClass(
+						append(stream, [new ConformanceRecorded(99, 'stale')], expectedVersion),
+						EventStoreVersionConflictException,
+						{ expectedVersion, actualVersion: 3 },
+					);
+				}
+				expect((await drain(readEvents(stream))).map(seqOf)).toEqual(range(1, 3));
+			});
+
+			test(
+				'expected-gap',
+				'rejects an append that expects a newer version, writes nothing and burns no position',
+				async () => {
+					const stream = newEventStream();
+					const seeded = await append(stream, recordedEvents(3), ExpectedVersion.NoStream);
+
+					await expectRejectionOfClass(
+						append(stream, [new ConformanceRecorded(6, 'gap')], 5),
+						EventStoreVersionConflictException,
+						{ expectedVersion: 5, actualVersion: 3 },
+					);
+					expect((await drain(readEvents(stream))).map(seqOf)).toEqual(range(1, 3));
+
+					const [next] = await append(stream, recordedEvents(1, 4), 3);
+					expect(next.metadata.version).toBe(4);
+					expect(typeof seeded[2].metadata.globalPosition, 'the position of the last seeded event').toBe('bigint');
+					expect(next.metadata.globalPosition).toBe((seeded[2].metadata.globalPosition as bigint) + 1n);
+				},
+			);
+
+			test('no-stream-on-existing', 'rejects ExpectedVersion.NoStream for a stream that has events', async () => {
+				const stream = newEventStream();
+				await append(stream, recordedEvents(2), ExpectedVersion.NoStream);
+
+				await expectRejectionOfClass(
+					append(stream, recordedEvents(1, 3), ExpectedVersion.NoStream),
+					EventStoreVersionConflictException,
+					{ expectedVersion: 0, actualVersion: 2 },
+				);
+				expect((await drain(readEvents(stream))).map(seqOf)).toEqual([1, 2]);
+			});
+
+			test(
+				'expected-invalid',
+				'rejects an invalid expected version with an InvalidAppendOptionsException, without any I/O',
+				async () => {
+					const stream = newEventStream();
+					await expectNoIo('an invalid expected version', async () => {
+						for (const expectedVersion of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 'x', undefined, null]) {
+							await expectRejectionOfClass(
+								store.appendEvents(stream, recordedEvents(1), { expectedVersion } as never),
+								InvalidAppendOptionsException,
+								{ option: 'expectedVersion' },
+							);
+						}
+						// The positional form: the aggregate version after the append is below the number of events
+						await expectRejectionOfClass(
+							store.appendEvents(stream, 1, recordedEvents(2), pool),
+							InvalidAppendOptionsException,
+						);
+						await expectRejectionOfClass(
+							store.appendEvents(stream, recordedEvents(1), { expectedVersion: 0, pool: '' }),
+							InvalidAppendOptionsException,
+							{ option: 'pool' },
+						);
+					});
+					expect(await drain(readEvents(stream))).toEqual([]);
+				},
+			);
+		});
+
+		group('reading', () => {
 			test('read-round-trip', 'reads back what was appended, in version order', async () => {
 				const stream = newEventStream();
 				const events = recordedEvents(3);
@@ -363,7 +838,7 @@ export const describeEventStoreConformance = (
 			test(
 				'envelope-metadata-round-trip',
 				'keeps the event id, correlation id and causation id of appended envelopes',
-				async () => {
+				async (context) => {
 					const stream = newEventStream();
 					const nextEventId = EventId.factory();
 					const envelopes = recordedEvents(3).map((event, index) =>
@@ -376,7 +851,7 @@ export const describeEventStoreConformance = (
 						}),
 					);
 
-					await store.appendEvents(stream, 3, envelopes, pool);
+					const appended = await store.appendEvents(stream, 3, envelopes, pool);
 
 					const expected = envelopes.map(describeEnvelope);
 					expect((await drain(readEnvelopes(stream))).map(describeEnvelope)).toEqual(expected);
@@ -384,12 +859,10 @@ export const describeEventStoreConformance = (
 						expect(describeEnvelope(await call(() => store.getEnvelope(stream, index + 1, pool)))).toEqual(envelope);
 					}
 
-					const allEnvelopes = await drain(
-						store.getAllEnvelopes({ pool, since: { year: 2020, month: 6 }, until: { year: 2020, month: 6 } }),
-					);
-					expect(
-						allEnvelopes.filter(({ metadata }) => metadata.aggregateId === stream.aggregateId).map(describeEnvelope),
-					).toEqual(expected);
+					await readAllPart(context, async () => {
+						const fromAll = await readAllOf(pool, appended[0].metadata.globalPosition);
+						expect(fromAll.slice(0, 3).map(describeEnvelope)).toEqual(expected);
+					});
 				},
 			);
 
@@ -426,7 +899,7 @@ export const describeEventStoreConformance = (
 			});
 		});
 
-		describe('read filters', () => {
+		group('read filters', () => {
 			test('filter-from-version', 'reads from fromVersion on', async () => {
 				await expectVersions({ fromVersion: 1 }, range(1, 7));
 				await expectVersions({ fromVersion: 3 }, range(3, 7));
@@ -474,7 +947,7 @@ export const describeEventStoreConformance = (
 			});
 		});
 
-		describe('optimistic concurrency', () => {
+		group('optimistic concurrency', () => {
 			test(
 				'conflict-stale-version',
 				'rejects an append at or below the current version with an EventStoreVersionConflictException',
@@ -533,12 +1006,16 @@ export const describeEventStoreConformance = (
 				test(
 					'conflict-concurrent-appends',
 					`lets exactly one of ${CONCURRENT_WRITERS} concurrent appends to ${seeded ? 'an existing' : 'a new'} stream win`,
-					async () => {
+					async (context) => {
 						const stream = newEventStream();
 						if (seeded) {
 							await store.appendEvents(stream, seeded, recordedEvents(seeded), pool);
 						}
 						const target = seeded + 2;
+						// Atomic stores burn no position for the appends that lose
+						const checkPositions = capabilities.atomicAppend && readsAll();
+						const lastPosition = checkPositions ? await lastPositionOf(pool) : 0n;
+						const mark = publisher.mark();
 
 						const results = await withinTimeout(
 							Promise.allSettled(
@@ -553,7 +1030,8 @@ export const describeEventStoreConformance = (
 						expect(winners, 'the number of appends that succeeded').toHaveLength(1);
 						// Every other append lost the race with a version conflict
 						const otherFailures = results.flatMap((result) =>
-							result.status === 'rejected' && result.reason?.constructor !== EventStoreVersionConflictException
+							result.status === 'rejected' &&
+							!isEventSourcingError(result.reason, EventSourcingErrorCode.EventStoreVersionConflict)
 								? [String(result.reason)]
 								: [],
 						);
@@ -565,42 +1043,139 @@ export const describeEventStoreConformance = (
 							`writer-${winners[0]}`,
 							`writer-${winners[0]}`,
 						]);
+
+						// Only the winner is published: the appends that lost stored nothing
+						const winner = (results[winners[0]] as PromiseFulfilledResult<EventEnvelope[]>).value;
+						expect(publisher.callsSince(mark).map(idsOf), 'the published appends').toEqual([idsOf(winner)]);
+
+						if (checkPositions) {
+							expect(positionsOf(winner)).toEqual([lastPosition + 1n, lastPosition + 2n]);
+							expect(idsOf(await readAllOf(pool, lastPosition + 1n))).toEqual(idsOf(winner));
+						} else if (capabilities.atomicAppend) {
+							await context.annotate('readAll part skipped: read-all-order is skipped for this store');
+						}
 					},
 				);
 			}
+
+			test('conflict-fields', 'describes a conflict in the fields of the exception', async () => {
+				const stream = newEventStream();
+				await append(stream, recordedEvents(2), ExpectedVersion.NoStream);
+
+				// Found by the check of the expected version: the actual version is known
+				const checked = await rejectionOf(append(stream, recordedEvents(1, 3), 1));
+				expect(isEventSourcingError(checked, EventSourcingErrorCode.EventStoreVersionConflict)).toBe(true);
+				expect(checked).toMatchObject({
+					code: EventSourcingErrorCode.EventStoreVersionConflict,
+					streamId: stream.streamId,
+					aggregateId: stream.aggregateId,
+					pool,
+					expectedVersion: 1,
+					actualVersion: 2,
+				});
+
+				// Lost on the unique (stream, version) key, after the check passed: the store reports what it knows
+				const staleRead = spyOnStore('getStreamVersion').mockResolvedValueOnce(1);
+				let raced: unknown;
+				try {
+					raced = await rejectionOf(append(stream, recordedEvents(1, 2, 'raced'), 1));
+				} finally {
+					staleRead.mockRestore();
+				}
+				expect(isEventSourcingError(raced, EventSourcingErrorCode.EventStoreVersionConflict)).toBe(true);
+				expect(raced).toMatchObject({ streamId: stream.streamId, pool, expectedVersion: 1 });
+				const { actualVersion, cause } = raced as EventStoreVersionConflictException;
+				expect(actualVersion === undefined || typeof actualVersion === 'number').toBe(true);
+				expect(cause, 'the cause of a conflict on the unique key').toBeDefined();
+
+				const events = (await drain(readEvents(stream))) as ConformanceRecorded[];
+				expect(events.map(({ writer }) => writer)).not.toContain('raced');
+			});
+
+			test(
+				'concurrent-any',
+				`appends every one of ${CONCURRENT_WRITERS} concurrent appends with ExpectedVersion.Any`,
+				async () => {
+					const stream = newEventStream();
+
+					const appended = await withinTimeout(
+						allSettledOrThrow(
+							Array.from({ length: CONCURRENT_WRITERS }, (_, writer) =>
+								append(stream, recordedEvents(2, 1, `writer-${writer}`), ExpectedVersion.Any),
+							),
+						),
+						'Concurrent appends with ExpectedVersion.Any',
+						heavyTimeout,
+					);
+
+					for (const [writer, envelopes] of appended.entries()) {
+						const [first] = versionsOf(envelopes);
+						expect(versionsOf(envelopes), `the versions of writer ${writer}`).toEqual([first, first + 1]);
+						expectConsecutive(envelopes, `the positions of writer ${writer}`);
+					}
+					expect(appended.flatMap(versionsOf).sort((a, b) => a - b)).toEqual(range(1, CONCURRENT_WRITERS * 2));
+
+					// Each append is stored as one block, with its event ids
+					const read = await drain(readEnvelopes(stream));
+					expect(versionsOf(read)).toEqual(range(1, CONCURRENT_WRITERS * 2));
+					for (const envelopes of appended) {
+						const [first] = versionsOf(envelopes);
+						expect(idsOf(read.slice(first - 1, first + 1))).toEqual(idsOf(envelopes));
+					}
+				},
+				heavyTimeout,
+			);
 		});
 
-		describe('pools', () => {
+		group('pools', () => {
 			test(
 				'unknown-pool-append',
 				'rejects an append to a pool whose collection was never created, without creating it',
 				async () => {
-					await expectRejectionOfClass(
-						store.appendEvents(newEventStream(), 1, recordedEvents(1), unknownPool),
-						EventStorePersistenceException,
-						{ code: EventSourcingErrorCode.EventStorePersistence, outcome: 'not-persisted' },
-					);
+					const error = await rejectionOf(store.appendEvents(newEventStream(), 1, recordedEvents(1), unknownPool));
+					expect(isEventSourcingError(error, EventSourcingErrorCode.EventStorePersistence)).toBe(true);
+					expect(error).toMatchObject({
+						code: EventSourcingErrorCode.EventStorePersistence,
+						outcome: 'not-persisted',
+						collection: EventCollection.get(unknownPool),
+					});
+					expect(
+						isEventSourcingError((error as Error).cause, EventSourcingErrorCode.EventCollectionNotFound),
+						`the cause ${String((error as Error).cause)}`,
+					).toBe(true);
 					expect(await drain(store.listCollections())).not.toContain(EventCollection.get(unknownPool));
 				},
 			);
 
-			test('unknown-pool-read', 'rejects reads from a pool whose collection was never created', async () => {
-				const filter = { pool: unknownPool };
-				await expectRejection(drain(store.getEvents(reference, filter)), 'getEvents()');
-				await expectRejection(drain(store.getEnvelopes(reference, filter)), 'getEnvelopes()');
-				await expectRejection(
-					call(() => store.getEvent(reference, 1, unknownPool)),
-					'getEvent()',
-				);
-				await expectRejection(
-					call(() => store.getEnvelope(reference, 1, unknownPool)),
-					'getEnvelope()',
-				);
-				await expectRejection(
-					drain(store.getAllEnvelopes({ ...filter, since: { year: 2021, month: 1 }, until: { year: 2021, month: 2 } })),
-					'getAllEnvelopes()',
-				);
-			});
+			test(
+				'unknown-pool-read',
+				'rejects reads from a pool whose collection was never created with an EventCollectionNotFoundException',
+				async () => {
+					const filter = { pool: unknownPool };
+					const fields = { collection: EventCollection.get(unknownPool), pool: unknownPool };
+					await expectRejectionOfClass(
+						drain(store.getEvents(reference, filter)),
+						EventCollectionNotFoundException,
+						fields,
+					);
+					await expectRejectionOfClass(
+						drain(store.getEnvelopes(reference, filter)),
+						EventCollectionNotFoundException,
+						fields,
+					);
+					await expectRejectionOfClass(
+						call(() => store.getEvent(reference, 1, unknownPool)),
+						EventCollectionNotFoundException,
+						fields,
+					);
+					await expectRejectionOfClass(
+						call(() => store.getEnvelope(reference, 1, unknownPool)),
+						EventCollectionNotFoundException,
+						fields,
+					);
+					await expectRejectionOfClass(drain(store.readAll(filter)), EventCollectionNotFoundException, fields);
+				},
+			);
 
 			test('ensure-collection-idempotent', 'ensures an existing collection without touching its events', async () => {
 				await expect(call(() => store.ensureCollection(pool))).resolves.toBe(collection);
@@ -623,106 +1198,513 @@ export const describeEventStoreConformance = (
 
 				const collections = batches.flat();
 				expect(collections).toContain(collection);
-				expect(collections).toContain(allCollection);
 				expect(new Set(collections).size).toBe(collections.length);
 
-				expect(await drain(store.listCollections())).toEqual(expect.arrayContaining([collection, allCollection]));
+				expect(await drain(store.listCollections())).toEqual(expect.arrayContaining([collection]));
 			});
 		});
 
-		describe('getAllEnvelopes', () => {
-			test('all-envelopes-order', 'reads the envelopes of every stream in the order they occurred', async () => {
-				const expected = monthly.chronological.map(describeEnvelope);
+		group('template', () => {
+			test(
+				'template-not-overridden',
+				'leaves appendEvents, getEvent and getEvents to the EventStore base class',
+				async () => {
+					expect(() => assertEventStoreImplementation(store)).not.toThrow();
+					expect(store).toBeInstanceOf(EventStore);
+					for (const method of ['appendEvents', 'getEvent', 'getEvents'] as const) {
+						expect(store[method], `${method}`).toBe(EventStore.prototype[method]);
+					}
+				},
+			);
+		});
 
-				const read = await drain(
-					readAllEnvelopes({ since: { year: 2021, month: 1 }, until: { year: 2021, month: 5 } }),
-				);
-				expect(read.map(describeEnvelope)).toEqual(expected);
+		group('publishing', () => {
+			test('publish-committed-once', 'publishes the stored envelopes once, as they were returned', async () => {
+				const stream = newEventStream();
 
-				// Without an end, up to the current month
-				expect((await drain(readAllEnvelopes({ since: { year: 2021, month: 1 } }))).map(describeEnvelope)).toEqual(
-					expected,
-				);
+				const mark = publisher.mark();
+				const appended = await append(stream, recordedEvents(3), ExpectedVersion.NoStream);
+				expect(publisher.callsSince(mark)).toEqual([appended]);
+
+				const anyMark = publisher.mark();
+				const appendedAny = await append(stream, recordedEvents(1, 4), ExpectedVersion.Any);
+				expect(publisher.callsSince(anyMark)).toEqual([appendedAny]);
+				expect(positionsOf(publisher.callsSince(anyMark)[0])).toEqual(positionsOf(appendedAny));
 			});
 
-			test('all-envelopes-month-range', 'reads only the envelopes of the months from since to until', async () => {
-				const ranges: [IAllEventsFilter['since'], IAllEventsFilter['until'], EventEnvelope[]][] = [
-					[{ year: 2021, month: 1 }, { year: 2021, month: 1 }, monthly.inMonths('2021-01')],
-					[{ year: 2021, month: 2 }, { year: 2021, month: 3 }, monthly.inMonths('2021-02', '2021-03')],
-					[{ year: 2020, month: 12 }, { year: 2021, month: 2 }, monthly.inMonths('2021-01', '2021-02')],
-					[{ year: 2021, month: 4 }, { year: 2021, month: 4 }, []],
-					[{ year: 2021, month: 6 }, { year: 2021, month: 12 }, []],
-				];
+			test('publish-false-skips-publisher', 'stores without publishing when publish is false', async () => {
+				const stream = newEventStream();
 
-				for (const [since, until, expected] of ranges) {
+				const mark = publisher.mark();
+				const appended = await store.appendEvents(stream, recordedEvents(2), {
+					expectedVersion: ExpectedVersion.NoStream,
+					pool,
+					publish: false,
+				});
+				expect(publisher.callsSince(mark)).toEqual([]);
+				expect(idsOf(await drain(readEnvelopes(stream)))).toEqual(idsOf(appended));
+			});
+
+			test('conflict-publishes-nothing', 'publishes nothing for an append that conflicts', async () => {
+				const stream = newEventStream();
+				await append(stream, recordedEvents(2), ExpectedVersion.NoStream);
+
+				const mark = publisher.mark();
+				await expectRejectionOfClass(
+					append(stream, recordedEvents(1, 3), ExpectedVersion.NoStream),
+					EventStoreVersionConflictException,
+				);
+				await expectRejectionOfClass(
+					store.appendEvents(stream, 2, recordedEvents(1, 2), pool),
+					EventStoreVersionConflictException,
+				);
+				expect(publisher.callsSince(mark)).toEqual([]);
+			});
+
+			test(
+				'publisher-failure-does-not-reject',
+				'resolves an append whose publisher fails, since the events are stored',
+				async () => {
+					for (const synchronously of [false, true]) {
+						const stream = newEventStream();
+						publisher.failWith(new Error('publisher failed'), { synchronously });
+
+						const mark = publisher.mark();
+						const appended = await append(stream, recordedEvents(2), ExpectedVersion.NoStream);
+
+						expect(publisher.callsSince(mark)).toEqual([appended]);
+						expect(idsOf(await drain(readEnvelopes(stream)))).toEqual(idsOf(appended));
+						publisher.failWith(undefined);
+					}
+				},
+			);
+		});
+
+		group('metadata', () => {
+			test(
+				'metadata-round-trip',
+				'stores the correlation id and causation id of the options, and keeps those of pre-built envelopes',
+				async (context) => {
+					const stream = newEventStream();
+					const metadata = { correlationId: `correlation-${stream.aggregateId}`, causationId: 'command-1' };
+
+					const mark = publisher.mark();
+					const appended = await store.appendEvents(stream, recordedEvents(2), {
+						expectedVersion: ExpectedVersion.NoStream,
+						pool,
+						metadata,
+					});
+					const prebuilt = EventEnvelope.create(
+						eventMap.getName(new ConformanceRecorded(4)),
+						eventMap.serializeEvent(new ConformanceRecorded(4)),
+						{ aggregateId: stream.aggregateId, version: 4, correlationId: 'own-correlation' },
+					);
+					const mixed = await store.appendEvents(stream, [new ConformanceRecorded(3), prebuilt], {
+						expectedVersion: 2,
+						pool,
+						metadata: { correlationId: 'options-correlation', causationId: 'command-2' },
+					});
+
+					const expected = [
+						{ correlationId: metadata.correlationId, causationId: 'command-1' },
+						{ correlationId: metadata.correlationId, causationId: 'command-1' },
+						{ correlationId: 'options-correlation', causationId: 'command-2' },
+						// The fields of a pre-built envelope win; the options fill the ones it lacks
+						{ correlationId: 'own-correlation', causationId: 'command-2' },
+					];
+					const idsOfMetadata = (envelopes: readonly EventEnvelope[]) =>
+						envelopes.map(({ metadata: { correlationId, causationId } }) => ({ correlationId, causationId }));
+
+					expect(idsOfMetadata([...appended, ...mixed]), 'returned').toEqual(expected);
+					expect(idsOfMetadata(publisher.callsSince(mark).flat()), 'published').toEqual(expected);
+					expect(idsOfMetadata(await drain(readEnvelopes(stream))), 'getEnvelopes()').toEqual(expected);
+					expect(idsOfMetadata([await store.getEnvelope(stream, 4, pool)]), 'getEnvelope()').toEqual([expected[3]]);
+					await readAllPart(context, async () => {
+						const fromAll = await readAllOf(pool, appended[0].metadata.globalPosition);
+						expect(
+							idsOfMetadata(fromAll.filter(({ metadata }) => metadata.aggregateId === stream.aggregateId)),
+							'readAll()',
+						).toEqual(expected);
+					});
+				},
+			);
+
+			test(
+				'headers-round-trip',
+				'stores the headers of the options and of pre-built envelopes',
+				async (context) => {
+					const stream = newEventStream();
+					const headers = { string: 'text', number: 42.5, boolean: false, nothing: null, 'ünïcødé-キー': 'värde' };
+
+					const mark = publisher.mark();
+					const withHeaders = await store.appendEvents(stream, recordedEvents(1), {
+						expectedVersion: ExpectedVersion.NoStream,
+						pool,
+						metadata: { headers },
+					});
+					const withoutHeaders = await append(stream, recordedEvents(1, 2), 1);
+					const prebuilt = EventEnvelope.create(
+						eventMap.getName(new ConformanceRecorded(3)),
+						eventMap.serializeEvent(new ConformanceRecorded(3)),
+						{ aggregateId: stream.aggregateId, version: 3, headers: { $traceparent: '00-trace-span-01', tenant: 'a' } },
+					);
+					const imported = await store.appendEvents(stream, [prebuilt], {
+						expectedVersion: 2,
+						pool,
+						// A pre-built envelope keeps its own headers
+						metadata: { headers: { tenant: 'b' } },
+					});
+
+					const expected = [headers, undefined, { $traceparent: '00-trace-span-01', tenant: 'a' }];
+					const headersOf = (envelopes: readonly EventEnvelope[]) => envelopes.map(({ metadata }) => metadata.headers);
+
+					expect(headersOf([...withHeaders, ...withoutHeaders, ...imported]), 'returned').toEqual(expected);
+					expect(headersOf(publisher.callsSince(mark).flat()), 'published').toEqual(expected);
+					const read = await drain(readEnvelopes(stream));
+					expect(headersOf(read), 'getEnvelopes()').toEqual(expected);
+					expect(read[1].metadata.headers, 'absent headers').toBeUndefined();
+					for (const version of [1, 2, 3]) {
+						expect(headersOf([await store.getEnvelope(stream, version, pool)]), `getEnvelope(${version})`).toEqual([
+							expected[version - 1],
+						]);
+					}
+					await readAllPart(context, async () => {
+						const fromAll = await readAllOf(pool, withHeaders[0].metadata.globalPosition);
+						expect(
+							headersOf(fromAll.filter(({ metadata }) => metadata.aggregateId === stream.aggregateId)),
+							'readAll()',
+						).toEqual(expected);
+					});
+				},
+				{ requires: ({ headers }) => (headers ? undefined : 'headers') },
+			);
+
+			test(
+				'headers-unsupported-rejects',
+				'rejects headers with an UnsupportedOperationException, without any I/O',
+				async () => {
+					const stream = newEventStream();
+					const prebuilt = EventEnvelope.create(
+						eventMap.getName(new ConformanceRecorded(1)),
+						eventMap.serializeEvent(new ConformanceRecorded(1)),
+						{ aggregateId: stream.aggregateId, version: 1, headers: { tenant: 'a' } },
+					);
+
+					await expectNoIo('headers on a store without headers', async () => {
+						await expectRejectionOfClass(
+							store.appendEvents(stream, recordedEvents(1), {
+								expectedVersion: ExpectedVersion.NoStream,
+								pool,
+								metadata: { headers: { tenant: 'a' } },
+							}),
+							UnsupportedOperationException,
+							{ operation: 'headers' },
+						);
+						await expectRejectionOfClass(
+							append(stream, [prebuilt], ExpectedVersion.NoStream),
+							UnsupportedOperationException,
+							{ operation: 'headers' },
+						);
+					});
+					expect(await drain(readEvents(stream))).toEqual([]);
+				},
+				{ requires: ({ headers }) => (headers ? 'headers: false (the store supports headers)' : undefined) },
+			);
+
+			test(
+				'metadata-validation-no-io',
+				'rejects invalid metadata with an InvalidEventMetadataException, without any I/O',
+				async () => {
+					const stream = newEventStream();
+					const invalid: [string, unknown, Record<string, unknown>][] = [
+						['a reserved header key', { headers: { $tenant: 'a' } }, { field: 'headers', reason: 'reserved-key' }],
+						['an empty header key', { headers: { '': 'a' } }, { field: 'headers', reason: 'empty-key' }],
+						['an object header value', { headers: { a: { b: 1 } } }, { field: 'headers', reason: 'invalid-value' }],
+						['a NaN header value', { headers: { a: Number.NaN } }, { field: 'headers', reason: 'invalid-value' }],
+						['headers over 8 KiB', { headers: { a: 'x'.repeat(8 * 1024) } }, { field: 'headers', reason: 'too-large' }],
+						[
+							'a long correlation id',
+							{ correlationId: 'c'.repeat(256) },
+							{ field: 'correlationId', reason: 'too-long' },
+						],
+						['a long causation id', { causationId: 'c'.repeat(256) }, { field: 'causationId', reason: 'too-long' }],
+						['a numeric correlation id', { correlationId: 42 }, { field: 'correlationId', reason: 'invalid-type' }],
+					];
+
+					await expectNoIo('invalid metadata', async () => {
+						for (const [description, metadata, fields] of invalid) {
+							const error = await rejectionOf(
+								store.appendEvents(stream, recordedEvents(1), {
+									expectedVersion: ExpectedVersion.NoStream,
+									pool,
+									metadata: metadata as never,
+								}),
+							);
+							expect(isEventSourcingError(error, EventSourcingErrorCode.InvalidEventMetadata), `${description}`).toBe(
+								true,
+							);
+							expect(error, `${description}`).toMatchObject(fields);
+						}
+					});
+					expect(await drain(readEvents(stream))).toEqual([]);
+				},
+			);
+		});
+
+		group('readAll', () => {
+			test(
+				'read-all-order',
+				'reads a pool across streams in commit order, with the positions the appends returned',
+				async () => {
+					const orderPool = await createPool('order');
+					const [a, b, c] = [newEventStream(), newEventStream(), newEventStream()];
+
+					const mark = publisher.mark();
+					const appends = [
+						await append(a, recordedEvents(2, 1, 'a'), ExpectedVersion.NoStream, orderPool),
+						await append(b, recordedEvents(1, 1, 'b'), ExpectedVersion.NoStream, orderPool),
+						await append(a, recordedEvents(1, 3, 'a'), 2, orderPool),
+						await append(c, recordedEvents(3, 1, 'c'), ExpectedVersion.NoStream, orderPool),
+						await append(b, recordedEvents(2, 2, 'b'), ExpectedVersion.Any, orderPool),
+					];
+					const appended = appends.flat();
+
+					for (const [index, envelopes] of appends.entries()) {
+						expectConsecutive(envelopes, `the positions of append ${index}`);
+					}
+					expectStrictlyIncreasing(positionsOf(appended), 'the positions of the appends');
+					expect(appended[0].metadata.globalPosition, 'the first position of a pool').toBe(1n);
+
+					const read = await readAllOf(orderPool);
+					expect(read.map(describeStored)).toEqual(appended.map(describeStored));
+					expect(positionsOf(publisher.callsSince(mark).flat())).toEqual(positionsOf(appended));
+					expect(read.map(({ metadata }) => metadata.aggregateId)).toEqual([
+						a.aggregateId,
+						a.aggregateId,
+						b.aggregateId,
+						a.aggregateId,
+						c.aggregateId,
+						c.aggregateId,
+						c.aggregateId,
+						b.aggregateId,
+						b.aggregateId,
+					]);
+				},
+			);
+
+			test(
+				'read-all-positions-on-reads',
+				'returns the global position of every event from getEnvelope and getEnvelopes',
+				async () => {
+					const stream = newEventStream();
+					const appended = await append(stream, recordedEvents(3), ExpectedVersion.NoStream);
+
+					expectConsecutive(appended, 'the appended positions');
+					expect(positionsOf(await drain(readEnvelopes(stream)))).toEqual(positionsOf(appended));
 					expect(
-						(await drain(readAllEnvelopes({ since, until }))).map(describeEnvelope),
-						`${stringify(since)} - ${stringify(until)}`,
-					).toEqual(expected.map(describeEnvelope));
+						positionsOf(await drain(readEnvelopes(stream, { direction: StreamReadingDirection.BACKWARD }))),
+					).toEqual(positionsOf(appended).reverse());
+					for (const envelope of appended) {
+						expect((await store.getEnvelope(stream, envelope.metadata.version, pool)).metadata.globalPosition).toBe(
+							envelope.metadata.globalPosition,
+						);
+					}
+				},
+			);
+
+			test('read-all-resume', 'resumes at every position, inclusive, in batches of any size, per pool', async () => {
+				const [first, second] = [await createPool('resume-a'), await createPool('resume-b')];
+				const [a, b, c] = [newEventStream(), newEventStream(), newEventStream()];
+
+				const appendedFirst: EventEnvelope[] = [];
+				const appendedSecond: EventEnvelope[] = [];
+				appendedFirst.push(...(await append(a, recordedEvents(2), ExpectedVersion.NoStream, first)));
+				appendedSecond.push(...(await append(c, recordedEvents(2), ExpectedVersion.NoStream, second)));
+				appendedFirst.push(...(await append(b, recordedEvents(1), ExpectedVersion.NoStream, first)));
+				appendedFirst.push(...(await append(a, recordedEvents(2, 3), 2, first)));
+				appendedSecond.push(...(await append(c, recordedEvents(1, 3), 2, second)));
+
+				const inFirst = await readAllOf(first);
+				expect(idsOf(inFirst)).toEqual(idsOf(appendedFirst));
+				expect(positionsOf(inFirst)).toEqual(positionsOf(appendedFirst));
+				// The pools are independent
+				const inSecond = await readAllOf(second);
+				expect(idsOf(inSecond)).toEqual(idsOf(appendedSecond));
+				expect(positionsOf(inSecond)[0], 'the first position of the second pool').toBe(1n);
+
+				const positions = positionsOf(inFirst) as bigint[];
+				const last = positions[positions.length - 1];
+				for (const fromPosition of [undefined, 0n, ...positions, last + 1n, last + 10n]) {
+					const expected = inFirst.filter(
+						({ metadata }) => (metadata.globalPosition as bigint) >= (fromPosition ?? 0n),
+					);
+					for (let batch = 1; batch <= inFirst.length + 1; batch++) {
+						const description = `readAll(${stringify({ fromPosition, batch })})`;
+						const batches = await collectBatches(store.readAll({ pool: first, fromPosition, batch }));
+						expect(idsOf(batches.flat()), `${description}`).toEqual(idsOf(expected));
+						expect(
+							batches.map((read) => read.length),
+							`${description}: batches`,
+						).toEqual(
+							Array.from({ length: Math.ceil(expected.length / batch) }, (_, index) =>
+								Math.min(batch, expected.length - index * batch),
+							),
+						);
+					}
 				}
 			});
 
-			test('all-envelopes-batch', 'hands out batches of at most batch envelopes', async () => {
-				const batches = await collectBatches(
-					readAllEnvelopes({ since: { year: 2021, month: 1 }, until: { year: 2021, month: 5 }, batch: 2 }),
-				);
+			test(
+				'read-all-gap-safe',
+				`hands every event to a reader that tails ${CONCURRENT_WRITERS} concurrent writers exactly once`,
+				async () => {
+					const gapSafePool = await createPool('gap-safe');
+					let writing = true;
 
-				for (const batch of batches) {
-					expect(batch.length).toBeGreaterThan(0);
-					expect(batch.length).toBeLessThanOrEqual(2);
-				}
-				expect(batches.flat().map(describeEnvelope)).toEqual(monthly.chronological.map(describeEnvelope));
-			});
+					const writerPromises = Array.from({ length: CONCURRENT_WRITERS }, async (_, writer) => {
+						const stream = newEventStream();
+						const envelopes: EventEnvelope[] = [];
+						for (let index = 0; index < GAP_SAFE_APPENDS_PER_WRITER; index++) {
+							const count = 1 + ((writer + index) % 3);
+							envelopes.push(
+								...(await append(
+									stream,
+									recordedEvents(count, envelopes.length + 1, `writer-${writer}`),
+									envelopes.length,
+									gapSafePool,
+								)),
+							);
+							// Lets the reader in between the appends, also on a store whose appends wait for no I/O. A store that
+							// makes positions readable out of order is caught when that takes a timer or I/O, as it does in every
+							// real store; a reorder within microtasks goes unnoticed.
+							await yieldToEventLoop();
+						}
+						return envelopes;
+					});
+					const writers = allSettledOrThrow(writerPromises).finally(() => {
+						writing = false;
+					});
+					// Awaited below; a failing reader must not leave its rejection unhandled
+					writers.catch(() => undefined);
 
-			test('all-envelopes-full-batches', 'fills every batch but the last', async () => {
-				const batches = await collectBatches(
-					readAllEnvelopes({ since: { year: 2021, month: 1 }, until: { year: 2021, month: 5 }, batch: 3 }),
-				);
+					const read: EventEnvelope[] = [];
+					let readWhileWriting = 0;
+					const readFromLast = async () => {
+						const fromPosition = ((read.at(-1)?.metadata.globalPosition as bigint | undefined) ?? 0n) + 1n;
+						read.push(...(await drain(store.readAll({ pool: gapSafePool, fromPosition, batch: 7 }))));
+					};
+					try {
+						while (writing) {
+							const before = read.length;
+							await readFromLast();
+							if (writing) {
+								readWhileWriting += read.length - before;
+							}
+							await yieldToEventLoop();
+						}
+					} finally {
+						await Promise.allSettled(writerPromises);
+					}
+					const appended = (await writers).flat();
+					await readFromLast();
 
-				expect(batches.map((batch) => batch.length)).toEqual([3, 3, 2]);
-			});
+					expect(readWhileWriting, 'events the reader read while the writers were appending').toBeGreaterThan(0);
+					expectStrictlyIncreasing(positionsOf(read), 'the positions the tailing reader read');
+					const counts = new Map<string, number>();
+					for (const id of idsOf(read)) {
+						counts.set(id, (counts.get(id) ?? 0) + 1);
+					}
+					const missed = idsOf(appended).filter((id) => !counts.has(id));
+					const repeated = [...counts].filter(([, count]) => count > 1).map(([id]) => id);
+					expect(missed, 'events the tailing reader never read').toEqual([]);
+					expect(repeated, 'events the tailing reader read more than once').toEqual([]);
+					expect(read).toHaveLength(appended.length);
+
+					const positionById = new Map(
+						appended.map(({ metadata }) => [metadata.eventId.value, metadata.globalPosition]),
+					);
+					expect(
+						read.every(({ metadata }) => positionById.get(metadata.eventId.value) === metadata.globalPosition),
+					).toBe(true);
+				},
+				{
+					timeout: heavyTimeout,
+					requires: ({ globalOrder }) => (globalOrder === 'gap-safe' ? undefined : "globalOrder: 'gap-safe'"),
+				},
+			);
+
+			test(
+				'read-all-best-effort',
+				'reads every event of concurrent writers once they are done, in increasing positions',
+				async () => {
+					const bestEffortPool = await createPool('best-effort');
+
+					const appended = (
+						await allSettledOrThrow(
+							Array.from({ length: CONCURRENT_WRITERS }, async (_, writer) => {
+								const stream = newEventStream();
+								const envelopes: EventEnvelope[] = [];
+								for (let index = 0; index < 5; index++) {
+									envelopes.push(
+										...(await append(
+											stream,
+											recordedEvents(2, envelopes.length + 1, `writer-${writer}`),
+											envelopes.length,
+											bestEffortPool,
+										)),
+									);
+								}
+								return envelopes;
+							}),
+						)
+					).flat();
+
+					const read = await readAllOf(bestEffortPool);
+					expectStrictlyIncreasing(positionsOf(read), 'the positions of readAll');
+					expect([...idsOf(read)].sort()).toEqual([...idsOf(appended)].sort());
+				},
+				{
+					timeout: heavyTimeout,
+					requires: ({ globalOrder }) => (globalOrder === 'best-effort' ? undefined : "globalOrder: 'best-effort'"),
+				},
+			);
 		});
 
-		describe('iteration', () => {
+		group('iteration', () => {
+			const readers = (): [string, () => AsyncGenerator<unknown[]>][] => [
+				['getEvents', () => readEvents(reference, { batch: 1 })],
+				['getEnvelopes', () => readEnvelopes(reference, { batch: 1 })],
+				['listCollections', () => store.listCollections({ batch: 1 })],
+			];
+			const readAllReaders = (): [string, () => AsyncGenerator<unknown[]>][] => [
+				['readAll', () => store.readAll({ pool, batch: 1 })],
+			];
+
 			test(
 				'early-break',
 				'stays usable when a consumer stops reading early',
-				async () => {
-					for (const [method, read] of readers) {
-						for (let iteration = 0; iteration < LEAK_PROBE_ITERATIONS; iteration++) {
-							await withinTimeout(
-								(async () => {
-									for await (const batch of read()) {
-										expect(batch.length).toBeGreaterThan(0);
-										break;
-									}
-								})(),
-								`Breaking out of ${method}()`,
-							);
-						}
-						await expectStoreToBeUsable(`after breaking out of ${method}()`);
-					}
-				},
+				() => expectReadersToRelease(readers(), 'break'),
 				timeout * 2,
 			);
 
 			test(
 				'consumer-throws',
 				'stays usable when a consumer throws while reading',
-				async () => {
-					for (const [method, read] of readers) {
-						for (let iteration = 0; iteration < LEAK_PROBE_ITERATIONS; iteration++) {
-							const failure = new Error(`Consumer of ${method}() failed`);
-							const consume = async () => {
-								for await (const _batch of read()) {
-									throw failure;
-								}
-							};
-							await expect(withinTimeout(consume(), `Throwing out of ${method}()`)).rejects.toBe(failure);
-						}
-						await expectStoreToBeUsable(`after throwing out of ${method}()`);
-					}
-				},
+				() => expectReadersToRelease(readers(), 'throw'),
+				timeout * 2,
+			);
+
+			test(
+				'read-all-early-break',
+				'stays usable when a consumer stops reading all early',
+				() => expectReadersToRelease(readAllReaders(), 'break'),
+				timeout * 2,
+			);
+
+			test(
+				'read-all-consumer-throws',
+				'stays usable when a consumer throws while reading all',
+				() => expectReadersToRelease(readAllReaders(), 'throw'),
 				timeout * 2,
 			);
 
@@ -799,7 +1781,7 @@ export const describeEventStoreConformance = (
 			});
 		});
 
-		describe('payloads', () => {
+		group('payloads', () => {
 			test('payload-json-fidelity', 'returns JSON payloads exactly as they were appended', async () => {
 				const stream = newEventStream();
 				const data = createJsonPayloadProbe();

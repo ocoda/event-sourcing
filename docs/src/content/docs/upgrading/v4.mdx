@@ -217,15 +217,67 @@ The changes in this section are planned for later prereleases. Each subsection d
 
 ### Event store API [#event-store-api]
 
-*Planned.* `appendEvents(stream, events, { expectedVersion, pool })` replaces the positional form, which stays as a deprecated shim until 5.0. An empty append does nothing, and an append that leaves a gap in the versions conflicts. Custom stores implement a new contract, which conformance test suites check.
+*In the next prerelease, with the in-memory store. The PostgreSQL, MariaDB and MongoDB stores follow with schema v2.* See [Event Store](/under-the-hood/event-store).
+
+`appendEvents` takes the events and an options object. `expectedVersion` is the version of the stream **before** the append:
+
+```ts
+// 3.x: the version of the aggregate after the append
+await this.eventStore.appendEvents(stream, account.version, events, pool);
+// 4.0: the version of the stream before the append
+await this.eventStore.appendEvents(stream, events, { expectedVersion: account.version - events.length, pool });
+```
+
+`ExpectedVersion.NoStream` (0) expects a new stream. `ExpectedVersion.Any` appends whatever the version is: it makes up to 16 attempts while concurrent appends take the versions, with the same event ids, and can still conflict under sustained contention on one stream, so retry such a conflict in your application. `publish: false` stores without publishing, for imports and migrations. The returned envelopes carry their `globalPosition`.
+
+The 3.x form still works, but is deprecated and will be removed in 5.0. It emits a `DeprecationWarning` with the code `OCODA_ES_POSITIONAL_APPEND` once per process. In both forms, on the stores that implement the new contract:
+
+- **An empty append does nothing.** It returns `[]` without reading or writing, and publishes nothing. 3.x could conflict on an empty save.
+- **An append that leaves a gap conflicts.** 3.x accepted an append whose first version was above the next version of the stream. The version check now requires the stream to be exactly at the expected version, and the conflict carries its `actualVersion`.
+- **Pre-built envelopes must continue the stream**: the aggregate id of the stream, the versions `expectedVersion + 1`, `+ 2`, …, and a numeric expected version. Otherwise the append throws an `InvalidEventEnvelopeException`. They keep their id, `occurredOn` and metadata.
+- **Invalid arguments throw before any I/O**: an `InvalidAppendOptionsException` for a negative or fractional expected version (in the 3.x form, an aggregate version below the number of events) or an empty pool name, and an `InvalidEventEnvelopeException` for a stream id, aggregate id or event name over 255 characters.
+- **The failure of the version check's read** is an `EventStorePersistenceException` with `outcome: 'not-persisted'`.
+
+The database stores keep their 3.x appends until they move to schema v2. They check the arguments of both forms first, like the other stores: an empty pool name, or an aggregate version that is fractional or below the number of events, throws an `InvalidAppendOptionsException`. Otherwise the 3.x form keeps its 3.x behaviour there: an empty append reaches the store, a gap is accepted, and pre-built envelopes are stored as they are. They accept the options form with a numeric expected version, where pre-built envelopes must continue the stream, and reject `ExpectedVersion.Any` and metadata with an `UnsupportedOperationException`. In both forms, they reject pre-built envelopes with headers or an `eventVersion`, which they would drop, with an `UnsupportedOperationException`. Call the options form through the `EventStore` type: on a variable typed as `PostgresEventStore`, `MariaDBEventStore` or `MongoDBEventStore`, only the 3.x form type-checks until schema v2.
+
+**Publishing.** The module hands the store the `EventBus` when it creates it, and `eventStore.publish = …` is gone. Events appended before the application bootstrapped are no longer held back with a warning, but the publishers and subscribers are only registered at bootstrap, so they still don't receive them. The store calls `eventBus.publishAll(envelopes)`, so a test double that replaces the `EventBus` must implement it; spies on `eventBus.publish` keep working.
+
+**Reads.** `getEvent()` and `getEnvelope()` always return a promise, also on the in-memory store. On the in-memory store now, and on the database stores with schema v2, every read of a pool whose collection doesn't exist throws an `EventCollectionNotFoundException`; the in-memory store's `getEvents()` and `getEnvelopes()` yielded nothing and its `getEvent()` threw an `EventNotFoundException`. An append to such a pool throws an `EventStorePersistenceException` with `outcome: 'not-persisted'`, whose `cause` is the `EventCollectionNotFoundException`.
+
+**Custom stores.** The store is constructed with `(context, options)`, where `context` holds the event map and the publisher, and `options` no longer includes `useDefaultPool`. `EventStoreDriver` is now the type of that constructor rather than an interface of the store instance. A store implements the driver methods (`getStreamVersion`, `getEnvelope`, `getEnvelopes`, `readAll`, `persistEvents`) and declares its `capabilities`; the base class implements `appendEvents`, `getEvent` and `getEvents`, and a store that overrides one of them fails the bootstrap with an `InvalidEventStoreImplementationException`. A store that still overrides `appendEvents` the 3.x way keeps working in this prerelease, with the deprecated `this.eventMap`, once it takes `(context, options)`, returns promises from every method, and implements `getEnvelope` and `getEnvelopes`, which are required now; that path is removed before 4.0.0. See [Custom Event and Snapshot Stores](/advanced/custom-stores#migrating-a-3x-store).
 
 ### Metadata and headers [#metadata-headers]
 
-*Planned.* An append can set a `correlationId`, a `causationId` and `headers` for its events. The envelopes store and return them.
+*In the next prerelease, with the in-memory store. The database stores follow with schema v2.* See [Envelopes](/under-the-hood/envelopes#headers).
+
+An append can set a `correlationId`, a `causationId` and `headers` for all its events:
+
+```ts
+await eventStore.appendEvents(stream, events, {
+	expectedVersion: account.version - events.length,
+	metadata: { correlationId: request.id, causationId: command.id, headers: { tenant: 'acme' } },
+});
+```
+
+- The envelopes store and return them, together with the new `eventVersion` and `globalPosition` fields of the metadata.
+- Header keys are not empty and don't start with `$`, which is reserved for the library; values are strings, finite numbers, booleans or `null`; the headers of an event are at most 8 KiB of JSON. The correlation and causation ids are at most 255 characters. Invalid metadata throws an `InvalidEventMetadataException` before any I/O.
+- A store without the `headers` capability rejects headers with an `UnsupportedOperationException` instead of dropping them.
+- Pre-built envelopes keep their own metadata, `$` headers included; the metadata of the append only fills the fields they lack.
 
 ### Reading all events [#read-all]
 
-*Planned.* `readAll({ fromPosition })`, over a `globalPosition` that the store assigns to every event, replaces `getAllEnvelopes({ since, until })`.
+*In the next prerelease, with the in-memory store. The database stores follow with schema v2, which adds the positions to existing events.* See [Reading all events](/under-the-hood/event-store#reading-all-events).
+
+`readAll({ fromPosition, batch, pool })` replaces `getAllEnvelopes({ since, until })`. Every stored event has a `globalPosition`, a bigint per pool, starting at `1n`; `readAll` yields a pool in that order, from `fromPosition` on (inclusive), in batches of `batch` (a positive integer, or a `RangeError`). Store the position of the last envelope you processed and resume at `checkpoint + 1n`. To read a period, filter on `metadata.occurredOn`.
+
+```ts
+// 3.x
+for await (const envelopes of eventStore.getAllEnvelopes({ since: { year: 2024, month: 1 } })) { … }
+// 4.0
+for await (const envelopes of eventStore.readAll({ fromPosition: checkpoint + 1n })) { … }
+```
+
+The in-memory store no longer has `getAllEnvelopes`. The database stores keep it until schema v2, and `getAllEnvelopes`, `IAllEventsFilter` and `EventStore.getYearMonthRange` are removed before 4.0.0. `capabilities.globalOrder` says whether a reader that tails the store can miss an event (`'best-effort'`) or not (`'gap-safe'`); the in-memory store is gap-safe.
 
 ### Snapshot store [#snapshot-store]
 

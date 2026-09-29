@@ -6,6 +6,7 @@ import {
 	EventEnvelope,
 	EventId,
 	EventMap,
+	type EventStoreContext,
 	EventStream,
 	type IEvent,
 	type ISnapshot,
@@ -245,3 +246,21 @@ export const getEvents = (): IEvent[] => [
 	new AccountDebitedEvent(35),
 	new AccountClosedEvent(),
 ];
+
+/**
+ * The context the module hands an event store: the event map, and a publisher that passes every envelope it publishes
+ * to `publish`, in order, awaiting each call (a `vi.fn()` spy in the driver specs).
+ */
+export const createTestContext = (
+	eventMap: EventMap = getEventMap(),
+	publish: (envelope: EventEnvelope) => unknown = () => undefined,
+): EventStoreContext => ({
+	eventMap,
+	publisher: {
+		publishAll: async (envelopes) => {
+			for (const envelope of envelopes) {
+				await publish(envelope);
+			}
+		},
+	},
+});

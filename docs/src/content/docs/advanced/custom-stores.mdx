@@ -3,11 +3,12 @@ title: Custom Event and Snapshot Stores
 ---
 
 ## How to create your own Event Store
-To create and register your own Event Store implementation you'll need an EventStore class and a configuration interface to be able to register it in the module.
+An event store has two halves. The `EventStore` base class implements the contract that every store shares: it validates appends, serializes the events, checks the expected version, retries `ExpectedVersion.Any`, stamps the global positions on the envelopes and publishes them. Your store implements the **driver methods**, which read and write the database and never touch the event map. The [conformance suite](#test-your-event-store) checks that the two halves fit.
+
+To register your store in the module, you need an `EventStore` subclass and a configuration interface.
 
 #### Create a configuration
-The first thing you need to do to be able to register your Event Store is to create a configuration interface.
-It should extend the `EventStoreConfig` interface and define the EventStore you're about to create as the driver, along with additional parameters you'll need to initialize it.
+The configuration extends `EventStoreConfig`, names your store as the `driver`, and adds the options your store needs.
 
 ```typescript
 import type { Type } from '@nestjs/common';
@@ -22,10 +23,12 @@ export interface FooEventStoreConfig extends EventStoreConfig {
 ```
 
 #### Create an Event Store
-Secondly you'll need to create your Event Store which extends the `EventStore` class and implements the required methods.
-If an existing integration suits your needs, but misses only a few things, you could also extend an existing integration EventStore.
+The module creates your store with `new driver(context, options)`:
 
-The module creates your store with `new driver(eventMap, config)`, where `config` is the configuration you registered without the `driver`. The base class stores both, so you don't need a constructor of your own. They are available in your class as `this.eventMap` and `this.options`.
+- `context` holds the `eventMap` and the `publisher` (the `EventBus`). The base class uses both; your store needs neither.
+- `options` is the configuration you registered, without `driver` and `useDefaultPool` (the module handles those). It is available as `this.options`.
+
+The base class stores both, so you don't need a constructor of your own. If you declare one, pass both arguments on to `super`. `EventStoreDriver`, the type of `driver`, is this constructor: `new (context, options) => EventStore`.
 
 The snippet below is a skeleton, fill in the methods with the logic for your database.
 
@@ -33,95 +36,118 @@ The snippet below is a skeleton, fill in the methods with the logic for your dat
 import {
 	type EventEnvelope,
 	EventStore,
+	type EventStoreCapabilities,
 	type EventStream,
-	type IAllEventsFilter,
-	type IEvent,
 	type IEventCollection,
 	type IEventCollectionFilter,
 	type IEventFilter,
 	type IEventPool,
+	type IReadAllFilter,
+	type PersistOutcome,
+	type PersistTarget,
 } from '@ocoda/event-sourcing';
 import type { FooEventStoreConfig } from './foo-event-store-config';
 
 export class FooEventStore extends EventStore<FooEventStoreConfig> {
-	public async connect(): Promise<void> {
-		// Connect to your Event Store, the configuration is available as this.options
+	// The guarantees your store gives; the conformance suite tests each one you claim
+	override readonly capabilities: EventStoreCapabilities = {
+		atomicAppend: true,
+		headers: true,
+		globalOrder: 'gap-safe',
+	};
+
+	async connect(): Promise<void> {
+		// Connect to your database, the configuration is available as this.options
 	}
 
-	public async disconnect(): Promise<void> {
-		// Disconnect from your Event Store
+	async disconnect(): Promise<void> {
+		// Disconnect from your database
 	}
 
-	public async ensureCollection(pool?: IEventPool): Promise<IEventCollection> {
-		// Ensure the collection for the pool exists in your Event Store and return its name.
-		// Use EventCollection.get(pool) to get the name: 'events' or e.g. 'tenant-1-events'
+	async ensureCollection(pool?: IEventPool): Promise<IEventCollection> {
+		// Create the collection of the pool unless it exists, and return its name.
+		// EventCollection.get(pool) is the name: 'events' or e.g. 'tenant-1-events'
 	}
 
-	public async *listCollections(filter?: IEventCollectionFilter): AsyncGenerator<IEventCollection[]> {
-		// List all collections in your Event Store
-		// yield them in batches (arrays) of filter?.batch collections
+	async *listCollections(filter?: IEventCollectionFilter): AsyncGenerator<IEventCollection[]> {
+		// Yield the collections in batches (arrays) of filter?.batch collections
 	}
 
-	async getEvent(eventStream: EventStream, version: number, pool?: IEventPool): Promise<IEvent> {
-		// Get a single event from your Event Store
+	async getStreamVersion(stream: EventStream, pool?: IEventPool): Promise<number> {
+		// The version of the last event of the stream, 0 when it has none
 	}
 
-	async *getEvents(eventStream: EventStream, filter?: IEventFilter): AsyncGenerator<IEvent[]> {
-		// Get the events of a stream from your Event Store
-		// yield them in batches (arrays) of filter?.batch events
+	async getEnvelope(stream: EventStream, version: number, pool?: IEventPool): Promise<EventEnvelope> {
+		// The envelope of one event, with its globalPosition; an EventNotFoundException when there is none
 	}
 
-	async appendEvents(
-		eventStream: EventStream,
-		version: number,
-		events: IEvent[],
-		pool?: IEventPool,
-	): Promise<EventEnvelope[]> {
-		// Append the events to the stream of your Event Store and return their envelopes
+	async *getEnvelopes(stream: EventStream, filter?: IEventFilter): AsyncGenerator<EventEnvelope[]> {
+		// The envelopes of a stream from filter.fromVersion on, in the requested direction,
+		// in batches (arrays) of filter?.batch envelopes
 	}
 
-	async *getAllEnvelopes(filter: IAllEventsFilter): AsyncGenerator<EventEnvelope[]> {
-		// Get the envelopes of all the events in your Event Store
-		// yield them in batches (arrays) of filter.batch envelopes
+	async *readAll(filter?: IReadAllFilter): AsyncGenerator<EventEnvelope[]> {
+		// The envelopes of a pool across streams, by global position, from filter.fromPosition on (inclusive),
+		// in batches (arrays) of filter?.batch envelopes
+	}
+
+	protected async persistEvents(envelopes: readonly EventEnvelope[], target: PersistTarget): Promise<PersistOutcome> {
+		// Store the envelopes all or nothing, assign their global positions, and return them:
+		// return { status: 'committed', positions };
+		// On a duplicate (stream, version) key: return { status: 'conflict', cause: error };
 	}
 }
 ```
 
-The methods that are required:
+The driver methods:
 
 | Method | What it does |
 | --- | --- |
-| `connect()` and `disconnect()` | Open and close the connection to the database. |
-| `ensureCollection(pool?)` | Creates the collection (table) for a pool when it doesn't exist yet, and returns its name. |
+| `connect()` and `disconnect()` | Open and close the connection to the database. The capabilities are final once `connect()` resolved. |
+| `ensureCollection(pool?)` | Creates the collection (table) of a pool unless it exists, and returns its name. Never touches existing events. |
 | `listCollections(filter?)` | Yields the existing collections as arrays. |
-| `getEvent(eventStream, version, pool?)` | Returns the event with the given version from a stream. |
-| `getEvents(eventStream, filter?)` | Yields the events of a stream as arrays, starting from `filter.fromVersion` and in the requested direction. |
-| `appendEvents(eventStream, version, events, pool?)` | Stores the events and returns their `EventEnvelope`s. |
-| `getAllEnvelopes(filter)` | Yields the envelopes of all events in the given period (`since` until `until`) as arrays. |
+| `getStreamVersion(stream, pool?)` | Returns the version of the stream: the version of its last event, 0 when it has none. |
+| `getEnvelope(stream, version, pool?)` | Returns the envelope of an event of a stream. |
+| `getEnvelopes(stream, filter?)` | Yields the envelopes of a stream as arrays, from `filter.fromVersion` on and in the requested direction. |
+| `readAll(filter?)` | Yields the envelopes of a pool as arrays, in the order of their global position, from `filter.fromPosition` on. See [Reading all events](/under-the-hood/event-store#reading-all-events). |
+| `persistEvents(envelopes, target)` | Stores the envelopes of an append, all or nothing, and returns their global positions. |
 
-`getEnvelopes(eventStream, filter?)` and `getEnvelope(eventStream, version, pool?)` are optional. They return the envelopes of a stream instead of just the events.
+Every method returns a promise (or an async generator), and every read throws an `EventCollectionNotFoundException` when the collection of the pool doesn't exist. `getEnvelope` throws an `EventNotFoundException` for an event that doesn't exist. Envelopes read from the database are built with `EventEnvelope.from(event, payload, metadata)`.
 
-A few things to keep in mind when implementing `appendEvents`:
-- The `version` is the version of the aggregate **after** the events were applied. The first of the new events gets the version `version - events.length + 1`.
-- Reject the append with an `EventStoreVersionConflictException` when the stream already contains an event with this version or a higher one. That's how concurrent changes to the same aggregate are detected. Map a duplicate-key error of your database to the same exception, passing it as the `cause`.
-- Wrap any other failure in an `EventStorePersistenceException`, with an `outcome` that says whether the events may have been stored: `'not-persisted'` when the failure happened before anything was written, `'unknown'` otherwise.
-- Serialize the events with `this.eventMap.getName(event)` and `this.eventMap.serializeEvent(event)`, and turn stored events back into instances with `this.eventMap.deserializeEvent(name, payload)`.
-- Return the created envelopes. You don't publish them yourself, the `EventStore` base class publishes them after `appendEvents` has resolved, see [Event Pub/Sub](/advanced/event-pubsub).
+**Don't override `appendEvents`, `getEvent` or `getEvents`.** The base class implements them for every store, and the module refuses a store that overrides one with an `InvalidEventStoreImplementationException` when it creates the store. `assertEventStoreImplementation(store)` runs the same check. To decorate appends, for tracing for instance, override `persistEvents` and call `super.persistEvents(envelopes, target)`.
 
-The exceptions take a single object argument (since 4.0), plus the standard error options for the `cause`:
+#### Implement `persistEvents`
+The base class calls `persistEvents` once it has validated the append, serialized the events, numbered them and checked that the stream is at `target.expectedVersion`. The first envelope has the version `target.expectedVersion + 1`. `persistEvents` checks no versions and serializes nothing:
+
+- **Store the envelopes all or nothing**, in one transaction, and never overwrite an event. Store every field of the metadata: `eventId`, `aggregateId`, `version`, `occurredOn`, `correlationId`, `causationId`, `headers` and `eventVersion`.
+- **Assign the global positions** in the same write: one per envelope, consecutive, higher than every position the pool handed out before, and never reused. Return them as bigints: `{ status: 'committed', positions }`. `toPosition()` converts what a database driver returns (a decimal string, a number or an Int64) to a bigint.
+- **Map a duplicate `(stream, version)` key to a conflict**: return `{ status: 'conflict', cause: error }`, with the duplicate-key error of your database as the `cause` (PostgreSQL `23505`, MariaDB `1062`, MongoDB `11000`), and the version of the stream as `actualVersion` if you know it. That is how an append that lost a race is detected, since the version check of the base class runs before the write. Only this key is a conflict.
+- **Throw everything else** as an `EventStorePersistenceException` with the `outcome` you know: `'not-persisted'` when nothing was written (the connection failed, the transaction was rolled back, the collection doesn't exist), and `'unknown'` when the commit may have happened (the connection dropped after `COMMIT` was sent). The base class passes your exception through unchanged, and treats any other error as `'unknown'`.
+
+For a pool whose collection doesn't exist, throw the persistence exception with an `EventCollectionNotFoundException` as its `cause`:
 
 ```typescript
-const expectedVersion = version - events.length; // the version of the stream before the append
-
-throw new EventStoreVersionConflictException({ stream: eventStream, expectedVersion, actualVersion, pool });
-throw new EventStorePersistenceException({ collection, outcome: 'unknown' }, { cause: error });
-throw new EventNotFoundException({ streamId: eventStream.streamId, version, pool });
+throw new EventStorePersistenceException(
+	{ collection: target.collection, outcome: 'not-persisted' },
+	{ cause: new EventCollectionNotFoundException({ collection: target.collection, pool: target.pool }) },
+);
 ```
 
-Leave `actualVersion` out when you don't know it, for instance after losing a race on the unique key. To tell errors apart, use `isEventSourcingError(error, EventSourcingErrorCode.EventStoreVersionConflict)` rather than comparing `error.constructor`.
+To tell errors apart, use `isEventSourcingError(error, EventSourcingErrorCode.EventStoreVersionConflict)` rather than comparing `error.constructor`.
+
+#### Declare the capabilities
+`capabilities` lists the optional guarantees of your store. The flags you leave out get their default:
+
+| Capability | Default | What it means |
+| --- | --- | --- |
+| `atomicAppend` | `true` | An append stores all of its events or none of them. |
+| `headers` | `false` | The store persists the `headers` of the events. Without it, an append with headers is rejected with an `UnsupportedOperationException` before anything is written. |
+| `globalOrder` | `'best-effort'` | `'gap-safe'`: once `readAll` yielded a position, no event at or below it commits later, so a reader that resumes after its last position never misses an event. `'best-effort'`: positions strictly increase, but an event may still commit below a position that was read. |
+
+Claim a capability only if its conformance cases pass. When the capabilities depend on the database (a MongoDB server without a replica set has no transactions, for instance), set them in `connect()`, with `Object.assign(this.capabilities, { ... })`.
 
 #### Register your Event Store
-Once you have that, you can register your EventStore in the module, while providing the configuration for it so the module knows that it's an EventStore.
+Register your store in the module, with its configuration:
 
 ```typescript
 import { Module } from '@nestjs/common';
@@ -146,6 +172,34 @@ import type { FooEventStoreConfig } from './foo-event-store-config';
 })
 export class AppModule {}
 ```
+
+#### Test your Event Store
+The conformance suite that every built-in store runs encodes the contract. It will be published as `@ocoda/event-sourcing/testing` in a later 4.0 prerelease; until then it lives in the repository's private `@ocoda/event-sourcing-testing` package. The suite hands your factory the store context, and your factory returns the connected store:
+
+```typescript
+describeEventStoreConformance('FooEventStore', async (context) => {
+	const store = new FooEventStore(context, { ... });
+	await store.connect();
+	return {
+		store,
+		cleanup: async (collections) => {
+			// Drop the collections, then disconnect
+		},
+	};
+});
+```
+
+Cases that need a capability your store doesn't claim are skipped. A case your store can't pass yet is skipped with a reason, in the `skip` option.
+
+#### Migrating a 3.x store
+1. The constructor becomes `(context, options)`. Remove yours, or pass both arguments on.
+2. Delete `appendEvents`, `getEvents`, `getEvent` and every use of `this.eventMap`.
+3. Implement `getStreamVersion`, `getEnvelope`, `getEnvelopes`, `readAll` and `persistEvents`. `readAll` replaces `getAllEnvelopes`, and with it the year-month column and `getYearMonthRange`.
+4. Make every method `async`.
+5. Store the correlation id, causation id, headers and event version, and declare your `capabilities`.
+6. Construct exceptions with a single object argument, plus the error options for the `cause`.
+
+A store that still overrides `appendEvents` the 3.x way keeps working in the next prerelease once it has taken steps 1 and 4 and implements `getEnvelope` and `getEnvelopes`, which are required now: the base class publishes what its `appendEvents` returns, and its `this.eventMap` is the event map of the context (deprecated). Such a store gets the appends in the 3.x form, and rejects `ExpectedVersion.Any`, append metadata, and pre-built envelopes with headers or an `eventVersion`. The built-in database stores work this way until they move to schema v2. This path, `getAllEnvelopes` and `getYearMonthRange` are removed before 4.0.0.
 
 ---
 

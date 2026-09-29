@@ -10,7 +10,7 @@ import {
 	UnsupportedOperationException,
 } from '../exceptions/index.js';
 import type { EventStoreCapabilities, IEventPool } from '../interfaces/index.js';
-import { EventEnvelope, type EventStream } from '../models/index.js';
+import { EventEnvelope, EventId, type EventStream } from '../models/index.js';
 
 /**
  * The largest values every event store accepts. Appends are checked against them before any I/O, and the stores size
@@ -242,7 +242,8 @@ export const validateEnvelopeLimits = (stream: EventStream, envelopes: readonly 
 /**
  * Checks the pre-built envelopes among the items of an append. They are stored as they are, so they need a numeric
  * expected version, have to belong to the stream's aggregate, and the item at index `i` (raw events count too) has to
- * have version `expectedVersion + 1 + i`. Their metadata is checked separately, with `validateAppendMetadata`.
+ * have version `expectedVersion + 1 + i`. Their `eventId` has to be an `EventId`, and their `occurredOn`, when set, a
+ * valid `Date`. Their correlation id, causation id and headers are checked separately, with `validateAppendMetadata`.
  *
  * Expects an expected version that passed `validateExpectedVersion`.
  * @throws InvalidEventEnvelopeException
@@ -277,6 +278,25 @@ export const validatePrebuiltEnvelopes = (
 				reason: 'version',
 				expected: expectedVersion + 1 + index,
 				actual: version,
+			});
+		}
+		// Stored as they are, so an envelope parsed from JSON and not revived would only fail in the store, or be stored
+		// with an id that is not an EventId
+		if (!(item.metadata.eventId instanceof EventId)) {
+			throw new InvalidEventEnvelopeException({
+				streamId: stream.streamId,
+				index,
+				reason: 'invalid-type',
+				field: 'eventId',
+			});
+		}
+		const { occurredOn } = item.metadata;
+		if (occurredOn !== undefined && !(occurredOn instanceof Date && Number.isFinite(occurredOn.getTime()))) {
+			throw new InvalidEventEnvelopeException({
+				streamId: stream.streamId,
+				index,
+				reason: 'invalid-type',
+				field: 'occurredOn',
 			});
 		}
 	}

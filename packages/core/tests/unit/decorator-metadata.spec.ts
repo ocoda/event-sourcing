@@ -7,12 +7,15 @@ import {
 	EventMap,
 	type EventSourcingModuleOptions,
 	EventStore,
+	type IEvent,
+	InvalidEventStoreImplementationException,
 	QueryBus,
 	SnapshotStore,
+	assertEventStoreImplementation,
 } from '@ocoda/event-sourcing';
 import { AccountRepository, OpenAccountCommandHandler } from '@ocoda/event-sourcing-testing/e2e/application';
 import { AccountSnapshotRepository } from '@ocoda/event-sourcing-testing/e2e/domain';
-import { eventStreamAccountA, getEventMap, getEvents } from '@ocoda/event-sourcing-testing/unit';
+import { createTestContext } from '@ocoda/event-sourcing-testing/unit';
 import { InMemoryEventStore } from '@ocoda/event-sourcing/integration/event-store';
 import { ExplorerService } from '@ocoda/event-sourcing/services';
 import { EventSourcingCoreModule } from '../../lib/event-sourcing.core.module.js';
@@ -76,56 +79,27 @@ describe('decorator metadata', () => {
 });
 
 // The shared tsconfig keeps define semantics for class fields (useDefineForClassFields: true), matching the
-// published build, and Oxc mirrors it for the tests. The EventStore constructor returns a Proxy that wraps
-// appendEvents to publish, reading `_publish`, a field that is declared without an initializer and only assigned
-// through the `publish` setter.
-describe('EventStore publish wiring (define semantics for class fields)', () => {
-	const events = getEvents();
-	let eventStore: InMemoryEventStore;
-
-	beforeEach(async () => {
-		eventStore = new InMemoryEventStore(getEventMap(), { driver: InMemoryEventStore });
-		await eventStore.connect();
-		await eventStore.ensureCollection();
-	});
-
-	afterEach(async () => {
-		await eventStore.disconnect();
-	});
-
+// published build, and Oxc mirrors it for the tests. The event store's implementation guard relies on it: a template
+// method that a store overrides with a class field is an own property of the store. (The 3.x publishing proxy that
+// these tests used to cover is the interim legacy path now: tests/unit/event-store/legacy-path.spec.ts.)
+describe('class fields (define semantics)', () => {
 	it('defines class fields without an initializer, like the published build', () => {
-		const store = new InMemoryEventStore(getEventMap(), { driver: InMemoryEventStore });
+		const store = new InMemoryEventStore(createTestContext(), { driver: InMemoryEventStore });
 
 		// Define semantics: fields declared without an initializer are own properties initialised to undefined.
-		expect(Object.hasOwn(store, '_publish')).toBe(true);
+		expect(Object.hasOwn(store, 'collections')).toBe(true);
+		expect(store.collections).toBeUndefined();
 		// Fields with an initializer are still assigned in the constructor.
 		expect(Object.hasOwn(store, 'logger')).toBe(true);
 	});
 
-	it('publishes every appended envelope through the function set on the proxy', async () => {
-		const publish = vi.fn();
-		eventStore.publish = publish;
+	it('makes a template method overridden by a class field an own property, which the guard rejects', () => {
+		class FieldOverride extends InMemoryEventStore {
+			getEvent = async (): Promise<IEvent> => ({});
+		}
+		const store = new FieldOverride(createTestContext(), { driver: InMemoryEventStore });
 
-		// The setter ran against the proxied instance.
-		expect((eventStore as unknown as { _publish: unknown })._publish).toBe(publish);
-
-		const envelopes = await eventStore.appendEvents(eventStreamAccountA, 3, events.slice(0, 3));
-
-		expect(envelopes).toHaveLength(3);
-		expect(publish.mock.calls).toEqual(envelopes.map((envelope) => [envelope]));
-		expect(publish.mock.contexts).toEqual([eventStore, eventStore, eventStore]);
-	});
-
-	it('uses the publish function that is set at the time of the append', async () => {
-		const first = vi.fn();
-		const second = vi.fn();
-
-		eventStore.publish = first;
-		await eventStore.appendEvents(eventStreamAccountA, 1, events.slice(0, 1));
-		eventStore.publish = second;
-		await eventStore.appendEvents(eventStreamAccountA, 2, events.slice(1, 2));
-
-		expect(first).toHaveBeenCalledTimes(1);
-		expect(second).toHaveBeenCalledTimes(1);
+		expect(Object.hasOwn(store, 'getEvent')).toBe(true);
+		expect(() => assertEventStoreImplementation(store)).toThrow(InvalidEventStoreImplementationException);
 	});
 });

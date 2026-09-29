@@ -1,5 +1,10 @@
 import type { EventStoreCapabilities } from '@ocoda/event-sourcing';
-import { conformanceRepeat, conformanceTest, stringify } from '@ocoda/event-sourcing-testing/conformance';
+import {
+	conformanceRepeat,
+	conformanceTest,
+	isSkippedCase,
+	stringify,
+} from '@ocoda/event-sourcing-testing/conformance';
 import type { RunnerTestCase } from 'vitest';
 
 // The harness of the conformance suites (packages/testing/conformance/fixtures.ts), which every store's conformance
@@ -178,6 +183,96 @@ describe(conformanceTest, () => {
 		it('ran the case three times', ({ task }) => {
 			expect(runs).toBe(3);
 			expect(resultOf(task, 'repeated')).toMatchObject({ state: 'pass', repeatCount: 2 });
+		});
+	});
+
+	describe('only', () => {
+		const ran: string[] = [];
+		const test = withHarnessEnv({}, () =>
+			conformanceTest<'kept' | 'left-out'>(undefined, 5_000, undefined, { only: ['kept'] }),
+		);
+
+		test('kept', 'registers a listed case', async () => {
+			ran.push('kept');
+		});
+		test('left-out', 'does not register a case that is not listed', async () => {
+			ran.push('left-out');
+		});
+
+		it('registered only the listed case', ({ task }) => {
+			expect(ran).toEqual(['kept']);
+			expect(resultOf(task, 'left-out')).toBeUndefined();
+		});
+	});
+
+	describe('expectFailure', () => {
+		const test = withHarnessEnv({}, () =>
+			conformanceTest<'broken'>(undefined, 5_000, undefined, { expectFailure: true }),
+		);
+
+		test('broken', 'registers a case that must fail', async () => {
+			throw new Error('the detector fired');
+		});
+
+		const matched = withHarnessEnv({}, () =>
+			conformanceTest<'detected'>(undefined, 5_000, undefined, { expectFailure: { detected: /detector fired/ } }),
+		);
+
+		matched('detected', 'registers a case that must fail with a matching message', async () => {
+			throw new Error('the detector fired');
+		});
+
+		it('passes because the case failed (with the expected message)', ({ task }) => {
+			expect(resultOf(task, 'broken')?.state).toBe('pass');
+			expect(resultOf(task, 'detected')?.state).toBe('pass');
+		});
+
+		it('fails a case that passes, fails for another reason, or is gated off by a capability', async () => {
+			const registered: ((context: unknown) => Promise<void>)[] = [];
+			const globals = globalThis as unknown as { it: (...args: unknown[]) => void };
+			const register = vi.spyOn(globals, 'it').mockImplementation((...args: unknown[]) => {
+				registered.push(args[2] as (context: unknown) => Promise<void>);
+			});
+			const control = conformanceTest<'passes' | 'other' | 'gated', { gapSafe: boolean }>(
+				undefined,
+				5_000,
+				() => ({ gapSafe: false }),
+				{ expectFailure: { other: /detector fired/ } },
+			);
+			control('passes', 'a case that does not detect the defect', async () => undefined);
+			control('other', 'a case that fails for another reason', async () => {
+				throw new TypeError('x is not a function');
+			});
+			const gated = vi.fn(async () => {
+				throw new Error('the detector fired');
+			});
+			control('gated', 'a case the store lacks the capability for', gated, {
+				requires: ({ gapSafe }) => (gapSafe ? undefined : "globalOrder: 'gap-safe'"),
+			});
+			register.mockRestore();
+
+			const skip = vi.fn();
+			const [passes, other, gatedOff] = registered.map((fn) => fn({ skip }));
+			await expect(passes).rejects.toThrow('The negative control passes passed: the case did not detect the defect');
+			await expect(other).rejects.toThrow(
+				'The negative control other failed for another reason than the defect (expected a failure matching /detector fired/): x is not a function',
+			);
+			await expect(gatedOff).rejects.toThrow(
+				"The negative control gated is gated off by the capability globalOrder: 'gap-safe', so it proves nothing",
+			);
+			expect(gated).not.toHaveBeenCalled();
+			expect(skip).not.toHaveBeenCalled();
+		});
+	});
+
+	describe(isSkippedCase, () => {
+		it('is true for a case with a reason, unless CONFORMANCE_RUN_SKIPPED is true', () => {
+			const skip = { gap: 'a documented gap' };
+
+			expect(withHarnessEnv({}, () => isSkippedCase(skip, 'gap'))).toBe(true);
+			expect(withHarnessEnv({}, () => isSkippedCase<string>(skip, 'other'))).toBe(false);
+			expect(withHarnessEnv({}, () => isSkippedCase(undefined, 'gap'))).toBe(false);
+			expect(withHarnessEnv({ CONFORMANCE_RUN_SKIPPED: 'true' }, () => isSkippedCase(skip, 'gap'))).toBe(false);
 		});
 	});
 
