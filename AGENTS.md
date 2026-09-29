@@ -40,13 +40,17 @@ The `ci-ok` check is the only required check on `master` and `3.x`. Before openi
 
 ## Changesets
 
-- Every change to a published package needs a changeset (`pnpm exec changeset`). It is the user-facing CHANGELOG entry, so write it for users and call out behaviour changes.
-- Keep `` $` `` out of changeset text. The changelog generator treats it as a `String.replace` pattern and corrupts the entry.
+- Every change to a published package needs a changeset (`pnpm exec changeset`). It is the user-facing CHANGELOG entry, so write it for users and call out behaviour changes. On `master`, the `Changesets` CI job requires one when a PR changes `lib/` or the runtime fields of `package.json` in `packages/core` or `packages/integration/*`. Only a maintainer can waive that, with the `no-changeset` label.
+- A changeset may only name the four published packages, never a private one.
+- `master` is in changesets pre mode with the tag `next` (`.changeset/pre.json`). It releases `4.0.0-next.N` prereleases under the npm dist-tag `next`, and `latest` stays on 3.x. `.github/scripts/release-guard.sh` fails the release workflow for anything else.
+- Versioned changesets move to `.changeset/pre/`. At 4.0 GA they become the 4.0.0 changelog, so fix an outdated one there.
+- Keep `` $` `` out of changeset text. Changesets 2 on `3.x`, where fixes get backported, treats it as a `String.replace` pattern and corrupts the entry.
 
 ## Hard guardrails
 
 These need a maintainer's explicit OK:
 - Publishing: never run `npm publish`, `pnpm publish` or `changeset publish` locally. Only `.github/workflows/release.yml` publishes, through npm trusted publishing.
 - Renaming `release.yml`: the npm trusted publisher is bound to that exact filename, so renaming it breaks publishing.
+- Exiting pre mode on `master` (`changeset pre exit`) or loosening `release-guard.sh`. That is the 4.0 GA decision, and it moves `latest` to 4.x.
 - Force-pushing `master` or `3.x`.
 - Changing rulesets or repo settings.
