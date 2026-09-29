@@ -407,6 +407,60 @@ describe(DynamoDBSnapshotStore, () => {
 		expect(resolvedCollections.includes('c-snapshots')).toBe(true);
 	});
 
+	it('should hand out snapshot batches that stay intact while the next batches are read', async () => {
+		const snapshotBatches: ISnapshot<Account>[][] = [];
+		for await (const batch of snapshotStore.getSnapshots(snapshotStreamAccountA, { batch: 2 })) {
+			snapshotBatches.push(batch);
+		}
+
+		expect(snapshotBatches.length).toBeGreaterThan(1);
+		expect(snapshotBatches.flat()).toEqual(snapshotsAccountA);
+	});
+
+	it('should hand out snapshot-envelope batches that stay intact while the next batches are read', async () => {
+		const envelopeBatches: SnapshotEnvelope<Account>[][] = [];
+		for await (const batch of snapshotStore.getEnvelopes(snapshotStreamAccountA, { batch: 2 })) {
+			envelopeBatches.push(batch);
+		}
+
+		expect(envelopeBatches.length).toBeGreaterThan(1);
+		expect(envelopeBatches.flat().map(({ metadata }) => metadata.version)).toEqual(
+			envelopesAccountA.map(({ metadata }) => metadata.version),
+		);
+	});
+
+	it('should hand out batches of the last snapshot-envelopes for an aggregate that stay intact while the next batches are read', async () => {
+		const envelopeBatches: SnapshotEnvelope<Account>[][] = [];
+		for await (const batch of snapshotStore.getLastEnvelopesForAggregate(Account, { batch: 1 })) {
+			envelopeBatches.push(batch);
+		}
+
+		expect(envelopeBatches).toHaveLength(2);
+		expect(
+			envelopeBatches
+				.flat()
+				.map(({ metadata }) => metadata.aggregateId)
+				.sort(),
+		).toEqual(
+			[
+				envelopesAccountA[envelopesAccountA.length - 1].metadata.aggregateId,
+				envelopesAccountB[envelopesAccountB.length - 1].metadata.aggregateId,
+			].sort(),
+		);
+	});
+
+	it('should list the collections of every page as it reads them', async () => {
+		const collectionBatches: ISnapshotCollection[][] = [];
+		for await (const collections of snapshotStore.listCollections({ batch: 1 })) {
+			collectionBatches.push(collections);
+		}
+
+		for (const collections of collectionBatches) {
+			expect(collections).toHaveLength(1);
+		}
+		expect(collectionBatches.flat()).toEqual(expect.arrayContaining(['a-snapshots', 'b-snapshots', 'c-snapshots']));
+	});
+
 	describe('transactional appends', () => {
 		const pool = 'dynamodb-appends';
 		const collection = SnapshotCollection.get(pool);

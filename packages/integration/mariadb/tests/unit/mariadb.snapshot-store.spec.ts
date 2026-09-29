@@ -343,6 +343,14 @@ describe(MariaDBSnapshotStore, () => {
 		expect(resolvedAccountBEnvelope.metadata.version).toEqual(envelopeAccountB.metadata.version);
 	});
 
+	it('should retrieve no last snapshots for an empty list of streams', async () => {
+		await expect(snapshotStore.getLastSnapshots([])).resolves.toEqual(new Map());
+	});
+
+	it('should retrieve no last snapshot-envelopes for an empty list of streams', async () => {
+		await expect(snapshotStore.getManyLastSnapshotEnvelopes([])).resolves.toEqual(new Map());
+	});
+
 	it('should list collections', async () => {
 		await Promise.all([
 			snapshotStore.ensureCollection('a'),
