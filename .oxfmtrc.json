@@ -26,7 +26,6 @@
 		"**/*.md",
 		"**/*.mdx",
 		"**/*.yml",
-		"**/*.yaml",
-		"benchmarks/report"
+		"**/*.yaml"
 	]
 }
