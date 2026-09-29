@@ -1,0 +1,18 @@
+{
+	"$schema": "https://json.schemastore.org/claude-code-settings.json",
+	"permissions": {
+		"deny": [
+			"Bash(npm publish:*)",
+			"Bash(pnpm publish:*)",
+			"Bash(pnpm exec changeset publish:*)",
+			"Bash(npx changeset publish:*)",
+			"Bash(changeset publish:*)",
+			"Bash(npm unpublish:*)",
+			"Bash(git push --force:*)",
+			"Bash(git push -f:*)",
+			"Bash(git push origin +*)",
+			"Read(./.env)",
+			"Read(./.env.*)"
+		]
+	}
+}
