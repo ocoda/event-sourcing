@@ -116,13 +116,17 @@ const settle = (call: () => unknown, timeout: number, describe: () => string): S
  *   `publishing.publisherTimeout` (30 s by default, `0` disables it). A publisher that throws, rejects or times out
  *   is logged and reported on {@link EventBus.deliveryErrors$}; it still gets the later envelopes, and the other
  *   publishers aren't affected. {@link EventBus.publishAll} resolves once every publisher settled, and never rejects.
+ * - **Order.** Each publisher gets the appends one after the other, in the order in which they were published: while
+ *   it still handles an append, the next append waits for it (for that publisher only), even when the appends run
+ *   concurrently. A publisher with nothing to catch up on is called at once, so a synchronous one (like the default
+ *   one, which feeds the subscribers) gets the envelopes synchronously.
  * - **Subscribers** handle the envelopes in parallel and are not awaited. A failing subscriber is logged and reported
  *   on {@link EventBus.deliveryErrors$}, and keeps receiving later envelopes.
  * - **Shutdown.** `beforeApplicationShutdown` waits for the running publishers and subscribers
  *   ({@link EventBus.whenIdle}), for at most `publishing.shutdownTimeout` (10 s by default), and
  *   `onApplicationShutdown` unsubscribes the subscribers.
  *
- * Delivery is in-process and at-most-once.
+ * Delivery is in-process, at-most-once and ordered per publisher.
  */
 @Injectable()
 export class EventBus
@@ -142,6 +146,11 @@ export class EventBus
 	private pendingPublications = 0;
 	private pendingHandlers = 0;
 	private readonly idleWaiters = new Set<() => void>();
+	/**
+	 * The last delivery of each publisher that is still handling an append; the next append's delivery to it waits for
+	 * it. A publisher is only in here while a delivery to it is asynchronous.
+	 */
+	private readonly deliveries = new Map<IEventPublisher, Promise<void>>();
 
 	/**
 	 * @throws RangeError when a timeout of the `publishing` options is not a non-negative number
@@ -206,7 +215,7 @@ export class EventBus
 
 		this.pendingPublications++;
 		try {
-			await Promise.allSettled(this.publishers.map((publisher) => this.deliver(publisher, batch)));
+			await Promise.allSettled(this.publishers.map((publisher) => this.enqueue(publisher, batch)));
 		} finally {
 			this.pendingPublications--;
 			this.notifyIfIdle();
@@ -337,44 +346,98 @@ export class EventBus
 	}
 
 	/**
-	 * Delivers the envelopes of an append to one publisher, in order. Never rejects.
+	 * Delivers the envelopes of an append to one publisher once its delivery of the earlier appends settled, so that it
+	 * gets the appends in the order in which they were published. Never rejects.
+	 *
+	 * @returns the delivery, or nothing when it finished synchronously
 	 */
-	private async deliver(publisher: IEventPublisher, envelopes: readonly EventEnvelope[]): Promise<void> {
-		const handler = nameOf(publisher);
-		if (typeof publisher.publishAll === 'function') {
-			const outcome = await settle(
-				() => publisher.publishAll?.(envelopes),
-				this.publisherTimeout,
-				() => `Publishing ${envelopes.length} event(s) with ${handler}`,
-			);
-			if (outcome.failed) {
-				logger.error(
-					`Event publisher ${handler} failed to publish ${envelopes.length} event(s)`,
-					describeError(outcome.error),
-				);
-				for (const envelope of envelopes) {
-					this.deliveryErrorsSubject.next({ kind: 'publisher', handler, envelope, error: outcome.error });
+	private enqueue(publisher: IEventPublisher, envelopes: readonly EventEnvelope[]): Promise<void> | undefined {
+		const previous = this.deliveries.get(publisher);
+		const run = () => this.deliver(publisher, envelopes);
+		const delivery = previous ? previous.then(run, run) : run();
+		if (delivery) {
+			this.deliveries.set(publisher, delivery);
+			const release = () => {
+				if (this.deliveries.get(publisher) === delivery) {
+					this.deliveries.delete(publisher);
 				}
-			}
-			return;
+			};
+			delivery.then(release, release);
+		}
+		return delivery;
+	}
+
+	/**
+	 * Delivers the envelopes of an append to one publisher: one `publishAll` call, or one `publish` call per envelope,
+	 * in order, each awaited before the next. Never rejects.
+	 *
+	 * @returns the rest of the delivery, or nothing when the publisher took every envelope synchronously
+	 */
+	private deliver(publisher: IEventPublisher, envelopes: readonly EventEnvelope[]): Promise<void> | undefined {
+		const handler = nameOf(publisher);
+		if (typeof publisher.publishAll !== 'function') {
+			return this.deliverEach(publisher, handler, envelopes, 0);
 		}
 
-		for (const envelope of envelopes) {
-			let outcome = settle(
+		const outcome = settle(
+			() => publisher.publishAll?.(envelopes),
+			this.publisherTimeout,
+			() => `Publishing ${envelopes.length} event(s) with ${handler}`,
+		);
+		const report = (settled: Settled) =>
+			this.reportPublisherFailure(handler, envelopes, settled, `${envelopes.length} event(s)`);
+		if (isPromiseLike(outcome)) {
+			return outcome.then(report);
+		}
+		report(outcome);
+		return undefined;
+	}
+
+	/**
+	 * Calls `publish` for the envelopes from `start` on, one after the other: synchronously as long as the publisher
+	 * returns no promise, and from its first promise on, each call once the previous one settled.
+	 */
+	private deliverEach(
+		publisher: IEventPublisher,
+		handler: string,
+		envelopes: readonly EventEnvelope[],
+		start: number,
+	): Promise<void> | undefined {
+		for (let index = start; index < envelopes.length; index++) {
+			const envelope = envelopes[index] as EventEnvelope;
+			const outcome = settle(
 				() => publisher.publish(envelope),
 				this.publisherTimeout,
 				() => `Publishing event "${envelope?.event}" with ${handler}`,
 			);
+			const report = (settled: Settled) =>
+				this.reportPublisherFailure(handler, [envelope], settled, `event "${envelope?.event}"`);
 			if (isPromiseLike(outcome)) {
-				outcome = await outcome;
+				return outcome.then((settled) => {
+					report(settled);
+					return this.deliverEach(publisher, handler, envelopes, index + 1);
+				});
 			}
-			if (outcome.failed) {
-				logger.error(
-					`Event publisher ${handler} failed to publish event "${envelope?.event}"`,
-					describeError(outcome.error),
-				);
-				this.deliveryErrorsSubject.next({ kind: 'publisher', handler, envelope, error: outcome.error });
-			}
+			report(outcome);
+		}
+		return undefined;
+	}
+
+	/**
+	 * Logs a failed call of a publisher once, and reports it on {@link EventBus.deliveryErrors$} for each of its envelopes.
+	 */
+	private reportPublisherFailure(
+		handler: string,
+		envelopes: readonly EventEnvelope[],
+		outcome: Settled,
+		what: string,
+	): void {
+		if (!outcome.failed) {
+			return;
+		}
+		logger.error(`Event publisher ${handler} failed to publish ${what}`, describeError(outcome.error));
+		for (const envelope of envelopes) {
+			this.deliveryErrorsSubject.next({ kind: 'publisher', handler, envelope, error: outcome.error });
 		}
 	}
 

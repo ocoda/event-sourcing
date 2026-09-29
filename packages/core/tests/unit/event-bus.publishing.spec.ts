@@ -213,6 +213,124 @@ describe('EventBus publishing (ADR 0001 §2)', () => {
 			expect(log).toEqual(['start 1', 'end 1', 'start 2', 'end 2', 'start 3', 'end 3']);
 		});
 
+		it('delivers the appends to a publisher in commit order, even when an append commits while the previous one is still being published', async () => {
+			const { bus, store, deliveryErrors } = await createStore();
+			const gate = deferred();
+			const published: number[] = [];
+			// For example a broker producer keyed by the aggregate id, that is still sending version 1
+			bus.addPublisher({
+				publish: ({ metadata: { version } }: EventEnvelope) => {
+					published.push(version);
+					return version === 1 ? gate.promise : undefined;
+				},
+			});
+			const stream = newStream();
+			let firstAppended = false;
+			let secondAppended = false;
+
+			// One command appends versions 1 and 2 ...
+			const first = store
+				.appendEvents(stream, events.slice(0, 2), { expectedVersion: 0 })
+				.then(() => (firstAppended = true));
+			await vi.waitFor(() => expect(published).toEqual([1]));
+			// ... and another one, which loaded the stream at version 2, appends version 3 while version 1 is being sent
+			const second = store
+				.appendEvents(stream, events.slice(2, 3), { expectedVersion: 2 })
+				.then(() => (secondAppended = true));
+			await sleep(5);
+			expect(published).toEqual([1]);
+			expect({ firstAppended, secondAppended }).toEqual({ firstAppended: false, secondAppended: false });
+			gate.resolve();
+			await Promise.all([first, second]);
+
+			expect(published).toEqual([1, 2, 3]);
+			expect(deliveryErrors).toEqual([]);
+		});
+
+		it('holds back only the publisher that is still busy: the others get the next append at once', async () => {
+			const bus = new EventBus();
+			const gate = deferred();
+			const slow = { publish: vi.fn((_envelope: EventEnvelope) => gate.promise) };
+			const fast = { publish: vi.fn(async (_envelope: EventEnvelope) => undefined) };
+			const synchronous = { publish: vi.fn((_envelope: EventEnvelope) => undefined) };
+			bus.addPublisher(slow);
+			bus.addPublisher(fast);
+			bus.addPublisher(synchronous);
+			const [first, second] = [envelopeFor(1), envelopeFor(2)];
+
+			const publishing = [bus.publishAll([first]), bus.publishAll([second])];
+			// A synchronous publisher is called within publishAll
+			expect(synchronous.publish.mock.calls).toEqual([[first], [second]]);
+			await vi.waitFor(() => expect(fast.publish).toHaveBeenCalledTimes(2));
+			expect(slow.publish.mock.calls).toEqual([[first]]);
+			gate.resolve();
+			await Promise.all(publishing);
+
+			expect(slow.publish.mock.calls).toEqual([[first], [second]]);
+			expect(fast.publish.mock.calls).toEqual([[first], [second]]);
+		});
+
+		it('queues the appends for a publisher that implements publishAll, one call at a time', async () => {
+			const bus = new EventBus();
+			const gate = deferred();
+			const publishAll = vi.fn((envelopes: readonly EventEnvelope[]) =>
+				envelopes[0]?.metadata.version === 1 ? gate.promise : Promise.resolve(),
+			);
+			bus.addPublisher({ publish: vi.fn(), publishAll });
+			const [first, second, third] = [envelopeFor(1), envelopeFor(2), envelopeFor(3)];
+
+			const publishing = [bus.publishAll([first, second]), bus.publishAll([third])];
+			await sleep(5);
+			expect(publishAll.mock.calls).toEqual([[[first, second]]]);
+			gate.resolve();
+			await Promise.all(publishing);
+
+			expect(publishAll.mock.calls).toEqual([[[first, second]], [[third]]]);
+		});
+
+		it.each([
+			['rejects', () => Promise.reject(new Error('broker unavailable')), 'Error'],
+			['hangs', () => new Promise<void>(() => undefined), 'TimeoutError'],
+		])('goes on with the next append once a queued call %s', async (_, failingCall: () => Promise<void>, errorName) => {
+			const bus = new EventBus({ publishing: { publisherTimeout: 5 } });
+			const deliveryErrors = recordDeliveryErrors(bus);
+			const publish = vi.fn(({ metadata: { version } }: EventEnvelope) =>
+				version === 1 ? failingCall() : Promise.resolve(),
+			);
+			bus.addPublisher({ publish });
+			const [first, second] = [envelopeFor(1), envelopeFor(2)];
+
+			await Promise.all([bus.publishAll([first]), bus.publishAll([second])]);
+
+			expect(publish.mock.calls).toEqual([[first], [second]]);
+			expect(deliveryErrors).toEqual([
+				expect.objectContaining({ envelope: first, error: expect.objectContaining({ name: errorName }) }),
+			]);
+		});
+
+		it('calls a publisher at once again once it caught up, and waits in whenIdle for the queued appends', async () => {
+			const bus = new EventBus();
+			const gate = deferred();
+			const publish = vi.fn(({ metadata: { version } }: EventEnvelope) =>
+				version === 1 ? gate.promise : Promise.resolve(),
+			);
+			bus.addPublisher({ publish });
+			let idle = false;
+
+			const publishing = [bus.publishAll([envelopeFor(1)]), bus.publishAll([envelopeFor(2)])];
+			const waiting = bus.whenIdle().then(() => (idle = true));
+			await sleep(5);
+			expect(idle).toBe(false);
+			gate.resolve();
+			await waiting;
+			expect(publish).toHaveBeenCalledTimes(2);
+			await Promise.all(publishing);
+
+			void bus.publishAll([envelopeFor(3)]);
+			expect(publish).toHaveBeenCalledTimes(3);
+			await bus.whenIdle();
+		});
+
 		it('publishes nothing for a conflicting append', async () => {
 			const { bus, store, deliveryErrors } = await createStore();
 			const stream = newStream();
@@ -347,6 +465,13 @@ describe('EventBus publishing (ADR 0001 §2)', () => {
 		});
 
 		it.each([
+			[
+				'throws',
+				() => {
+					throw new Error('batch failure');
+				},
+				new Error('batch failure'),
+			],
 			['rejects', () => Promise.reject(new Error('batch failure')), new Error('batch failure')],
 			[
 				'hangs',
