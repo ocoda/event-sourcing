@@ -35,6 +35,12 @@
 			"require": "./dist/index.js",
 			"default": "./dist/index.js"
 		},
+		"./testing": {
+			"types": "./dist/testing/index.d.ts",
+			"import": "./dist/testing/index.js",
+			"require": "./dist/testing/index.js",
+			"default": "./dist/testing/index.js"
+		},
 		"./class-transformer": {
 			"types": "./dist/class-transformer/index.d.ts",
 			"import": "./dist/class-transformer/index.js",
@@ -49,6 +55,9 @@
 		"*": {
 			"class-transformer": [
 				"./dist/class-transformer/index.d.ts"
+			],
+			"testing": [
+				"./dist/testing/index.d.ts"
 			]
 		}
 	},
@@ -77,10 +86,14 @@
 		"@nestjs/core": "^12.0.0",
 		"class-transformer": "^0.5.1",
 		"reflect-metadata": "^0.2.0",
-		"rxjs": "^7.8.0"
+		"rxjs": "^7.8.0",
+		"vitest": "^4.0.0 || ^5.0.0"
 	},
 	"peerDependenciesMeta": {
 		"class-transformer": {
+			"optional": true
+		},
+		"vitest": {
 			"optional": true
 		}
 	},
@@ -95,6 +108,7 @@
 		"class-transformer": "catalog:",
 		"reflect-metadata": "catalog:",
 		"rxjs": "catalog:",
-		"typescript": "catalog:"
+		"typescript": "catalog:",
+		"vitest": "catalog:"
 	}
 }

@@ -1,5 +1,5 @@
 import { MariaDBSnapshotStore } from '@ocoda/event-sourcing-mariadb';
-import { describeSnapshotStoreConformance } from '@ocoda/event-sourcing-testing/conformance';
+import { describeSnapshotStoreConformance } from '@ocoda/event-sourcing/testing';
 import { createSnapshotStore, dropTables, poolOf } from '../support/stores.js';
 
 describeSnapshotStoreConformance(MariaDBSnapshotStore.name, async () => {

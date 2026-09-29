@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { afterAll, beforeAll, describe, expect } from 'vitest';
 import {
 	Aggregate,
 	AggregateRoot,
@@ -10,19 +11,20 @@ import {
 	SnapshotCollection,
 	SnapshotEnvelope,
 	SnapshotNotFoundException,
-	type SnapshotStore,
+	SnapshotStore,
 	SnapshotStorePersistenceException,
 	SnapshotStoreVersionConflictException,
 	SnapshotStream,
 	StreamReadingDirection,
 	isEventSourcingError,
-} from '@ocoda/event-sourcing';
+} from '../index.js';
 import {
 	CALL_TIMEOUT,
 	ConformanceAudit,
 	ConformanceId,
 	ConformanceLedger,
 	type ConformanceSnapshot,
+	type ConformanceTestContext,
 	LEAK_PROBE_ITERATIONS,
 	TEST_TIMEOUT,
 	call,
@@ -37,7 +39,7 @@ import {
 	uniquePoolName,
 	withinTimeout,
 } from './fixtures.js';
-import type { ConformanceStoreHandle } from './types.js';
+import type { SnapshotStoreConformanceHandle } from './types.js';
 
 /**
  * The snapshot store under test. Every method of a snapshot store is required, or has a default in the base class.
@@ -48,8 +50,8 @@ export type ConformanceSnapshotStore = SnapshotStore<unknown>;
  * Creates a connected snapshot store.
  */
 export type SnapshotStoreConformanceFactory = () =>
-	| ConformanceStoreHandle<ConformanceSnapshotStore>
-	| Promise<ConformanceStoreHandle<ConformanceSnapshotStore>>;
+	| SnapshotStoreConformanceHandle<ConformanceSnapshotStore>
+	| Promise<SnapshotStoreConformanceHandle<ConformanceSnapshotStore>>;
 
 export const SNAPSHOT_STORE_CONFORMANCE_CASES = [
 	'append-returns-envelope',
@@ -138,6 +140,44 @@ const CURSOR_ID_PREFIXES = ['0', 'A', 'B', 'F', 'a', 'b', 'f'];
 class ConformanceCursor extends AggregateRoot {}
 
 /**
+ * What the snapshot store suite reads from the store once the factory resolved, to gate the cases that need it.
+ */
+export interface SnapshotStoreConformanceFeatures {
+	/**
+	 * Whether the store implements `getLastEnvelopesForAggregate`. A store that keeps the default of the `SnapshotStore`
+	 * base class, which rejects with an `UnsupportedOperationException`, skips the cases of that read.
+	 */
+	aggregateReads: boolean;
+}
+
+/**
+ * What a case that reads the latest snapshots of an aggregate requires: a store that keeps the `SnapshotStore`
+ * default of `getLastEnvelopesForAggregate` lacks it, and the case is skipped with `capability: <this>`.
+ */
+const AGGREGATE_READS = 'getLastEnvelopesForAggregate';
+
+/**
+ * Whether the store keeps the `SnapshotStore` default of a method: it inherits the base class's implementation, or
+ * assigns it. The base class is recognized by identity, or by its name at the root of the prototype chain, so a store
+ * built on another copy of the package is recognized too.
+ */
+export const keepsSnapshotStoreDefault = (store: object, method: 'getLastEnvelopesForAggregate'): boolean => {
+	const implementation: unknown = (store as Record<string, unknown>)[method];
+	if (implementation === SnapshotStore.prototype[method]) {
+		return true;
+	}
+	let owner: object | null = store;
+	while (owner && !Object.hasOwn(owner, method)) {
+		owner = Object.getPrototypeOf(owner);
+	}
+	return (
+		owner !== null &&
+		Object.getPrototypeOf(owner) === Object.prototype &&
+		(owner as { constructor?: { name?: string } }).constructor?.name === SnapshotStore.name
+	);
+};
+
+/**
  * Sorts strings in descending binary order: code unit by code unit, so case-sensitively.
  */
 const descendingBinary = (values: string[]): string[] => [...values].sort().reverse();
@@ -173,7 +213,15 @@ export const describeSnapshotStoreConformance = (
 	options: SnapshotStoreConformanceOptions = {},
 ): void => {
 	const timeout = options.timeout ?? TEST_TIMEOUT;
-	const test = conformanceTest<SnapshotStoreConformanceCase>(options.skip, timeout);
+	let features: SnapshotStoreConformanceFeatures;
+	const test = conformanceTest<SnapshotStoreConformanceCase, SnapshotStoreConformanceFeatures>(
+		options.skip,
+		timeout,
+		() => features,
+	);
+	const requiresAggregateReads = {
+		requires: ({ aggregateReads }: SnapshotStoreConformanceFeatures) => (aggregateReads ? undefined : AGGREGATE_READS),
+	};
 
 	describe(`${name} snapshot store conformance`, () => {
 		const pool = options.pool ?? uniquePoolName();
@@ -182,7 +230,7 @@ export const describeSnapshotStoreConformance = (
 		const collection = SnapshotCollection.get(pool);
 		const listingCollection = SnapshotCollection.get(listingPool);
 
-		let handle: ConformanceStoreHandle<ConformanceSnapshotStore> | undefined;
+		let handle: SnapshotStoreConformanceHandle<ConformanceSnapshotStore> | undefined;
 		let store: ConformanceSnapshotStore;
 
 		// A stream with a snapshot at every version of REFERENCE_VERSIONS
@@ -217,6 +265,18 @@ export const describeSnapshotStoreConformance = (
 			aggregate: typeof ConformanceLedger | typeof ConformanceAudit,
 			filter: Omit<ILatestSnapshotFilter, 'pool'> = {},
 		) => store.getLastEnvelopesForAggregate<ConformanceLedger>(aggregate, { ...filter, pool: listingPool });
+
+		/**
+		 * Runs the part of a case that reads the latest snapshots of an aggregate, or annotates the case with why it
+		 * didn't: the store keeps the SnapshotStore default of getLastEnvelopesForAggregate.
+		 */
+		const aggregateReadPart = async (context: ConformanceTestContext, fn: () => Promise<void>) => {
+			if (features.aggregateReads) {
+				await fn();
+			} else {
+				await context.annotate(`getLastEnvelopesForAggregate part skipped: capability: ${AGGREGATE_READS}`);
+			}
+		};
 
 		/**
 		 * Asserts the versions that getSnapshots() and getEnvelopes() read from the reference stream, per batch.
@@ -264,16 +324,34 @@ export const describeSnapshotStoreConformance = (
 				`Store calls ${context}`,
 			);
 
-		const readers: [string, () => AsyncGenerator<unknown[]>][] = [
+		/**
+		 * The reads that the iteration cases stop early. getLastEnvelopesForAggregate only when the store implements it.
+		 */
+		const readers = (): [string, () => AsyncGenerator<unknown[]>][] => [
 			['getSnapshots', () => readSnapshots(reference, { batch: 1 })],
 			['getEnvelopes', () => readEnvelopes(reference, { batch: 1 })],
-			['getLastEnvelopesForAggregate', () => readLatestOfAggregate(ConformanceLedger, { batch: 1 })],
+			...(features.aggregateReads
+				? [
+						['getLastEnvelopesForAggregate', () => readLatestOfAggregate(ConformanceLedger, { batch: 1 })] as [
+							string,
+							() => AsyncGenerator<unknown[]>,
+						],
+					]
+				: []),
 			['listCollections', () => store.listCollections({ batch: 1 })],
 		];
+
+		/**
+		 * Notes on an iteration case that it didn't stop getLastEnvelopesForAggregate early, when the store doesn't
+		 * implement it.
+		 */
+		const annotateSkippedReaders = (context: ConformanceTestContext) =>
+			aggregateReadPart(context, () => Promise.resolve());
 
 		beforeAll(async () => {
 			handle = await factory();
 			store = handle.store;
+			features = { aggregateReads: !keepsSnapshotStoreDefault(store, 'getLastEnvelopesForAggregate') };
 
 			await store.ensureCollection(pool);
 			await store.ensureCollection(listingPool);
@@ -606,7 +684,12 @@ export const describeSnapshotStoreConformance = (
 			/**
 			 * Asserts that the stream has one latest snapshot, the one with the given version, however it's read.
 			 */
-			const expectSingleLatest = async (stream: SnapshotStream, version: number, racePool: ISnapshotPool) => {
+			const expectSingleLatest = async (
+				context: ConformanceTestContext,
+				stream: SnapshotStream,
+				version: number,
+				racePool: ISnapshotPool,
+			) => {
 				await expect(call(() => store.getLastSnapshot(stream, racePool))).resolves.toStrictEqual(snapshotAt(version));
 				expect((await call(() => store.getLastEnvelope<ConformanceLedger>(stream, racePool)))?.metadata.version).toBe(
 					version,
@@ -618,19 +701,21 @@ export const describeSnapshotStoreConformance = (
 				expect([...many.values()].map(({ metadata }) => metadata.version)).toEqual([version]);
 
 				// The pool holds this stream only, so the aggregate-wide read returns its latest snapshots: exactly one
-				const latest = await drain(
-					store.getLastEnvelopesForAggregate<ConformanceLedger>(ConformanceLedger, { pool: racePool }),
-				);
-				expect(latest.map(({ metadata }) => [metadata.aggregateId, metadata.version])).toEqual([
-					[stream.aggregateId, version],
-				]);
+				await aggregateReadPart(context, async () => {
+					const latest = await drain(
+						store.getLastEnvelopesForAggregate<ConformanceLedger>(ConformanceLedger, { pool: racePool }),
+					);
+					expect(latest.map(({ metadata }) => [metadata.aggregateId, metadata.version])).toEqual([
+						[stream.aggregateId, version],
+					]);
+				});
 			};
 
 			for (const seeded of [false, true]) {
 				test(
 					'latest-unique-concurrent',
 					`keeps one latest snapshot, the highest version, when ${CONCURRENT_WRITERS} appends of different versions to ${seeded ? 'an existing' : 'a new'} stream race`,
-					async () => {
+					async (context) => {
 						const racePool = await ensureCasePool('latest');
 						const stream = newSnapshotStream();
 						const seed = seeded ? 1 : 0;
@@ -664,11 +749,11 @@ export const describeSnapshotStoreConformance = (
 						expect((await drain(store.getSnapshots(stream, { pool: racePool }))).map(versionOf)).toEqual(stored);
 
 						const highest = Math.max(...appended);
-						await expectSingleLatest(stream, highest, racePool);
+						await expectSingleLatest(context, stream, highest, racePool);
 
 						// The next version is accepted, and becomes the only latest snapshot
 						await call(() => store.appendSnapshot(stream, highest + 1, snapshotAt(highest + 1), racePool));
-						await expectSingleLatest(stream, highest + 1, racePool);
+						await expectSingleLatest(context, stream, highest + 1, racePool);
 					},
 				);
 			}
@@ -692,32 +777,48 @@ export const describeSnapshotStoreConformance = (
 						auditStreams.map(({ aggregateId }) => aggregateId).sort(),
 					);
 				},
+				requiresAggregateReads,
 			);
 
-			test('aggregate-limit', 'reads at most limit snapshots', async () => {
-				const limited = await drain(readLatestOfAggregate(ConformanceLedger, { limit: 3 }));
-				expect(limited).toHaveLength(3);
-				expect(new Set(limited.map(({ metadata }) => metadata.aggregateId)).size).toBe(3);
+			test(
+				'aggregate-limit',
+				'reads at most limit snapshots',
+				async () => {
+					const limited = await drain(readLatestOfAggregate(ConformanceLedger, { limit: 3 }));
+					expect(limited).toHaveLength(3);
+					expect(new Set(limited.map(({ metadata }) => metadata.aggregateId)).size).toBe(3);
 
-				expect(await drain(readLatestOfAggregate(ConformanceLedger, { limit: 10 }))).toHaveLength(7);
-			});
+					expect(await drain(readLatestOfAggregate(ConformanceLedger, { limit: 10 }))).toHaveLength(7);
+				},
+				requiresAggregateReads,
+			);
 
-			test('aggregate-batch', 'hands out full batches of batch snapshots', async () => {
-				const batches = await collectBatches(readLatestOfAggregate(ConformanceLedger, { batch: 3 }));
-				expect(batches.map((batch) => batch.length)).toEqual([3, 3, 1]);
-				expect(new Set(batches.flat().map(({ metadata }) => metadata.aggregateId)).size).toBe(7);
+			test(
+				'aggregate-batch',
+				'hands out full batches of batch snapshots',
+				async () => {
+					const batches = await collectBatches(readLatestOfAggregate(ConformanceLedger, { batch: 3 }));
+					expect(batches.map((batch) => batch.length)).toEqual([3, 3, 1]);
+					expect(new Set(batches.flat().map(({ metadata }) => metadata.aggregateId)).size).toBe(7);
 
-				const limited = await collectBatches(readLatestOfAggregate(ConformanceLedger, { batch: 3, limit: 5 }));
-				expect(limited.map((batch) => batch.length)).toEqual([3, 2]);
-			});
+					const limited = await collectBatches(readLatestOfAggregate(ConformanceLedger, { batch: 3, limit: 5 }));
+					expect(limited.map((batch) => batch.length)).toEqual([3, 2]);
+				},
+				requiresAggregateReads,
+			);
 
-			test('aggregate-order', 'reads the streams in descending binary order of their id', async () => {
-				const envelopes = await drain(readLatestOfAggregate(ConformanceLedger));
-				expect(envelopes.map(({ metadata }) => metadata.aggregateId)).toEqual(ledgerIdsDescending);
+			test(
+				'aggregate-order',
+				'reads the streams in descending binary order of their id',
+				async () => {
+					const envelopes = await drain(readLatestOfAggregate(ConformanceLedger));
+					expect(envelopes.map(({ metadata }) => metadata.aggregateId)).toEqual(ledgerIdsDescending);
 
-				const limited = await drain(readLatestOfAggregate(ConformanceLedger, { limit: 3 }));
-				expect(limited.map(({ metadata }) => metadata.aggregateId)).toEqual(ledgerIdsDescending.slice(0, 3));
-			});
+					const limited = await drain(readLatestOfAggregate(ConformanceLedger, { limit: 3 }));
+					expect(limited.map(({ metadata }) => metadata.aggregateId)).toEqual(ledgerIdsDescending.slice(0, 3));
+				},
+				requiresAggregateReads,
+			);
 
 			test(
 				'aggregate-cursor-paging',
@@ -783,6 +884,7 @@ export const describeSnapshotStoreConformance = (
 						).toEqual(after(prefix));
 					}
 				},
+				requiresAggregateReads,
 			);
 		});
 
@@ -799,7 +901,7 @@ export const describeSnapshotStoreConformance = (
 				},
 			);
 
-			test('unknown-pool-read', 'rejects reads from a pool whose collection was never created', async () => {
+			test('unknown-pool-read', 'rejects reads from a pool whose collection was never created', async (context) => {
 				const filter = { pool: unknownPool };
 				await expectRejection(drain(store.getSnapshots(reference, filter)), 'getSnapshots()');
 				await expectRejection(drain(store.getEnvelopes(reference, filter)), 'getEnvelopes()');
@@ -827,9 +929,12 @@ export const describeSnapshotStoreConformance = (
 					call(() => store.getManyLastSnapshotEnvelopes([reference], unknownPool)),
 					'getManyLastSnapshotEnvelopes()',
 				);
-				await expectRejection(
-					drain(store.getLastEnvelopesForAggregate(ConformanceLedger, filter)),
-					'getLastEnvelopesForAggregate()',
+				// The SnapshotStore default rejects every read, whatever the pool, so it proves nothing here
+				await aggregateReadPart(context, () =>
+					expectRejection(
+						drain(store.getLastEnvelopesForAggregate(ConformanceLedger, filter)),
+						'getLastEnvelopesForAggregate()',
+					),
 				);
 			});
 
@@ -866,8 +971,9 @@ export const describeSnapshotStoreConformance = (
 			test(
 				'early-break',
 				'stays usable when a consumer stops reading early',
-				async () => {
-					for (const [method, read] of readers) {
+				async (context) => {
+					await annotateSkippedReaders(context);
+					for (const [method, read] of readers()) {
 						for (let iteration = 0; iteration < LEAK_PROBE_ITERATIONS; iteration++) {
 							await withinTimeout(
 								(async () => {
@@ -888,8 +994,9 @@ export const describeSnapshotStoreConformance = (
 			test(
 				'consumer-throws',
 				'stays usable when a consumer throws while reading',
-				async () => {
-					for (const [method, read] of readers) {
+				async (context) => {
+					await annotateSkippedReaders(context);
+					for (const [method, read] of readers()) {
 						for (let iteration = 0; iteration < LEAK_PROBE_ITERATIONS; iteration++) {
 							const failure = new Error(`Consumer of ${method}() failed`);
 							const consume = async () => {

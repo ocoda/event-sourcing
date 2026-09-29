@@ -1,6 +1,6 @@
 import { MongoDBSnapshotStore } from '@ocoda/event-sourcing-mongodb';
-import { describeSnapshotStoreConformance } from '@ocoda/event-sourcing-testing/conformance';
 import { mongodbTestTopologies } from '@ocoda/event-sourcing-testing/unit';
+import { describeSnapshotStoreConformance } from '@ocoda/event-sourcing/testing';
 import { dropCollections } from '../support/catalog.js';
 import { createSnapshotStore } from '../support/stores.js';
 

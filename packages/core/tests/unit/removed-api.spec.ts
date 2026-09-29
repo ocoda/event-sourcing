@@ -9,8 +9,8 @@ import {
 	InMemoryEventStore,
 	ULID,
 } from '@ocoda/event-sourcing';
-import * as Conformance from '@ocoda/event-sourcing-testing/conformance';
 import { createTestContext } from '@ocoda/event-sourcing-testing/unit';
+import * as Conformance from '@ocoda/event-sourcing/testing';
 import { StubEventStore } from './event-store/stub-event-store.js';
 
 /**

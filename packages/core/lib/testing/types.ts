@@ -1,19 +1,4 @@
-import type { EventStore, IEventCollection } from '@ocoda/event-sourcing';
-
-/**
- * What a conformance suite factory hands to the suite.
- */
-export interface ConformanceStoreHandle<TStore> {
-	/**
-	 * The connected store under test.
-	 */
-	store: TStore;
-	/**
-	 * Called once after the last test: drop the given collections (tables) and disconnect the store.
-	 * The list also names collections the suite expected to never be created, so ignore those that don't exist.
-	 */
-	cleanup: (collections: string[]) => void | Promise<void>;
-}
+import type { EventStore, IEventCollection, SnapshotStore } from '../index.js';
 
 /**
  * Failures an event store's conformance handle can inject, for the cases that need a write to fail halfway.
@@ -46,4 +31,19 @@ export interface EventStoreConformanceHandle<TStore extends EventStore<unknown> 
 	 * claims `atomicAppend` (the default): provide it, or skip that case with a reason.
 	 */
 	faults?: EventStoreFaults;
+}
+
+/**
+ * What a snapshot store conformance factory hands to the suite.
+ */
+export interface SnapshotStoreConformanceHandle<TStore extends SnapshotStore<unknown> = SnapshotStore<unknown>> {
+	/**
+	 * The connected store under test.
+	 */
+	store: TStore;
+	/**
+	 * Called once after the last test: drop the given collections (tables) and disconnect the store.
+	 * The list also names collections the suite expected to never be created, so ignore those that don't exist.
+	 */
+	cleanup(collections: string[]): void | Promise<void>;
 }

@@ -1,13 +1,8 @@
 import type { EventStoreCapabilities } from '@ocoda/event-sourcing';
-import {
-	conformanceRepeat,
-	conformanceTest,
-	isSkippedCase,
-	stringify,
-} from '@ocoda/event-sourcing-testing/conformance';
-import type { RunnerTestCase } from 'vitest';
+import type { RunnerTestCase, TestAPI } from 'vitest';
+import { conformanceRepeat, conformanceTest, isSkippedCase, stringify } from '../../../lib/testing/fixtures.js';
 
-// The harness of the conformance suites (packages/testing/conformance/fixtures.ts), which every store's conformance
+// The harness of the conformance suites (lib/testing/fixtures.ts), which every store's conformance
 // spec runs through.
 
 /**
@@ -229,15 +224,14 @@ describe(conformanceTest, () => {
 
 		it('fails a case that passes, fails for another reason, or is gated off by a capability', async () => {
 			const registered: ((context: unknown) => Promise<void>)[] = [];
-			const globals = globalThis as unknown as { it: (...args: unknown[]) => void };
-			const register = vi.spyOn(globals, 'it').mockImplementation((...args: unknown[]) => {
+			const register = vi.fn((...args: unknown[]) => {
 				registered.push(args[2] as (context: unknown) => Promise<void>);
 			});
 			const control = conformanceTest<'passes' | 'other' | 'gated', { gapSafe: boolean }>(
 				undefined,
 				5_000,
 				() => ({ gapSafe: false }),
-				{ expectFailure: { other: /detector fired/ } },
+				{ expectFailure: { other: /detector fired/ }, register: register as unknown as TestAPI },
 			);
 			control('passes', 'a case that does not detect the defect', async () => undefined);
 			control('other', 'a case that fails for another reason', async () => {
@@ -249,7 +243,6 @@ describe(conformanceTest, () => {
 			control('gated', 'a case the store lacks the capability for', gated, {
 				requires: ({ gapSafe }) => (gapSafe ? undefined : "globalOrder: 'gap-safe'"),
 			});
-			register.mockRestore();
 
 			const skip = vi.fn();
 			const [passes, other, gatedOff] = registered.map((fn) => fn({ skip }));
@@ -279,16 +272,16 @@ describe(conformanceTest, () => {
 	describe('timeouts', () => {
 		it('still takes a timeout as the fourth argument', () => {
 			const registered: unknown[][] = [];
-			const globals = globalThis as unknown as { it: (...args: unknown[]) => void };
-			const register = vi.spyOn(globals, 'it').mockImplementation((...args: unknown[]) => {
+			const register = vi.fn((...args: unknown[]) => {
 				registered.push(args);
 			});
-			const test = conformanceTest<'timed'>(undefined, 5_000);
+			const test = conformanceTest<'timed'>(undefined, 5_000, undefined, {
+				register: register as unknown as TestAPI,
+			});
 
 			test('timed', 'with a number', async () => undefined, 1_234);
 			test('timed', 'with options', async () => undefined, { timeout: 4_321 });
 			test('timed', 'with the default', async () => undefined);
-			register.mockRestore();
 
 			expect(registered.map(([, options]) => (options as { timeout: number }).timeout)).toEqual([1_234, 4_321, 5_000]);
 		});

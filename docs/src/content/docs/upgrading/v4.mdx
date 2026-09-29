@@ -6,7 +6,7 @@ import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
 
 4.0 is the next major release. It is published as prereleases (`4.0.0-next.N`) under the npm `next` tag, while 3.x stays on `latest` and keeps receiving fixes. See [Versioning and support](/upgrading/versioning) for what each release line gets.
 
-This guide covers the changes released so far, up to `4.0.0-next.1`, and the changes that ship in the next prerelease: the new event and snapshot store contract, schema v2 for PostgreSQL, MariaDB and MongoDB with its data migration, the publishing pipeline and the typed command and query buses. Sections that describe unreleased changes say so. More breaking changes are planned before 4.0.0; they are listed under [Coming in later 4.0 prereleases](#coming-next).
+This guide covers the changes released so far, up to `4.0.0-next.1`, and the changes that ship in the next prerelease: the new event and snapshot store contract, schema v2 for PostgreSQL, MariaDB and MongoDB with its data migration, the publishing pipeline, the typed command and query buses and the conformance suites for custom stores. Sections that describe unreleased changes say so. More breaking changes are planned before 4.0.0; they are listed under [Coming in later 4.0 prereleases](#coming-next).
 
 <Aside type="caution" title="Prerelease">
 There is no stability or support guarantee until 4.0.0 is released, and a later prerelease can break things again. Pin the exact version, and read the [changelog](https://github.com/ocoda/event-sourcing/blob/master/packages/core/CHANGELOG.md) before you move to the next prerelease.
@@ -303,7 +303,7 @@ The 3.x form still works, but is deprecated and will be removed in 5.0. It emits
 
 **Reads.** `getEvent()` and `getEnvelope()` always return a promise, also on the in-memory store. On the in-memory store now, and on the database stores with schema v2, every read of a pool whose collection doesn't exist throws an `EventCollectionNotFoundException`; the in-memory store's `getEvents()` and `getEnvelopes()` yielded nothing and its `getEvent()` threw an `EventNotFoundException`. An append to such a pool throws an `EventStorePersistenceException` with `outcome: 'not-persisted'`, whose `cause` is the `EventCollectionNotFoundException`.
 
-**Custom stores.** The store is constructed with `(context, options)`, where `context` holds the event map and the publisher, and `options` no longer includes `useDefaultPool`. `EventStoreDriver` is now the type of that constructor rather than an interface of the store instance. A store implements the driver methods (`getStreamVersion`, `getEnvelope`, `getEnvelopes`, `readAll`, `persistEvents`) and declares its `capabilities`; the base class implements `appendEvents`, `getEvent` and `getEvents`, and a store that overrides one of them fails the bootstrap with an `InvalidEventStoreImplementationException`. `this.eventMap` is gone: the base class serializes and deserializes the events. See [Custom Event and Snapshot Stores](/advanced/custom-stores#migrating-a-3x-store).
+**Custom stores.** The store is constructed with `(context, options)`, where `context` holds the event map and the publisher, and `options` no longer includes `useDefaultPool`. `EventStoreDriver` is now the type of that constructor rather than an interface of the store instance. A store implements the driver methods (`getStreamVersion`, `getEnvelope`, `getEnvelopes`, `readAll`, `persistEvents`) and declares its `capabilities`; the base class implements `appendEvents`, `getEvent` and `getEvents`, and a store that overrides one of them fails the bootstrap with an `InvalidEventStoreImplementationException`. `this.eventMap` is gone: the base class serializes and deserializes the events. See [Custom Event and Snapshot Stores](/advanced/custom-stores#migrating-a-3x-store), and check the store with the [conformance suites](#custom-store-conformance).
 
 ### Metadata and headers [#metadata-headers]
 
@@ -354,6 +354,36 @@ For custom snapshot stores:
 2. Drop your `getManyLastSnapshotEnvelopes` if it only looped over `getLastEnvelope`: the base class does that.
 3. If you implement `getLastEnvelopesForAggregate`, order by the aggregate id in binary, descending order, and treat `filter.aggregateId` as an exclusive cursor.
 4. Replace uses of the `SnapshotStoreDriver` interface with `SnapshotStore`.
+
+### Testing a custom store [#custom-store-conformance]
+
+*In the next prerelease.* See [Test your Event Store](/advanced/custom-stores#test-your-event-store).
+
+The conformance suites that every built-in store runs are published as `@ocoda/event-sourcing/testing`. They register [Vitest](https://vitest.dev) tests, so `vitest` (4 or 5) is an optional peer dependency of `@ocoda/event-sourcing`: install it next to the prerelease to use the subpath. The suites import Vitest's API, so they need no `globals: true`, and the root entry point never loads Vitest.
+
+npm checks an optional peer whenever the project has that package: a project on another major of Vitest gets `ERESOLVE` from `npm install @ocoda/event-sourcing@next`, even if it never imports the subpath, until it moves to Vitest 4 or 5 or installs with `--legacy-peer-deps`. pnpm and Yarn only warn.
+
+As the last step of moving a custom store to 4.0, run the suites against it:
+
+```ts
+import { describeEventStoreConformance, describeSnapshotStoreConformance } from '@ocoda/event-sourcing/testing';
+
+describeEventStoreConformance('FooEventStore', async (context) => {
+	const store = new FooEventStore(context, { ... });
+	await store.connect();
+	return { store, cleanup: async (collections) => { /* drop them, then disconnect */ } };
+});
+
+describeSnapshotStoreConformance('FooSnapshotStore', async () => {
+	const store = new FooSnapshotStore({ ... });
+	await store.connect();
+	return { store, cleanup: async (collections) => { /* drop them, then disconnect */ } };
+});
+```
+
+- Declare `capabilities` instead of skipping cases: a case that needs a guarantee your store doesn't claim is skipped with `capability: <flag>`. `skip` remains for real gaps, and each skip needs a reason.
+- A snapshot store that keeps the base class's `getLastEnvelopesForAggregate` skips the cases of that read the same way.
+- The subpath also has `createInMemoryEventStore()`, `createInMemorySnapshotStore()`, `createTestEventStoreContext()` and the `RecordingPublisher`, for tests that use the in-memory stores or construct a store without the module.
 
 ### PostgreSQL schema v2 [#postgres-schema-v2]
 
@@ -565,5 +595,6 @@ In the next prerelease, described above:
 - **Module configuration.** See [Module configuration](#module-configuration).
 - **Aggregates and ids.** See [Aggregates and ids](#aggregates-and-ids).
 - **Serialization.** See [Serialization](#serialization).
+- **Conformance suites for custom stores.** See [Testing a custom store](#custom-store-conformance).
 
 See the ADR's [migration guide](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0001-v4-core-api.md#migration-guide) for the planned steps, including those for custom store authors.

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { type TestAPI, expect, it } from 'vitest';
 import {
 	Aggregate,
 	AggregateRoot,
@@ -11,7 +12,7 @@ import {
 	SnapshotStream,
 	UUID,
 	isEventSourcingError,
-} from '@ocoda/event-sourcing';
+} from '../index.js';
 
 export class ConformanceId extends UUID {}
 
@@ -282,6 +283,10 @@ export interface ConformanceSuiteOptions<TCase extends string> {
 	 * defect. A case that the store's capabilities gate off fails too, rather than being skipped.
 	 */
 	expectFailure?: boolean | Partial<Record<TCase, RegExp>>;
+	/**
+	 * Registers the tests. Vitest's `it`, imported rather than global; the specs of the harness replace it.
+	 */
+	register?: TestAPI;
 }
 
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
@@ -333,11 +338,10 @@ export const conformanceTest = <TCase extends string, TCapabilities = never>(
 	skip: Partial<Record<TCase, string>> | undefined,
 	timeout: number,
 	capabilities?: () => TCapabilities,
-	{ only, expectFailure = false }: ConformanceSuiteOptions<TCase> = {},
+	{ only, expectFailure = false, register = it }: ConformanceSuiteOptions<TCase> = {},
 ) => {
 	const runSkipped = process.env.CONFORMANCE_RUN_SKIPPED === 'true';
 	const repeats = conformanceRepeat() - 1;
-	const register = it;
 
 	return (
 		id: TCase,
@@ -351,7 +355,7 @@ export const conformanceTest = <TCase extends string, TCapabilities = never>(
 		const { timeout: testTimeout = timeout, requires } = typeof options === 'number' ? { timeout: options } : options;
 		const reason = skip?.[id];
 		if (reason && !runSkipped) {
-			it.skip(`${title} [${id}] (skipped: ${reason})`, fn);
+			register.skip(`${title} [${id}] (skipped: ${reason})`, fn);
 			return;
 		}
 		if (requires && !capabilities) {

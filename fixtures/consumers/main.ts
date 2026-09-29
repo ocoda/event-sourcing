@@ -1,8 +1,8 @@
 // A small NestJS 12 application that consumes the packed @ocoda/event-sourcing tarballs. scripts/test-consumers.mjs
 // compiles it twice: as ESM ("type": "module") and as CommonJS, where tsc emits require() calls that load the
 // ESM-only packages through require(esm). It boots EventSourcingModule with forRoot and with forRootAsync, next to a
-// forFeature module, on the in-memory stores, runs a command, a query and a round trip through the event store, and
-// exits 0 only if every check passed.
+// forFeature module, on the in-memory stores, runs a command, a query and a round trip through the event store, loads
+// @ocoda/event-sourcing/testing outside a test runner, and exits 0 only if every check passed.
 import 'reflect-metadata';
 import { type DynamicModule, Injectable, Module } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
@@ -40,6 +40,12 @@ import { MariaDBEventStore, MariaDBSnapshotStore } from '@ocoda/event-sourcing-m
 import { MongoDBEventStore, MongoDBSnapshotStore } from '@ocoda/event-sourcing-mongodb';
 import { PostgresEventStore, PostgresSnapshotStore } from '@ocoda/event-sourcing-postgres';
 import { ClassTransformerEventSerializer } from '@ocoda/event-sourcing/class-transformer';
+import {
+	EVENT_STORE_CONFORMANCE_CASES,
+	RecordingPublisher,
+	createInMemoryEventStore,
+	createInMemorySnapshotStore,
+} from '@ocoda/event-sourcing/testing';
 import { Type } from 'class-transformer';
 
 const format = typeof require === 'function' ? 'cjs' : 'esm';
@@ -293,6 +299,30 @@ async function scenario(variant: string, root: DynamicModule): Promise<void> {
 	check(deliveryErrors.length === 0, `${variant}: no delivery errors (${deliveryErrors.length})`);
 }
 
+// The testing subpath loads without a test runner (its conformance suites need one to register their tests), through
+// require(esm) in the CommonJS build, and its helpers build the stores of the root entry point: one module instance.
+async function testingHelpers(): Promise<void> {
+	const { store, publisher } = await createInMemoryEventStore({ events: [AccountOpenedEvent] });
+	const id = AccountId.generate();
+	const [envelope] = await store.appendEvents(
+		EventStream.for<Account>(Account, id),
+		[new AccountOpenedEvent(id.value)],
+		{ expectedVersion: 0 },
+	);
+	check(
+		store instanceof EventStore &&
+			publisher instanceof RecordingPublisher &&
+			publisher.calls.length === 1 &&
+			publisher.calls[0][0]?.metadata.eventId.value === envelope?.metadata.eventId.value,
+		'testing: createInMemoryEventStore builds a core store that publishes to a RecordingPublisher',
+	);
+	const snapshotStore = await createInMemorySnapshotStore();
+	check(
+		snapshotStore instanceof SnapshotStore && EVENT_STORE_CONFORMANCE_CASES.includes('read-all-gap-safe'),
+		'testing: the snapshot store helper and the case ids load',
+	);
+}
+
 /**
  * The default JSON serializer refuses an event with class-transformer decorators at bootstrap, and the
  * '@ocoda/event-sourcing/class-transformer' entry point serializes it with its decorators.
@@ -355,6 +385,7 @@ async function main(): Promise<void> {
 		`every integration loads with its driver (${drivers.map((driver) => driver.name).join(', ')})`,
 	);
 
+	await testingHelpers();
 	await scenario('forRoot', forRoot());
 	await scenario('forRootAsync', forRootAsync());
 	await serializers();

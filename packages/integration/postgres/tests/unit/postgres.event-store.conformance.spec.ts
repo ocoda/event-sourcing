@@ -1,5 +1,5 @@
 import { PostgresEventStore } from '@ocoda/event-sourcing-postgres';
-import { describeEventStoreConformance } from '@ocoda/event-sourcing-testing/conformance';
+import { describeEventStoreConformance } from '@ocoda/event-sourcing/testing';
 import { createEventStore, dropCollections, failInsertOf } from '../support/stores.js';
 
 describeEventStoreConformance(PostgresEventStore.name, async (context) => {
