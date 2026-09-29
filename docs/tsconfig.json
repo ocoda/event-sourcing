@@ -1,5 +1,5 @@
 {
-	"extends": "@ocoda/event-sourcing-config/typescript/docs.json",
-	"include": ["next-env.d.ts", "**/*.ts", "**/*.tsx"],
-	"exclude": ["node_modules"]
+	"extends": "astro/tsconfigs/strict",
+	"include": [".astro/types.d.ts", "**/*"],
+	"exclude": ["dist"]
 }

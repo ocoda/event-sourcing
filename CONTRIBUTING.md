@@ -78,6 +78,19 @@ pnpm test:cov --filter=@ocoda/event-sourcing-postgres
 
 Tests run on [Vitest](https://vitest.dev). Vite's Oxc transform applies each package's `tsconfig.json`, including the legacy decorator and `emitDecoratorMetadata` settings Nest needs. A package's tsconfig must therefore include its `tests` folder.
 
+## Documentation
+
+The docs site in `docs/` is built with [Starlight](https://starlight.astro.build) and deployed to GitHub Pages under `/event-sourcing`. Its pages are the MDX files in `docs/src/content/docs`, and the sidebar is defined in `docs/astro.config.ts`.
+
+```bash
+pnpm --filter @ocoda/event-sourcing-docs docs:dev     # local dev server
+pnpm docs:build --filter=@ocoda/event-sourcing-docs  # the static site in docs/dist
+```
+
+- Link to other pages with root-relative links such as `/start/install#advanced-setup`. The base path is added at build time.
+- Give a heading a stable anchor with `## Heading [#anchor]`.
+- The build fails on a broken internal link or anchor.
+
 ## Changesets
 
 Every change to a published package needs a changeset, which becomes the CHANGELOG entry:

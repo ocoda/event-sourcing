@@ -1,0 +1,162 @@
+---
+title: Multitenancy
+---
+
+import { Aside, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
+
+Ocoda Event Sourcing provides built-in support for multitenancy. This allows you to separate the event- and snapshot-streams of different tenants. This can be achieved by using pools. A **pool** is a **collection of streams** that belong to the same tenant.
+By default the event- and snapshot-store create a shared collection of streams for all tenants. To enable multitenancy you need to:
+
+<Steps>
+
+1. ### Disable the creation of a default pool in the store configuration
+
+   Set `useDefaultPool: false` on the configuration of both stores, so no shared collection is created.
+
+   <Tabs>
+   <TabItem label="In-memory">
+
+   ```typescript {4-5,14,18}
+   import { Module } from '@nestjs/common';
+   import {
+       EventSourcingModule,
+       InMemoryEventStore, // exported since 3.0.1
+       InMemorySnapshotStore, // exported since 3.0.1
+   } from '@ocoda/event-sourcing';
+
+   @Module({
+       imports: [
+           EventSourcingModule.forRoot({
+               events: Events,
+               eventStore: {
+                   driver: InMemoryEventStore,
+                   useDefaultPool: false,
+               },
+               snapshotStore: {
+                   driver: InMemorySnapshotStore,
+                   useDefaultPool: false,
+               },
+           }),
+       ]
+   })
+   export class AppModule {}
+   ```
+
+   <Aside>
+   `InMemoryEventStore` and `InMemorySnapshotStore` are exported from `@ocoda/event-sourcing` since 3.0.1. In earlier versions they can't be imported from the package.
+   </Aside>
+
+   </TabItem>
+   <TabItem label="PostgreSQL">
+
+   ```typescript {17,22}
+   import { Module } from '@nestjs/common';
+   import { EventSourcingModule } from '@ocoda/event-sourcing';
+   import {
+       PostgresEventStore,
+       PostgresSnapshotStore,
+       type PostgresEventStoreConfig,
+       type PostgresSnapshotStoreConfig,
+   } from '@ocoda/event-sourcing-postgres';
+
+   @Module({
+       imports: [
+           EventSourcingModule.forRoot<PostgresEventStoreConfig, PostgresSnapshotStoreConfig>({
+               events: Events,
+               eventStore: {
+                   driver: PostgresEventStore,
+                   connectionString: process.env.DATABASE_URL,
+                   useDefaultPool: false,
+               },
+               snapshotStore: {
+                   driver: PostgresSnapshotStore,
+                   connectionString: process.env.DATABASE_URL,
+                   useDefaultPool: false,
+               },
+           }),
+       ]
+   })
+   export class AppModule {}
+   ```
+
+   Every pool is stored in its own pair of tables in the same database, e.g. `tenant-1-events` and `tenant-1-snapshots`.
+
+   </TabItem>
+   </Tabs>
+
+2. ### Create a pool for each tenant
+
+   The ensureCollection methods are used to create a pool for a tenant. The pool is created if it does not exist, so it's safe to call them again for a tenant that already has a pool.
+
+   ```typescript
+   await eventStore.ensureCollection('tenant-1');
+   await snapshotStore.ensureCollection('tenant-1');
+   ```
+
+   For example, in a service that provisions new tenants. The `EventStore` and `SnapshotStore` can be injected anywhere, see [Module configuration](/start/module-configuration#global-module).
+
+   ```typescript
+   import { Injectable } from '@nestjs/common';
+   import { EventStore, SnapshotStore } from '@ocoda/event-sourcing';
+
+   @Injectable()
+   export class TenantProvisioningService {
+       constructor(
+           private readonly eventStore: EventStore,
+           private readonly snapshotStore: SnapshotStore,
+       ) {}
+
+       async provision(tenantId: string): Promise<void> {
+           await this.eventStore.ensureCollection(tenantId);
+           await this.snapshotStore.ensureCollection(tenantId);
+       }
+   }
+   ```
+
+   <Aside>
+   This library makes a distinction between the types for pools and for collections:
+   - a pool (`IEventPool` and `ISnapshotPool`) only represents the name of a tenant, e.g. `tenant-1`
+   - a collection (`IEventCollection` and `ISnapshotCollection`) is an internal type that represents the name of the collection **within** the database, e.g. `tenant-1-events` and `tenant-1-snapshots`.
+   </Aside>
+
+   <Aside type="caution">
+   The name of a pool becomes part of the name of a collection or table in your database. Validate the tenant identifiers you turn into pool names, and keep them short. PostgreSQL, for instance, limits the length of a table name to 63 bytes.
+   </Aside>
+
+   <Aside>
+   The in-memory stores only leave an existing pool untouched when `ensureCollection` is called again since 3.0.1. In earlier versions calling it for an existing pool emptied that pool.
+   </Aside>
+
+3. ### Provide a pool when interacting with the event-store or snapshot-repository
+
+   The library doesn't resolve the tenant for you, so determine it in your application (e.g. from a request header or a token) and pass it as the pool.
+
+   ```typescript
+   async getById(accountId: AccountId, tenantId: string): Promise<Account> {
+     const eventStream = EventStream.for<Account>(Account, accountId);
+
+     const account = await this.accountSnapshotRepository.load(accountId, tenantId);
+
+     const eventCursor = this.eventStore.getEvents(eventStream, {
+       fromVersion: account.version + 1,
+       pool: tenantId,
+     });
+     await account.loadFromHistory(eventCursor);
+
+     return account;
+   }
+
+   async save(account: Account, tenantId: string): Promise<void> {
+     const events = account.commit();
+     const stream = EventStream.for<Account>(Account, account.id);
+
+     await this.eventStore.appendEvents(stream, account.version, events, tenantId);
+     await this.accountSnapshotRepository.save(account.id, account, tenantId);
+   }
+   ```
+
+   <Aside>
+   `getEvents` returns an async generator, so don't `await` it. Hand it to `loadFromHistory` as above, or iterate over it with `for await`.
+   </Aside>
+
+</Steps>
