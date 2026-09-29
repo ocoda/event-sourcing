@@ -26,8 +26,6 @@ export interface NormalizedAppend {
 	/** As it was passed; `validateAppendMetadata` checks it. */
 	metadata: unknown;
 	publish: boolean;
-	/** Whether the deprecated 3.x form was used. */
-	positional: boolean;
 }
 
 /**
@@ -99,7 +97,6 @@ export const normalizeAppendArguments = (args: readonly unknown[]): NormalizedAp
 			pool: validatePool(pool),
 			metadata: undefined,
 			publish: true,
-			positional: true,
 		};
 	}
 
@@ -123,6 +120,5 @@ export const normalizeAppendArguments = (args: readonly unknown[]): NormalizedAp
 		pool,
 		metadata: options.metadata,
 		publish: options.publish !== false,
-		positional: false,
 	};
 };

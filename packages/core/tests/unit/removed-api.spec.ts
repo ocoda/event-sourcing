@@ -1,7 +1,17 @@
 import * as EventSourcing from '@ocoda/event-sourcing';
-import { EventId, EventStore, InMemoryEventStore, ULID } from '@ocoda/event-sourcing';
+import {
+	type EventEnvelope,
+	EventId,
+	EventStore,
+	type EventStream,
+	type IEvent,
+	type IEventPool,
+	InMemoryEventStore,
+	ULID,
+} from '@ocoda/event-sourcing';
 import * as Conformance from '@ocoda/event-sourcing-testing/conformance';
 import { createTestContext } from '@ocoda/event-sourcing-testing/unit';
+import { StubEventStore } from './event-store/stub-event-store.js';
 
 /**
  * The API that 4.0 removes: the 3.x year-month reads, which `readAll` replaces, and the interim path of the 4.0
@@ -36,7 +46,8 @@ describe('removed API', () => {
 	);
 
 	it('exports none of the interim path', () => {
-		const removed = /legacy|interim|AllEventsFilter|AppendEventsArguments|YearMonth/i;
+		// Runtime exports only; the removed types are guarded by the @ts-expect-error lines below (pnpm typecheck)
+		const removed = /legacy|interim|YearMonth/i;
 		expect(Object.keys(EventSourcing).filter((key) => removed.test(key))).toEqual([]);
 		expect(Object.keys(Conformance).filter((key) => removed.test(key))).toEqual([]);
 	});
@@ -49,5 +60,21 @@ describe('removed API', () => {
 		expectTypeOf<EventStore>().not.toHaveProperty('getAllEnvelopes');
 		expectTypeOf<ULID>().not.toHaveProperty('yearMonth');
 		expectTypeOf<EventId>().not.toHaveProperty('yearMonth');
+	});
+
+	it('makes a 3.x-shaped appendEvents override a compile error', () => {
+		class ThreeXShapedEventStore extends StubEventStore {
+			// @ts-expect-error the 3.x override doesn't match the options overload of appendEvents
+			override async appendEvents(
+				_stream: EventStream,
+				_aggregateVersion: number,
+				_events: IEvent[],
+				_pool?: IEventPool,
+			): Promise<EventEnvelope[]> {
+				return [];
+			}
+		}
+		// The bootstrap guard rejects it at runtime too (implementation-guard.spec.ts)
+		expect(Object.hasOwn(ThreeXShapedEventStore.prototype, 'appendEvents')).toBe(true);
 	});
 });
