@@ -13,7 +13,8 @@ export interface IEventPublisher {
 	publish(envelope: EventEnvelope): unknown;
 	/**
 	 * Publishes the envelopes of one append, in commit order, in one call. When a publisher implements it, the bus calls
-	 * it instead of `publish`.
+	 * it instead of `publish`. A returned promise is awaited like that of `publish`, and any other return value (the
+	 * result of a `sendBatch()`) is ignored.
 	 */
-	publishAll?(envelopes: readonly EventEnvelope[]): Promise<void>;
+	publishAll?(envelopes: readonly EventEnvelope[]): unknown;
 }

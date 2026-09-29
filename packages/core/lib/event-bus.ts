@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
+
 import {
 	type BeforeApplicationShutdown,
 	Injectable,
@@ -39,8 +41,27 @@ const DEFAULT_SHUTDOWN_TIMEOUT = 10_000;
  */
 const MAX_TIMER_DELAY = 2 ** 31 - 1;
 
-const describeError = (error: unknown): string =>
-	error instanceof Error ? error.stack || error.message : String(error);
+/**
+ * A value as text, also for one that has no string form (`Object.create(null)`), so that reporting a failure can't fail.
+ */
+const show = (value: unknown): string => {
+	try {
+		return String(value);
+	} catch {
+		return Object.prototype.toString.call(value);
+	}
+};
+
+const describeError = (error: unknown): string => {
+	try {
+		if (error instanceof Error) {
+			return error.stack || error.message;
+		}
+	} catch {
+		// A throwing getter: fall through to the plain description
+	}
+	return show(error);
+};
 
 const isPromiseLike = (value: unknown): value is PromiseLike<unknown> =>
 	typeof (value as PromiseLike<unknown> | undefined)?.then === 'function';
@@ -58,7 +79,7 @@ const toTimeout = (value: unknown, fallback: number, option: string): number => 
 	}
 	if (typeof value !== 'number' || Number.isNaN(value) || value < 0) {
 		throw new RangeError(
-			`Not a timeout for ${option}: ${String(value)}. Expected a number of milliseconds, or 0 to disable it.`,
+			`Not a timeout for ${option}: ${show(value)}. Expected a number of milliseconds, or 0 to disable it.`,
 		);
 	}
 	return value > MAX_TIMER_DELAY ? 0 : value;
@@ -68,6 +89,28 @@ const toTimeout = (value: unknown, fallback: number, option: string): number => 
  * A timeout, as the web platform reports it (`AbortSignal.timeout()`): a `DOMException` named `TimeoutError`.
  */
 const timeoutError = (message: string): DOMException => new DOMException(message, 'TimeoutError');
+
+/**
+ * The publishers whose call is running in the current async context. When a publisher appends or publishes from inside
+ * its own call, it gets those envelopes at once: queued behind the call that waits for them, they would wait for
+ * themselves until the timeout, or forever without one.
+ */
+const delivering = new AsyncLocalStorage<ReadonlySet<IEventPublisher>>();
+const NO_PUBLISHERS: ReadonlySet<IEventPublisher> = new Set();
+
+/**
+ * Runs a call of a publisher in the async context of its delivery, which is also that of the calls it runs in.
+ */
+const within = (publisher: IEventPublisher, call: () => unknown): unknown => {
+	const publishers = new Set(delivering.getStore());
+	publishers.add(publisher);
+	return delivering.run(publishers, call);
+};
+
+/**
+ * The stream an envelope belongs to, which the deliveries to a publisher are ordered by: its aggregate id.
+ */
+const streamOf = (envelope: EventEnvelope | undefined): unknown => envelope?.metadata?.aggregateId;
 
 type Settled = { readonly failed: false } | { readonly failed: true; readonly error: unknown };
 
@@ -116,17 +159,21 @@ const settle = (call: () => unknown, timeout: number, describe: () => string): S
  *   `publishing.publisherTimeout` (30 s by default, `0` disables it). A publisher that throws, rejects or times out
  *   is logged and reported on {@link EventBus.deliveryErrors$}; it still gets the later envelopes, and the other
  *   publishers aren't affected. {@link EventBus.publishAll} resolves once every publisher settled, and never rejects.
- * - **Order.** Each publisher gets the appends one after the other, in the order in which they were published: while
- *   it still handles an append, the next append waits for it (for that publisher only), even when the appends run
- *   concurrently. A publisher with nothing to catch up on is called at once, so a synchronous one (like the default
- *   one, which feeds the subscribers) gets the envelopes synchronously.
+ * - **Order.** Each publisher gets the appends of a stream one after the other, in the order in which they were
+ *   published: while it still handles an append, the next append to the same stream waits for it (for that publisher
+ *   only), even when the appends run concurrently. Appends to other streams don't wait for it, so a slow publisher
+ *   holds back one stream, not every aggregate; the order across streams is that of `readAll`. A publisher with
+ *   nothing to catch up on is called at once, so a synchronous one gets the envelopes synchronously. The default
+ *   publisher, which feeds the subscribers, gets them last, so what a subscriber appends to the stream in reaction
+ *   reaches the other publishers after the event that caused it. A publisher that appends or publishes from inside its
+ *   own call gets those envelopes at once, instead of after the call that waits for them.
  * - **Subscribers** handle the envelopes in parallel and are not awaited. A failing subscriber is logged and reported
  *   on {@link EventBus.deliveryErrors$}, and keeps receiving later envelopes.
  * - **Shutdown.** `beforeApplicationShutdown` waits for the running publishers and subscribers
  *   ({@link EventBus.whenIdle}), for at most `publishing.shutdownTimeout` (10 s by default), and
  *   `onApplicationShutdown` unsubscribes the subscribers.
  *
- * Delivery is in-process, at-most-once and ordered per publisher.
+ * Delivery is in-process, at-most-once and ordered per publisher and stream.
  */
 @Injectable()
 export class EventBus
@@ -134,7 +181,11 @@ export class EventBus
 	implements IEventBus, EnvelopePublisher, BeforeApplicationShutdown, OnApplicationShutdown
 {
 	protected readonly subscriptions: Subscription[] = [];
-	private publishers: IEventPublisher[] = [new DefaultEventPubSub(this.subject$)];
+	/**
+	 * The default publisher, which feeds the subscribers. It gets every append after the other publishers.
+	 */
+	private readonly subscriberFeed: IEventPublisher = new DefaultEventPubSub(this.subject$);
+	private readonly publishers: IEventPublisher[] = [];
 	private readonly deliveryErrorsSubject = new Subject<EventDeliveryError>();
 	/**
 	 * Every failure of a publisher (including a timeout) or a subscriber, one per envelope. They are logged as well.
@@ -147,10 +198,10 @@ export class EventBus
 	private pendingHandlers = 0;
 	private readonly idleWaiters = new Set<() => void>();
 	/**
-	 * The last delivery of each publisher that is still handling an append; the next append's delivery to it waits for
-	 * it. A publisher is only in here while a delivery to it is asynchronous.
+	 * Per publisher, the last delivery of each stream that it is still handling; the next delivery of that stream to it
+	 * waits for it. A stream is only in here while a delivery of it is asynchronous.
 	 */
-	private readonly deliveries = new Map<IEventPublisher, Promise<void>>();
+	private readonly deliveries = new Map<IEventPublisher, Map<unknown, Promise<void>>>();
 
 	/**
 	 * @throws RangeError when a timeout of the `publishing` options is not a non-negative number
@@ -215,7 +266,10 @@ export class EventBus
 
 		this.pendingPublications++;
 		try {
-			await Promise.allSettled(this.publishers.map((publisher) => this.enqueue(publisher, batch)));
+			const deliveries = this.publishers.map((publisher) => this.enqueue(publisher, batch));
+			// Last: what a subscriber appends in reaction then reaches the publishers after the event that caused it
+			deliveries.push(this.enqueue(this.subscriberFeed, batch));
+			await Promise.allSettled(deliveries);
 		} finally {
 			this.pendingPublications--;
 			this.notifyIfIdle();
@@ -346,25 +400,60 @@ export class EventBus
 	}
 
 	/**
-	 * Delivers the envelopes of an append to one publisher once its delivery of the earlier appends settled, so that it
-	 * gets the appends in the order in which they were published. Never rejects.
+	 * Delivers the envelopes of an append to one publisher once its delivery of the earlier appends to the same stream
+	 * settled, so that it gets the appends of a stream in the order in which they were published. Appends to other
+	 * streams don't wait. Never rejects.
 	 *
 	 * @returns the delivery, or nothing when it finished synchronously
 	 */
 	private enqueue(publisher: IEventPublisher, envelopes: readonly EventEnvelope[]): Promise<void> | undefined {
-		const previous = this.deliveries.get(publisher);
-		const run = () => this.deliver(publisher, envelopes);
-		const delivery = previous ? previous.then(run, run) : run();
-		if (delivery) {
-			this.deliveries.set(publisher, delivery);
-			const release = () => {
-				if (this.deliveries.get(publisher) === delivery) {
-					this.deliveries.delete(publisher);
-				}
-			};
-			delivery.then(release, release);
+		if (delivering.getStore()?.has(publisher)) {
+			// The publisher appends or publishes from inside its own call: queued behind that call, it would wait for itself
+			return this.deliver(publisher, envelopes);
 		}
+
+		// An append has one stream; a batch someone publishes directly may have several, and waits for each of them
+		const streams = new Set(envelopes.map(streamOf));
+		const previous: Promise<void>[] = [];
+		for (const stream of streams) {
+			const running = this.deliveries.get(publisher)?.get(stream);
+			if (running) {
+				previous.push(running);
+			}
+		}
+		const run = () => this.deliver(publisher, envelopes);
+		const delivery = previous.length > 0 ? Promise.all(previous).then(run, run) : run();
+		if (!delivery) {
+			return undefined;
+		}
+
+		// Looked up after the call, which may have queued another delivery to this publisher
+		const queue = this.deliveries.get(publisher) ?? new Map<unknown, Promise<void>>();
+		this.deliveries.set(publisher, queue);
+		for (const stream of streams) {
+			queue.set(stream, delivery);
+		}
+		const release = () => {
+			for (const stream of streams) {
+				if (queue.get(stream) === delivery) {
+					queue.delete(stream);
+				}
+			}
+			if (queue.size === 0 && this.deliveries.get(publisher) === queue) {
+				this.deliveries.delete(publisher);
+			}
+		};
+		delivery.then(release, release);
 		return delivery;
+	}
+
+	/**
+	 * Calls a publisher in the async context of its delivery, so that what it appends or publishes from inside the call
+	 * doesn't wait for the call (see `delivering`). The subscriber feed runs outside of every delivery: no call waits for
+	 * the subscribers, so what they append queues like any other append.
+	 */
+	private invoke(publisher: IEventPublisher, call: () => unknown): () => unknown {
+		return () => (publisher === this.subscriberFeed ? delivering.run(NO_PUBLISHERS, call) : within(publisher, call));
 	}
 
 	/**
@@ -380,7 +469,7 @@ export class EventBus
 		}
 
 		const outcome = settle(
-			() => publisher.publishAll?.(envelopes),
+			this.invoke(publisher, () => publisher.publishAll?.(envelopes)),
 			this.publisherTimeout,
 			() => `Publishing ${envelopes.length} event(s) with ${handler}`,
 		);
@@ -406,12 +495,12 @@ export class EventBus
 		for (let index = start; index < envelopes.length; index++) {
 			const envelope = envelopes[index] as EventEnvelope;
 			const outcome = settle(
-				() => publisher.publish(envelope),
+				this.invoke(publisher, () => publisher.publish(envelope)),
 				this.publisherTimeout,
-				() => `Publishing event "${envelope?.event}" with ${handler}`,
+				() => `Publishing event "${show(envelope?.event)}" with ${handler}`,
 			);
 			const report = (settled: Settled) =>
-				this.reportPublisherFailure(handler, [envelope], settled, `event "${envelope?.event}"`);
+				this.reportPublisherFailure(handler, [envelope], settled, `event "${show(envelope?.event)}"`);
 			if (isPromiseLike(outcome)) {
 				return outcome.then((settled) => {
 					report(settled);

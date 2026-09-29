@@ -30,8 +30,13 @@ const deferred = <T = void>() => {
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-const envelopeFor = (version: number, event = 'publishing-recorded') =>
-	EventEnvelope.create(event, {}, { aggregateId: 'a', version });
+const envelopeFor = (version: number, event = 'publishing-recorded', aggregateId = 'a') =>
+	EventEnvelope.create(event, {}, { aggregateId, version });
+
+/**
+ * Something that has no string form: `String()` throws for it.
+ */
+const bare = Object.create(null) as object;
 
 const recordDeliveryErrors = (bus: EventBus): EventDeliveryError[] => {
 	const errors: EventDeliveryError[] = [];
@@ -95,10 +100,26 @@ describe('EventBus publishing (ADR 0001 §2)', () => {
 				return new Promise(() => undefined);
 			}
 		}
+		class BareThrowingPublisher implements IEventPublisher {
+			readonly calls: EventEnvelope[] = [];
+			publish(envelope: EventEnvelope): void {
+				this.calls.push(envelope);
+				throw bare;
+			}
+		}
+		class BareRejectingPublisher implements IEventPublisher {
+			readonly calls: EventEnvelope[] = [];
+			async publish(envelope: EventEnvelope): Promise<void> {
+				this.calls.push(envelope);
+				throw bare;
+			}
+		}
 
 		it.each([
 			['throws', ThrowingPublisher, new Error('broker misconfigured')],
 			['rejects', RejectingPublisher, new Error('broker unavailable')],
+			['throws something without a string form', BareThrowingPublisher, bare],
+			['rejects with something without a string form', BareRejectingPublisher, bare],
 			[
 				'hangs',
 				HangingPublisher,
@@ -268,6 +289,210 @@ describe('EventBus publishing (ADR 0001 §2)', () => {
 
 			expect(slow.publish.mock.calls).toEqual([[first], [second]]);
 			expect(fast.publish.mock.calls).toEqual([[first], [second]]);
+		});
+
+		it('holds back only the stream it is busy with: with a hanging publisher, appends to other streams resolve after one timeout', async () => {
+			vi.useFakeTimers();
+			const { bus, store, deliveryErrors } = await createStore({ publisherTimeout: 50 });
+			const publisher = new HangingPublisher();
+			bus.addPublisher(publisher);
+			let appended = 0;
+
+			const appending = Array.from({ length: 6 }, () =>
+				store.appendEvents(newStream(), events.slice(0, 1), { expectedVersion: 0 }).then(() => appended++),
+			);
+			await vi.advanceTimersByTimeAsync(49);
+			expect(publisher.calls).toHaveLength(6);
+			expect(appended).toBe(0);
+			await vi.advanceTimersByTimeAsync(1);
+			await Promise.all(appending);
+
+			expect(appended).toBe(6);
+			expect(deliveryErrors.map(({ error }) => (error as Error).name)).toEqual(Array(6).fill('TimeoutError'));
+		});
+
+		it('makes the next append to the same stream wait for the call before it, each call up to the timeout', async () => {
+			vi.useFakeTimers();
+			const bus = new EventBus({ publishing: { publisherTimeout: 50 } });
+			const publisher = new HangingPublisher();
+			bus.addPublisher(publisher);
+			const [first, second] = [envelopeFor(1), envelopeFor(2)];
+			const published: number[] = [];
+
+			const publishing = [
+				bus.publishAll([first]).then(() => published.push(1)),
+				bus.publishAll([second]).then(() => published.push(2)),
+			];
+			await vi.advanceTimersByTimeAsync(50);
+			expect(published).toEqual([1]);
+			expect(publisher.calls).toEqual([first, second]);
+			await vi.advanceTimersByTimeAsync(50);
+			await Promise.all(publishing);
+
+			expect(published).toEqual([1, 2]);
+		});
+
+		it('makes a batch that spans streams wait for each of them', async () => {
+			const bus = new EventBus();
+			const gate = deferred();
+			const publish = vi.fn(({ metadata: { aggregateId, version } }: EventEnvelope) =>
+				aggregateId === 'a' && version === 1 ? gate.promise : Promise.resolve(),
+			);
+			bus.addPublisher({ publish });
+			const [a1, a2] = [envelopeFor(1, undefined, 'a'), envelopeFor(2, undefined, 'a')];
+			const [b1, b2] = [envelopeFor(1, undefined, 'b'), envelopeFor(2, undefined, 'b')];
+
+			const publishing = [bus.publishAll([a1]), bus.publishAll([b1]), bus.publishAll([b2, a2])];
+			await vi.waitFor(() => expect(publish.mock.calls).toEqual([[a1], [b1]]));
+			await sleep(5);
+			expect(publish.mock.calls).toEqual([[a1], [b1]]);
+			gate.resolve();
+			await Promise.all(publishing);
+
+			expect(publish.mock.calls).toEqual([[a1], [b1], [b2], [a2]]);
+		});
+
+		type Reaction = { bus: EventBus; store: InMemoryEventStore; stream: EventStream; envelope: EventEnvelope };
+
+		it.each([
+			[
+				'publishes to the same stream',
+				({ bus, envelope }: Reaction) =>
+					bus.publish(envelopeFor(2, 'publishing-derived', envelope.metadata.aggregateId)),
+			],
+			[
+				'appends to the same stream',
+				({ store, stream }: Reaction) => store.appendEvents(stream, events.slice(1, 2), { expectedVersion: 1 }),
+			],
+			[
+				'appends to another stream',
+				({ store }: Reaction) => store.appendEvents(newStream(), events.slice(1, 2), { expectedVersion: 0 }),
+			],
+		])(
+			'delivers at once what a publisher %s from inside its own call, instead of making it wait for itself',
+			async (_, react: (reaction: Reaction) => Promise<unknown>) => {
+				const { bus, store, deliveryErrors } = await createStore({ publisherTimeout: 0 });
+				const stream = newStream();
+				const received: EventEnvelope[] = [];
+				bus.addPublisher({
+					publish: async (envelope: EventEnvelope) => {
+						received.push(envelope);
+						if (received.length === 1) {
+							// After an await, when the delivery of the first envelope is already queued for this publisher
+							await sleep(1);
+							await react({ bus, store, stream, envelope });
+						}
+					},
+				});
+
+				const [first] = await Promise.race([
+					store.appendEvents(stream, events.slice(0, 1), { expectedVersion: 0 }),
+					sleep(1_000).then(() => {
+						throw new Error('the append waits for its publisher, which waits for itself');
+					}),
+				]);
+
+				expect(received).toHaveLength(2);
+				expect(received[0]).toEqual(first);
+				expect(deliveryErrors).toEqual([]);
+				await expect(bus.whenIdle({ timeout: 1_000 })).resolves.toBeUndefined();
+			},
+		);
+
+		it("queues what a subscriber publishes, also when a publisher's own publication started the subscriber", async () => {
+			const bus = new EventBus();
+			const log: string[] = [];
+			bus.addPublisher({
+				publish: async ({ event }: EventEnvelope) => {
+					log.push(`start ${event}`);
+					if (event === 'publishing-cause') {
+						await sleep(1);
+						await bus.publish(envelopeFor(1, 'publishing-trigger', 'b'));
+						await sleep(1);
+					}
+					log.push(`end ${event}`);
+				},
+			});
+			bus.bind(
+				{
+					handle: () => {
+						void bus.publish(envelopeFor(2, 'publishing-effect', 'a'));
+					},
+				},
+				'publishing-trigger',
+			);
+
+			await bus.publish(envelopeFor(1, 'publishing-cause', 'a'));
+			await bus.whenIdle({ timeout: 1_000 });
+
+			expect(log).toEqual([
+				'start publishing-cause',
+				'start publishing-trigger',
+				'end publishing-trigger',
+				'end publishing-cause',
+				'start publishing-effect',
+				'end publishing-effect',
+			]);
+		});
+
+		it('keeps the order of a stream whose first delivery started while the publisher was being called', async () => {
+			const bus = new EventBus();
+			const gate = deferred();
+			const log: string[] = [];
+			bus.addPublisher({
+				publish: ({ event }: EventEnvelope) => {
+					log.push(event);
+					if (event === 'publishing-cause') {
+						// Synchronously, so the subscriber below publishes to this publisher before this call returns
+						void bus.publish(envelopeFor(1, 'publishing-trigger', 'b'));
+						return sleep(1);
+					}
+					return event === 'publishing-effect' ? gate.promise : undefined;
+				},
+			});
+			bus.bind(
+				{
+					handle: () => {
+						void bus.publish(envelopeFor(1, 'publishing-effect', 'c'));
+					},
+				},
+				'publishing-trigger',
+			);
+
+			const publishing = [
+				bus.publish(envelopeFor(1, 'publishing-cause', 'a')),
+				bus.publish(envelopeFor(2, 'publishing-next', 'c')),
+			];
+			await sleep(5);
+			expect(log).toEqual(['publishing-cause', 'publishing-trigger', 'publishing-effect']);
+			gate.resolve();
+			await Promise.all(publishing);
+
+			expect(log).toEqual(['publishing-cause', 'publishing-trigger', 'publishing-effect', 'publishing-next']);
+		});
+
+		it('feeds the subscribers last: the publishers get an event before what a subscriber publishes in reaction to it', async () => {
+			const bus = new EventBus();
+			const received: string[] = [];
+			bus.addPublisher({
+				publish: async ({ event }: EventEnvelope) => {
+					received.push(event);
+					await sleep(1);
+				},
+			});
+			bus.bind(
+				{
+					handle: ({ metadata: { aggregateId } }: EventEnvelope) => {
+						void bus.publish(envelopeFor(2, 'publishing-effect', aggregateId));
+					},
+				},
+				'publishing-cause',
+			);
+
+			await bus.publish(envelopeFor(1, 'publishing-cause'));
+			await bus.whenIdle({ timeout: 1_000 });
+
+			expect(received).toEqual(['publishing-cause', 'publishing-effect']);
 		});
 
 		it('queues the appends for a publisher that implements publishAll, one call at a time', async () => {
@@ -540,18 +765,28 @@ describe('EventBus publishing (ADR 0001 §2)', () => {
 				}
 			}
 
+			class BatchKafkaPublisher extends KafkaPublisher {
+				async publishAll(): Promise<{ partition: number }[]> {
+					return [{ partition: 0 }];
+				}
+			}
+
 			expectTypeOf<KafkaPublisher>().toExtend<IEventPublisher>();
 			expectTypeOf<ClientProxyPublisher>().toExtend<IEventPublisher>();
+			expectTypeOf<BatchKafkaPublisher>().toExtend<IEventPublisher>();
 		});
 	});
 
 	describe('subscribers', () => {
-		it('reports a failing subscriber on deliveryErrors$ and keeps it subscribed', async () => {
+		it.each([
+			['an error', new Error('projection down')],
+			['something without a string form', bare],
+		])('reports a subscriber that fails with %s on deliveryErrors$ and keeps it subscribed', async (_, failure) => {
 			const bus = new EventBus();
 			const deliveryErrors = recordDeliveryErrors(bus);
 			class FailingSubscriber implements IEventSubscriber {
 				async handle(): Promise<void> {
-					throw new Error('projection down');
+					throw failure;
 				}
 			}
 			bus.bind(new FailingSubscriber(), 'publishing-recorded');
@@ -565,9 +800,10 @@ describe('EventBus publishing (ADR 0001 §2)', () => {
 					kind: 'subscriber',
 					handler: 'FailingSubscriber',
 					envelope,
-					error: new Error('projection down'),
+					error: failure,
 				})),
 			);
+			expect(loggerError).toHaveBeenCalledTimes(2);
 		});
 
 		it("doesn't make an append wait for the subscribers; whenIdle does", async () => {
@@ -665,6 +901,14 @@ describe('EventBus publishing (ADR 0001 §2)', () => {
 			);
 		});
 
+		it('rejects a timeout without a string form with a RangeError too', () => {
+			expect(() => new EventBus({ publishing: { publisherTimeout: bare } } as never)).toThrow(
+				new RangeError(
+					'Not a timeout for publishing.publisherTimeout: [object Object]. Expected a number of milliseconds, or 0 to disable it.',
+				),
+			);
+		});
+
 		it('takes the defaults for omitted options', () => {
 			expect(() => new EventBus()).not.toThrow();
 			expect(() => new EventBus({})).not.toThrow();
@@ -719,6 +963,27 @@ describe('EventBus publishing (ADR 0001 §2)', () => {
 			await expect(bus.beforeApplicationShutdown()).resolves.toBeUndefined();
 
 			expect(loggerWarn).toHaveBeenCalledTimes(1);
+		});
+
+		it.each([
+			['0', 0],
+			['above the timer range', 2 ** 31],
+		])('waits as long as it takes with a shutdownTimeout of %s', async (_, shutdownTimeout) => {
+			vi.useFakeTimers();
+			const bus = new EventBus({ publishing: { shutdownTimeout } });
+			const gate = deferred();
+			bus.bind({ handle: () => gate.promise }, '');
+			await bus.publish(envelopeFor(1));
+			let drained = false;
+
+			const shuttingDown = bus.beforeApplicationShutdown().then(() => (drained = true));
+			expect(vi.getTimerCount()).toBe(0);
+			await vi.advanceTimersByTimeAsync(60 * 60 * 1_000);
+			expect(drained).toBe(false);
+			gate.resolve();
+			await shuttingDown;
+
+			expect(loggerWarn).not.toHaveBeenCalled();
 		});
 
 		it('unsubscribes the subscribers once the application has shut down, which ends their tracking', async () => {

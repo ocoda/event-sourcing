@@ -51,6 +51,15 @@ class HangingSubscriber implements IEventSubscriber {
 }
 
 @EventPublisher()
+class GatedPublisher implements IEventPublisher {
+	async publish({ event }: EventEnvelope): Promise<void> {
+		timeline.push(`publishing ${event}`);
+		await new Promise<void>((resolve) => (release = resolve));
+		timeline.push(`published ${event}`);
+	}
+}
+
+@EventPublisher()
 class HangingPublisher implements IEventPublisher {
 	publish(): Promise<void> {
 		return new Promise(() => undefined);
@@ -117,6 +126,32 @@ describe('EventBus on a Nest application (ADR 0001 §2)', () => {
 		expect(timeline).toEqual([
 			'handling shutdown-account-opened',
 			'handled shutdown-account-opened',
+			'disconnect InMemoryEventStore',
+			'disconnect InMemorySnapshotStore',
+		]);
+		for (const disconnect of disconnects) {
+			expect(disconnect).toHaveBeenCalledTimes(1);
+		}
+		expect(loggerWarn).not.toHaveBeenCalled();
+	});
+
+	it('app.close() drains a publication that is still running, then disconnects each store once', async () => {
+		const context = await bootstrap(EventSourcingModule.forRoot({ events: [AccountOpenedEvent] }), [GatedPublisher]);
+		const disconnects = recordDisconnects(context);
+
+		// The append waits for the publisher
+		const appending = appendOpened(context);
+		await vi.waitFor(() => expect(timeline).toEqual(['publishing shutdown-account-opened']));
+		const closing = context.close();
+		await sleep(20);
+		expect(timeline).toEqual(['publishing shutdown-account-opened']);
+		release();
+		await Promise.all([appending, closing]);
+		app = undefined;
+
+		expect(timeline).toEqual([
+			'publishing shutdown-account-opened',
+			'published shutdown-account-opened',
 			'disconnect InMemoryEventStore',
 			'disconnect InMemorySnapshotStore',
 		]);
