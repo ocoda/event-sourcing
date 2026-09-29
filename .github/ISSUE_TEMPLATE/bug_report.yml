@@ -29,11 +29,11 @@ body:
       required: true
 
   - type: input
-    id: package-version
+    id: package-versions
     attributes:
-      label: Package version
-      description: The exact version from your lockfile or `npm ls @ocoda/event-sourcing`.
-      placeholder: "3.0.2"
+      label: Package versions
+      description: The exact version of each @ocoda package you use, from your lockfile or `npm ls`.
+      placeholder: "@ocoda/event-sourcing 3.0.2, @ocoda/event-sourcing-postgres 3.0.2"
     validations:
       required: true
 
@@ -106,5 +106,5 @@ body:
       options:
         - label: I searched [existing issues](https://github.com/ocoda/event-sourcing/issues?q=is%3Aissue) and this is not a duplicate.
           required: true
-        - label: I use a [supported version](https://github.com/ocoda/event-sourcing/blob/master/SECURITY.md#supported-versions).
+        - label: I use 3.x or a 4.0.0-next prerelease. 2.x and older are [not supported](https://github.com/ocoda/event-sourcing/blob/master/SECURITY.md#supported-versions).
           required: true

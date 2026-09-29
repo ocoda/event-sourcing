@@ -33,7 +33,7 @@ One volunteer maintains this project, so handling is best-effort and there is no
 
 1. The report is acknowledged once it has been read.
 2. It is assessed: whether it affects these packages, which versions, and how severe it is. Follow-up questions go through the advisory.
-3. A fix is prepared privately and released as a patch for each supported line.
+3. A fix is prepared privately and released on each affected line: as a 3.x patch release, and for v4 in the next `4.0.0-next.N` prerelease.
 
 ## Disclosure
 

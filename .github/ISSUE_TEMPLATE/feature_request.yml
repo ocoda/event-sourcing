@@ -46,7 +46,6 @@ body:
         - "@ocoda/event-sourcing-mariadb"
         - "@ocoda/event-sourcing-mongodb"
         - "A new store integration"
-        - "Documentation"
         - "Not sure"
     validations:
       required: true
