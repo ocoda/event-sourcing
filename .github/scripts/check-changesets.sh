@@ -14,8 +14,11 @@ readonly SKIP_LABEL='no-changeset'
 # package.json fields that change what users install or load.
 readonly RUNTIME_FIELDS='{dependencies, peerDependencies, peerDependenciesMeta, optionalDependencies, type, main, types, exports, engines}'
 readonly PACKAGE_DIR_PATTERN='^packages/(core|integration/[^/]+)/'
-# A frontmatter line: '@scope/name': patch (the name may be single-, double- or unquoted).
-readonly RELEASE_LINE_PATTERN="^[[:space:]]*[\"']?([^\"':[:space:]]+)[\"']?[[:space:]]*:[[:space:]]*([a-z]+)[[:space:]]*$"
+# A frontmatter line: '@scope/name': patch (name and bump may be single-, double- or unquoted, as YAML allows; a
+# trailing YAML comment is allowed too).
+readonly RELEASE_LINE_PATTERN="^[[:space:]]*[\"']?([^\"':[:space:]]+)[\"']?[[:space:]]*:[[:space:]]*[\"']?([a-z]+)[\"']?[[:space:]]*(#.*)?$"
+# A frontmatter line without a release: blank, or only a YAML comment.
+readonly NO_RELEASE_LINE_PATTERN='^[[:space:]]*(#.*)?$'
 
 errors=0
 error() {
@@ -70,7 +73,7 @@ while IFS=$'\t' read -r status file; do
 
 	releases=0
 	while IFS= read -r line; do
-		[[ $line =~ ^[[:space:]]*$ ]] && continue
+		[[ $line =~ $NO_RELEASE_LINE_PATTERN ]] && continue
 		if [[ $line =~ $RELEASE_LINE_PATTERN ]]; then
 			package="${BASH_REMATCH[1]}"
 			bump="${BASH_REMATCH[2]}"
