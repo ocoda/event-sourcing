@@ -34,6 +34,10 @@ describe(ULID, () => {
 		expect(() => ULID.from(value)).toThrow(new InvalidIdException({ value, idType: 'ULID' }));
 	});
 
+	it('should throw an InvalidIdException when from() is called detached', () => {
+		expect(() => [''].map(ULID.from)).toThrow(new InvalidIdException({ value: '', idType: 'ULID' }));
+	});
+
 	it("should generate different ULID's for different instances", () => {
 		const generatedUlid1 = ULID.generate();
 		const generatedUlid2 = ULID.generate();

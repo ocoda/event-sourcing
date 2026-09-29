@@ -1,6 +1,16 @@
+import type { Id } from '../../models/index.js';
 import { EventSourcingErrorCode } from '../event-sourcing-error.js';
 import { brandEventSourcingError } from '../internal.js';
 import { DomainException } from './domain-error.js';
+
+interface InvalidIdDetails {
+	/** The value the id was created from. */
+	value?: unknown;
+	/** The class name of the id class that rejected the value. */
+	idType?: string;
+	/** Replaces the default message. */
+	reason?: string;
+}
 
 /**
  * Thrown when an id is created from an empty or malformed value.
@@ -14,16 +24,29 @@ export class InvalidIdException extends DomainException {
 	readonly code = EventSourcingErrorCode.InvalidId;
 	/** The value the id was created from. */
 	readonly value?: unknown;
-	/** The class name of the id, such as 'UUID' or 'AccountId'. */
+	/** The class name of the id class that rejected the value, such as 'UUID' or 'ULID'. */
 	readonly idType?: string;
 
-	constructor(details?: { value?: unknown; idType?: string; reason?: string }, options?: ErrorOptions) {
-		super(InvalidIdException.describe(details), undefined, options);
-		this.value = details?.value;
-		this.idType = details?.idType;
+	constructor(details?: InvalidIdDetails, options?: ErrorOptions);
+	/**
+	 * @deprecated The 3.x form, kept for subclasses that call `super(message, id)`. Pass
+	 * `{ value, idType, reason: message }` instead. Removed in 5.0.
+	 */
+	constructor(message: string, id?: Id, options?: ErrorOptions);
+	constructor(details?: InvalidIdDetails | string, idOrOptions?: Id | ErrorOptions, options?: ErrorOptions) {
+		const positional = typeof details === 'string';
+		super(
+			positional ? details : InvalidIdException.describe(details),
+			positional ? (idOrOptions as Id | undefined) : undefined,
+			positional ? options : (idOrOptions as ErrorOptions | undefined),
+		);
+		if (!positional) {
+			this.value = details?.value;
+			this.idType = details?.idType;
+		}
 	}
 
-	private static describe(details?: { value?: unknown; idType?: string; reason?: string }): string {
+	private static describe(details?: InvalidIdDetails): string {
 		if (details?.reason) {
 			return details.reason;
 		}

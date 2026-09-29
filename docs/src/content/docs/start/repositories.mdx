@@ -88,13 +88,14 @@ export class AccountModule {}
    	await this.accountRepository.save(account);
    } catch (error) {
    	if (isEventSourcingError(error, EventSourcingErrorCode.EventStoreVersionConflict)) {
+   		// error is narrowed to EventStoreVersionConflictException:
    		// error.streamId, error.expectedVersion and error.actualVersion describe the conflict
    	}
    	throw error;
    }
    ```
 
-   Every error the library throws has a stable `code` from `EventSourcingErrorCode` and the fields that describe it; the original error, if any, is its `cause` (since 4.0).
+   Every exception class the library exports has a stable `code` from `EventSourcingErrorCode` and the fields that describe it; the original error, if any, is its `cause` (since 4.0).
 
 4. ### Lazy Loading of Events
    While fetching aggregates, events should be loaded lazily or in a paginated fashion, especially for aggregates with long histories. This example uses `eventStore.getEvents(eventStream, { fromVersion: account.version + 1 })` to only fetch events after the aggregate's current version, optimizing performance and ensuring only relevant events are processed.

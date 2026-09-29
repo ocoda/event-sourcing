@@ -188,14 +188,26 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 			} catch (error) {
 				if (isDuplicateKeyError(error)) {
 					// The insert is ordered and not atomic: take back the events that made it in before the conflict
-					await this.discardInsertedEvents(eventCollection, entities, error);
+					const cleanupError = await this.discardInsertedEvents(eventCollection, entities, error);
+					if (cleanupError !== undefined) {
+						// A conflict promises that nothing was stored, but a part of the events stays behind
+						throw new EventStorePersistenceException(
+							{ collection, outcome: 'unknown' },
+							{
+								cause: new AggregateError(
+									[error, cleanupError],
+									'The append lost a race on the unique key, and the events it stored before could not be removed',
+								),
+							},
+						);
+					}
 				}
 				throw error;
 			}
 
 			return envelopes;
 		} catch (error) {
-			if (error instanceof EventStoreVersionConflictException) {
+			if (error instanceof EventStoreVersionConflictException || error instanceof EventStorePersistenceException) {
 				throw error;
 			}
 
@@ -371,22 +383,23 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 
 	/**
 	 * Removes the events of a failed ordered `insertMany` that were already stored.
-	 * Only events that this very call inserted are removed. This is a best effort clean-up.
+	 * Only events that this very call inserted are removed. Resolves with the error of a failed clean-up, if any.
 	 */
 	private async discardInsertedEvents(
 		eventCollection: Collection<MongoDBEventEntity>,
 		entities: MongoDBEventEntity[],
 		error: unknown,
-	): Promise<void> {
+	): Promise<unknown> {
 		const { insertedCount } = error as { insertedCount?: number };
 		if (!insertedCount) {
-			return;
+			return undefined;
 		}
 
 		try {
 			await eventCollection.deleteMany({ _id: { $in: entities.slice(0, insertedCount).map(({ _id }) => _id) } });
+			return undefined;
 		} catch (cleanupError) {
-			this.logger.error(`Failed to remove the events of a conflicting append: ${cleanupError.message}`);
+			return cleanupError ?? new Error('The clean-up failed without an error');
 		}
 	}
 

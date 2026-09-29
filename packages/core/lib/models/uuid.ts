@@ -17,7 +17,7 @@ export class UUID extends Id {
 
 	public static from(id: string): UUID {
 		if (!id) {
-			throw new InvalidIdException({ value: id, idType: this.name });
+			throw new InvalidIdException({ value: id, idType: UUID.name });
 		}
 		return new UUID(id);
 	}

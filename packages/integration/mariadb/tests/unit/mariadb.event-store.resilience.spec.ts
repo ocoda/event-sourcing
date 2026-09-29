@@ -225,16 +225,80 @@ describe(`${MariaDBEventStore.name} resilience`, () => {
 
 	describe('appending', () => {
 		it('should append nothing and throw a persistence exception when the collection does not exist', async () => {
-			await expect(eventStore.appendEvents(newStream(), 1, events.slice(0, 1), uniquePool('missing'))).rejects.toThrow(
-				EventStorePersistenceException,
-			);
+			await expect(
+				eventStore.appendEvents(newStream(), 1, events.slice(0, 1), uniquePool('missing')),
+			).rejects.toMatchObject({
+				name: EventStorePersistenceException.name,
+				outcome: 'not-persisted',
+				cause: expect.any(Error),
+			});
 			expect(pool.activeConnections()).toBe(0);
 		});
 
 		it('should throw a persistence exception and release the connection when the collection name cannot be escaped', async () => {
-			await expect(eventStore.appendEvents(newStream(), 1, events.slice(0, 1), 'nul\u0000pool')).rejects.toThrow(
-				EventStorePersistenceException,
-			);
+			await expect(eventStore.appendEvents(newStream(), 1, events.slice(0, 1), 'nul\u0000pool')).rejects.toMatchObject({
+				name: EventStorePersistenceException.name,
+				outcome: 'not-persisted',
+				cause: expect.any(Error),
+			});
+			expect(pool.activeConnections()).toBe(0);
+		});
+
+		/** Makes the next connection the store takes from the pool fail the given method with the given error. */
+		const failNextConnection = (method: 'batch' | 'commit', error: Error) => {
+			const getConnection = pool.getConnection.bind(pool);
+			const failures: MockInstance[] = [];
+			const getConnectionSpy = vi.spyOn(pool, 'getConnection').mockImplementationOnce(async () => {
+				const connection: PoolConnection = await getConnection();
+				failures.push(vi.spyOn(connection, method).mockRejectedValue(error));
+				return connection;
+			});
+			return {
+				failures,
+				restore: () => {
+					getConnectionSpy.mockRestore();
+					for (const failure of failures) {
+						failure.mockRestore();
+					}
+				},
+			};
+		};
+
+		it("should report a 'not-persisted' outcome when the insert fails before the commit", async () => {
+			const eventPool = await newPool('batch-fails');
+			const stream = newStream();
+			const cause = new Error('batch failure');
+			const { failures, restore } = failNextConnection('batch', cause);
+
+			try {
+				await expect(eventStore.appendEvents(stream, 1, events.slice(0, 1), eventPool)).rejects.toMatchObject({
+					code: EventSourcingErrorCode.EventStorePersistence,
+					collection: EventCollection.get(eventPool),
+					outcome: 'not-persisted',
+					cause,
+				});
+				expect(failures[0]).toHaveBeenCalled();
+			} finally {
+				restore();
+			}
+			expect(pool.activeConnections()).toBe(0);
+		});
+
+		it("should report an 'unknown' outcome when the commit fails", async () => {
+			const eventPool = await newPool('commit-fails');
+			const cause = new Error('commit failure');
+			const { failures, restore } = failNextConnection('commit', cause);
+
+			try {
+				await expect(eventStore.appendEvents(newStream(), 1, events.slice(0, 1), eventPool)).rejects.toMatchObject({
+					code: EventSourcingErrorCode.EventStorePersistence,
+					outcome: 'unknown',
+					cause,
+				});
+				expect(failures[0]).toHaveBeenCalled();
+			} finally {
+				restore();
+			}
 			expect(pool.activeConnections()).toBe(0);
 		});
 
@@ -248,9 +312,12 @@ describe(`${MariaDBEventStore.name} resilience`, () => {
 			});
 
 			try {
-				await expect(
-					eventStore.appendEvents(newStream(), 1, events.slice(0, 1), uniquePool('missing')),
-				).rejects.toThrow(EventStorePersistenceException);
+				const error = await eventStore
+					.appendEvents(newStream(), 1, events.slice(0, 1), uniquePool('missing'))
+					.catch((e: unknown) => e);
+				expect(error).toBeInstanceOf(EventStorePersistenceException);
+				expect((error as Error).cause).toBeInstanceOf(Error);
+				expect(((error as Error).cause as Error).message).not.toBe('rollback failure');
 				expect(rollbacks).toHaveLength(1);
 				expect(rollbacks[0]).toHaveBeenCalled();
 			} finally {

@@ -27,6 +27,10 @@ describe(EventId, () => {
 		expect(() => EventId.from(value)).toThrow(new InvalidIdException({ value, idType: 'EventId' }));
 	});
 
+	it('should throw an InvalidIdException when from() is called detached', () => {
+		expect(() => [''].map(EventId.from)).toThrow(new InvalidIdException({ value: '', idType: 'EventId' }));
+	});
+
 	it("should generate different EventId's for different instances", () => {
 		const generatedEventId1 = EventId.generate();
 		const generatedEventId2 = EventId.generate();

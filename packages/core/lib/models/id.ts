@@ -12,7 +12,7 @@ export class Id extends ValueObject<Props> {
 
 	public static from(id: string): Id {
 		if (!id) {
-			throw new InvalidIdException({ value: id, idType: this.name });
+			throw new InvalidIdException({ value: id, idType: Id.name });
 		}
 		return new Id(id);
 	}

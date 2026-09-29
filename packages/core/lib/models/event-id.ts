@@ -14,7 +14,7 @@ export class EventId extends ULID {
 
 	public static from(id: string): ULID {
 		if (!id) {
-			throw new InvalidIdException({ value: id, idType: this.name });
+			throw new InvalidIdException({ value: id, idType: EventId.name });
 		}
 		return new EventId(id);
 	}

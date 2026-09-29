@@ -14,6 +14,10 @@ export abstract class DomainException extends Error {
 		options?: ErrorOptions,
 	) {
 		super(message, options);
-		this.name = new.target.name;
+		// Only when the subclass didn't set a name of its own, e.g. with a getter or on its prototype, which can't be
+		// assigned to. Not enumerable, like the inherited `Error` name, so the error serializes as it did in 3.x.
+		if (this.name === Error.prototype.name) {
+			Object.defineProperty(this, 'name', { value: new.target.name, writable: true, configurable: true });
+		}
 	}
 }

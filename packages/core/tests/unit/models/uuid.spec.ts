@@ -24,4 +24,13 @@ describe(UUID, () => {
 		const value = '123-abc';
 		expect(() => UUID.from(value)).toThrow(new InvalidIdException({ value, idType: 'UUID' }));
 	});
+
+	it('should throw an InvalidIdException when from() is called detached', () => {
+		class AccountId extends UUID {}
+
+		expect(() => [''].map(UUID.from)).toThrow(InvalidIdException);
+		// idType names the id class that rejected the value, for an empty and a malformed value alike
+		expect(() => [''].map(AccountId.from)).toThrow(new InvalidIdException({ value: '', idType: 'UUID' }));
+		expect(() => AccountId.from('123-abc')).toThrow(new InvalidIdException({ value: '123-abc', idType: 'UUID' }));
+	});
 });

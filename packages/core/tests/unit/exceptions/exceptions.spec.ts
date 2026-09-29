@@ -214,10 +214,36 @@ describe('exceptions', () => {
 			if (error instanceof EventSourcingError) {
 				expectTypeOf(error.code).toEqualTypeOf<EventSourcingErrorCode>();
 			}
+			if (isEventSourcingError(error)) {
+				expectTypeOf(error).toEqualTypeOf<EventSourcingError>();
+			}
+			// A code narrows to the exception class of that code, so its fields are available
 			if (isEventSourcingError(error, EventSourcingErrorCode.EventStoreVersionConflict)) {
+				expectTypeOf(error).toEqualTypeOf<EventStoreVersionConflictException>();
+				expectTypeOf(error.actualVersion).toEqualTypeOf<number | undefined>();
+			}
+			if (isEventSourcingError(error, EventSourcingErrorCode.InvalidId)) {
+				expectTypeOf(error).toEqualTypeOf<InvalidIdException>();
+			}
+			const code = EventSourcingErrorCode.EventStorePersistence as EventSourcingErrorCode | undefined;
+			if (isEventSourcingError(error, code)) {
 				expectTypeOf(error).toEqualTypeOf<EventSourcingError>();
 			}
 			expect.assertions(0);
+		});
+
+		it('maps every code to its exception class', () => {
+			// A new code without an entry in EventSourcingErrorByCode fails to compile here
+			expectTypeOf<keyof EventSourcing.EventSourcingErrorByCode>().toEqualTypeOf<EventSourcingErrorCode>();
+
+			const stream = EventStream.for(Account, UUID.generate());
+			const errors: EventSourcing.EventSourcingErrorByCode[EventSourcingErrorCode][] = [
+				new EventStoreVersionConflictException({ stream, expectedVersion: 1 }),
+				new InvalidIdException(),
+			];
+			for (const error of errors) {
+				expect(isEventSourcingError(error, error.code)).toBe(true);
+			}
 		});
 
 		it('leaves the actual version unknown after a lost race', () => {
@@ -256,6 +282,34 @@ describe('exceptions', () => {
 			expect(error).not.toHaveProperty('code');
 			expect(isEventSourcingError(error)).toBe(false);
 			expect(error).not.toBeInstanceOf(EventSourcingError);
+			// Not enumerable, like the name of an Error: the error serializes as in 3.x
+			expect(JSON.parse(JSON.stringify(error))).not.toHaveProperty('name');
+		});
+
+		it('keeps a name the subclass defines itself', () => {
+			// A getter-only or read-only name on the prototype can't be assigned to
+			class GetterNameException extends DomainException {
+				constructor() {
+					super('getter');
+				}
+			}
+			Object.defineProperty(GetterNameException.prototype, 'name', { get: () => 'CustomGetterName' });
+			class PrototypeNameException extends DomainException {
+				constructor() {
+					super('prototype');
+				}
+			}
+			Object.defineProperty(PrototypeNameException.prototype, 'name', { value: 'CustomPrototypeName' });
+			class FieldNameException extends DomainException {
+				override readonly name = 'CustomFieldName';
+				constructor() {
+					super('field');
+				}
+			}
+
+			expect(new GetterNameException().name).toBe('CustomGetterName');
+			expect(new PrototypeNameException().name).toBe('CustomPrototypeName');
+			expect(new FieldNameException().name).toBe('CustomFieldName');
 		});
 	});
 
@@ -273,6 +327,27 @@ describe('exceptions', () => {
 			expect(InvalidIdException.becauseEmpty()).toBeInstanceOf(InvalidIdException);
 			expect(InvalidIdException.becauseInvalid('nope').message).toBe("'nope' is not a valid UUID.");
 			expect(InvalidIdException.because('custom reason').message).toBe('custom reason');
+		});
+
+		it('keeps the deprecated 3.x constructor for subclasses', () => {
+			class InvalidAccountIdException extends InvalidIdException {
+				constructor(id: UUID, cause?: unknown) {
+					super('Not an account id', id, { cause });
+				}
+			}
+			const id = UUID.generate();
+			const cause = new Error('checksum');
+			const error = new InvalidAccountIdException(id, cause);
+
+			expect(error).toBeInstanceOf(InvalidIdException);
+			expect(error).toMatchObject({
+				name: 'InvalidIdException',
+				code: EventSourcingErrorCode.InvalidId,
+				message: 'Not an account id',
+				id,
+				cause,
+			});
+			expect(error.value).toBeUndefined();
 		});
 	});
 });

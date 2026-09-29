@@ -221,9 +221,11 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 				);
 			}
 
-			// The insert is a single statement in autocommit mode: when Postgres rejects it, nothing was stored.
-			// When the connection fails instead, the insert may have committed before the response was lost.
-			const outcome = writing && !(error instanceof DatabaseError) ? 'unknown' : 'not-persisted';
+			// The insert is a single statement in autocommit mode: when Postgres rejects it (severity ERROR), nothing was
+			// stored. When the connection fails or the session ends (FATAL, PANIC) instead, the insert may have committed
+			// before the response was lost. A server that localizes the severity falls back to the cautious 'unknown'.
+			const rejected = error instanceof DatabaseError && error.severity === 'ERROR';
+			const outcome = writing && !rejected ? 'unknown' : 'not-persisted';
 			throw new EventStorePersistenceException({ collection, outcome }, { cause: error });
 		}
 	}

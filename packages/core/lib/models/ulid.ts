@@ -20,7 +20,7 @@ export class ULID extends Id {
 
 	public static from(id: string): ULID {
 		if (!id) {
-			throw new InvalidIdException({ value: id, idType: this.name });
+			throw new InvalidIdException({ value: id, idType: ULID.name });
 		}
 		return new ULID(id);
 	}
