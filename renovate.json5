@@ -1,0 +1,62 @@
+{
+	$schema: 'https://docs.renovatebot.com/renovate-schema.json',
+	extends: ['config:best-practices', 'helpers:pinGitHubActionDigestsToSemver'],
+	baseBranchPatterns: ['master', '3.x'],
+	labels: ['dependencies'],
+	semanticCommits: 'enabled',
+	// Every update waits for approval on the Dependency Dashboard while master moves to v4;
+	// switched off for the dependency-freshness pass before 4.0.0 GA.
+	dependencyDashboard: true,
+	dependencyDashboardApproval: true,
+	// Matches pnpm's own minimumReleaseAge so frozen-lockfile installs never reject a fresh release.
+	minimumReleaseAge: '3 days',
+	osvVulnerabilityAlerts: true,
+	vulnerabilityAlerts: {
+		labels: ['dependencies', 'security'],
+	},
+	lockFileMaintenance: {
+		enabled: true,
+		schedule: ['before 6am on the first day of the month'],
+	},
+	packageRules: [
+		{
+			description: 'Library peers: widen ranges instead of dropping support for older versions',
+			matchDepTypes: ['peerDependencies'],
+			rangeStrategy: 'widen',
+		},
+		{ groupName: 'nestjs', matchPackageNames: ['@nestjs/**'] },
+		{ groupName: 'aws-sdk', matchPackageNames: ['@aws-sdk/**'] },
+		{ groupName: 'postgres driver', matchPackageNames: ['pg', 'pg-cursor', '@types/pg', '@types/pg-cursor'] },
+		{ groupName: 'mongodb driver', matchPackageNames: ['mongodb'] },
+		{ groupName: 'mariadb driver', matchPackageNames: ['mariadb'] },
+		{ groupName: 'oxc', matchPackageNames: ['oxlint', 'oxfmt', 'oxlint-tsgolint'] },
+		{ groupName: 'vitest', matchPackageNames: ['vitest', '@vitest/**', 'vite'] },
+		{ groupName: 'docs site', matchFileNames: ['docs/package.json'] },
+		{ groupName: 'github actions', matchManagers: ['github-actions'] },
+		{ groupName: 'database images', matchManagers: ['docker-compose'] },
+		{
+			description: 'Tooling updates merge on their own once ci-ok is green',
+			matchDepTypes: ['devDependencies'],
+			matchUpdateTypes: ['minor', 'patch'],
+			automerge: true,
+		},
+		{
+			description: 'Action digest and patch/minor updates merge on their own once ci-ok is green',
+			matchManagers: ['github-actions'],
+			matchUpdateTypes: ['digest', 'pinDigest', 'minor', 'patch'],
+			automerge: true,
+		},
+		{
+			description: '3.x only receives security fixes and patch updates of runtime dependencies',
+			matchBaseBranches: ['3.x'],
+			matchUpdateTypes: ['major', 'minor'],
+			enabled: false,
+		},
+		{
+			description: '3.x keeps its tooling as released',
+			matchBaseBranches: ['3.x'],
+			matchDepTypes: ['devDependencies'],
+			enabled: false,
+		},
+	],
+}
