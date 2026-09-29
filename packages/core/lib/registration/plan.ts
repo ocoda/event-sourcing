@@ -8,6 +8,8 @@ import {
 } from '../decorators/constants.js';
 import type { EventSourcingConfigurationIssue } from '../exceptions/index.js';
 import { describeValue } from '../exceptions/internal.js';
+import type { ClassTransformerDecoratorsOf } from '../helpers/class-transformer-decorators.js';
+import { JsonEventSerializer } from '../helpers/json-event-serializer.js';
 import {
 	getCommandHandlerMetadata,
 	getEventMetadata,
@@ -16,6 +18,7 @@ import {
 	getQueryHandlerMetadata,
 } from '../helpers/metadata/index.js';
 import type {
+	EventSerializerFactory,
 	ICommandHandler,
 	IEvent,
 	IEventPublisher,
@@ -43,6 +46,22 @@ export interface RegistrationPlan {
 	readonly issues: EventSourcingConfigurationIssue[];
 }
 
+/**
+ * How the events without an `@EventSerializer()` of their own are serialized.
+ * @internal Not exported from the package.
+ */
+export interface SerializationPlanOptions {
+	/** `defaultEventSerializer` of the options: `JsonEventSerializer` when `undefined`. */
+	readonly defaultSerializer?: unknown;
+	/** Finds class-transformer decorators; `undefined` without class-transformer, which checks nothing. */
+	readonly classTransformerDecoratorsOf?: ClassTransformerDecoratorsOf;
+}
+
+const isSerializerFactory = (value: unknown): value is EventSerializerFactory =>
+	(typeof value === 'object' || typeof value === 'function') &&
+	value !== null &&
+	typeof (value as { for?: unknown }).for === 'function';
+
 const nameOfClass = (value: unknown): string =>
 	typeof value === 'function' ? value.name || 'an anonymous class' : describeValue(value);
 
@@ -62,7 +81,11 @@ const scopeOf = (wrapper: ProviderWrapper): string => {
  *
  * @internal Not exported from the package.
  */
-export const planRegistration = (providers: readonly ProviderWrapper[], rootEvents: unknown): RegistrationPlan => {
+export const planRegistration = (
+	providers: readonly ProviderWrapper[],
+	rootEvents: unknown,
+	{ defaultSerializer, classTransformerDecoratorsOf }: SerializationPlanOptions = {},
+): RegistrationPlan => {
 	const issues: EventSourcingConfigurationIssue[] = [];
 	const issue = (kind: EventSourcingConfigurationIssue['kind'], message: string) => issues.push({ kind, message });
 
@@ -160,6 +183,8 @@ export const planRegistration = (providers: readonly ProviderWrapper[], rootEven
 		subscribers: new Set<Function>(),
 	};
 	const serializerByEvent = new Map<Function, Function>();
+	// The events that a serializer class names, also one with an issue, so that it isn't reported as on the default too
+	const eventsWithSerializer = new Set<Function>();
 	const commandHandlerByCommand = new Map<Function, Function>();
 	const queryHandlerByQuery = new Map<Function, Function>();
 
@@ -211,6 +236,9 @@ export const planRegistration = (providers: readonly ProviderWrapper[], rootEven
 		if (Reflect.hasMetadata(EVENT_SERIALIZER_METADATA, type) && !seen.serializers.has(type)) {
 			seen.serializers.add(type);
 			const { event } = getEventSerializerMetadata(type as Type<IEventSerializer>);
+			if (typeof event === 'function') {
+				eventsWithSerializer.add(event);
+			}
 			if (!isStatic) {
 				notStatic(wrapper, `The event serializer ${nameOfClass(type)}`);
 			} else if (typeof event !== 'function') {
@@ -267,6 +295,28 @@ export const planRegistration = (providers: readonly ProviderWrapper[], rootEven
 				if (valid) {
 					subscribers.push(wrapper as ProviderWrapper<IEventSubscriber>);
 				}
+			}
+		}
+	}
+
+	// The default serializer, and the class-transformer decorators it would ignore (ADR 0001 §3, §6)
+	if (defaultSerializer !== undefined && !isSerializerFactory(defaultSerializer)) {
+		issue(
+			'invalid-options',
+			`The defaultEventSerializer of EventSourcingModule.forRoot() must be an event serializer factory with a for() method, such as JsonEventSerializer or ClassTransformerEventSerializer, got ${describeValue(defaultSerializer)}.`,
+		);
+	} else if (classTransformerDecoratorsOf) {
+		const factory = defaultSerializer ?? JsonEventSerializer;
+		for (const event of events) {
+			if (eventsWithSerializer.has(event)) {
+				continue;
+			}
+			const decorators = classTransformerDecoratorsOf(event);
+			if (decorators.length > 0 && factory.for(event) instanceof JsonEventSerializer) {
+				issue(
+					'class-transformer-decorators',
+					`The event ${nameOfClass(event)} uses class-transformer decorators (${decorators.join(', ')}), which the default JsonEventSerializer ignores: set defaultEventSerializer: ClassTransformerEventSerializer (from '@ocoda/event-sourcing/class-transformer') in EventSourcingModule.forRoot(), or register an @EventSerializer() for the event.`,
+				);
 			}
 		}
 	}

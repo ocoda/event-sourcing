@@ -65,6 +65,7 @@ The next prerelease adds these steps:
 11. Migrate the data of the PostgreSQL, MariaDB and MongoDB stores to schema v2 before you deploy: run the store's `migrate()` with `dryRun: true` first and review the report, stop every 3.x instance, then run `migrate()` for the events and then for the snapshots. See [Data migration](#data-migration).
 12. Replace `getAllEnvelopes()` with [`readAll()`](#read-all), and `ULID.yearMonth` with `id.date.toISOString().slice(0, 7)`: both are removed. A custom event store implements the driver methods instead of `appendEvents`: see [Migrating a 3.x store](/advanced/custom-stores#migrating-a-3x-store).
 13. Save aggregates with `getUncommittedEvents()`, `appendEvents(stream, events, { expectedVersion: account.committedVersion, pool })` and `markCommitted()` instead of `commit()`, and check the other [aggregate and id changes](#aggregates-and-ids): event handlers run before the version moves, and ids of different classes are no longer equal.
+14. Replace `DefaultEventSerializer` with `JsonEventSerializer`, the new default. If your events, or the classes of the values they hold, use class-transformer decorators, install `class-transformer@^0.5.1` and set `defaultEventSerializer: ClassTransformerEventSerializer`: otherwise the application fails to bootstrap, or the append of such an event fails. See [Serialization](#serialization).
 
 ## NestJS 12 and Node.js 22.12 [#nestjs-and-node]
 
@@ -455,7 +456,7 @@ EventSourcingModule.forRoot({
 - **Registration moves to `onModuleInit`.** The handlers, subscribers, publishers and serializers are registered in the module's `onModuleInit`, or on the first use of the event store or a bus if a provider of another module (your own `@Global()` module, say) uses them from its `onModuleInit` first. 3.x registered them in `onApplicationBootstrap`, so events appended from `onModuleInit` were never published. Commands, queries and appends now work from `onModuleInit` on.
 - **Provider factories can't use the library yet.** Appending events (pre-built envelopes and `publish: false` included), reading events (`getEvent`, `getEvents`), executing or publishing from a provider factory or a constructor throws an `EventSourcingNotReadyException` (`ES_EVENT_SOURCING_NOT_READY`), before any I/O: the handlers don't exist yet. Move that code to `onModuleInit` or later. Reading envelopes (`getEnvelope`, `getEnvelopes`, `readAll`) still works there.
 - **The stores connect while the providers are instantiated**, the snapshot store after the event store, and create their default pools right after. A wrong connection still fails the bootstrap, but now before any `onModuleInit` runs, and a store that fails is disconnected again, as is the event store when the snapshot store fails. The error is thrown while `NestFactory.create()` instantiates the providers: with Nest's default `abortOnError: true`, Nest logs it and exits with code 1 instead of rejecting `app.listen()`. Pass `NestFactory.create(AppModule, { abortOnError: false })` to catch it; `Test.createTestingModule().compile()` rejects with it. They disconnect in their own `onApplicationShutdown`, after the `EventBus` has drained.
-- **Misconfiguration fails the bootstrap** with one `EventSourcingConfigurationException` (`ES_EVENT_SOURCING_CONFIGURATION`) whose `issues` list every problem: two event classes with one name, two handlers for one command or query, two serializers for one event, a serializer or subscriber for an unregistered event, missing decorator metadata, and request-scoped or transient subscribers, publishers and serializers. 3.x kept one of the duplicates, or dropped the provider, silently. Providing one class in several modules, or listing an event twice, is still fine. See [Configuration checks](/start/module-configuration#configuration-checks).
+- **Misconfiguration fails the bootstrap** with one `EventSourcingConfigurationException` (`ES_EVENT_SOURCING_CONFIGURATION`) whose `issues` list every problem: two event classes with one name, two handlers for one command or query, two serializers for one event, a serializer or subscriber for an unregistered event, missing decorator metadata, request-scoped or transient subscribers, publishers and serializers, and events with class-transformer decorators on the JSON serializer (see [Serialization](#serialization)). 3.x kept one of the duplicates, or dropped the provider, silently. Providing one class in several modules, or listing an event twice, is still fine. See [Configuration checks](/start/module-configuration#configuration-checks).
 - **Request-scoped command and query handlers work**: the bus resolves them per call, and `execute(message, { request })` lets them inject the request with `@Inject(REQUEST)`. 3.x registered their bare prototype. A request-scoped handler provided with `useFactory` must use the handler class as its token. See [request-scoped handlers](/start/module-configuration#request-scoped-handlers).
 - **Handlers provided with `useFactory` or `useValue` are discovered**, by the class of their instance.
 - **`forFeature` is no longer global state.** Its events belong to the applications that import the feature module; 3.x put them in a registry shared by the whole process, so several applications in one process (tests) now each see only their own events. `forFeature({ serializers, imports })` provides the serializers of the feature's events.
@@ -514,6 +515,35 @@ account.markCommitted();
 - **`ulidFactory` is deprecated**: it has always been a no-op. Use `ULID.factory()`. It is removed in 5.0.
 - **`ValueObject.equals()`** returns `false` for `null` and `undefined` instead of throwing a `TypeError`, and compares the keys of the props, not only their number.
 
+## Serialization [#serialization]
+
+*In the next prerelease.* See [Event Serialization](/advanced/event-serialization).
+
+- **A JSON serializer is the default.** `JsonEventSerializer` replaces class-transformer as the serializer of every event without an `@EventSerializer()` of its own. For events that use no class-transformer decorators, neither on the event class nor on the classes of the values it holds, it stores the same payloads and reads back the same events as 3.x, so stored events need no migration: nested class instances, value objects such as ids included, are stored and read back as plain objects, a `Date` stays a `Date` in the payload (the SQL stores read back its ISO string), a `Set` becomes an array and a `Map` an object. The values that the MongoDB driver returns as instances of its classes (a `Binary` for a buffer, a `Long` for an integer beyond 2^53, an `ObjectId`) read back as those instances, as in 3.x; so does a `Decimal128`, which 3.x failed to read.
+- **class-transformer decorators can't lose their effect silently.** The JSON serializer ignores them, so the events whose payload they would change fail with an error that names the event, the decorators and the fix:
+  - at bootstrap, an event class or a parent class with `@Type`, `@Transform`, `@Expose` or `@Exclude`: an `EventSourcingConfigurationException` with a `class-transformer-decorators` issue for every such event (see [Module configuration](#module-configuration));
+  - when you append an event that holds an instance of a class whose decorators changed the payload that 3.x stored: a value object or DTO with `@Expose`, `@Exclude`, `@Transform`, or a `@Type` with a discriminator. The append fails with an `EventSerializationException` (`reason: 'class-transformer-decorators'`) before it writes anything, and the exception's `path` names the property that holds the instance. The bootstrap can't find these classes, because nothing refers to them until an event holds one. Without this check, an `@Exclude()`d field would be stored.
+
+  Serialize those events with class-transformer, as 3.x did:
+
+  ```ts
+  import { ClassTransformerEventSerializer } from '@ocoda/event-sourcing/class-transformer';
+
+  EventSourcingModule.forRoot({ events, defaultEventSerializer: ClassTransformerEventSerializer });
+  ```
+
+  The checks see the decorators that reach class-transformer the way Node loads it. A bundler that resolves class-transformer's ES module build keeps a second copy of its metadata, which the checks can't see.
+- **class-transformer is an optional peer dependency.** The core no longer installs it: install `class-transformer@^0.5.1` if you use `ClassTransformerEventSerializer` or class-transformer's decorators.
+- **`DefaultEventSerializer` is removed** from `@ocoda/event-sourcing`. Use `JsonEventSerializer.for(MyEvent)` or `ClassTransformerEventSerializer.for(MyEvent)` instead.
+- **A circular reference in an event** fails the append with an `EventSerializationException` (`reason: 'circular-reference'`) before anything is written. 3.x overflowed the stack.
+- The JSON serializer accepts a few inputs that class-transformer threw a `TypeError` for: a payload key that matches a getter without a setter inherited from a parent class is skipped, and so is a nested `constructor` key.
+
+To migrate:
+
+1. Replace `DefaultEventSerializer.for(MyEvent)` with `JsonEventSerializer.for(MyEvent)`, or with `ClassTransformerEventSerializer.for(MyEvent)` for an event with class-transformer decorators.
+2. Look for class-transformer decorators on your event classes and on the classes of the values they hold (value objects, DTOs). If you find any, install `class-transformer@^0.5.1` and set `defaultEventSerializer: ClassTransformerEventSerializer`, or give those events an `@EventSerializer()` of their own. The bootstrap fails for an event class with decorators, and an append fails for an event that holds an instance of a class with decorators; both name the event.
+3. If you bundle the application, the checks may not see the decorators: rely on step 2.
+
 ## DynamoDB is not part of 4.0 [#dynamodb]
 
 The DynamoDB store (`@ocoda/event-sourcing-dynamodb`) is not released for 4.0. DynamoDB can't give the events a gap-free global order, which the read side planned for 4.0 relies on. You have two options:
@@ -534,9 +564,6 @@ In the next prerelease, described above:
 - **Typed command and query buses.** See [Typed command and query buses](#typed-buses).
 - **Module configuration.** See [Module configuration](#module-configuration).
 - **Aggregates and ids.** See [Aggregates and ids](#aggregates-and-ids).
-
-In later prereleases:
-
-- **Serialization.** A JSON serializer replaces class-transformer as the default. Events that use class-transformer decorators opt back in with `defaultEventSerializer: ClassTransformerEventSerializer`.
+- **Serialization.** See [Serialization](#serialization).
 
 See the ADR's [migration guide](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0001-v4-core-api.md#migration-guide) for the planned steps, including those for custom store authors.

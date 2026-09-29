@@ -22,6 +22,7 @@ Everything in this library is wired together by the `EventSourcingModule`. It ex
 | `eventStore` | The configuration of the event store. Needs a `driver` (the store class), can contain `useDefaultPool` and any option that the driver needs to connect. The module passes the driver every option except `driver` and `useDefaultPool`. Defaults to the in-memory event store. |
 | `snapshotStore` | The configuration of the snapshot store, which has the same shape as `eventStore`. Defaults to the in-memory snapshot store. |
 | `publishing` | `{ publisherTimeout, shutdownTimeout }`: how long, in milliseconds, one call of an event publisher may take (30 000 by default), and how long the application's shutdown waits for the running publishers and subscribers (10 000 by default). `0` disables a timeout. See [event pub/sub](/advanced/event-pubsub#when-idle). |
+| `defaultEventSerializer` | The serializer of every event without an `@EventSerializer()` of its own. Defaults to `JsonEventSerializer`; use `ClassTransformerEventSerializer` from `@ocoda/event-sourcing/class-transformer` for events with class-transformer decorators. See [event serialization](/advanced/event-serialization#serializing-with-class-transformer). |
 
 The in-memory stores are handy for testing and prototyping, but they lose everything when the process stops. When `NODE_ENV` is `production` and `eventStore` or `snapshotStore` is left out, the module logs a warning. Each integration library exports its own drivers and configuration interfaces, see [installation](/start/install#advanced-setup).
 
@@ -352,13 +353,14 @@ Before the module registers anything, it checks the whole configuration. When so
 
 | `kind` | What is wrong |
 | --- | --- |
-| `invalid-options` | Options that can't work: `forRootAsync()` without `useFactory`, `useClass` or `useExisting`, a store without a `driver` class, or an entry of `events` that isn't a class. |
+| `invalid-options` | Options that can't work: `forRootAsync()` without `useFactory`, `useClass` or `useExisting`, a store without a `driver` class, an entry of `events` that isn't a class, or a `defaultEventSerializer` without a `for()` method. |
 | `missing-metadata` | A registered event without `@Event()`, a serializer in `forFeature({ serializers })` without `@EventSerializer()`, a handler whose decorator names no command or query class, or a subscriber that names no events. |
 | `duplicate-event-name` | Two event classes with the same event name. |
 | `duplicate-command-handler`, `duplicate-query-handler` | Two classes that handle the same command or query. |
 | `duplicate-event-serializer` | Two classes that serialize the same event. |
 | `unregistered-event` | A serializer or subscriber for an event that isn't registered in `forRoot` or a `forFeature`. |
 | `non-static-provider` | A request-scoped or transient subscriber, publisher or serializer, see [above](#request-scoped-handlers). |
+| `class-transformer-decorators` | An event class, or a parent class, with class-transformer decorators (`@Type`, `@Transform`, `@Expose` or `@Exclude`) that would get the default `JsonEventSerializer`, which ignores them. Checked only when class-transformer is installed; see [event serialization](/advanced/event-serialization#serializing-with-class-transformer). |
 
 Providing the same class in several modules, or listing the same event more than once, is not a duplicate: it is registered once.
 

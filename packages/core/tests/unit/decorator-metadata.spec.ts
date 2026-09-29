@@ -46,7 +46,8 @@ describe('decorator metadata', () => {
 	it('is emitted for library providers with constructor injection', () => {
 		// Interfaces (the injected module options, the registration) have no runtime value and are emitted as Object.
 		expect(paramTypes(EventSourcingModule)).toEqual([Object]);
-		expect(paramTypes(EventSourcingRegistrar)).toEqual([DiscoveryService, ModuleRef, Object]);
+		// The last one is the class-transformer lookup, injected by its token
+		expect(paramTypes(EventSourcingRegistrar)).toEqual([DiscoveryService, ModuleRef, Object, Object]);
 		expect(paramTypes(CommandBus)).toEqual([ModuleRef, Object]);
 		expect(paramTypes(QueryBus)).toEqual([ModuleRef, Object]);
 		expect(paramTypes(EventMap)).toEqual([Object]);

@@ -2,6 +2,7 @@ import type {
 	CommandHandlerNotFoundException,
 	EventCollectionNotFoundException,
 	EventNotFoundException,
+	EventSerializationException,
 	EventSourcingConfigurationException,
 	EventSourcingNotReadyException,
 	InvalidAggregateStreamNameException,
@@ -54,6 +55,7 @@ export const EventSourcingErrorCode = {
 	CommandHandlerNotFound: 'ES_COMMAND_HANDLER_NOT_FOUND',
 	EventCollectionNotFound: 'ES_EVENT_COLLECTION_NOT_FOUND',
 	EventNotFound: 'ES_EVENT_NOT_FOUND',
+	EventSerialization: 'ES_EVENT_SERIALIZATION',
 	EventSourcingConfiguration: 'ES_EVENT_SOURCING_CONFIGURATION',
 	EventSourcingNotReady: 'ES_EVENT_SOURCING_NOT_READY',
 	InvalidAggregateStreamName: 'ES_INVALID_AGGREGATE_STREAM_NAME',
@@ -104,6 +106,7 @@ export interface EventSourcingErrorByCode {
 	[EventSourcingErrorCode.CommandHandlerNotFound]: CommandHandlerNotFoundException;
 	[EventSourcingErrorCode.EventCollectionNotFound]: EventCollectionNotFoundException;
 	[EventSourcingErrorCode.EventNotFound]: EventNotFoundException;
+	[EventSourcingErrorCode.EventSerialization]: EventSerializationException;
 	[EventSourcingErrorCode.EventSourcingConfiguration]: EventSourcingConfigurationException;
 	[EventSourcingErrorCode.EventSourcingNotReady]: EventSourcingNotReadyException;
 	[EventSourcingErrorCode.InvalidAggregateStreamName]: InvalidAggregateStreamNameException;

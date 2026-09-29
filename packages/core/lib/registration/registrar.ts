@@ -1,10 +1,14 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { DiscoveryService, ModuleRef } from '@nestjs/core';
 import { CommandBus } from '../command-bus.js';
 import { EVENT_SOURCING_OPTIONS } from '../constants.js';
 import { EventBus } from '../event-bus.js';
 import { EventMap } from '../event-map.js';
 import { EventSourcingConfigurationException, EventSourcingNotReadyException } from '../exceptions/index.js';
+import {
+	CLASS_TRANSFORMER_DECORATORS,
+	type ClassTransformerDecoratorsOf,
+} from '../helpers/class-transformer-decorators.js';
 import type { EventSourcingModuleOptions, ProviderWrapper } from '../interfaces/index.js';
 import { QueryBus } from '../query-bus.js';
 import { planRegistration } from './plan.js';
@@ -36,6 +40,10 @@ export class EventSourcingRegistrar implements Registration {
 		private readonly discoveryService: DiscoveryService,
 		private readonly moduleRef: ModuleRef,
 		@Inject(EVENT_SOURCING_OPTIONS) private readonly options: EventSourcingModuleOptions,
+		// Loaded by an async provider before this is created, so that registration can stay synchronous (ADR 0001 §6)
+		@Optional()
+		@Inject(CLASS_TRANSFORMER_DECORATORS)
+		private readonly classTransformerDecoratorsOf?: ClassTransformerDecoratorsOf,
 	) {}
 
 	ensureRegistered(operation?: string): void {
@@ -60,12 +68,20 @@ export class EventSourcingRegistrar implements Registration {
 	private register(providers: ProviderWrapper[]): void {
 		this.registering = true;
 		try {
-			const plan = planRegistration(providers, this.options?.events);
+			const defaultSerializer = this.options?.defaultEventSerializer;
+			const { classTransformerDecoratorsOf } = this;
+			const plan = planRegistration(providers, this.options?.events, {
+				defaultSerializer,
+				classTransformerDecoratorsOf,
+			});
 			if (plan.issues.length > 0) {
 				throw new EventSourcingConfigurationException({ issues: plan.issues });
 			}
 
-			this.moduleRef.get(EventMap).registerSerializers(plan.events, plan.serializers);
+			// The plan checked the event classes; the JSON serializers check the instances an event holds when it's appended
+			this.moduleRef
+				.get(EventMap)
+				.registerSerializers(plan.events, plan.serializers, { defaultSerializer, classTransformerDecoratorsOf });
 			this.moduleRef.get(CommandBus).register(plan.commands);
 			this.moduleRef.get(QueryBus).register(plan.queries);
 			const eventBus = this.moduleRef.get(EventBus);

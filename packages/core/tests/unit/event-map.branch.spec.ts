@@ -1,10 +1,4 @@
-import {
-	DefaultEventSerializer,
-	Event,
-	EventMap,
-	type IEvent,
-	UnregisteredEventException,
-} from '@ocoda/event-sourcing';
+import { JsonEventSerializer, Event, EventMap, type IEvent, UnregisteredEventException } from '@ocoda/event-sourcing';
 
 describe(EventMap, () => {
 	@Event('billing-updated')
@@ -22,7 +16,7 @@ describe(EventMap, () => {
 
 	it('serializes using a registered serializer', () => {
 		const eventMap = new EventMap();
-		eventMap.register(BillingUpdatedEvent, DefaultEventSerializer.for(BillingUpdatedEvent));
+		eventMap.register(BillingUpdatedEvent, JsonEventSerializer.for(BillingUpdatedEvent));
 
 		const payload = eventMap.serializeEvent(new BillingUpdatedEvent(42));
 		expect(payload.amount).toBe(42);

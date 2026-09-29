@@ -1,11 +1,19 @@
 import { Inject, Injectable, Optional, type Type } from '@nestjs/common';
 import {
+	EventSerializationException,
 	MissingEventMetadataException,
 	UnregisteredEventException,
 	UnregisteredSerializerException,
 } from './exceptions/index.js';
-import { DefaultEventSerializer, getEventMetadata, getEventSerializerMetadata } from './helpers/index.js';
-import type { IEvent, IEventPayload, IEventSerializer, ProviderWrapper } from './interfaces/index.js';
+import { type ClassTransformerDecoratorsOf, checkNestedClasses } from './helpers/class-transformer-decorators.js';
+import { JsonEventSerializer, getEventMetadata, getEventSerializerMetadata } from './helpers/index.js';
+import type {
+	EventSerializerFactory,
+	IEvent,
+	IEventPayload,
+	IEventSerializer,
+	ProviderWrapper,
+} from './interfaces/index.js';
 import { providerClassOf } from './registration/providers.js';
 import { EVENT_SOURCING_REGISTRATION, type Registration } from './registration/registration.js';
 
@@ -119,20 +127,50 @@ export class EventMap {
 		return name;
 	}
 
-	registerSerializers(events: Type<IEvent>[] = [], serializers: ProviderWrapper<IEventSerializer>[] = []) {
+	/**
+	 * Registers the events with their serializer: the `@EventSerializer()` provider for the event if there is one,
+	 * otherwise one from `defaultSerializer` (`JsonEventSerializer` unless `EventSourcingModule.forRoot()` sets
+	 * `defaultEventSerializer`).
+	 *
+	 * @throws EventSerializationException when an event would get a `JsonEventSerializer` although it carries
+	 * class-transformer decorators, which that serializer ignores. `classTransformerDecoratorsOf` finds them; without
+	 * it, nothing is checked. With it, the JSON serializers registered here also refuse, when they serialize, an event
+	 * that holds an instance of a class whose decorators would have shaped the payload. In the `EventSourcingModule`,
+	 * the registration reports every such event as a `class-transformer-decorators` issue of an
+	 * `EventSourcingConfigurationException` before it calls this.
+	 */
+	registerSerializers(
+		events: Type<IEvent>[] = [],
+		serializers: ProviderWrapper<IEventSerializer>[] = [],
+		{
+			defaultSerializer = JsonEventSerializer,
+			classTransformerDecoratorsOf,
+		}: { defaultSerializer?: EventSerializerFactory; classTransformerDecoratorsOf?: ClassTransformerDecoratorsOf } = {},
+	) {
 		for (const event of events) {
-			// get the handler
 			// The class of the serializer is that of its instance, so that factory and value providers are found too
 			const handler = serializers.find((wrapper) => {
 				const type = providerClassOf(wrapper);
 				return !!type && getEventSerializerMetadata(type as Type<IEventSerializer>)?.event === event;
 			});
 
-			// get the serializer, or use the default one
-			const serializer = handler?.instance || DefaultEventSerializer.for(event);
+			const custom = handler?.instance as IEventSerializer | undefined;
+			const serializer = custom ?? defaultSerializer.for(event);
 
-			// register the event
-			this.register(event, serializer as IEventSerializer);
+			if (!custom && serializer instanceof JsonEventSerializer && classTransformerDecoratorsOf) {
+				const decorators = classTransformerDecoratorsOf(event);
+				// Only reached by a direct call: the module's registration plan lists these events as configuration issues
+				if (decorators.length > 0) {
+					throw new EventSerializationException({
+						event: event.name,
+						reason: 'class-transformer-decorators',
+						decorators,
+					});
+				}
+				checkNestedClasses(serializer, classTransformerDecoratorsOf);
+			}
+
+			this.register(event, serializer);
 		}
 	}
 }

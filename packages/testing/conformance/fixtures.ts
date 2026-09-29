@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import {
 	Aggregate,
 	AggregateRoot,
-	DefaultEventSerializer,
+	JsonEventSerializer,
 	Event,
 	EventMap,
 	EventStream,
@@ -53,8 +53,8 @@ export const UNREGISTERED_EVENT_NAME = 'conformance-unregistered';
 
 export const createConformanceEventMap = (): EventMap => {
 	const eventMap = new EventMap();
-	eventMap.register(ConformanceRecorded, DefaultEventSerializer.for(ConformanceRecorded));
-	eventMap.register(ConformancePayloadProbed, DefaultEventSerializer.for(ConformancePayloadProbed));
+	eventMap.register(ConformanceRecorded, JsonEventSerializer.for(ConformanceRecorded));
+	eventMap.register(ConformancePayloadProbed, JsonEventSerializer.for(ConformancePayloadProbed));
 	return eventMap;
 };
 

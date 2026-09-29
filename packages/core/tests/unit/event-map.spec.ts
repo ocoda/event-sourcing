@@ -1,5 +1,5 @@
 import {
-	DefaultEventSerializer,
+	JsonEventSerializer,
 	Event,
 	EventMap,
 	type IEvent,
@@ -80,7 +80,7 @@ describe(EventMap, () => {
 
 	it('serializes a registered event', () => {
 		const eventMap = new EventMap();
-		eventMap.register(AccountOpenedEvent, DefaultEventSerializer.for(AccountOpenedEvent));
+		eventMap.register(AccountOpenedEvent, JsonEventSerializer.for(AccountOpenedEvent));
 
 		const event = new AccountOpenedEvent(new Date());
 		const payload = eventMap.serializeEvent<AccountOpenedEvent>(event);
@@ -102,7 +102,7 @@ describe(EventMap, () => {
 
 	it('deserializes a registered event', () => {
 		const eventMap = new EventMap();
-		eventMap.register(AccountOpenedEvent, DefaultEventSerializer.for(AccountOpenedEvent));
+		eventMap.register(AccountOpenedEvent, JsonEventSerializer.for(AccountOpenedEvent));
 
 		const payload = { opened: new Date() };
 		const event = eventMap.deserializeEvent<AccountOpenedEvent>('account-opened', payload);

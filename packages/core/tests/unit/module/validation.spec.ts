@@ -26,8 +26,11 @@ import {
 	type ProviderWrapper,
 	QUERY_HANDLER_METADATA,
 	QueryHandler,
+	JsonEventSerializer,
 	isEventSourcingError,
 } from '@ocoda/event-sourcing';
+import { ClassTransformerEventSerializer } from '@ocoda/event-sourcing/class-transformer';
+import { Exclude, Type } from 'class-transformer';
 import { EventSourcingFeature } from '../../../lib/registration/event-sourcing-feature.js';
 import { planRegistration } from '../../../lib/registration/plan.js';
 
@@ -44,6 +47,23 @@ class ClosedEvent implements IEvent {}
 class ImpostorOpenedEvent implements IEvent {}
 
 class UndecoratedEvent implements IEvent {}
+
+class Money {
+	readonly amount: number = 0;
+}
+
+// class-transformer decorators, which the default JsonEventSerializer ignores
+@Event('validation-deposited')
+class DepositedEvent implements IEvent {
+	@Type(() => Money)
+	readonly amount: Money = new Money();
+}
+
+@Event('validation-withdrawn')
+class WithdrawnEvent implements IEvent {
+	@Exclude()
+	readonly reason: string = '';
+}
 
 @Event('validation-unregistered')
 class UnregisteredEvent implements IEvent {}
@@ -278,6 +298,18 @@ describe('bootstrap validation', () => {
 			/serializer RequestDependentSerializer depends on a request-scoped provider/,
 		],
 		[
+			'an event with class-transformer decorators on the JSON default',
+			{ imports: [root([OpenedEvent, DepositedEvent])] },
+			'class-transformer-decorators',
+			/event DepositedEvent uses class-transformer decorators \(@Type on DepositedEvent.amount\), which the default JsonEventSerializer ignores: set defaultEventSerializer: ClassTransformerEventSerializer/,
+		],
+		[
+			'a defaultEventSerializer without a for() method',
+			{ imports: [EventSourcingModule.forRoot({ events: [OpenedEvent], defaultEventSerializer: {} as never })] },
+			'invalid-options',
+			/defaultEventSerializer of EventSourcingModule.forRoot\(\) must be an event serializer factory with a for\(\) method, .*got an object\./,
+		],
+		[
 			'an entry of events that is not a class',
 			{ imports: [root([OpenedEvent, 'validation-closed'])] },
 			'invalid-options',
@@ -291,12 +323,14 @@ describe('bootstrap validation', () => {
 
 	it('reports every issue at once, in one exception', async () => {
 		const issues = await issuesOf({
-			imports: [root([OpenedEvent, ImpostorOpenedEvent, UndecoratedEvent])],
+			imports: [root([OpenedEvent, ImpostorOpenedEvent, UndecoratedEvent, DepositedEvent, WithdrawnEvent])],
 			providers: [OpenHandler, OtherOpenHandler, UnregisteredEventSubscriber, TransientPublisher],
 		});
 
 		expect(issues.map(({ kind }) => kind).sort()).toEqual(
 			[
+				'class-transformer-decorators',
+				'class-transformer-decorators',
 				'duplicate-command-handler',
 				'duplicate-event-name',
 				'missing-metadata',
@@ -470,6 +504,71 @@ describe(planRegistration, () => {
 			publishers: [publisher],
 			subscribers: [subscriber],
 			issues: [],
+		});
+	});
+
+	describe('class-transformer decorators', () => {
+		const decoratorsOf = (target: Function) =>
+			target === DepositedEvent ? ['@Type on DepositedEvent.amount'] : target === WithdrawnEvent ? ['@Exclude'] : [];
+
+		it('reports every event on the JSON default that has decorators', () => {
+			const plan = planRegistration([], [OpenedEvent, DepositedEvent, WithdrawnEvent], {
+				classTransformerDecoratorsOf: decoratorsOf,
+			});
+
+			expect(plan.issues.map(({ kind }) => kind)).toEqual([
+				'class-transformer-decorators',
+				'class-transformer-decorators',
+			]);
+			expect(plan.issues.map(({ message }) => message)).toEqual([
+				expect.stringContaining(
+					'The event DepositedEvent uses class-transformer decorators (@Type on DepositedEvent.amount)',
+				),
+				expect.stringContaining('The event WithdrawnEvent uses class-transformer decorators (@Exclude)'),
+			]);
+		});
+
+		it('checks a default factory that returns JSON serializers too', () => {
+			const plan = planRegistration([], [DepositedEvent], {
+				defaultSerializer: { for: (event: Function) => JsonEventSerializer.for(event as never) },
+				classTransformerDecoratorsOf: decoratorsOf,
+			});
+
+			expect(plan.issues.map(({ kind }) => kind)).toEqual(['class-transformer-decorators']);
+		});
+
+		it('accepts decorated events with another default, or with a serializer of their own', () => {
+			expect(
+				planRegistration([], [DepositedEvent, WithdrawnEvent], {
+					defaultSerializer: ClassTransformerEventSerializer,
+					classTransformerDecoratorsOf: decoratorsOf,
+				}).issues,
+			).toEqual([]);
+
+			@EventSerializer(DepositedEvent)
+			class DepositedSerializer extends TestSerializer {}
+			expect(
+				planRegistration([wrapper(new DepositedSerializer())], [DepositedEvent], {
+					classTransformerDecoratorsOf: decoratorsOf,
+				}).issues,
+			).toEqual([]);
+		});
+
+		it('reports only the serializer of a decorated event when that serializer is invalid', () => {
+			@EventSerializer(DepositedEvent)
+			class ScopedDepositedSerializer extends TestSerializer {}
+
+			const plan = planRegistration(
+				[wrapper(new ScopedDepositedSerializer(), { isDependencyTreeStatic: () => false, scope: Scope.REQUEST })],
+				[DepositedEvent],
+				{ classTransformerDecoratorsOf: decoratorsOf },
+			);
+
+			expect(plan.issues.map(({ kind }) => kind)).toEqual(['non-static-provider']);
+		});
+
+		it('checks nothing without class-transformer', () => {
+			expect(planRegistration([], [DepositedEvent, WithdrawnEvent]).issues).toEqual([]);
 		});
 	});
 

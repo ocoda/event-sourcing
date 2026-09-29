@@ -6,6 +6,7 @@ import { EventMap } from './event-map.js';
 import { EventStore } from './event-store.js';
 import { EventSourcingConfigurationException } from './exceptions/index.js';
 import { describeValue } from './exceptions/internal.js';
+import { classTransformerDecoratorsProvider } from './helpers/class-transformer-decorators.js';
 import { InMemoryEventStore } from './integration/event-store/index.js';
 import { InMemorySnapshotStore } from './integration/snapshot-store/index.js';
 import type { EventSourcingModuleOptions } from './interfaces/index.js';
@@ -128,6 +129,8 @@ export const createCoreProviders = (): Provider[] => [
 	CommandBus,
 	QueryBus,
 	{ provide: EVENT_SOURCING_REGISTRATION, useClass: EventSourcingRegistrar },
+	// class-transformer's metadata storage, loaded before the registrar is created (ADR 0001 §6)
+	classTransformerDecoratorsProvider,
 	EventStoreProvider,
 	SnapshotStoreProvider,
 ];

@@ -2,15 +2,15 @@ import type { Type } from '@nestjs/common';
 import {
 	Aggregate,
 	AggregateRoot,
-	DefaultEventSerializer,
 	Event,
 	EventMap,
 	EventStream,
 	Id,
-	type IEventPayload,
-	type IEventSerializer,
+	JsonEventSerializer,
 	SnapshotStream,
 } from '@ocoda/event-sourcing';
+import { ClassTransformerEventSerializer } from '@ocoda/event-sourcing/class-transformer';
+import { Type as TransformType } from 'class-transformer';
 
 // The master mirror of fixtures/cross-version/v3/domain.mjs: same event names, class names, stream names and fields.
 // Change both together.
@@ -34,12 +34,18 @@ export class AccountOpened {
 	) {}
 }
 
+/** The `@Type`-decorated event: its `amount` is read back as a `Money` instance (ClassTransformerEventSerializer). */
 @Event('funds-deposited')
 export class FundsDeposited {
+	@TransformType(() => Money)
+	public readonly amount: Money;
+
 	constructor(
-		public readonly amount: Money,
+		amount: Money,
 		public readonly reference: string,
-	) {}
+	) {
+		this.amount = amount;
+	}
 }
 
 @Event('funds-withdrawn')
@@ -77,29 +83,10 @@ export class LedgerEntryRecorded {
 }
 
 /**
- * The 3.x writer decorates `FundsDeposited.amount` with class-transformer's `@Type(() => Money)`, so 3.x reads it back
- * as a `Money`. The testing package can't import class-transformer (it isn't a dependency), so this serializer does
- * what the decorator does: the default deserialization, then a `Money` built without arguments with the stored keys
- * assigned. Swap it for `ClassTransformerEventSerializer` and a real `@Type` when the serializer change lands.
+ * An event map with every event of the corpus, as a 4.x application registers them: the `@Type`-decorated event with
+ * `ClassTransformerEventSerializer`, which is what 3.x's default serializer did, the others with the default
+ * `JsonEventSerializer`. That the specs read every event as 3.0.2 did is the proof of ADR 0001 §6 on real 3.x data.
  */
-export class FundsDepositedSerializer implements IEventSerializer<FundsDeposited> {
-	private readonly serializer = DefaultEventSerializer.for(FundsDeposited);
-
-	serialize(event: FundsDeposited): IEventPayload<FundsDeposited> {
-		return this.serializer.serialize(event);
-	}
-
-	deserialize(payload: IEventPayload<FundsDeposited>): FundsDeposited {
-		const event = this.serializer.deserialize(payload);
-		if (event.amount !== null && typeof event.amount === 'object') {
-			const money = new Money(undefined as never, undefined as never);
-			Object.assign(event, { amount: Object.assign(money, event.amount) });
-		}
-		return event;
-	}
-}
-
-/** An event map with every event of the corpus, serialized the way the 3.x writer registered them. */
 export const createCrossVersionEventMap = (): EventMap => {
 	const eventMap = new EventMap();
 	const events: Type<object>[] = [
@@ -111,9 +98,9 @@ export const createCrossVersionEventMap = (): EventMap => {
 		LedgerEntryRecorded,
 	];
 	for (const cls of events) {
-		eventMap.register(cls, DefaultEventSerializer.for(cls));
+		eventMap.register(cls, JsonEventSerializer.for(cls));
 	}
-	eventMap.register(FundsDeposited, new FundsDepositedSerializer());
+	eventMap.register(FundsDeposited, ClassTransformerEventSerializer.for(FundsDeposited));
 	return eventMap;
 };
 

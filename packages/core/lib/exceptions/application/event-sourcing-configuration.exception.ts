@@ -4,7 +4,8 @@ import { EventSourcingError, EventSourcingErrorCode } from '../event-sourcing-er
  * What is wrong with the configuration, one kind per check the bootstrap runs:
  *
  * - `invalid-options`: module options that can't work, such as `forRootAsync()` without `useFactory`, `useClass` or
- *   `useExisting`, a store config without a `driver` class, or an entry of `events` that is not a class.
+ *   `useExisting`, a store config without a `driver` class, an entry of `events` that is not a class, or a
+ *   `defaultEventSerializer` without a `for()` method.
  * - `missing-metadata`: a class lacks the metadata of its decorator: an event without `@Event()`, a serializer passed
  *   to `forFeature({ serializers })` without `@EventSerializer()`, a handler whose decorator names no message class,
  *   or a subscriber that names no events.
@@ -14,6 +15,9 @@ import { EventSourcingError, EventSourcingErrorCode } from '../event-sourcing-er
  * - `unregistered-event`: a serializer or subscriber for an event that no `events` option registers.
  * - `non-static-provider`: a request-scoped or transient event subscriber, publisher or serializer. These live as long
  *   as the application, so they must be singletons; command and query handlers may be request-scoped.
+ * - `class-transformer-decorators`: an event class, or a parent class, with class-transformer decorators (`@Type`,
+ *   `@Transform`, `@Expose` or `@Exclude`) that would get the default `JsonEventSerializer`, which ignores them.
+ *   Found only when class-transformer is installed.
  */
 export type EventSourcingConfigurationIssueKind =
 	| 'invalid-options'
@@ -23,7 +27,8 @@ export type EventSourcingConfigurationIssueKind =
 	| 'duplicate-query-handler'
 	| 'duplicate-event-serializer'
 	| 'unregistered-event'
-	| 'non-static-provider';
+	| 'non-static-provider'
+	| 'class-transformer-decorators';
 
 /**
  * One problem with the configuration of the `EventSourcingModule`.
