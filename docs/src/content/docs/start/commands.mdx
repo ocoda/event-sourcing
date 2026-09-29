@@ -5,7 +5,7 @@ title: Commands & Command Handlers
 import { Aside, Steps } from '@astrojs/starlight/components';
 
 <Aside type="note" title="4.0 prerelease">
-This page describes the command bus of the 4.0 prereleases. The `Command` base class, the typed results and the rejecting `execute()` ship in a later prerelease. Until then, and in 3.x, implement `ICommand` and pass the result type to `execute<OpenAccountCommand, string>()`. See [Typed command and query buses](/upgrading/v4#typed-buses).
+This page describes the command bus of the 4.0 prereleases. The `Command` base class, the typed results and the rejecting `execute()` ship in the next prerelease. Until then, and in 3.x, implement `ICommand` and pass the result type to `execute<OpenAccountCommand, string>()`. See [Typed command and query buses](/upgrading/v4#typed-buses).
 </Aside>
 
 A **Command** represents a user or system's intent to perform a specific action within your domain. Commands are part of the **CQRS** pattern, where they express actions that change the state of the system. Each command is handled by a **CommandHandler**, which contains the logic for executing the command, such as interacting with the domain's aggregates and repositories.

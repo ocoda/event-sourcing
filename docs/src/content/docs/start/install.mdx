@@ -8,7 +8,7 @@ This library consists of a core module `@ocoda/event-sourcing` that provides the
 
 By default the core library will use an in-memory event- and snapshot-store, which is useful for testing and prototyping, but not recommended for production use.
 
-The packages require Node.js 22.12 or later and NestJS 12. They are published as ES modules only: CommonJS applications can keep using `require()` (or TypeScript's CommonJS output), which Node.js supports for ES modules since 22.12.
+The packages require Node.js 22.12 or later and NestJS 12. They are published as ES modules only: CommonJS applications can keep using `require()` (or TypeScript's CommonJS output), which Node.js supports for ES modules since 22.12. From the next prerelease on, TypeScript projects need TypeScript 5.4 or later: the [typed buses](/upgrading/v4#typed-buses) use `NoInfer` in their type declarations.
 
 The database drivers are peer dependencies of the integration libraries, so you install the driver next to the integration and choose its version yourself. TypeScript projects using PostgreSQL also need `@types/pg` and `@types/pg-cursor`.
 

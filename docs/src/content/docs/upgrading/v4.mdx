@@ -6,7 +6,7 @@ import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
 
 4.0 is the next major release. It is published as prereleases (`4.0.0-next.N`) under the npm `next` tag, while 3.x stays on `latest` and keeps receiving fixes. See [Versioning and support](/upgrading/versioning) for what each release line gets.
 
-This guide covers the changes that have been released so far, up to `4.0.0-next.1`. More breaking changes are planned before 4.0.0. They are listed under [Event store, snapshots and schema v2](#store-and-schema) and [Coming in later 4.0 prereleases](#coming-next), and are described in full as they ship.
+This guide covers the changes released so far, up to `4.0.0-next.1`, and the changes that ship in the next prerelease: the new event and snapshot store contract, schema v2 for PostgreSQL, MariaDB and MongoDB with its data migration, the publishing pipeline and the typed command and query buses. Sections that describe unreleased changes say so. More breaking changes are planned before 4.0.0; they are listed under [Coming in later 4.0 prereleases](#coming-next).
 
 <Aside type="caution" title="Prerelease">
 There is no stability or support guarantee until 4.0.0 is released, and a later prerelease can break things again. Pin the exact version, and read the [changelog](https://github.com/ocoda/event-sourcing/blob/master/packages/core/CHANGELOG.md) before you move to the next prerelease.
@@ -55,7 +55,15 @@ The core and the integrations are released together with the same version number
 6. On MariaDB, check code that depends on the [order of `loadAll`](#mariadb-snapshot-order).
 7. If you use DynamoDB, read [DynamoDB is not part of 4.0](#dynamodb) first.
 
-The stored event and snapshot formats are unchanged in the prereleases so far, so they need no data migration. A one-time schema migration of the event and snapshot tables is planned for a later prerelease (see [Data migration](#data-migration)).
+The stored event and snapshot formats are unchanged up to `4.0.0-next.1`, so these steps need no data migration.
+
+The next prerelease adds these steps:
+
+8. Move `appendEvents` to the options form, `appendEvents(stream, events, { expectedVersion, pool })`. `expectedVersion` is the version the stream had before the append: the aggregate's committed version, which is `account.version - events.length` once the new events are applied. The 3.x form keeps working until 5.0, with a deprecation warning. See [Event store API](#event-store-api).
+9. Adapt to the [publishing](#publishing) changes: `eventBus.publish()` returns a promise, and publishers are awaited. In tests, `await eventBus.whenIdle()` instead of waiting for a fixed time, and register a publisher or subscribe to the bus instead of spying on `eventBus.publish`.
+10. Adapt to the [typed buses](#typed-buses): assert the failures of `execute()` as rejections, and make the `execute()` of every decorated handler return a promise. Type-checking needs TypeScript 5.4 or later.
+11. Migrate the data of the PostgreSQL, MariaDB and MongoDB stores to schema v2 before you deploy: run the store's `migrate()` with `dryRun: true` first and review the report, stop every 3.x instance, then run `migrate()` for the events and then for the snapshots. See [Data migration](#data-migration).
+12. Replace `getAllEnvelopes()` with [`readAll()`](#read-all), and `ULID.yearMonth` with `id.date.toISOString().slice(0, 7)`: both are removed. A custom event store implements the driver methods instead of `appendEvents`: see [Migrating a 3.x store](/advanced/custom-stores#migrating-a-3x-store).
 
 ## NestJS 12 and Node.js 22.12 [#nestjs-and-node]
 
@@ -212,7 +220,7 @@ This reverses the order of `loadAll` on MariaDB, and a `limit` now returns the s
 ## Typed command and query buses [#typed-buses]
 
 <Aside type="note" title="Not released yet">
-The changes in this section ship in a later 4.0 prerelease. The design is in [ADR 0001](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0001-v4-core-api.md#7-typed-buses).
+The changes in this section ship in the next prerelease. The design is in [ADR 0001](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0001-v4-core-api.md#7-typed-buses).
 </Aside>
 
 `commandBus.execute()` and `queryBus.execute()` take their result type from the command or query, and reject instead of throwing.
@@ -263,12 +271,12 @@ To migrate:
 ## Event store, snapshots and schema v2 [#store-and-schema]
 
 <Aside type="note" title="Not released yet">
-The changes in this section are planned for later prereleases. Each subsection describes its change once that change ships. The design is in [ADR 0001](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0001-v4-core-api.md) and, for the database schema and the migration, [ADR 0002](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0002-schema-v2.md).
+The changes in this section ship in the next prerelease. The design is in [ADR 0001](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0001-v4-core-api.md) and, for the database schema and the migration, [ADR 0002](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0002-schema-v2.md).
 </Aside>
 
 ### Event store API [#event-store-api]
 
-*In the next prerelease, with the in-memory store. The PostgreSQL, MariaDB and MongoDB stores follow with schema v2.* See [Event Store](/under-the-hood/event-store).
+*In the next prerelease, with the in-memory store and the PostgreSQL, MariaDB and MongoDB stores on schema v2.* See [Event Store](/under-the-hood/event-store).
 
 `appendEvents` takes the events and an options object. `expectedVersion` is the version of the stream **before** the append:
 
@@ -289,8 +297,6 @@ The 3.x form still works, but is deprecated and will be removed in 5.0. It emits
 - **Invalid arguments throw before any I/O**: an `InvalidAppendOptionsException` for a negative or fractional expected version (in the 3.x form, an aggregate version below the number of events) or an empty pool name, and an `InvalidEventEnvelopeException` for a stream id, aggregate id or event name over 255 characters.
 - **The failure of the version check's read** is an `EventStorePersistenceException` with `outcome: 'not-persisted'`.
 
-The database stores keep their 3.x appends until they move to schema v2. They check the arguments of both forms first, like the other stores: an empty pool name, or an aggregate version that is fractional or below the number of events, throws an `InvalidAppendOptionsException`. Otherwise the 3.x form keeps its 3.x behaviour there: an empty append reaches the store, a gap is accepted, and pre-built envelopes are stored as they are. They accept the options form with a numeric expected version, where pre-built envelopes must continue the stream, and reject `ExpectedVersion.Any` and metadata with an `UnsupportedOperationException`. In both forms, they reject pre-built envelopes with headers or an `eventVersion`, which they would drop, with an `UnsupportedOperationException`. Call the options form through the `EventStore` type: on a variable typed as `PostgresEventStore`, `MariaDBEventStore` or `MongoDBEventStore`, only the 3.x form type-checks until schema v2.
-
 **Publishing.** The module hands the store the `EventBus` when it creates it, and `eventStore.publish = …` is gone. Events appended before the application bootstrapped are no longer held back with a warning, but the publishers and subscribers are only registered at bootstrap, so they still don't receive them. The store calls `eventBus.publishAll(envelopes)`, so a test double that replaces the `EventBus` must implement it. The bus no longer passes the envelopes of an append through `eventBus.publish`, so a spy on it sees nothing: see [Publishing](#publishing).
 
 **Reads.** `getEvent()` and `getEnvelope()` always return a promise, also on the in-memory store. On the in-memory store now, and on the database stores with schema v2, every read of a pool whose collection doesn't exist throws an `EventCollectionNotFoundException`; the in-memory store's `getEvents()` and `getEnvelopes()` yielded nothing and its `getEvent()` threw an `EventNotFoundException`. An append to such a pool throws an `EventStorePersistenceException` with `outcome: 'not-persisted'`, whose `cause` is the `EventCollectionNotFoundException`.
@@ -299,7 +305,7 @@ The database stores keep their 3.x appends until they move to schema v2. They ch
 
 ### Metadata and headers [#metadata-headers]
 
-*In the next prerelease, with the in-memory store. The database stores follow with schema v2.* See [Envelopes](/under-the-hood/envelopes#headers).
+*In the next prerelease, with the in-memory store and the PostgreSQL, MariaDB and MongoDB stores on schema v2.* See [Envelopes](/under-the-hood/envelopes#headers).
 
 An append can set a `correlationId`, a `causationId` and `headers` for all its events:
 
@@ -317,7 +323,7 @@ await eventStore.appendEvents(stream, events, {
 
 ### Reading all events [#read-all]
 
-*In the next prerelease, with the in-memory store. The database stores follow with schema v2, which adds the positions to existing events.* See [Reading all events](/under-the-hood/event-store#reading-all-events).
+*In the next prerelease, with the in-memory store and the PostgreSQL, MariaDB and MongoDB stores on schema v2, whose migration adds the positions to existing events.* See [Reading all events](/under-the-hood/event-store#reading-all-events).
 
 `readAll({ fromPosition, batch, pool })` replaces `getAllEnvelopes({ since, until })`. Every stored event has a `globalPosition`, a bigint per pool, starting at `1n`; `readAll` yields a pool in that order, from `fromPosition` on (inclusive), in batches of `batch` (a positive integer, or a `RangeError`). Store the position of the last envelope you processed and resume at `checkpoint + 1n`. To read a period, filter on `metadata.occurredOn`.
 
@@ -328,16 +334,16 @@ for await (const envelopes of eventStore.getAllEnvelopes({ since: { year: 2024, 
 for await (const envelopes of eventStore.readAll({ fromPosition: checkpoint + 1n })) { … }
 ```
 
-`getAllEnvelopes`, `IAllEventsFilter`, `EventStore.getYearMonthRange` and `ULID.yearMonth` are removed. For `ULID.yearMonth`, also on `EventId`, use `id.date.toISOString().slice(0, 7)`. `capabilities.globalOrder` says whether a reader that tails the store can miss an event (`'best-effort'`) or not (`'gap-safe'`); the in-memory store is gap-safe.
+`getAllEnvelopes`, `IAllEventsFilter`, `EventStore.getYearMonthRange` and `ULID.yearMonth` are removed. For `ULID.yearMonth`, also on `EventId`, use `id.date.toISOString().slice(0, 7)`. `capabilities.globalOrder` says whether a reader that tails the store can miss an event (`'best-effort'`) or not (`'gap-safe'`); the in-memory store, PostgreSQL, MariaDB on InnoDB and MongoDB replica sets are gap-safe.
 
 ### Snapshot store [#snapshot-store]
 
-*Ships in the next prerelease, except for the parts that name the PostgreSQL, MariaDB and MongoDB stores: those come with each store's schema v2.* See [Snapshot store](/under-the-hood/snapshot-store) for the whole contract.
+*In the next prerelease, with schema v2 for the PostgreSQL, MariaDB and MongoDB stores.* See [Snapshot store](/under-the-hood/snapshot-store) for the whole contract.
 
 - **Promises only.** Every method of a snapshot store returns a promise (or an async generator), and fails by rejecting. The in-memory store's `getSnapshot`, `getLastSnapshot`, `getLastSnapshots`, `getLastEnvelope`, `getEnvelope` and `getManyLastSnapshotEnvelopes` returned their result directly in 3.x: `await` them. A failure, such as the `SnapshotNotFoundException` of `getSnapshot`, is now a rejection instead of a synchronous throw. `SnapshotRepository` already awaited them, so repositories need no change.
 - **`SnapshotStoreDriver` is the class of a store**, `new (options) => SnapshotStore`, and `SnapshotStoreConfig.driver` has that type. In 3.x it was an interface for the store instance, with `connect`, `disconnect` and `ensureCollection`. Type a store instance as `SnapshotStore` instead.
 - **Base defaults.** `getManyLastSnapshotEnvelopes` has a default in the base class, which reads the streams one by one with `getLastEnvelope`, so `SnapshotRepository.loadMany()` works with every store. `getLastEnvelopesForAggregate` has a default that rejects with an `UnsupportedOperationException` when it's read, which `loadAll()` passes on. The repository no longer checks whether the store has these methods.
-- **The last snapshot is the highest version.** The in-memory store's `getLastSnapshot`, `getLastEnvelope` and their bulk forms read the snapshot with the highest version of the stream, and appends to one stream keep a single latest snapshot even when they race. The PostgreSQL, MariaDB and MongoDB stores still read the snapshot they flag as the latest, and read the highest version with their schema v2, which enforces a single latest snapshot per stream with a unique index. PostgreSQL already keeps a single latest snapshot when appends race, because it serializes the appends to a stream; MariaDB and MongoDB get that with their schema v2.
+- **The last snapshot is the highest version.** The in-memory store's `getLastSnapshot`, `getLastEnvelope` and their bulk forms read the snapshot with the highest version of the stream, and appends to one stream keep a single latest snapshot even when they race. The PostgreSQL, MariaDB and MongoDB stores read the highest version with their schema v2, which enforces a single latest snapshot per stream with a unique index, also when appends race.
 - **`loadAll` pages in binary order.** `getLastEnvelopesForAggregate`, and so `loadAll`, reads the streams in descending binary order of their aggregate ids, which is case-sensitive: uppercase letters come before lowercase ones. The `aggregateId` of the filter is an exclusive cursor: pass the aggregate id of the last envelope of a page to read the next page. The in-memory store ordered the ids ignoring case in 3.x; the PostgreSQL, MariaDB and MongoDB stores ignore the cursor in 3.x and get it, in binary order, with their schema v2.
 
 For custom snapshot stores:
@@ -378,7 +384,7 @@ The PostgreSQL stores implement the new contract natively: global positions, `re
 
 ### MongoDB schema v2 [#mongodb-schema-v2]
 
-*In this prerelease.* See [MongoDB](/integrations/mongodb) for the schema, the capabilities per topology and the privileges.
+*In the next prerelease.* See [MongoDB](/integrations/mongodb) for the schema, the capabilities per topology and the privileges.
 
 - **The MongoDB event store implements the store contract.** Everything in [Event store API](#event-store-api), [Metadata and headers](#metadata-headers) and [Reading all events](#read-all) applies to it: the options form of `appendEvents` with `ExpectedVersion.Any` and metadata, `readAll` instead of `getAllEnvelopes`, which is gone from it, and `EventCollectionNotFoundException` for every read of a pool that was never ensured. On a variable typed as `MongoDBEventStore`, the options form now type-checks.
 - **Event documents** gain a 64-bit `globalPosition`, `headers` and `eventVersion`, and lose `eventDate`. Absent metadata is left out instead of stored as `null`. A validator requires the position, so 3.x writers fail loudly on a migrated collection.
@@ -391,7 +397,7 @@ The PostgreSQL stores implement the new contract natively: global positions, `re
 
 ### Data migration [#data-migration]
 
-*PostgreSQL: in the next prerelease. MariaDB and MongoDB: planned.* A one-time, offline migration of the event and snapshot tables, run with the store's `migrate()` after a dry run, while no 3.x instance is running.
+*In the next prerelease.* A one-time, offline migration of the event and snapshot tables, run with the store's `migrate()` after a dry run, while no 3.x instance is running.
 
 **PostgreSQL.** Follow the [runbook](/integrations/postgres#migrating-from-3x). In short:
 
@@ -403,27 +409,9 @@ The PostgreSQL stores implement the new contract natively: global positions, `re
 
 Each table is migrated in one transaction under an exclusive lock, keeps its OID (grants and publications survive) and the columns you added, and gets positions in 3.x's order with every stream kept in version order. Plan for about 0.5 minutes per million events under the lock (a provisional figure, extrapolated from 100,000 events), 3 times the table's size in free disk, and a `TRUNCATE` plus an insert of every row in publications; migrate the tables of a logical replication subscriber first. A 3.x instance that still writes afterwards fails instead of writing events without positions. A stream with a gap in its versions conflicts on its next append.
 
-**MongoDB** (in this prerelease): take a backup, run `MongoDBEventStore.migrate(config, { dryRun: true })` and `MongoDBSnapshotStore.migrate(config, { dryRun: true })` and review the reports, stop every 3.x instance, run `MongoDBEventStore.migrate(config)`, then `MongoDBSnapshotStore.migrate(config)`, and deploy 4.0. The events keep 3.x's order, `(eventDate, _id)`, as their global positions `1n…`, with every stream in version order; a stream with gaps in its versions conflicts on its next append until you append with its actual version. The migration took about a minute per million events, measured with 100,000 events (larger collections sort on disk and take longer), and writes about half a GB of oplog per million; a run that stopped resumes. See [Migrating from 3.x](/integrations/mongodb#migrating-from-3x) for the steps, the room it needs and what blocks a collection.
+**MongoDB.** Take a backup, run `MongoDBEventStore.migrate(config, { dryRun: true })` and `MongoDBSnapshotStore.migrate(config, { dryRun: true })` and review the reports, stop every 3.x instance, run `MongoDBEventStore.migrate(config)`, then `MongoDBSnapshotStore.migrate(config)`, and deploy 4.0. The events keep 3.x's order, `(eventDate, _id)`, as their global positions `1n…`, with every stream in version order; a stream with gaps in its versions conflicts on its next append until you append with its actual version. The migration took about a minute per million events, measured with 100,000 events (larger collections sort on disk and take longer), and writes about half a GB of oplog per million; a run that stopped resumes. See [Migrating from 3.x](/integrations/mongodb#migrating-from-3x) for the steps, the room it needs and what blocks a collection.
 
-## Publishing [#publishing]
-
-*In the next prerelease.* See [Event Publishers and Subscribers](/advanced/event-pubsub#delivery-semantics).
-
-- **Publishers are awaited.** The bus awaits the promise that a publisher's `publish` returns before it passes that publisher the next envelope of the append, and `appendEvents` resolves once every publisher is done. 3.x fired them and forgot. The publishers run concurrently, and each call may take at most `publishing.publisherTimeout` milliseconds (30 s by default, `0` disables it): after that the bus logs and reports a timeout and moves on. Each publisher gets the appends of a stream in the order in which they were stored, one after the other, even when they run concurrently; appends to other streams don't wait for each other. A slow publisher now slows down your commands: each call up to that timeout, and an append to a stream also waits for the calls of the earlier appends to that stream that the publisher still handles. A publisher may implement `publishAll(envelopes)` to get the envelopes of an append in one call.
-- **`eventBus.publish()` returns a promise**, which resolves once the publishers are done and never rejects. The envelopes of an append go through `eventBus.publishAll()`, not through `publish()`: to see what an append published in a test, register a publisher or subscribe to the bus instead of spying on `eventBus.publish`.
-- **`eventBus.whenIdle()`** resolves once no publisher or subscriber is running. In tests, `await eventBus.whenIdle()` replaces waiting for a fixed time for the subscribers.
-- **`eventBus.deliveryErrors$`** emits every publisher and subscriber failure, a timeout included. They are still logged.
-- **Shutdown.** `app.close()` waits for the running publishers and subscribers, for at most `publishing.shutdownTimeout` milliseconds (10 s by default), then unsubscribes the subscribers and disconnects the stores. 3.x unsubscribed and disconnected in `onModuleDestroy`, which dropped the deliveries in flight. NestJS still runs `onModuleDestroy` first, so if your subscribers use providers that clean up there, `await eventBus.whenIdle()` before `app.close()`.
-- **`IEventPublisher.publish`** returns `unknown` instead of `any` and no longer declares rest parameters, which the bus never passed. `IEventBus.publish` returns `Promise<void>`.
-
-```ts
-EventSourcingModule.forRoot({
-	events: [AccountOpenedEvent],
-	publishing: { publisherTimeout: 5_000, shutdownTimeout: 30_000 },
-});
-```
-
-**MariaDB** (*in the next prerelease*): follow the [runbook](/integrations/mariadb#runbook). In short, take a backup, run the dry runs with the 4.0 package, stop every 3.x instance, migrate, then deploy 4.0:
+**MariaDB.** Follow the [runbook](/integrations/mariadb#runbook). In short, take a backup, run the dry runs with the 4.0 package, stop every 3.x instance, migrate, then deploy 4.0:
 
 ```ts
 import { MariaDBEventStore, MariaDBSnapshotStore } from '@ocoda/event-sourcing-mariadb';
@@ -438,8 +426,26 @@ await MariaDBSnapshotStore.migrate(config);
 - The event tables are copied into schema v2 and swapped in, numbered in 3.x's order with every stream in version order; the 3.x tables are kept as `<table>__es_v1` backups until you drop them. `occurred_on` is restored to the millisecond from the event ids, which also corrects the hours 3.x was off when the application ran in another time zone than the database server.
 - The snapshot tables are converted in place, and every stream gets exactly one latest snapshot, its highest version.
 - After the migration, a 3.x instance that still runs fails to append events (error 1136) instead of writing rows without positions. Its snapshot writes still succeed, so stop every 3.x instance before you migrate.
-- Plan for about 3 minutes per million events, and free space of 1.5 times the event tables in the data directory and again in `tmpdir`. A failed migration can be run again: it continues where it stopped.
+- Plan for about 3 minutes per million events (a provisional estimate: a million events were not measured with the copy that ships), and free space of 1.5 times the event tables in the data directory and again in `tmpdir`. A failed migration can be run again: it continues where it stopped.
 - Stream ids that differ in case only become separate streams, and a stream with a gap in its versions conflicts on its next append; the dry run lists both.
+
+## Publishing [#publishing]
+
+*In the next prerelease.* See [Event Publishers and Subscribers](/advanced/event-pubsub#delivery-semantics).
+
+- **Publishers are awaited.** The bus awaits the promise that a publisher's `publish` returns before it passes that publisher the next envelope of the append, and `appendEvents` resolves once every publisher is done. 3.x fired them and forgot. The publishers run concurrently, and each call may take at most `publishing.publisherTimeout` milliseconds (30 s by default, `0` disables it): after that the bus logs and reports a timeout and moves on. Each publisher gets the appends of a stream in the order in which they were stored, one after the other, even when they run concurrently; appends to other streams don't wait for each other. A slow publisher now slows down your commands: each call up to that timeout, and an append to a stream also waits for the calls of the earlier appends to that stream that the publisher still handles. A publisher may implement `publishAll(envelopes)` to get the envelopes of an append in one call.
+- **`eventBus.publish()` returns a promise**, which resolves once the publishers are done and never rejects because of a publisher or subscriber. The envelopes of an append go through `eventBus.publishAll()`, not through `publish()`: to see what an append published in a test, register a publisher or subscribe to the bus instead of spying on `eventBus.publish`.
+- **`eventBus.whenIdle()`** resolves once no publisher or subscriber is running. In tests, `await eventBus.whenIdle()` replaces waiting for a fixed time for the subscribers.
+- **`eventBus.deliveryErrors$`** emits every publisher and subscriber failure, a timeout included. They are still logged.
+- **Shutdown.** `app.close()` waits for the running publishers and subscribers, for at most `publishing.shutdownTimeout` milliseconds (10 s by default), then unsubscribes the subscribers and disconnects the stores. 3.x unsubscribed and disconnected in `onModuleDestroy`, which dropped the deliveries in flight. NestJS still runs `onModuleDestroy` first, so if your subscribers use providers that clean up there, `await eventBus.whenIdle()` before `app.close()`.
+- **`IEventPublisher.publish`** returns `unknown` instead of `any` and no longer declares rest parameters, which the bus never passed. `IEventBus.publish` returns `Promise<void>`.
+
+```ts
+EventSourcingModule.forRoot({
+	events: [AccountOpenedEvent],
+	publishing: { publisherTimeout: 5_000, shutdownTimeout: 30_000 },
+});
+```
 
 ## Module configuration [#module-configuration]
 
@@ -484,10 +490,16 @@ The DynamoDB store (`@ocoda/event-sourcing-dynamodb`) is not released for 4.0. D
 Nothing in this section is released yet. The changes are planned in [ADR 0001: v4 core API](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0001-v4-core-api.md), which is still a proposal, so the details can change before they ship. This guide will be extended with each prerelease.
 </Aside>
 
-- **Event store, snapshots and schema v2.** See [Event store, snapshots and schema v2](#store-and-schema).
-- **Saving aggregates.** `commit()` gives way to `getUncommittedEvents()` and `markCommitted()`, and saving an unchanged aggregate becomes a no-op. `commit()` stays as a deprecated shim until 5.0.
+In the next prerelease, described above:
+
+- **Event store, snapshots and schema v2** for PostgreSQL, MariaDB and MongoDB. See [Event store, snapshots and schema v2](#store-and-schema).
 - **Publishing.** See [Publishing](#publishing).
+- **Typed command and query buses.** See [Typed command and query buses](#typed-buses).
 - **Module configuration.** See [Module configuration](#module-configuration).
+
+In later prereleases:
+
+- **Saving aggregates.** `commit()` gives way to `getUncommittedEvents()` and `markCommitted()`, and saving an unchanged aggregate becomes a no-op. `commit()` stays as a deprecated shim until 5.0.
 - **Serialization.** A JSON serializer replaces class-transformer as the default. Events that use class-transformer decorators opt back in with `defaultEventSerializer: ClassTransformerEventSerializer`.
 - **Ids.** `generate()` on an id class returns that class, so `AccountId.generate()` returns an `AccountId`, and ids of different classes are no longer equal.
 
