@@ -21,6 +21,9 @@ catalogs:
     '@types/node':
       specifier: 22.20.4
       version: 22.20.4
+    class-transformer:
+      specifier: 0.5.1
+      version: 0.5.1
     mongodb:
       specifier: ^7.7.0
       version: 7.7.0
@@ -157,9 +160,6 @@ importers:
 
   packages/core:
     dependencies:
-      class-transformer:
-        specifier: 0.5.1
-        version: 0.5.1
       ulidx:
         specifier: ^2.4.1
         version: 2.4.1
@@ -185,6 +185,9 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 22.20.4
+      class-transformer:
+        specifier: 'catalog:'
+        version: 0.5.1
       reflect-metadata:
         specifier: 'catalog:'
         version: 0.2.2
@@ -333,6 +336,9 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 22.20.4
+      class-transformer:
+        specifier: 'catalog:'
+        version: 0.5.1
       typescript:
         specifier: 'catalog:'
         version: 7.0.2

@@ -1,11 +1,19 @@
 import { Injectable, type Type } from '@nestjs/common';
 import {
+	EventSerializationException,
 	MissingEventMetadataException,
 	UnregisteredEventException,
 	UnregisteredSerializerException,
 } from './exceptions/index.js';
-import { DefaultEventSerializer, getEventMetadata, getEventSerializerMetadata } from './helpers/index.js';
-import type { IEvent, IEventPayload, IEventSerializer, ProviderWrapper } from './interfaces/index.js';
+import type { ClassTransformerDecoratorsOf } from './helpers/class-transformer-decorators.js';
+import { JsonEventSerializer, getEventMetadata, getEventSerializerMetadata } from './helpers/index.js';
+import type {
+	EventSerializerFactory,
+	IEvent,
+	IEventPayload,
+	IEventSerializer,
+	ProviderWrapper,
+} from './interfaces/index.js';
 
 export type EventSerializerType = Type<IEventSerializer<IEvent>>;
 
@@ -94,18 +102,43 @@ export class EventMap {
 		return name;
 	}
 
-	registerSerializers(events: Type<IEvent>[] = [], serializers: ProviderWrapper<IEventSerializer>[] = []) {
+	/**
+	 * Registers the events with their serializer: the `@EventSerializer()` provider for the event if there is one,
+	 * otherwise one from `defaultSerializer` (`JsonEventSerializer` unless `EventSourcingModule.forRoot()` sets
+	 * `defaultEventSerializer`).
+	 *
+	 * @throws EventSerializationException when an event would get a `JsonEventSerializer` although it carries
+	 * class-transformer decorators, which that serializer ignores. `classTransformerDecoratorsOf` finds them; without
+	 * it, nothing is checked.
+	 */
+	registerSerializers(
+		events: Type<IEvent>[] = [],
+		serializers: ProviderWrapper<IEventSerializer>[] = [],
+		{
+			defaultSerializer = JsonEventSerializer,
+			classTransformerDecoratorsOf,
+		}: { defaultSerializer?: EventSerializerFactory; classTransformerDecoratorsOf?: ClassTransformerDecoratorsOf } = {},
+	) {
 		for (const event of events) {
-			// get the handler
 			const handler = serializers.find(({ metatype }) => {
 				return getEventSerializerMetadata(metatype as Type<IEventSerializer>)?.event === event;
 			});
 
-			// get the serializer, or use the default one
-			const serializer = handler?.instance || DefaultEventSerializer.for(event);
+			const custom = handler?.instance as IEventSerializer | undefined;
+			const serializer = custom ?? defaultSerializer.for(event);
 
-			// register the event
-			this.register(event, serializer as IEventSerializer);
+			if (!custom && serializer instanceof JsonEventSerializer && classTransformerDecoratorsOf) {
+				const decorators = classTransformerDecoratorsOf(event);
+				if (decorators.length > 0) {
+					throw new EventSerializationException({
+						event: event.name,
+						reason: 'class-transformer-decorators',
+						decorators,
+					});
+				}
+			}
+
+			this.register(event, serializer);
 		}
 	}
 }

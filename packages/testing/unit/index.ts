@@ -1,7 +1,7 @@
 import {
 	Aggregate,
 	AggregateRoot,
-	DefaultEventSerializer,
+	JsonEventSerializer,
 	Event,
 	EventEnvelope,
 	EventId,
@@ -230,10 +230,10 @@ export const customerSnapshot: ISnapshot<Customer> = { name: 'Hubert Farnsworth'
 
 export const getEventMap = (): EventMap => {
 	const eventMap = new EventMap();
-	eventMap.register(AccountOpenedEvent, DefaultEventSerializer.for(AccountOpenedEvent));
-	eventMap.register(AccountCreditedEvent, DefaultEventSerializer.for(AccountCreditedEvent));
-	eventMap.register(AccountDebitedEvent, DefaultEventSerializer.for(AccountDebitedEvent));
-	eventMap.register(AccountClosedEvent, DefaultEventSerializer.for(AccountClosedEvent));
+	eventMap.register(AccountOpenedEvent, JsonEventSerializer.for(AccountOpenedEvent));
+	eventMap.register(AccountCreditedEvent, JsonEventSerializer.for(AccountCreditedEvent));
+	eventMap.register(AccountDebitedEvent, JsonEventSerializer.for(AccountDebitedEvent));
+	eventMap.register(AccountClosedEvent, JsonEventSerializer.for(AccountClosedEvent));
 
 	return eventMap;
 };

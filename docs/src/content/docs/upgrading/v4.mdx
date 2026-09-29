@@ -441,6 +441,31 @@ await MariaDBSnapshotStore.migrate(config);
 - Plan for about 3 minutes per million events, and free space of 1.5 times the event tables in the data directory and again in `tmpdir`. A failed migration can be run again: it continues where it stopped.
 - Stream ids that differ in case only become separate streams, and a stream with a gap in its versions conflicts on its next append; the dry run lists both.
 
+## Serialization [#serialization]
+
+*In the next prerelease.* See [Event Serialization](/advanced/event-serialization).
+
+- **A JSON serializer is the default.** `JsonEventSerializer` replaces class-transformer as the serializer of every event without an `@EventSerializer()` of its own. For events without class-transformer decorators it stores the same payloads and reads back the same events as 3.x, so stored events need no migration: nested class instances, value objects such as ids included, are stored and read back as plain objects, a `Date` stays a `Date` in the payload (the SQL stores read back its ISO string), a `Set` becomes an array and a `Map` an object.
+- **Events with class-transformer decorators fail the bootstrap.** An event with `@Type`, `@Transform`, `@Expose` or `@Exclude` that would get the JSON serializer throws an `EventSerializationException` that names the event and its decorators, instead of losing their effect silently. Serialize those events with class-transformer, as 3.x did:
+
+  ```ts
+  import { ClassTransformerEventSerializer } from '@ocoda/event-sourcing/class-transformer';
+
+  EventSourcingModule.forRoot({ events, defaultEventSerializer: ClassTransformerEventSerializer });
+  ```
+
+  The check sees the decorators that reach class-transformer the way Node loads it. A bundler that resolves class-transformer's ES module build keeps a second copy of its metadata, which the check can't see.
+- **class-transformer is an optional peer dependency.** The core no longer installs it: install `class-transformer@^0.5.1` if you use `ClassTransformerEventSerializer` or class-transformer's decorators.
+- **`DefaultEventSerializer` is removed** from `@ocoda/event-sourcing`. Use `JsonEventSerializer.for(MyEvent)` or `ClassTransformerEventSerializer.for(MyEvent)` instead.
+- **A circular reference in an event** fails the append with an `EventSerializationException` (`reason: 'circular-reference'`) before anything is written. 3.x overflowed the stack.
+- The JSON serializer accepts a few inputs that class-transformer threw a `TypeError` for: a payload key that matches a getter without a setter inherited from a parent class is skipped, and so is a nested `constructor` key.
+
+To migrate:
+
+1. Replace `DefaultEventSerializer.for(MyEvent)` with `JsonEventSerializer.for(MyEvent)`, or with `ClassTransformerEventSerializer.for(MyEvent)` for an event with class-transformer decorators.
+2. If your events use class-transformer decorators, install `class-transformer@^0.5.1` and set `defaultEventSerializer: ClassTransformerEventSerializer`, or give those events an `@EventSerializer()` of their own. Then bootstrap the application: it fails as long as an event with decorators is left on the JSON serializer, and names it.
+3. If you bundle the application, check your events for class-transformer decorators yourself.
+
 ## DynamoDB is not part of 4.0 [#dynamodb]
 
 The DynamoDB store (`@ocoda/event-sourcing-dynamodb`) is not released for 4.0. DynamoDB can't give the events a gap-free global order, which the read side planned for 4.0 relies on. You have two options:
@@ -458,7 +483,7 @@ Nothing in this section is released yet. The changes are planned in [ADR 0001: v
 - **Saving aggregates.** `commit()` gives way to `getUncommittedEvents()` and `markCommitted()`, and saving an unchanged aggregate becomes a no-op. `commit()` stays as a deprecated shim until 5.0.
 - **Publishing.** See [Publishing](#publishing).
 - **Bootstrap checks.** Duplicate registrations, and request-scoped subscribers, publishers and serializers, fail the bootstrap. Request-scoped command and query handlers start to work.
-- **Serialization.** A JSON serializer replaces class-transformer as the default. Events that use class-transformer decorators opt back in with `defaultEventSerializer: ClassTransformerEventSerializer`.
+- **Serialization.** See [Serialization](#serialization).
 - **Ids.** `generate()` on an id class returns that class, so `AccountId.generate()` returns an `AccountId`, and ids of different classes are no longer equal.
 
 See the ADR's [migration guide](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0001-v4-core-api.md#migration-guide) for the planned steps, including those for custom store authors.

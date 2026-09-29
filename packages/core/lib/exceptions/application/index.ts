@@ -1,6 +1,7 @@
 export * from './command-handler-not-found.exception.js';
 export * from './event-collection-not-found.exception.js';
 export * from './event-not-found.exception.js';
+export * from './event-serialization.exception.js';
 export * from './invalid-aggregate-stream-name.exception.js';
 export * from './invalid-append-options.exception.js';
 export * from './invalid-command-handler.exception.js';

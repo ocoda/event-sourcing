@@ -1,0 +1,251 @@
+import { Injectable, type INestApplicationContext, Module } from '@nestjs/common';
+import { Test } from '@nestjs/testing';
+import {
+	Event,
+	EventMap,
+	EventSerializationException,
+	EventSerializer,
+	EventSourcingModule,
+	EventStore,
+	EventStream,
+	type IEventPayload,
+	type IEventSerializer,
+	JsonEventSerializer,
+} from '@ocoda/event-sourcing';
+import { Account, AccountId } from '@ocoda/event-sourcing-testing/unit';
+import { ClassTransformerEventSerializer } from '@ocoda/event-sourcing/class-transformer';
+import { Exclude, Expose, Transform, Type } from 'class-transformer';
+import { loadClassTransformerDecorators } from '../../../lib/helpers/class-transformer-decorators.js';
+
+// ADR 0001 §6: an event with class-transformer decorators can't switch to the JSON default silently. The bootstrap
+// loads class-transformer's metadata storage and fails for such an event, naming the fix.
+
+class Money {
+	constructor(
+		public readonly amount: number,
+		public readonly currency: string,
+	) {}
+}
+
+@Event('tripwire-deposited')
+class Deposited {
+	@Type(() => Money)
+	readonly amount: Money;
+
+	constructor(amount: Money) {
+		this.amount = amount;
+	}
+}
+
+@Event('tripwire-plain')
+class Plain {
+	constructor(public readonly note: string) {}
+}
+
+@Exclude()
+class ExcludedBase {
+	@Expose()
+	readonly id: string = '';
+}
+
+@Event('tripwire-inherited')
+class Inherited extends ExcludedBase {
+	@Transform(({ value }) => value)
+	readonly note: string = '';
+}
+
+const decoratorsOf = async () => {
+	const found = await loadClassTransformerDecorators();
+	if (!found) throw new Error('class-transformer is installed for the tests');
+	return found;
+};
+
+describe('the class-transformer tripwire', () => {
+	describe(loadClassTransformerDecorators, () => {
+		it('finds the decorators of a class and of its parent classes', async () => {
+			const of = await decoratorsOf();
+
+			expect(of(Deposited)).toEqual(['@Type on Deposited.amount']);
+			expect(of(Inherited)).toEqual([
+				'@Transform on Inherited.note',
+				'@Expose on ExcludedBase.id',
+				'@Exclude on ExcludedBase',
+			]);
+			expect(of(Plain)).toEqual([]);
+			expect(of(Money)).toEqual([]);
+		});
+
+		it('resolves to undefined without class-transformer, so nothing is checked', async () => {
+			const missing = Object.assign(new Error("Cannot find package 'class-transformer'"), {
+				code: 'ERR_MODULE_NOT_FOUND',
+			});
+
+			await expect(loadClassTransformerDecorators(() => Promise.reject(missing))).resolves.toBeUndefined();
+		});
+
+		it('resolves to undefined for a metadata storage it does not know', async () => {
+			await expect(loadClassTransformerDecorators(async () => ({}))).resolves.toBeUndefined();
+			await expect(loadClassTransformerDecorators(async () => undefined)).resolves.toBeUndefined();
+			await expect(
+				loadClassTransformerDecorators(async () => ({ defaultMetadataStorage: { _typeMetadatas: {} } })),
+			).resolves.toBeUndefined();
+		});
+	});
+
+	describe('EventMap.registerSerializers', () => {
+		it('registers the JSON serializer by default', () => {
+			const eventMap = new EventMap();
+
+			eventMap.registerSerializers([Plain]);
+
+			expect(eventMap.serializeEvent(new Plain('a'))).toStrictEqual({ note: 'a' });
+			expect(eventMap.deserializeEvent('tripwire-plain', { note: 'a' })).toBeInstanceOf(Plain);
+		});
+
+		it('throws for a decorated event that would get the JSON serializer', async () => {
+			const eventMap = new EventMap();
+
+			const register = async () =>
+				eventMap.registerSerializers([Plain, Deposited], [], { classTransformerDecoratorsOf: await decoratorsOf() });
+
+			await expect(register()).rejects.toThrow(EventSerializationException);
+			await expect(register()).rejects.toMatchObject({
+				event: 'Deposited',
+				reason: 'class-transformer-decorators',
+				decorators: ['@Type on Deposited.amount'],
+			});
+		});
+
+		it('accepts a decorated event with another default serializer, or with a serializer of its own', async () => {
+			const classTransformerDecoratorsOf = await decoratorsOf();
+			const eventMap = new EventMap();
+
+			eventMap.registerSerializers([Deposited], [], {
+				defaultSerializer: ClassTransformerEventSerializer,
+				classTransformerDecoratorsOf,
+			});
+			expect(
+				eventMap.deserializeEvent<Deposited>('tripwire-deposited', { amount: { amount: 1 } }).amount,
+			).toBeInstanceOf(Money);
+
+			class DepositedSerializer implements IEventSerializer<Deposited> {
+				serialize(event: Deposited): IEventPayload<Deposited> {
+					return { amount: { ...event.amount } };
+				}
+				deserialize(payload: IEventPayload<Deposited>): Deposited {
+					return new Deposited(new Money(payload.amount.amount, payload.amount.currency));
+				}
+			}
+			EventSerializer(Deposited)(DepositedSerializer);
+			const own = new EventMap();
+			own.registerSerializers(
+				[Deposited],
+				[{ metatype: DepositedSerializer, instance: new DepositedSerializer() }] as never,
+				{
+					classTransformerDecoratorsOf,
+				},
+			);
+			expect(own.deserializeEvent<Deposited>('tripwire-deposited', { amount: { amount: 2 } }).amount).toBeInstanceOf(
+				Money,
+			);
+		});
+
+		it('checks a factory that returns JSON serializers too', async () => {
+			const eventMap = new EventMap();
+
+			expect(() =>
+				eventMap.registerSerializers([Deposited], [], {
+					defaultSerializer: { for: (event) => JsonEventSerializer.for(event) },
+					classTransformerDecoratorsOf: () => ['@Type on Deposited.amount'],
+				}),
+			).toThrow(EventSerializationException);
+		});
+	});
+
+	describe('bootstrap', () => {
+		@Injectable()
+		class Deposits {
+			constructor(private readonly eventStore: EventStore) {}
+
+			async roundTrip(): Promise<Deposited> {
+				const stream = EventStream.for(Account, AccountId.generate());
+				await this.eventStore.appendEvents(stream, [new Deposited(new Money(5, 'EUR'))], { expectedVersion: 0 });
+				return this.eventStore.getEvent(stream, 1) as Promise<Deposited>;
+			}
+		}
+
+		const bootstrap = async (
+			root: ReturnType<typeof EventSourcingModule.forRoot>,
+		): Promise<INestApplicationContext> => {
+			@Module({ imports: [root], providers: [Deposits] })
+			class AppModule {}
+
+			const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+			return moduleRef.init();
+		};
+
+		it('fails for a decorated event on the JSON default, and names the fix', async () => {
+			const bootstrapping = bootstrap(EventSourcingModule.forRoot({ events: [Plain, Deposited] }));
+
+			await expect(bootstrapping).rejects.toThrow(EventSerializationException);
+			await expect(bootstrapping).rejects.toThrow(
+				"The event Deposited uses class-transformer decorators (@Type on Deposited.amount), which the default JsonEventSerializer ignores. Serialize it with class-transformer: set defaultEventSerializer: ClassTransformerEventSerializer (from '@ocoda/event-sourcing/class-transformer') in EventSourcingModule.forRoot(), or register an @EventSerializer() for the event.",
+			);
+		});
+
+		it('boots with defaultEventSerializer: ClassTransformerEventSerializer and reads the event back', async () => {
+			const app = await bootstrap(
+				EventSourcingModule.forRoot({ events: [Deposited], defaultEventSerializer: ClassTransformerEventSerializer }),
+			);
+
+			const read = await app.get(Deposits).roundTrip();
+
+			expect(read).toBeInstanceOf(Deposited);
+			expect(read.amount).toBeInstanceOf(Money);
+			await app.close();
+		});
+
+		it('takes defaultEventSerializer from forRootAsync', async () => {
+			const app = await bootstrap(
+				EventSourcingModule.forRootAsync({
+					useFactory: async () => ({ events: [Deposited], defaultEventSerializer: ClassTransformerEventSerializer }),
+				}),
+			);
+
+			expect((await app.get(Deposits).roundTrip()).amount).toBeInstanceOf(Money);
+			await app.close();
+		});
+
+		it('boots on the JSON default when the decorated event has a serializer of its own', async () => {
+			@EventSerializer(Deposited)
+			class DepositedSerializer extends ClassTransformerEventSerializer<Deposited> {
+				constructor() {
+					super(Deposited);
+				}
+			}
+
+			@Module({
+				imports: [EventSourcingModule.forRoot({ events: [Plain, Deposited] })],
+				providers: [Deposits, DepositedSerializer],
+			})
+			class AppModule {}
+
+			const app = await (await Test.createTestingModule({ imports: [AppModule] }).compile()).init();
+
+			expect((await app.get(Deposits).roundTrip()).amount).toBeInstanceOf(Money);
+			await app.close();
+		});
+
+		// Last: forFeature registers its events for every later bootstrap in this file
+		it('fails for a decorated event registered by a feature module', async () => {
+			@Module({ imports: [EventSourcingModule.forFeature({ events: [Inherited] })] })
+			class FeatureModule {}
+
+			const moduleRef = await Test.createTestingModule({
+				imports: [EventSourcingModule.forRoot({ events: [Plain] }), FeatureModule],
+			}).compile();
+
+			await expect(moduleRef.init()).rejects.toMatchObject({ event: 'Inherited' });
+		});
+	});
+});

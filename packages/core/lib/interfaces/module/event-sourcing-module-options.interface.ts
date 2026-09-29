@@ -2,7 +2,7 @@ import type { ModuleMetadata, Type } from '@nestjs/common';
 import type { InMemoryEventStoreConfig } from '../../integration/event-store/index.js';
 import type { InMemorySnapshotStoreConfig } from '../../integration/snapshot-store/index.js';
 import type { SnapshotStoreConfig } from '../aggregate/index.js';
-import type { EventStoreConfig, IEvent } from '../events/index.js';
+import type { EventSerializerFactory, EventStoreConfig, IEvent } from '../events/index.js';
 
 export interface EventSourcingModuleOptions<
 	TEventStoreConfig extends EventStoreConfig = InMemoryEventStoreConfig,
@@ -15,6 +15,13 @@ export interface EventSourcingModuleOptions<
 	events?: Type<IEvent>[];
 	eventStore?: TEventStoreConfig;
 	snapshotStore?: TSnapshotStoreConfig;
+	/**
+	 * The serializer of every event that has no `@EventSerializer()` of its own. Default: `JsonEventSerializer`.
+	 * Events with class-transformer decorators need `ClassTransformerEventSerializer`, from
+	 * `@ocoda/event-sourcing/class-transformer`: the application fails to bootstrap when such an event would get the
+	 * JSON serializer.
+	 */
+	defaultEventSerializer?: EventSerializerFactory;
 	/**
 	 * How the `EventBus` publishes the envelopes of an append. Both timeouts are in milliseconds, and `0` disables them.
 	 */

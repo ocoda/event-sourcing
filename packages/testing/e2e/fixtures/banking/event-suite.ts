@@ -1,7 +1,7 @@
 import {
 	Aggregate,
 	AggregateRoot,
-	DefaultEventSerializer,
+	JsonEventSerializer,
 	Event,
 	EventEnvelope,
 	EventId,
@@ -417,7 +417,7 @@ export interface BankingScenario {
 export const createBankingEventMap = (): EventMap => {
 	const eventMap = new EventMap();
 	for (const event of BankingEventClasses) {
-		eventMap.register(event, DefaultEventSerializer.for(event));
+		eventMap.register(event, JsonEventSerializer.for(event));
 	}
 	return eventMap;
 };

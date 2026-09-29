@@ -24,6 +24,7 @@ import { EventStore } from './event-store.js';
 import { SnapshotStore } from './snapshot-store.js';
 
 import { InjectEventSourcingOptions } from './decorators/index.js';
+import { loadClassTransformerDecorators } from './helpers/class-transformer-decorators.js';
 import { ExplorerService } from './services/index.js';
 
 import {
@@ -127,9 +128,11 @@ export class EventSourcingCoreModule implements OnModuleInit, OnApplicationBoots
 		}
 	}
 
-	onApplicationBootstrap(): any {
+	async onApplicationBootstrap(): Promise<void> {
 		const { events, queries, commands, eventPublishers, eventSerializers, eventSubscribers } =
 			this.explorerService.explore();
+		// Fails the bootstrap for an event with class-transformer decorators that would get the JSON serializer
+		const classTransformerDecoratorsOf = await loadClassTransformerDecorators();
 
 		// Register the handlers
 		this._logger.debug('Registering event handlers...');
@@ -137,7 +140,10 @@ export class EventSourcingCoreModule implements OnModuleInit, OnApplicationBoots
 		this.commandBus.register(commands);
 		this.eventBus.registerPublishers(eventPublishers);
 		this.eventBus.registerSubscribers(eventSubscribers);
-		this.eventMap.registerSerializers(events, eventSerializers);
+		this.eventMap.registerSerializers(events, eventSerializers, {
+			defaultSerializer: this.options.defaultEventSerializer,
+			classTransformerDecoratorsOf,
+		});
 		this._logger.debug('Event handlers registered successfully.');
 	}
 }

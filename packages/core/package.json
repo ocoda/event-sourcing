@@ -35,6 +35,12 @@
 			"require": "./dist/index.js",
 			"default": "./dist/index.js"
 		},
+		"./class-transformer": {
+			"types": "./dist/class-transformer/index.d.ts",
+			"import": "./dist/class-transformer/index.js",
+			"require": "./dist/class-transformer/index.js",
+			"default": "./dist/class-transformer/index.js"
+		},
 		"./package.json": "./package.json"
 	},
 	"main": "./dist/index.js",
@@ -57,14 +63,19 @@
 		"node": ">=22.12"
 	},
 	"dependencies": {
-		"class-transformer": "0.5.1",
 		"ulidx": "^2.4.1"
 	},
 	"peerDependencies": {
 		"@nestjs/common": "^12.0.0",
 		"@nestjs/core": "^12.0.0",
+		"class-transformer": "^0.5.1",
 		"reflect-metadata": "^0.2.0",
 		"rxjs": "^7.8.0"
+	},
+	"peerDependenciesMeta": {
+		"class-transformer": {
+			"optional": true
+		}
 	},
 	"devDependencies": {
 		"@nestjs/common": "catalog:",
@@ -74,6 +85,7 @@
 		"@ocoda/event-sourcing-config": "workspace:*",
 		"@ocoda/event-sourcing-testing": "workspace:*",
 		"@types/node": "catalog:",
+		"class-transformer": "catalog:",
 		"reflect-metadata": "catalog:",
 		"rxjs": "catalog:",
 		"typescript": "catalog:"
