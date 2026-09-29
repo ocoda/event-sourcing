@@ -354,6 +354,102 @@ describe(`${MariaDBSnapshotStore.name} resilience`, () => {
 					await concurrentStore.disconnect();
 				}
 			});
+
+			it('should run an append again when InnoDB picks it as the victim of a deadlock, up to 10 times', async () => {
+				const snapshotPool = await newPool('deadlock');
+				const getConnection = pool.getConnection.bind(pool);
+				let deadlocks = 0;
+				let failInserts = 2;
+				const getConnectionSpy = vi.spyOn(pool, 'getConnection').mockImplementation(async () => {
+					const connection: PoolConnection = await getConnection();
+					const query = connection.query.bind(connection);
+					vi.spyOn(connection, 'query').mockImplementation(async (sql: unknown, values?: unknown) => {
+						if (typeof sql === 'string' && sql.startsWith('INSERT INTO') && deadlocks < failInserts) {
+							deadlocks++;
+							throw Object.assign(new Error('Deadlock found when trying to get lock'), {
+								errno: 1213,
+								code: 'ER_LOCK_DEADLOCK',
+							});
+						}
+						return query(sql as string, values);
+					});
+					return connection;
+				});
+
+				try {
+					const stream = newStream();
+					await expect(snapshotStore.appendSnapshot(stream, 1, { balance: 1 }, snapshotPool)).resolves.toMatchObject({
+						metadata: { version: 1 },
+					});
+					expect(deadlocks).toBe(2);
+					await expect(snapshotStore.getLastEnvelope(stream, snapshotPool)).resolves.toMatchObject({
+						metadata: { version: 1 },
+					});
+
+					deadlocks = 0;
+					failInserts = Number.POSITIVE_INFINITY;
+					const error = await snapshotStore
+						.appendSnapshot(stream, 2, { balance: 2 }, snapshotPool)
+						.catch((caught: unknown) => caught);
+					expect(error).toBeInstanceOf(SnapshotStorePersistenceException);
+					expect((error as Error).cause).toMatchObject({ errno: 1213 });
+					expect(deadlocks).toBe(10);
+					// Every attempt was rolled back: the snapshot at version 1 is still the latest
+					await expect(snapshotStore.getLastEnvelope(stream, snapshotPool)).resolves.toMatchObject({
+						metadata: { version: 1 },
+					});
+				} finally {
+					getConnectionSpy.mockRestore();
+				}
+				expect(pool.activeConnections()).toBe(0);
+			});
+
+			it('should keep one latest snapshot per stream while the streams of an aggregate race each other', async () => {
+				// Few connections for many appends: the appends to different streams deadlock on the unique latest index,
+				// and InnoDB's victims run again
+				const racingStore = createSnapshotStore({ connectionLimit: 10 });
+				await racingStore.connect();
+				try {
+					const snapshotPool = await newPool('streams');
+					const failures: string[] = [];
+					for (let round = 0; round < 12; round++) {
+						await Promise.all(
+							Array.from({ length: WRITERS }, async (_, index) => {
+								const stream = newStream();
+								const seeded = (round + index) % 2;
+								if (seeded) {
+									await racingStore.appendSnapshot(stream, 1, { balance: 1 }, snapshotPool);
+								}
+								const versions = [3, 7, 2, 8, 5, 4, 6, 9].map((version) => version + seeded);
+								const results = await Promise.allSettled(
+									versions.map((version) =>
+										racingStore.appendSnapshot(stream, version, { balance: version }, snapshotPool),
+									),
+								);
+								for (const result of results) {
+									if (
+										result.status === 'rejected' &&
+										!(result.reason instanceof SnapshotStoreVersionConflictException)
+									) {
+										failures.push(String(result.reason?.cause ?? result.reason));
+									}
+								}
+								const appended = versions.filter((_, writer) => results[writer].status === 'fulfilled');
+								const last = await racingStore.getLastEnvelope(stream, snapshotPool);
+								expect(last?.metadata.version).toBe(Math.max(...appended));
+								const flagged = await pool.query<{ version: number }[]>(
+									`SELECT version FROM ${pool.escapeId(SnapshotCollection.get(snapshotPool))} WHERE stream_id = ? AND latest IS NOT NULL`,
+									[stream.streamId],
+								);
+								expect(flagged.map(({ version }) => version)).toEqual([Math.max(...appended)]);
+							}),
+						);
+					}
+					expect(failures).toEqual([]);
+				} finally {
+					await racingStore.disconnect();
+				}
+			});
 		});
 	});
 

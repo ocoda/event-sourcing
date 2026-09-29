@@ -36,7 +36,7 @@ import {
 	eventSchemaRemedy,
 	eventTableDdl,
 	inspectEventTable,
-	registerEventTableSql,
+	registerEventTable,
 } from './mariadb.schema.js';
 import {
 	MariaDBErrorNumber,
@@ -176,7 +176,7 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 				case 'v1-partial':
 					throw new EventStoreSchemaException({ collection, found: state, remedy: MIGRATE_REMEDY });
 			}
-			await db.query(registerEventTableSql(collection));
+			await registerEventTable(db, collection);
 
 			return collection;
 		} catch (error) {

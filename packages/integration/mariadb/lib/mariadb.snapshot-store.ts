@@ -1,3 +1,4 @@
+import { setTimeout as sleep } from 'node:timers/promises';
 import type { Type } from '@nestjs/common';
 import {
 	type AggregateRoot,
@@ -49,6 +50,9 @@ import {
 import { runMigration } from './migration/migrate.js';
 
 type Entity<A extends AggregateRoot> = MariaDBSnapshotEntity<A>;
+
+/** How often an append runs when InnoDB picks it as the victim of a deadlock. */
+const DEADLOCK_ATTEMPTS = 10;
 
 /**
  * The version of a snapshot table's schema: 2 stores UTC wall times in a `DATETIME(3)`, 1 is a 3.x table, whose
@@ -210,6 +214,10 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 	/**
 	 * Appends a snapshot and flags it as the latest, in one transaction that locks the stream's flagged snapshot first:
 	 * appends to a stream serialize there, and the unique index on the flag turns a race on a new stream into a conflict.
+	 *
+	 * Concurrent appends, also to other streams of the aggregate, can deadlock on the unique index (its duplicate checks
+	 * lock the records next to a key). InnoDB rolls the victim back, and the append runs again, up to
+	 * `DEADLOCK_ATTEMPTS` times.
 	 */
 	async appendSnapshot<A extends AggregateRoot>(
 		stream: SnapshotStream,
@@ -229,52 +237,30 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 			const table = escapeId(collection);
 			const payload = JSON.stringify(envelope.payload);
 			const version = await this.schemaVersionOf(collection);
-			const registeredOn = version === 2 ? toDateTime(envelope.metadata.registeredOn) : envelope.metadata.registeredOn;
-			const latest = `latest#${stream.streamId}`;
+			const row = [
+				stream.streamId,
+				envelope.metadata.version,
+				payload,
+				envelope.metadata.snapshotId,
+				envelope.metadata.aggregateId,
+				version === 2 ? toDateTime(envelope.metadata.registeredOn) : envelope.metadata.registeredOn,
+				stream.aggregate,
+				`latest#${stream.streamId}`,
+			];
 
 			connection = await this.connected().getConnection();
-			// READ COMMITTED: no gap locks, so appends that race on a new stream end on the unique index, not in a deadlock
-			const [, , [flagged]] = await Promise.all([
-				connection.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED'),
-				connection.query('START TRANSACTION'),
-				connection.query<{ version: number }[]>(
-					`SELECT version FROM ${table} WHERE aggregate_name = ? AND latest = ? FOR UPDATE`,
-					[stream.aggregate, latest],
-				),
-			]);
-
-			if (flagged && aggregateVersion <= flagged.version) {
-				throw new SnapshotStoreVersionConflictException({
-					stream,
-					version: aggregateVersion,
-					latestVersion: flagged.version,
-					pool,
-				});
+			for (let attempt = 1; ; attempt++) {
+				try {
+					await this.writeSnapshot(connection, table, stream, aggregateVersion, row, pool);
+					return envelope;
+				} catch (error) {
+					if (errorNumberOf(error) !== MariaDBErrorNumber.Deadlock || attempt >= DEADLOCK_ATTEMPTS) {
+						throw error;
+					}
+					await connection.rollback();
+					await sleep(Math.random() * Math.min(100, 2 ** attempt));
+				}
 			}
-			if (flagged) {
-				// Assigning registered_on to itself keeps a legacy ON UPDATE attribute (3.x tables) from firing
-				await connection.query(
-					`UPDATE ${table} SET latest = NULL, registered_on = registered_on WHERE stream_id = ? AND version = ?`,
-					[stream.streamId, flagged.version],
-				);
-			}
-			await connection.query(
-				`INSERT INTO ${table} (stream_id, version, payload, snapshot_id, aggregate_id, registered_on, aggregate_name, latest)
-				 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-				[
-					stream.streamId,
-					envelope.metadata.version,
-					payload,
-					envelope.metadata.snapshotId,
-					envelope.metadata.aggregateId,
-					registeredOn,
-					stream.aggregate,
-					latest,
-				],
-			);
-			await connection.commit();
-
-			return envelope;
 		} catch (error) {
 			broken = isFatalConnectionError(error);
 			await connection?.rollback().catch(() => {
@@ -302,6 +288,50 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 				}
 			}
 		}
+	}
+
+	/**
+	 * One attempt of an append, in a `READ COMMITTED` transaction (no gap locks from the locking read, so appends that
+	 * race on a new stream end on the unique index): lock the flagged snapshot, check the version, move the flag, commit.
+	 */
+	private async writeSnapshot(
+		connection: PoolConnection,
+		table: string,
+		stream: SnapshotStream,
+		aggregateVersion: number,
+		row: unknown[],
+		pool?: ISnapshotPool,
+	): Promise<void> {
+		const [, , [flagged]] = await Promise.all([
+			connection.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED'),
+			connection.query('START TRANSACTION'),
+			connection.query<{ version: number }[]>(
+				`SELECT version FROM ${table} WHERE aggregate_name = ? AND latest = ? FOR UPDATE`,
+				[stream.aggregate, `latest#${stream.streamId}`],
+			),
+		]);
+
+		if (flagged && aggregateVersion <= flagged.version) {
+			throw new SnapshotStoreVersionConflictException({
+				stream,
+				version: aggregateVersion,
+				latestVersion: flagged.version,
+				pool,
+			});
+		}
+		if (flagged) {
+			// Assigning registered_on to itself keeps a legacy ON UPDATE attribute (3.x tables) from firing
+			await connection.query(
+				`UPDATE ${table} SET latest = NULL, registered_on = registered_on WHERE stream_id = ? AND version = ?`,
+				[stream.streamId, flagged.version],
+			);
+		}
+		await connection.query(
+			`INSERT INTO ${table} (stream_id, version, payload, snapshot_id, aggregate_id, registered_on, aggregate_name, latest)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			row,
+		);
+		await connection.commit();
 	}
 
 	async getLastSnapshot<A extends AggregateRoot>(

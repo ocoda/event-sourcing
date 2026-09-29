@@ -104,6 +104,7 @@ An append runs on a connection of its own, in a `READ COMMITTED` transaction (se
 4. `COMMIT`.
 
 - A duplicate on the primary key (`stream_id`, `version`) is a version conflict: another append took the version. A duplicate on `ux_global_position` means the counter is behind the stored positions; the append fails with `outcome: 'not-persisted'`, and `ensureCollection()` heals the counter.
+- `ensureCollection()` registers a table without locking its rows, so an instance can start while others append to the pool.
 - Every failure before the `COMMIT` rolls back (explicitly, also after a lock wait timeout, which InnoDB doesn't roll back) and throws an `EventStorePersistenceException` with `outcome: 'not-persisted'`. Only a failure while committing, such as a lost connection, is `'unknown'`.
 - An append to a pool without a catalog row (never ensured, or not migrated) fails with `outcome: 'not-persisted'` and an `EventCollectionNotFoundException` as its cause, and creates nothing.
 - `ExpectedVersion.Any` makes up to 16 attempts while concurrent appends take the versions, and can still conflict under sustained contention on one stream: retry such a conflict in your application.
@@ -120,7 +121,7 @@ These are small machines under other load; measure your own. A single writer tha
 ## Snapshots [#snapshots]
 
 - The last snapshot of a stream is the one with the highest version. The store flags it as the latest (`latest = 'latest#<streamId>'`), and the unique key `ux_latest` allows one flagged snapshot per stream (unflagged snapshots have a `NULL` flag, and `NULL`s are distinct).
-- `appendSnapshot` locks the stream's flagged snapshot, checks that the new version is higher, unflags it and inserts the new snapshot, in one `READ COMMITTED` transaction. Concurrent appends to a stream wait for each other there; appends that race on a new stream end on the unique keys, with a `SnapshotStoreVersionConflictException` for all but one.
+- `appendSnapshot` locks the stream's flagged snapshot, checks that the new version is higher, unflags it and inserts the new snapshot, in one `READ COMMITTED` transaction. Concurrent appends to a stream wait for each other there; appends that race on a new stream end on the unique keys, with a `SnapshotStoreVersionConflictException` for all but one. Under load, InnoDB can pick an append as the victim of a deadlock on the unique key (also between streams of one aggregate); the store runs it again, up to 10 times.
 - `getLastEnvelopesForAggregate` (`SnapshotRepository.loadAll()`) reads the flagged snapshots in descending binary order of the aggregate ids, with `aggregateId` as an exclusive cursor.
 - A 3.x snapshot table keeps working until it is migrated: `ensureCollection()` logs a warning and registers it as schema version 1, and the store reads and writes `registered_on` the 3.x way, to the second, without the unique flag. The store decides this when it first uses the table, so restart the instances that use a 3.x snapshot table after you migrate it.
 

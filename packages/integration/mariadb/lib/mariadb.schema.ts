@@ -151,6 +151,23 @@ export const registerEventTableSql = (table: string, noBackslashEscapes = false)
   SELECT ${escapeString(table, noBackslashEscapes)}, 'events', 2, COALESCE(MAX(global_position), 0) FROM ${escapeId(table)}
   ON DUPLICATE KEY UPDATE schema_version = 2, last_position = GREATEST(last_position, VALUES(last_position))`;
 
+/**
+ * Registers an event table in the catalog, or heals its counter, while appends may run: the highest position is read
+ * first, without locks, then the catalog row is upserted. `registerEventTableSql`'s `INSERT … SELECT` would lock the
+ * last row of the table under `REPEATABLE READ`, and deadlock with an append, which locks the catalog row before it
+ * inserts after that row. A position committed in between is already counted: the counter never decreases.
+ */
+export const registerEventTable = async (db: Queryable, table: string): Promise<void> => {
+	const [{ last }] = await db.query<{ last: string }[]>(
+		`SELECT CAST(COALESCE(MAX(global_position), 0) AS CHAR) AS last FROM ${escapeId(table)}`,
+	);
+	await db.query(
+		`INSERT INTO ${escapeId(CATALOG_TABLE)} (name, kind, schema_version, last_position) VALUES (?, 'events', 2, ?)
+		 ON DUPLICATE KEY UPDATE schema_version = 2, last_position = GREATEST(last_position, VALUES(last_position))`,
+		[table, last],
+	);
+};
+
 /** Registers a snapshot table in the catalog, with the version of its schema. */
 export const registerSnapshotTableSql = (table: string, schemaVersion: 1 | 2, noBackslashEscapes = false): string =>
 	`INSERT INTO ${escapeId(CATALOG_TABLE)} (name, kind, schema_version, last_position)

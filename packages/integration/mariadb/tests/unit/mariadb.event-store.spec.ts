@@ -196,6 +196,36 @@ describe(MariaDBEventStore, () => {
 			expect(appended.metadata.globalPosition).toBe(4n);
 		});
 
+		it('registers the table while appends to it run, without a deadlock (an instance that boots while others write)', async () => {
+			const eventPool = await newPool('booting');
+			const { store: booting } = createEventStore({}, eventMap);
+			await booting.connect();
+			try {
+				let writing = true;
+				const writers = Promise.all(
+					Array.from({ length: 4 }, async () => {
+						const stream = newStream();
+						for (let version = 0; version < 40; version++) {
+							await store.appendEvents(stream, events.slice(0, 1), { expectedVersion: version, pool: eventPool });
+						}
+					}),
+				).finally(() => {
+					writing = false;
+				});
+				let ensured = 0;
+				while (writing) {
+					await booting.ensureCollection(eventPool);
+					ensured++;
+				}
+				await writers;
+
+				expect(ensured).toBeGreaterThan(0);
+				await expect(catalogRow(EventCollection.get(eventPool))).resolves.toMatchObject({ last_position: '160' });
+			} finally {
+				await booting.disconnect();
+			}
+		});
+
 		it('continues the positions of a pool whose table was dropped and created again', async () => {
 			const eventPool = await newPool('recreate');
 			const collection = EventCollection.get(eventPool);
