@@ -5,7 +5,7 @@ title: Event Store
 import { Aside } from '@astrojs/starlight/components';
 
 <Aside type="note" title="4.0 prerelease">
-This page describes the event store contract, which ships in the next 4.0 prerelease. The in-memory, PostgreSQL and MongoDB stores implement all of it; the PostgreSQL and MongoDB stores need their [data migrated](/upgrading/v4#data-migration) first. The MariaDB store keeps its 3.x appends (no global positions, no `readAll`, no metadata in the options) until it moves to schema v2 in a later prerelease.
+This page describes the event store contract, which ships in the next 4.0 prerelease. The in-memory store and the PostgreSQL, MariaDB and MongoDB stores implement all of it; the database stores need their 3.x data [migrated](/upgrading/v4#data-migration) first.
 </Aside>
 
 The event store keeps the events of every aggregate in a **stream**, `EventStream.for(Account, id)`, whose events are numbered 1, 2, 3, … by their `version`. Streams live in a **pool**: the default pool, or a named one (`ensureCollection('tenant-1')`), for instance per tenant. Each pool is a collection (table) of its own.
@@ -72,10 +72,10 @@ for await (const envelopes of eventStore.readAll({ fromPosition: checkpoint + 1n
 
 What a position guarantees depends on the store's `capabilities.globalOrder`:
 
-- **`'gap-safe'`**: once `readAll` yielded a position, no event at or below it commits later. A reader that resumes after its last position never misses an event, even while other appends are running. The in-memory store, PostgreSQL and MongoDB replica sets are gap-safe.
+- **`'gap-safe'`**: once `readAll` yielded a position, no event at or below it commits later. A reader that resumes after its last position never misses an event, even while other appends are running. The in-memory store, PostgreSQL, MariaDB on InnoDB and MongoDB replica sets are gap-safe.
 - **`'best-effort'`**: positions strictly increase, but an event can still commit below a position that was already read, while appends run. Read again from an older position, or wait until the writers are done, to be sure to see every event.
 
-The in-memory, PostgreSQL and MongoDB stores implement `readAll`; the MariaDB store implements it with its schema v2. It replaces `getAllEnvelopes({ since, until })`: to read a period, filter the envelopes on `metadata.occurredOn`.
+Every built-in store implements `readAll`. It replaces `getAllEnvelopes({ since, until })`: to read a period, filter the envelopes on `metadata.occurredOn`.
 
 ## Capabilities [#capabilities]
 
@@ -93,11 +93,13 @@ The built-in stores declare:
 | --- | --- | --- | --- |
 | In-memory | `true` | `true` | `'gap-safe'` |
 | PostgreSQL | `true` | `true` | `'gap-safe'` |
+| MariaDB on InnoDB | `true` | `true` | `'gap-safe'` |
+| MariaDB on a Galera cluster | `true` | `true` | `'best-effort'` |
 | MongoDB replica set | `true` | `true` | `'gap-safe'` |
 | MongoDB sharded cluster | `true` | `true` | `'best-effort'` |
 | MongoDB standalone server | `false` | `true` | `'best-effort'` |
 
-The MongoDB store detects its topology when it connects; see [MongoDB](/integrations/mongodb#capabilities). `resolveCapabilities(store.capabilities)` fills in the defaults of a store that leaves a flag out: `atomicAppend: true`, `headers: false`, `globalOrder: 'best-effort'`. The MariaDB store declares none until its schema v2, so it has these defaults.
+The MariaDB store detects a Galera cluster (`wsrep_on`) and the MongoDB store its topology when they connect; see [MariaDB](/integrations/mariadb#capabilities) and [MongoDB](/integrations/mongodb#capabilities). `resolveCapabilities(store.capabilities)` fills in the defaults of a store that leaves a flag out: `atomicAppend: true`, `headers: false`, `globalOrder: 'best-effort'`.
 
 ## Limits [#limits]
 

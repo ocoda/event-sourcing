@@ -31,7 +31,7 @@ The last snapshot of a stream is the one with the **highest version**. `appendSn
 A store may flag the latest snapshot of each stream, to list the streams of an aggregate quickly. The reads of a single stream (`getLastSnapshot`, `getLastEnvelope` and their bulk forms) don't rely on that flag: they read the highest version.
 
 <Aside type="note" title="Database stores">
-The in-memory store works this way, and so do the PostgreSQL and MongoDB stores with their [schema v2](/upgrading/v4#store-and-schema), in the next prerelease, which enforces one flagged snapshot per stream with a unique index. The MariaDB store follows with its schema v2, in a later prerelease. Until then it reads the last snapshot through the flag, and racing appends to one stream can leave more than one flagged snapshot.
+The in-memory store works this way, and so do the PostgreSQL, MariaDB and MongoDB stores with their [schema v2](/upgrading/v4#store-and-schema), in the next prerelease, which enforces one flagged snapshot per stream with a unique index.
 </Aside>
 
 ## Paging through an aggregate
@@ -54,7 +54,7 @@ do {
 } while (cursor);
 ```
 
-The in-memory store pages this way, and so do the PostgreSQL and MongoDB stores with their schema v2, in the next prerelease. The MariaDB store gets the same cursor and order with its schema v2, in a later prerelease.
+The in-memory store pages this way, and so do the PostgreSQL, MariaDB and MongoDB stores with their schema v2, in the next prerelease.
 
 ## Defaults for custom stores
 

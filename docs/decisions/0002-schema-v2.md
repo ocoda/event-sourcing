@@ -5,7 +5,7 @@
 - **Scope:** plan milestone M7: the 4.0 event and snapshot schemas of the PostgreSQL, MariaDB and MongoDB stores, the global position technique behind [ADR 0001](./0001-v4-core-api.md) §9, and the one-time `migrate()` from 3.x
 - **Depends on:** ADR 0001 §1, §8 and §9, and its [store contract amendments](./0001-v4-core-api.md#amendments-store-contract) (D1–D35)
 - **Baseline:** `origin/master` `0c345dd` (`4.0.0-next.1`); the 3.x schemas that 3.0.0 to 3.0.2 create
-- **Amendments:** 2026-09-29: §1, §2, §4 and §6 now describe the PostgreSQL (#570) and MongoDB (#572) drivers as merged, where they follow the Wave 0 spikes and the reviews: the PostgreSQL append is one statement and its migration rewrites the table; MongoDB numbers on the server. The MariaDB text (§3 and the MariaDB parts of §6) still describes the plan until the MariaDB schema v2 PR merges. The [Evidence](#evidence) section is filled in by the driver PRs; the [owner decisions](#owner-decisions) have defaults applied.
+- **Amendments:** 2026-09-29: §1, §2, §4 and §6 now describe the PostgreSQL (#570) and MongoDB (#572) drivers as merged, where they follow the Wave 0 spikes and the reviews: the PostgreSQL append is one statement and its migration rewrites the table; MongoDB numbers on the server. The MariaDB text (§3 and the MariaDB parts of §6) still describes the plan; the MariaDB driver (#571) lists where it departs from it in its [evidence](#mariadb), and bringing the text in line is a follow-up. The [Evidence](#evidence) section is filled in by the driver PRs; the [owner decisions](#owner-decisions) have defaults applied.
 
 ## Context
 
@@ -197,7 +197,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS "<deriveIndexName(t, 'latest')>" ON "<t>" (agg
 
 ### 3. MariaDB
 
-*This section still describes the plan. It is brought in line with the MariaDB driver once the MariaDB schema v2 PR merges.*
+*This section still describes the plan. Where the MariaDB driver (#571) departs from it is listed in its [evidence](#mariadb), under "Amendments to §3 and §6"; bringing the text in line is a follow-up.*
 
 **Catalog**
 
@@ -468,7 +468,7 @@ The same migration lock, transaction settings, table lock and re-inspection as t
 
 #### MariaDB events: copy and swap, per table
 
-*The MariaDB parts of §6 still describe the plan, until the MariaDB schema v2 PR merges.*
+*The MariaDB parts of §6 still describe the plan; see the note on §3.*
 
 The copy never `UPDATE`s a 3.x row, so the `ON UPDATE` hazard can't fire. The `TIMESTAMP → DATETIME(3)` change needs a copy anyway, and the swap leaves a backup.
 
