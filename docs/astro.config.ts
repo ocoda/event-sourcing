@@ -53,6 +53,13 @@ const sidebar: (SidebarLink | { label: string; items: SidebarLink[] })[] = [
 			{ label: 'Snapshot store', slug: 'under-the-hood/snapshot-store' },
 		],
 	},
+	{
+		label: 'Upgrading',
+		items: [
+			{ label: 'Migrating from 3.x to 4.0', slug: 'upgrading/v4' },
+			{ label: 'Versioning and support', slug: 'upgrading/versioning' },
+		],
+	},
 	{ label: 'Further reading', slug: 'further-reading' },
 	{ label: 'About Ocoda', slug: 'about-ocoda' },
 ];
