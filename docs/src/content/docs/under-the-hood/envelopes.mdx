@@ -37,7 +37,7 @@ An append sets the metadata of all its events:
 
 ```ts
 await eventStore.appendEvents(stream, events, {
-	expectedVersion: account.version,
+	expectedVersion: account.version - events.length,
 	metadata: {
 		correlationId: request.id,
 		causationId: command.id,

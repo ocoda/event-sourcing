@@ -34,7 +34,7 @@ import {
 } from './stores/append-validation.js';
 import { resolveCapabilities } from './stores/capabilities.js';
 import { EVENT_STORE_BASE } from './stores/implementation-guard.js';
-import { createLegacyEventStoreProxy } from './stores/legacy-event-store.js';
+import { createLegacyEventStoreProxy, isLegacyEventStore } from './stores/legacy-event-store.js';
 
 /**
  * The arguments of `appendEvents` after the stream:
@@ -54,11 +54,13 @@ const describeError = (error: unknown): string =>
 const isPresent = <T>(value: T | null | undefined): value is T => value !== undefined && value !== null;
 
 /**
- * Headers with at least one key; empty headers carry nothing and are not stored.
+ * A frozen copy of headers with at least one key; empty headers carry nothing and are not stored. A copy, taken right
+ * after the headers were checked, so that changing the caller's object while the append runs (or a subscriber changing
+ * the published envelopes) can't change what is stored, or leak into other appends.
  */
 const presentHeaders = (headers: unknown): EventEnvelope['metadata']['headers'] | undefined =>
 	typeof headers === 'object' && headers !== null && Object.keys(headers).length > 0
-		? (headers as EventEnvelope['metadata']['headers'])
+		? Object.freeze({ ...(headers as NonNullable<EventEnvelope['metadata']['headers']>) })
 		: undefined;
 
 /**
@@ -71,7 +73,9 @@ const presentHeaders = (headers: unknown): EventEnvelope['metadata']['headers'] 
  * It must not override `appendEvents`, `getEvent` or `getEvents`; to decorate appends, override `persistEvents` and
  * call `super`.
  */
-export abstract class EventStore<TOptions = Omit<EventSourcingModuleOptions['eventStore'], 'driver'>> {
+export abstract class EventStore<
+	TOptions = Omit<EventSourcingModuleOptions['eventStore'], 'driver' | 'useDefaultPool'>,
+> {
 	protected readonly logger = new Logger(this.constructor.name);
 
 	/**
@@ -91,7 +95,11 @@ export abstract class EventStore<TOptions = Omit<EventSourcingModuleOptions['eve
 		// INTERIM(H): a store that overrides appendEvents in the 3.x way gets the 3.x publishing wrapper instead of the
 		// template. Removed once the built-in database stores implement the contract.
 		if (Object.getPrototypeOf(this).appendEvents !== EventStore.prototype.appendEvents) {
-			return createLegacyEventStoreProxy(this, { publisher: context?.publisher, logger: this.logger });
+			return createLegacyEventStoreProxy(this, {
+				eventMap: context?.eventMap,
+				publisher: context?.publisher,
+				logger: this.logger,
+			});
 		}
 	}
 
@@ -115,15 +123,15 @@ export abstract class EventStore<TOptions = Omit<EventSourcingModuleOptions['eve
 	 *
 	 * - `expectedVersion` is the version of the stream before the append (`ExpectedVersion.NoStream`, 0, for a new
 	 *   stream). When the stream is at another version, the append throws an `EventStoreVersionConflictException` and
-	 *   writes nothing. `ExpectedVersion.Any` appends after whatever the stream holds; it retries up to
-	 *   `ANY_MAX_ATTEMPTS` times while concurrent appends take the versions, and can still conflict under sustained
-	 *   contention on one stream, so retry such a conflict in the application.
+	 *   writes nothing. `ExpectedVersion.Any` appends after whatever the stream holds; it makes up to
+	 *   `ANY_MAX_ATTEMPTS` (16) attempts while concurrent appends take the versions, and can still conflict under
+	 *   sustained contention on one stream, so retry such a conflict in the application.
 	 * - Pre-built envelopes (imports, copies) keep their id, time, correlation id, causation id, headers and event
 	 *   version. They need a numeric expected version, the aggregate id of the stream and the versions that continue
 	 *   it, like every item: the item at index `i` gets version `expectedVersion + 1 + i`.
 	 * - `metadata` applies to every event, and fills only the fields a pre-built envelope lacks. Headers need a store
 	 *   with the `headers` capability.
-	 * - An empty append returns `[]` without any I/O.
+	 * - An empty append returns `[]` without any I/O, once its options and metadata are checked.
 	 * - The returned envelopes carry their `globalPosition`. Unless `publish` is `false`, they are published once
 	 *   stored; publishing never makes the append fail.
 	 *
@@ -138,14 +146,17 @@ export abstract class EventStore<TOptions = Omit<EventSourcingModuleOptions['eve
 	 */
 	async appendEvents(stream: EventStream, ...args: AppendEventsArguments): Promise<EventEnvelope[]> {
 		const { items, expectedVersion, pool, metadata, publish } = normalizeAppendArguments(args);
+		const capabilities = resolveCapabilities(this.capabilities);
+		const component = this.constructor.name;
+		// Before the empty check, so that invalid metadata fails the same way whatever the number of events
+		validateAppendMetadata(metadata, capabilities, { component });
 		if (items.length === 0) {
 			return [];
 		}
 
-		const capabilities = resolveCapabilities(this.capabilities);
-		const component = this.constructor.name;
-		validateAppendMetadata(metadata, capabilities, { component });
 		const options = (metadata ?? {}) as NonNullable<AppendOptions['metadata']>;
+		// The stream's own limits first: they don't depend on the events, so they fail before any serialization
+		validateEnvelopeLimits(stream, []);
 		validatePrebuiltEnvelopes(stream, items, expectedVersion);
 		for (const item of items) {
 			if (item instanceof EventEnvelope) {
@@ -177,7 +188,9 @@ export abstract class EventStore<TOptions = Omit<EventSourcingModuleOptions['eve
 			const outcome = await this.persist(envelopes, { stream, collection, expectedVersion: head, pool });
 			if (outcome.status === 'committed') {
 				const committed = this.stampPositions(envelopes, outcome.positions, collection);
-				if (publish) {
+				// INTERIM(H): a store on the legacy path whose own appendEvents calls this one through `super` is published
+				// by the legacy wrapper, which also honours `publish: false`; `this` is the wrapper then
+				if (publish && !isLegacyEventStore(this)) {
 					await this.publishCommitted(committed);
 				}
 				return committed;

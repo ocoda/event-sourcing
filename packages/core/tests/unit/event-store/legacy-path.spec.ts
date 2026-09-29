@@ -1,5 +1,6 @@
 import { Logger } from '@nestjs/common';
 import {
+	type AppendEventsArguments,
 	EventEnvelope,
 	type EventMap,
 	EventStore,
@@ -8,6 +9,7 @@ import {
 	type IEvent,
 	type IEventCollection,
 	type IEventPool,
+	InMemoryEventStore,
 	InvalidAppendOptionsException,
 	InvalidEventEnvelopeException,
 	InvalidEventMetadataException,
@@ -180,6 +182,125 @@ describe('the interim path of stores that override appendEvents', () => {
 
 		await base().appendEvents(eventStreamAccountA, [envelope(1)], { expectedVersion: 0 });
 		expect(store.appended).toHaveLength(1);
+	});
+
+	it('checks the metadata of an empty append in the options form', async () => {
+		await expect(
+			base().appendEvents(eventStreamAccountA, [], { expectedVersion: 0, metadata: { headers: { $x: 'y' } } }),
+		).rejects.toBeInstanceOf(InvalidEventMetadataException);
+		await expect(
+			base().appendEvents(eventStreamAccountA, [], { expectedVersion: 0, metadata: { correlationId: 1 as never } }),
+		).rejects.toBeInstanceOf(InvalidEventMetadataException);
+		expect(store.appended).toEqual([]);
+	});
+
+	describe('pre-built envelopes', () => {
+		const eventMap = getEventMap();
+		const envelope = (version: number, metadata: Record<string, unknown> = {}) =>
+			EventEnvelope.create('account-opened', eventMap.serializeEvent(events[0]), {
+				aggregateId: eventStreamAccountA.aggregateId,
+				version,
+				correlationId: 'imported',
+				...metadata,
+			});
+		const forwardedItems = (index = 0) => store.appended[index].args[2] as EventEnvelope[];
+
+		it('passes them on in the options form without their global position, and the events among them as envelopes', async () => {
+			const imported = envelope(3).withGlobalPosition(42n);
+
+			await base().appendEvents(eventStreamAccountA, [imported, events[1]], { expectedVersion: 2 });
+			await base().appendEvents(eventStreamAccountA, [events[1], imported], { expectedVersion: 1 });
+
+			const [first, second] = [forwardedItems(0), forwardedItems(1)];
+			expect(store.appended.map(({ args }) => args[1])).toEqual([4, 3]);
+			expect(first.map(({ metadata }) => metadata.version)).toEqual([3, 4]);
+			expect(second.map(({ metadata }) => metadata.version)).toEqual([2, 3]);
+			for (const items of [first, second]) {
+				expect(items.every((item) => item instanceof EventEnvelope)).toBe(true);
+				const forwarded = items.find(({ metadata }) => metadata.eventId === imported.metadata.eventId);
+				expect(forwarded?.metadata).toEqual({
+					eventId: imported.metadata.eventId,
+					aggregateId: eventStreamAccountA.aggregateId,
+					version: 3,
+					occurredOn: imported.metadata.occurredOn,
+					correlationId: 'imported',
+				});
+				const event = items.find((item) => item !== forwarded) as EventEnvelope;
+				expect(event).toMatchObject({
+					event: eventMap.getName(events[1]),
+					payload: eventMap.serializeEvent(events[1]),
+				});
+				expect(event.metadata.aggregateId).toBe(eventStreamAccountA.aggregateId);
+			}
+			// The input is left as it was
+			expect(imported.metadata.globalPosition).toBe(42n);
+		});
+
+		it('passes them on in the positional form as 3.x did, only without their global position', async () => {
+			const copied = envelope(7, { aggregateId: 'another-aggregate' }).withGlobalPosition(42n);
+
+			await base().appendEvents(eventStreamAccountA, 2, [copied, events[1]]);
+
+			const [forwarded, event] = forwardedItems();
+			expect(forwarded).toBeInstanceOf(EventEnvelope);
+			expect(forwarded.metadata).toEqual({
+				eventId: copied.metadata.eventId,
+				aggregateId: 'another-aggregate',
+				version: 7,
+				occurredOn: copied.metadata.occurredOn,
+				correlationId: 'imported',
+			});
+			expect(event).toBe(events[1]);
+		});
+
+		it('passes events without envelopes on as they are', async () => {
+			await base().appendEvents(eventStreamAccountA, events.slice(0, 2), { expectedVersion: 0 });
+
+			expect(forwardedItems()).toEqual(events.slice(0, 2));
+		});
+
+		it.each<[string, EventEnvelope, Record<string, unknown>]>([
+			['headers', envelope(1, { headers: { $trace: 'x' } }), { operation: 'headers' }],
+			['an event version', envelope(1, { eventVersion: 2 }), { operation: 'eventVersion' }],
+		])('rejects envelopes with %s in both forms, without calling the store', async (_, item, fields) => {
+			for (const append of [
+				base().appendEvents(eventStreamAccountA, [item], { expectedVersion: 0 }),
+				base().appendEvents(eventStreamAccountA, 1, [item]),
+			]) {
+				const error = await append.catch((e: unknown) => e);
+				expect(error).toBeInstanceOf(UnsupportedOperationException);
+				expect(error).toMatchObject(fields);
+			}
+			expect(store.appended).toEqual([]);
+		});
+	});
+
+	describe('a store that overrides appendEvents and calls the base class', () => {
+		class DelegatingEventStore extends InMemoryEventStore {
+			async appendEvents(stream: EventStream, ...args: AppendEventsArguments): Promise<EventEnvelope[]> {
+				return super.appendEvents(stream, ...args);
+			}
+		}
+
+		it('publishes every append once, and nothing with publish: false', async () => {
+			const delegating = new DelegatingEventStore(createTestContext(getEventMap(), publish), {
+				driver: InMemoryEventStore,
+			});
+			await delegating.connect();
+			await delegating.ensureCollection();
+			expect(isLegacyEventStore(delegating)).toBe(true);
+			const through = delegating as EventStore<unknown>;
+
+			const positional = await through.appendEvents(eventStreamAccountA, 2, events.slice(0, 2));
+			expect(publish.mock.calls).toEqual(positional.map((envelope) => [envelope]));
+
+			await through.appendEvents(eventStreamAccountA, events.slice(2, 3), { expectedVersion: 2, publish: false });
+			expect(publish).toHaveBeenCalledTimes(2);
+
+			const withOptions = await through.appendEvents(eventStreamAccountA, events.slice(3, 4), { expectedVersion: 3 });
+			expect(publish).toHaveBeenCalledTimes(3);
+			expect(publish).toHaveBeenLastCalledWith(withOptions[0]);
+		});
 	});
 
 	it('resolves and logs when publishing fails', async () => {

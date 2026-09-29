@@ -8,6 +8,7 @@ import {
 	EventStorePersistenceException,
 	EventStoreVersionConflictException,
 	EventStream,
+	Id,
 	ExpectedVersion,
 	InvalidAppendOptionsException,
 	InvalidEventEnvelopeException,
@@ -117,6 +118,27 @@ describe('EventStore.appendEvents', () => {
 			});
 			expect(Object.hasOwn(withoutHeaders.metadata, 'headers')).toBe(false);
 			expect(Object.hasOwn(withoutHeaders.metadata, 'correlationId')).toBe(false);
+		});
+
+		it('stores a frozen copy of the headers it checked, so that later changes to them change nothing', async () => {
+			const { store, publishAll } = createStubStore();
+			const headers: Record<string, unknown> = { tenant: 'acme' };
+
+			// Changed while the append waits for the version of the stream, after the headers were checked
+			const appending = store.appendEvents(newStream(), events.slice(0, 2), {
+				expectedVersion: 0,
+				metadata: { headers: headers as never },
+			});
+			headers.$reserved = 'x';
+			headers.nested = { a: 1 };
+			const envelopes = await appending;
+
+			const [persisted] = store.persisted[0];
+			for (const { metadata } of [...persisted, ...envelopes, ...publishAll.mock.calls[0][0]]) {
+				expect(metadata.headers).toEqual({ tenant: 'acme' });
+				expect(metadata.headers).not.toBe(headers);
+				expect(Object.isFrozen(metadata.headers)).toBe(true);
+			}
 		});
 
 		it('publishes nothing when publish is false', async () => {
@@ -344,6 +366,58 @@ describe('EventStore.appendEvents', () => {
 			await expect(store.appendEvents(stream, [misplaced], { expectedVersion: 0 })).rejects.toBeInstanceOf(
 				InvalidEventEnvelopeException,
 			);
+		});
+
+		it('checks the metadata of an empty append too', async () => {
+			const { store, publishAll } = createStubStore();
+
+			await expect(
+				store.appendEvents(newStream(), [], { expectedVersion: 0, metadata: { headers: { $x: 1 } } }),
+			).rejects.toBeInstanceOf(InvalidEventMetadataException);
+			await expect(
+				createStubStore({ headers: false }).store.appendEvents(newStream(), [], {
+					expectedVersion: 0,
+					metadata: { headers: { tenant: 'a' } },
+				}),
+			).rejects.toBeInstanceOf(UnsupportedOperationException);
+			expectNoIo(store, publishAll);
+		});
+
+		it('rejects a stream id or an aggregate id over 255 characters before serializing the events', async () => {
+			const { store, publishAll } = createStubStore();
+			class NotRegistered {}
+			const stream = EventStream.for(Account, Id.from('a'.repeat(256)));
+
+			const error = await rejectionOf(store.appendEvents(stream, [new NotRegistered()], { expectedVersion: 0 }));
+
+			expect(error).toBeInstanceOf(InvalidEventEnvelopeException);
+			expect(error).toMatchObject({ reason: 'too-long', expected: 255 });
+			expectNoIo(store, publishAll);
+		});
+
+		it('rejects pre-built envelopes whose eventId is not an EventId, or whose occurredOn is not a valid Date', async () => {
+			const { store, publishAll, eventMap } = createStubStore();
+			const stream = newStream();
+			const envelope = (metadata: Record<string, unknown>) =>
+				EventEnvelope.from('account-opened', eventMap.serializeEvent(events[0]), {
+					eventId: EventId.generate(),
+					aggregateId: stream.aggregateId,
+					version: 1,
+					occurredOn: new Date(),
+					...metadata,
+				} as never);
+
+			for (const [metadata, field] of [
+				// As JSON.parse() returns an envelope that was not revived
+				[{ eventId: '01J0000000000000000000000' }, 'eventId'],
+				[{ occurredOn: '2020-01-02T03:04:05.678Z' }, 'occurredOn'],
+				[{ occurredOn: new Date(Number.NaN) }, 'occurredOn'],
+			] as const) {
+				const error = await rejectionOf(store.appendEvents(stream, [envelope(metadata)], { expectedVersion: 0 }));
+				expect(error).toBeInstanceOf(InvalidEventEnvelopeException);
+				expect(error).toMatchObject({ reason: 'invalid-type', field, index: 0 });
+			}
+			expectNoIo(store, publishAll);
 		});
 	});
 

@@ -1,3 +1,5 @@
+import { DEFAULT_BATCH_SIZE } from '../constants.js';
+
 /**
  * The forms in which database drivers return a global position: a decimal string (a `BIGINT` read as text), a number,
  * a bigint, or an Int64 object with a `toBigInt()` method (the `Long` of the MongoDB driver).
@@ -54,4 +56,15 @@ export const toPosition = (value: PositionLike): bigint => {
 		throw invalid(value);
 	}
 	return position;
+};
+
+/**
+ * The batch size of a `readAll()` filter: `DEFAULT_BATCH_SIZE` when it is omitted, otherwise a safe integer of at
+ * least 1. Anything else throws a `RangeError`, rather than making a reader stop early and take that for the end.
+ */
+export const toBatchSize = (batch: number | undefined = DEFAULT_BATCH_SIZE): number => {
+	if (typeof batch !== 'number' || !Number.isSafeInteger(batch) || batch < 1) {
+		throw new RangeError(`Not a batch size: ${String(batch)}. Expected a safe integer of at least 1.`);
+	}
+	return batch;
 };

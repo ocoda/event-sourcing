@@ -22,7 +22,7 @@ import type {
 	PersistTarget,
 } from '../../interfaces/index.js';
 import { EventCollection, EventEnvelope, type EventStream } from '../../models/index.js';
-import { toPosition } from '../../stores/positions.js';
+import { toBatchSize, toPosition } from '../../stores/positions.js';
 
 export type InMemoryEventEntity = {
 	streamId: string;
@@ -133,7 +133,7 @@ export class InMemoryEventStore extends EventStore<InMemoryEventStoreConfig> {
 	 * consumed, from the position after its last event, so events appended in the meantime are read too.
 	 */
 	public async *readAll(filter?: IReadAllFilter): AsyncGenerator<EventEnvelope[]> {
-		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
+		const batch = toBatchSize(filter?.batch);
 		let fromPosition = filter?.fromPosition === undefined ? 0n : toPosition(filter.fromPosition);
 
 		while (true) {

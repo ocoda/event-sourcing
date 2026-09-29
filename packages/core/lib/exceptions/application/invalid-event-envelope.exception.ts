@@ -6,8 +6,15 @@ import { EventSourcingError, EventSourcingErrorCode } from '../event-sourcing-er
  * - `'version'`: the versions of the appended items don't continue the stream from the expected version.
  * - `'expected-version-any'`: pre-built envelopes were appended with `ExpectedVersion.Any`.
  * - `'too-long'`: the stream id, aggregate id or event name is longer than the stores allow.
+ * - `'invalid-type'`: the `eventId` of a pre-built envelope is not an `EventId`, or its `occurredOn` is not a valid
+ *   `Date` (for instance an envelope parsed from JSON and not revived).
  */
-export type InvalidEventEnvelopeReason = 'aggregate-id' | 'version' | 'expected-version-any' | 'too-long';
+export type InvalidEventEnvelopeReason =
+	| 'aggregate-id'
+	| 'version'
+	| 'expected-version-any'
+	| 'too-long'
+	| 'invalid-type';
 
 /**
  * Thrown when an append can't store what it was given, before anything is written.
@@ -23,8 +30,11 @@ export class InvalidEventEnvelopeException extends EventSourcingError {
 	/** The index of the item in the appended array, when a single item is at fault. */
 	readonly index?: number;
 	readonly reason: InvalidEventEnvelopeReason;
-	/** For `'too-long'`: the value that is too long. `'event'` is the event name (`EVENT_STORE_LIMITS.eventName`). */
-	readonly field?: 'streamId' | 'aggregateId' | 'event';
+	/**
+	 * For `'too-long'`: the value that is too long. `'event'` is the event name (`EVENT_STORE_LIMITS.eventName`).
+	 * For `'invalid-type'`: the metadata field of the pre-built envelope that has the wrong type.
+	 */
+	readonly field?: 'streamId' | 'aggregateId' | 'event' | 'eventId' | 'occurredOn';
 	/** The aggregate id, version or maximum length that was expected. */
 	readonly expected?: string | number;
 	/** The aggregate id, version or length that was found instead. */
@@ -35,7 +45,7 @@ export class InvalidEventEnvelopeException extends EventSourcingError {
 			streamId: string;
 			index?: number;
 			reason: InvalidEventEnvelopeReason;
-			field?: 'streamId' | 'aggregateId' | 'event';
+			field?: 'streamId' | 'aggregateId' | 'event' | 'eventId' | 'occurredOn';
 			expected?: string | number;
 			actual?: string | number;
 		},
@@ -63,6 +73,10 @@ const messageOf = (details: ConstructorParameters<typeof InvalidEventEnvelopeExc
 			return `Pre-built envelopes can't be appended to ${stream} with ExpectedVersion.Any: pass the version of the stream before the append.`;
 		case 'too-long':
 			return `The ${details.field ?? 'value'} of ${details.index === undefined ? 'an append' : `the item at index ${details.index}`} to ${stream} is ${details.actual} characters long, the maximum is ${details.expected}.`;
+		case 'invalid-type':
+			return details.field === 'occurredOn'
+				? `${item} has an occurredOn that is not a valid Date.`
+				: `${item} has an eventId that is not an EventId: revive envelopes parsed from JSON with EventId.from().`;
 		default:
 			return `Invalid envelope for ${stream}.`;
 	}

@@ -26,6 +26,7 @@ import {
 import type { MockInstance } from 'vitest';
 import {
 	CALL_TIMEOUT,
+	type ConformanceTestContext,
 	ConformancePayloadProbed,
 	ConformanceRecorded,
 	HEAVY_TEST_TIMEOUT,
@@ -40,7 +41,6 @@ import {
 	createJsonPayloadProbe,
 	drain,
 	expectRejectionOfClass,
-	isSkippedCase,
 	newEventStream,
 	recordedEvents,
 	rejectionOf,
@@ -140,10 +140,12 @@ export interface EventStoreConformanceOptions {
 	 */
 	only?: readonly EventStoreConformanceCase[];
 	/**
-	 * Registers every case as a test that must fail: for negative controls, deliberately broken stores that prove the
-	 * cases detect what they check.
+	 * Registers every case as a test that passes only when the case fails: for negative controls, deliberately broken
+	 * stores that prove the cases detect what they check. Pass a pattern per case to require the failure message to
+	 * match it, so that a case that fails for another reason than the defect doesn't count. A case that the store's
+	 * capabilities gate off fails.
 	 */
-	expectFailure?: boolean;
+	expectFailure?: boolean | Partial<Record<EventStoreConformanceCase, RegExp>>;
 }
 
 /**
@@ -240,6 +242,24 @@ const expectConsecutive = (envelopes: readonly EventEnvelope[], description: str
  * collections to `cleanup` once it is done. Cases that need a capability the store doesn't claim are skipped with
  * `capability: <what is missing>`.
  */
+/**
+ * Waits for every promise, then fails with the first rejection, if any. Unlike `Promise.all`, no writer is still
+ * appending when a case ends, so a failing case doesn't leave writes (or unhandled rejections) to the next one.
+ */
+const allSettledOrThrow = async <T>(promises: readonly Promise<T>[]): Promise<T[]> => {
+	const results = await Promise.allSettled(promises);
+	const rejected = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
+	if (rejected) {
+		throw rejected.reason;
+	}
+	return results.map((result) => (result as PromiseFulfilledResult<T>).value);
+};
+
+/**
+ * Yields to the event loop, so that other tasks (a tailing reader) run even between appends that wait for no I/O.
+ */
+const yieldToEventLoop = () => new Promise<void>((resolve) => setImmediate(resolve));
+
 export const describeEventStoreConformance = (
 	name: string,
 	factory: EventStoreConformanceFactory,
@@ -285,9 +305,21 @@ export const describeEventStoreConformance = (
 
 		/**
 		 * Whether the cases can read with readAll: the readAll parts of other cases are skipped along with read-all-order,
-		 * for stores that can't read all yet.
+		 * for stores that can't read all yet. Also with `CONFORMANCE_RUN_SKIPPED`, which then shows exactly the skipped
+		 * cases failing; read-all-order itself runs then.
 		 */
-		const readsAll = () => !isSkippedCase(options.skip, 'read-all-order');
+		const readsAll = () => !options.skip?.['read-all-order'];
+
+		/**
+		 * Runs the readAll part of a case, or annotates the case with why it didn't.
+		 */
+		const readAllPart = async (context: ConformanceTestContext, fn: () => Promise<void>) => {
+			if (readsAll()) {
+				await fn();
+			} else {
+				await context.annotate('readAll part skipped: read-all-order is skipped for this store');
+			}
+		};
 
 		const readEvents = (stream: EventStream, filter: Omit<IEventFilter, 'pool'> = {}) =>
 			store.getEvents(stream, { ...filter, pool });
@@ -310,22 +342,38 @@ export const describeEventStoreConformance = (
 			});
 
 		/**
-		 * Spies on a method of the store contract where the store's class defines it, so that the base class's calls
-		 * (`this.persistEvents(...)`) go through the spy.
+		 * Spies on a method of the store contract where the store defines it (the store itself, or the first class of its
+		 * prototype chain that does), so that the base class's calls (`this.persistEvents(...)`) go through the spy.
 		 */
 		const spyOnStore = (method: SpiMethod): MockInstance => {
-			let owner = Object.getPrototypeOf(store);
+			let owner: object | null = store;
 			while (owner && !Object.hasOwn(owner, method)) {
 				owner = Object.getPrototypeOf(owner);
 			}
-			return vi.spyOn(owner, method as never);
+			return vi.spyOn(owner as Record<string, never>, method as never);
 		};
 
 		/**
-		 * Runs `fn` and asserts that it called neither getStreamVersion nor persistEvents, nor the publisher.
+		 * INTERIM(H): spies on the `appendEvents` of a store that overrides it (the interim legacy path), where its class
+		 * defines it. The legacy wrapper calls it for every append that passed the checks, instead of the driver methods.
+		 */
+		const spyOnOverriddenAppend = (): MockInstance[] => {
+			let owner: object | null = Object.getPrototypeOf(store);
+			while (owner && owner !== EventStore.prototype) {
+				if (Object.hasOwn(owner, 'appendEvents')) {
+					return [vi.spyOn(owner as Record<string, never>, 'appendEvents' as never)];
+				}
+				owner = Object.getPrototypeOf(owner);
+			}
+			return [];
+		};
+
+		/**
+		 * Runs `fn` and asserts that it called neither getStreamVersion nor persistEvents (nor the store's own
+		 * appendEvents), nor the publisher.
 		 */
 		const expectNoIo = async (description: string, fn: () => Promise<void>) => {
-			const spies = [spyOnStore('getStreamVersion'), spyOnStore('persistEvents')];
+			const spies = [spyOnStore('getStreamVersion'), spyOnStore('persistEvents'), ...spyOnOverriddenAppend()];
 			const mark = publisher.mark();
 			try {
 				await fn();
@@ -541,9 +589,12 @@ export const describeEventStoreConformance = (
 					});
 					expect(versionsOf(await drain(readEnvelopes(stream)))).toEqual([1, 2]);
 
-					// A mixed array that continues the stream is accepted
+					// A mixed array that continues the stream is accepted, whatever the order of its events and envelopes
 					const appended = await append(stream, [new ConformanceRecorded(3), envelope(4)], 2);
 					expect(versionsOf(appended)).toEqual([3, 4]);
+					const envelopeFirst = await append(stream, [envelope(5), new ConformanceRecorded(6)], 4);
+					expect(versionsOf(envelopeFirst)).toEqual([5, 6]);
+					expect((await drain(readEvents(stream))).map(seqOf)).toEqual(range(1, 6));
 				},
 			);
 
@@ -612,7 +663,12 @@ export const describeEventStoreConformance = (
 				'append-atomic-partial-failure',
 				'stores nothing of an append that fails halfway, and burns no positions',
 				async () => {
-					const faults = handle?.faults as NonNullable<EventStoreConformanceHandle['faults']>;
+					const faults = handle?.faults;
+					if (!faults) {
+						throw new Error(
+							"The store claims atomicAppend, but its conformance handle injects no write failures: provide `faults`, or skip 'append-atomic-partial-failure' with a reason",
+						);
+					}
 					const atomicPool = await createPool('atomic');
 					const [probe] = await append(newEventStream(), recordedEvents(1), ExpectedVersion.NoStream, atomicPool);
 
@@ -640,7 +696,10 @@ export const describeEventStoreConformance = (
 						await removeFault();
 					}
 
-					expect(await drain(store.getEnvelopes(stream, { pool: atomicPool }))).toEqual([]);
+					expect(
+						await drain(store.getEnvelopes(stream, { pool: atomicPool })),
+						'the events of the failed append',
+					).toEqual([]);
 					await expect(store.getStreamVersion(stream, atomicPool)).resolves.toBe(0);
 					const read = await readAllOf(atomicPool);
 					expect(idsOf(read)).toEqual(idsOf([probe]));
@@ -652,14 +711,7 @@ export const describeEventStoreConformance = (
 						(probe.metadata.globalPosition as bigint) + 2n,
 					]);
 				},
-				{
-					requires: ({ atomicAppend }) =>
-						!atomicAppend
-							? 'atomicAppend'
-							: !handle?.faults
-								? 'faults (the conformance handle injects no write failures)'
-								: undefined,
-				},
+				{ requires: ({ atomicAppend }) => (atomicAppend ? undefined : 'atomicAppend') },
 			);
 		});
 
@@ -706,9 +758,8 @@ export const describeEventStoreConformance = (
 
 					const [next] = await append(stream, recordedEvents(1, 4), 3);
 					expect(next.metadata.version).toBe(4);
-					if (seeded[2].metadata.globalPosition !== undefined) {
-						expect(next.metadata.globalPosition).toBe((seeded[2].metadata.globalPosition as bigint) + 1n);
-					}
+					expect(typeof seeded[2].metadata.globalPosition, 'the position of the last seeded event').toBe('bigint');
+					expect(next.metadata.globalPosition).toBe((seeded[2].metadata.globalPosition as bigint) + 1n);
 				},
 			);
 
@@ -787,7 +838,7 @@ export const describeEventStoreConformance = (
 			test(
 				'envelope-metadata-round-trip',
 				'keeps the event id, correlation id and causation id of appended envelopes',
-				async () => {
+				async (context) => {
 					const stream = newEventStream();
 					const nextEventId = EventId.factory();
 					const envelopes = recordedEvents(3).map((event, index) =>
@@ -808,10 +859,10 @@ export const describeEventStoreConformance = (
 						expect(describeEnvelope(await call(() => store.getEnvelope(stream, index + 1, pool)))).toEqual(envelope);
 					}
 
-					if (readsAll()) {
+					await readAllPart(context, async () => {
 						const fromAll = await readAllOf(pool, appended[0].metadata.globalPosition);
 						expect(fromAll.slice(0, 3).map(describeEnvelope)).toEqual(expected);
-					}
+					});
 				},
 			);
 
@@ -955,7 +1006,7 @@ export const describeEventStoreConformance = (
 				test(
 					'conflict-concurrent-appends',
 					`lets exactly one of ${CONCURRENT_WRITERS} concurrent appends to ${seeded ? 'an existing' : 'a new'} stream win`,
-					async () => {
+					async (context) => {
 						const stream = newEventStream();
 						if (seeded) {
 							await store.appendEvents(stream, seeded, recordedEvents(seeded), pool);
@@ -964,6 +1015,7 @@ export const describeEventStoreConformance = (
 						// Atomic stores burn no position for the appends that lose
 						const checkPositions = capabilities.atomicAppend && readsAll();
 						const lastPosition = checkPositions ? await lastPositionOf(pool) : 0n;
+						const mark = publisher.mark();
 
 						const results = await withinTimeout(
 							Promise.allSettled(
@@ -992,10 +1044,15 @@ export const describeEventStoreConformance = (
 							`writer-${winners[0]}`,
 						]);
 
+						// Only the winner is published: the appends that lost stored nothing
+						const winner = (results[winners[0]] as PromiseFulfilledResult<EventEnvelope[]>).value;
+						expect(publisher.callsSince(mark).map(idsOf), 'the published appends').toEqual([idsOf(winner)]);
+
 						if (checkPositions) {
-							const winner = (results[winners[0]] as PromiseFulfilledResult<EventEnvelope[]>).value;
 							expect(positionsOf(winner)).toEqual([lastPosition + 1n, lastPosition + 2n]);
 							expect(idsOf(await readAllOf(pool, lastPosition + 1n))).toEqual(idsOf(winner));
+						} else if (capabilities.atomicAppend) {
+							await context.annotate('readAll part skipped: read-all-order is skipped for this store');
 						}
 					},
 				);
@@ -1042,7 +1099,7 @@ export const describeEventStoreConformance = (
 					const stream = newEventStream();
 
 					const appended = await withinTimeout(
-						Promise.all(
+						allSettledOrThrow(
 							Array.from({ length: CONCURRENT_WRITERS }, (_, writer) =>
 								append(stream, recordedEvents(2, 1, `writer-${writer}`), ExpectedVersion.Any),
 							),
@@ -1227,7 +1284,7 @@ export const describeEventStoreConformance = (
 			test(
 				'metadata-round-trip',
 				'stores the correlation id and causation id of the options, and keeps those of pre-built envelopes',
-				async () => {
+				async (context) => {
 					const stream = newEventStream();
 					const metadata = { correlationId: `correlation-${stream.aggregateId}`, causationId: 'command-1' };
 
@@ -1262,20 +1319,20 @@ export const describeEventStoreConformance = (
 					expect(idsOfMetadata(publisher.callsSince(mark).flat()), 'published').toEqual(expected);
 					expect(idsOfMetadata(await drain(readEnvelopes(stream))), 'getEnvelopes()').toEqual(expected);
 					expect(idsOfMetadata([await store.getEnvelope(stream, 4, pool)]), 'getEnvelope()').toEqual([expected[3]]);
-					if (readsAll()) {
+					await readAllPart(context, async () => {
 						const fromAll = await readAllOf(pool, appended[0].metadata.globalPosition);
 						expect(
 							idsOfMetadata(fromAll.filter(({ metadata }) => metadata.aggregateId === stream.aggregateId)),
 							'readAll()',
 						).toEqual(expected);
-					}
+					});
 				},
 			);
 
 			test(
 				'headers-round-trip',
 				'stores the headers of the options and of pre-built envelopes',
-				async () => {
+				async (context) => {
 					const stream = newEventStream();
 					const headers = { string: 'text', number: 42.5, boolean: false, nothing: null, 'ünïcødé-キー': 'värde' };
 
@@ -1311,13 +1368,13 @@ export const describeEventStoreConformance = (
 							expected[version - 1],
 						]);
 					}
-					if (readsAll()) {
+					await readAllPart(context, async () => {
 						const fromAll = await readAllOf(pool, withHeaders[0].metadata.globalPosition);
 						expect(
 							headersOf(fromAll.filter(({ metadata }) => metadata.aggregateId === stream.aggregateId)),
 							'readAll()',
 						).toEqual(expected);
-					}
+					});
 				},
 				{ requires: ({ headers }) => (headers ? undefined : 'headers') },
 			);
@@ -1504,39 +1561,54 @@ export const describeEventStoreConformance = (
 					const gapSafePool = await createPool('gap-safe');
 					let writing = true;
 
-					const writers = Promise.all(
-						Array.from({ length: CONCURRENT_WRITERS }, async (_, writer) => {
-							const stream = newEventStream();
-							const envelopes: EventEnvelope[] = [];
-							for (let index = 0; index < GAP_SAFE_APPENDS_PER_WRITER; index++) {
-								const count = 1 + ((writer + index) % 3);
-								envelopes.push(
-									...(await append(
-										stream,
-										recordedEvents(count, envelopes.length + 1, `writer-${writer}`),
-										envelopes.length,
-										gapSafePool,
-									)),
-								);
-							}
-							return envelopes;
-						}),
-					).finally(() => {
+					const writerPromises = Array.from({ length: CONCURRENT_WRITERS }, async (_, writer) => {
+						const stream = newEventStream();
+						const envelopes: EventEnvelope[] = [];
+						for (let index = 0; index < GAP_SAFE_APPENDS_PER_WRITER; index++) {
+							const count = 1 + ((writer + index) % 3);
+							envelopes.push(
+								...(await append(
+									stream,
+									recordedEvents(count, envelopes.length + 1, `writer-${writer}`),
+									envelopes.length,
+									gapSafePool,
+								)),
+							);
+							// Lets the reader in between the appends, also on a store whose appends wait for no I/O. A store that
+							// makes positions readable out of order is caught when that takes a timer or I/O, as it does in every
+							// real store; a reorder within microtasks goes unnoticed.
+							await yieldToEventLoop();
+						}
+						return envelopes;
+					});
+					const writers = allSettledOrThrow(writerPromises).finally(() => {
 						writing = false;
 					});
+					// Awaited below; a failing reader must not leave its rejection unhandled
+					writers.catch(() => undefined);
 
 					const read: EventEnvelope[] = [];
+					let readWhileWriting = 0;
 					const readFromLast = async () => {
 						const fromPosition = ((read.at(-1)?.metadata.globalPosition as bigint | undefined) ?? 0n) + 1n;
 						read.push(...(await drain(store.readAll({ pool: gapSafePool, fromPosition, batch: 7 }))));
 					};
-					while (writing) {
-						await readFromLast();
-						await new Promise((resolve) => setImmediate(resolve));
+					try {
+						while (writing) {
+							const before = read.length;
+							await readFromLast();
+							if (writing) {
+								readWhileWriting += read.length - before;
+							}
+							await yieldToEventLoop();
+						}
+					} finally {
+						await Promise.allSettled(writerPromises);
 					}
 					const appended = (await writers).flat();
 					await readFromLast();
 
+					expect(readWhileWriting, 'events the reader read while the writers were appending').toBeGreaterThan(0);
 					expectStrictlyIncreasing(positionsOf(read), 'the positions the tailing reader read');
 					const counts = new Map<string, number>();
 					for (const id of idsOf(read)) {
@@ -1568,7 +1640,7 @@ export const describeEventStoreConformance = (
 					const bestEffortPool = await createPool('best-effort');
 
 					const appended = (
-						await Promise.all(
+						await allSettledOrThrow(
 							Array.from({ length: CONCURRENT_WRITERS }, async (_, writer) => {
 								const stream = newEventStream();
 								const envelopes: EventEnvelope[] = [];

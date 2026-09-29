@@ -16,7 +16,8 @@ import {
 } from '@ocoda/event-sourcing-testing/conformance';
 
 // Negative controls: deliberately broken in-memory stores that the conformance cases must catch. Each suite registers
-// only the case that detects the defect, as a test that must fail, which proves that the case detects it.
+// only the case that detects the defect, as a test that passes only when the case fails with the assertion that
+// detects the defect, which proves that the case detects it.
 
 const toEntity = (
 	{ stream }: PersistTarget,
@@ -101,7 +102,7 @@ class LostUniquenessEventStore extends InMemoryEventStore {
 const negativeControl = (
 	name: string,
 	createStore: (context: EventStoreContext) => InMemoryEventStore,
-	cases: EventStoreConformanceCase[],
+	cases: Partial<Record<EventStoreConformanceCase, RegExp>>,
 	faults?: (store: InMemoryEventStore) => EventStoreConformanceHandle['faults'],
 ) =>
 	describeEventStoreConformance(
@@ -111,17 +112,17 @@ const negativeControl = (
 			await store.connect();
 			return { store, cleanup: () => store.disconnect(), faults: faults?.(store) };
 		},
-		{ only: cases, expectFailure: true },
+		{ only: Object.keys(cases) as EventStoreConformanceCase[], expectFailure: cases },
 	);
 
-negativeControl('reorder-commit', (context) => new ReorderCommitEventStore(context, { driver: InMemoryEventStore }), [
-	'read-all-gap-safe',
-]);
+negativeControl('reorder-commit', (context) => new ReorderCommitEventStore(context, { driver: InMemoryEventStore }), {
+	'read-all-gap-safe': /events the tailing reader never read/,
+});
 
 negativeControl(
 	'non-atomic',
 	(context) => new NonAtomicEventStore(context, { driver: InMemoryEventStore }),
-	['append-atomic-partial-failure'],
+	{ 'append-atomic-partial-failure': /the events of the failed append/ },
 	(store) => ({
 		failInsertOf: async (collection, eventName) => {
 			const { failing } = store as NonAtomicEventStore;
@@ -135,6 +136,6 @@ negativeControl(
 	}),
 );
 
-negativeControl('lost-uniqueness', (context) => new LostUniquenessEventStore(context, { driver: InMemoryEventStore }), [
-	'conflict-concurrent-appends',
-]);
+negativeControl('lost-uniqueness', (context) => new LostUniquenessEventStore(context, { driver: InMemoryEventStore }), {
+	'conflict-concurrent-appends': /the number of appends that succeeded/,
+});

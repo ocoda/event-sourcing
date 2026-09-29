@@ -242,6 +242,16 @@ export const conformanceRepeat = (value = process.env.CONFORMANCE_REPEAT): numbe
 };
 
 /**
+ * The part of the Vitest test context that conformance cases get.
+ */
+export interface ConformanceTestContext {
+	/**
+	 * Adds a note to the result of the case, for instance for a part of it that didn't run.
+	 */
+	annotate(message: string): Promise<unknown>;
+}
+
+/**
  * The options of a single conformance case.
  */
 export interface ConformanceTestOptions<TCapabilities> {
@@ -266,11 +276,44 @@ export interface ConformanceSuiteOptions<TCase extends string> {
 	 */
 	only?: readonly TCase[];
 	/**
-	 * Registers every case as a test that must fail (`it.fails`): for negative controls, deliberately broken stores that
-	 * prove a case detects what it checks.
+	 * Registers every case as a test that passes only when the case fails: for negative controls, deliberately broken
+	 * stores that prove a case detects what it checks. `true` accepts any failure; a pattern per case requires the
+	 * message of the failure to match it, so that the control fails if the case fails for another reason than the
+	 * defect. A case that the store's capabilities gate off fails too, rather than being skipped.
 	 */
-	expectFailure?: boolean;
+	expectFailure?: boolean | Partial<Record<TCase, RegExp>>;
 }
+
+const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+
+/**
+ * Runs the case of a negative control: throws unless the case fails, with a message that matches the pattern.
+ */
+const expectCaseToFail = async (
+	id: string,
+	run: () => Promise<void>,
+	pattern: RegExp | undefined,
+	gatedOff: string | undefined,
+): Promise<void> => {
+	if (gatedOff) {
+		throw new Error(`The negative control ${id} is gated off by the capability ${gatedOff}, so it proves nothing`);
+	}
+	let failure: { error: unknown } | undefined;
+	try {
+		await run();
+	} catch (error) {
+		failure = { error };
+	}
+	if (!failure) {
+		throw new Error(`The negative control ${id} passed: the case did not detect the defect of the store`);
+	}
+	if (pattern && !pattern.test(messageOf(failure.error))) {
+		throw new Error(
+			`The negative control ${id} failed for another reason than the defect (expected a failure matching ${pattern}): ${messageOf(failure.error)}`,
+			{ cause: failure.error },
+		);
+	}
+};
 
 /**
  * Whether the case is skipped: it has a reason in `skip`, and `CONFORMANCE_RUN_SKIPPED` isn't `true`.
@@ -294,12 +337,12 @@ export const conformanceTest = <TCase extends string, TCapabilities = never>(
 ) => {
 	const runSkipped = process.env.CONFORMANCE_RUN_SKIPPED === 'true';
 	const repeats = conformanceRepeat() - 1;
-	const register = expectFailure ? it.fails : it;
+	const register = it;
 
 	return (
 		id: TCase,
 		title: string,
-		fn: () => Promise<void>,
+		fn: (context: ConformanceTestContext) => Promise<void>,
 		options: number | ConformanceTestOptions<TCapabilities> = {},
 	): void => {
 		if (only && !only.includes(id)) {
@@ -316,10 +359,15 @@ export const conformanceTest = <TCase extends string, TCapabilities = never>(
 		}
 		register(`${title} [${id}]`, { timeout: testTimeout, repeats }, async (context) => {
 			const missing = requires?.((capabilities as () => TCapabilities)());
+			if (expectFailure) {
+				const pattern = typeof expectFailure === 'object' ? expectFailure[id] : undefined;
+				await expectCaseToFail(id, () => fn(context), pattern, missing);
+				return;
+			}
 			if (missing) {
 				context.skip(`capability: ${missing}`);
 			}
-			await fn();
+			await fn(context);
 		});
 	};
 };

@@ -1,5 +1,6 @@
 import {
 	type EventEnvelope,
+	type EventStoreCapabilities,
 	EventStorePersistenceException,
 	type IEventCollection,
 	InMemoryEventStore,
@@ -59,4 +60,26 @@ describeEventStoreConformance(
 			'payload-dates-as-iso-strings': 'payloads are kept in memory as is, so dates stay Date instances',
 		},
 	},
+);
+
+/**
+ * The in-memory store claiming only a best-effort global order, so that the case for such stores (MongoDB standalone,
+ * from schema v2 on) runs here too.
+ */
+class BestEffortInMemoryEventStore extends InMemoryEventStore {
+	override readonly capabilities: EventStoreCapabilities = {
+		atomicAppend: true,
+		headers: true,
+		globalOrder: 'best-effort',
+	};
+}
+
+describeEventStoreConformance(
+	`${InMemoryEventStore.name} (best-effort global order)`,
+	async (context) => {
+		const store = new BestEffortInMemoryEventStore(context, { driver: InMemoryEventStore });
+		await store.connect();
+		return { store, cleanup: () => store.disconnect() };
+	},
+	{ only: ['read-all-best-effort'] },
 );

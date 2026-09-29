@@ -199,7 +199,7 @@ Cases that need a capability your store doesn't claim are skipped. A case your s
 5. Store the correlation id, causation id, headers and event version, and declare your `capabilities`.
 6. Construct exceptions with a single object argument, plus the error options for the `cause`.
 
-A store that still overrides `appendEvents` the 3.x way keeps working in the next prerelease: the base class publishes what its `appendEvents` returns, and its `this.eventMap` is the event map of the context (deprecated). The built-in database stores work this way until they move to schema v2. This path, `getAllEnvelopes` and `getYearMonthRange` are removed before 4.0.0.
+A store that still overrides `appendEvents` the 3.x way keeps working in the next prerelease once it has taken steps 1 and 4 and implements `getEnvelope` and `getEnvelopes`, which are required now: the base class publishes what its `appendEvents` returns, and its `this.eventMap` is the event map of the context (deprecated). Such a store gets the appends in the 3.x form, and rejects `ExpectedVersion.Any`, append metadata, and pre-built envelopes with headers or an `eventVersion`. The built-in database stores work this way until they move to schema v2. This path, `getAllEnvelopes` and `getYearMonthRange` are removed before 4.0.0.
 
 ---
 

@@ -393,6 +393,22 @@ describe(`${InMemoryEventStore.name} lifecycle, reads and publishing`, () => {
 		await expect(drain(eventStore.readAll({ fromPosition: -1n }))).rejects.toThrow(RangeError);
 	});
 
+	it('rejects a batch size that is not a positive integer, rather than stopping early', async () => {
+		await eventStore.appendEvents(newStream(), events.slice(0, 3), { expectedVersion: ExpectedVersion.NoStream });
+
+		for (const batch of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, '2' as unknown as number]) {
+			await expect(drain(eventStore.readAll({ batch })), `batch ${String(batch)}`).rejects.toThrow(
+				`Not a batch size: ${String(batch)}`,
+			);
+		}
+		const sizes: number[] = [];
+		for await (const batch of eventStore.readAll({ batch: 1 })) {
+			sizes.push(batch.length);
+		}
+		expect(sizes).toEqual([1, 1, 1]);
+		expect(await drain(eventStore.readAll({ batch: undefined }))).toHaveLength(3);
+	});
+
 	it('stores headers and the event version, as a copy of the appended headers', async () => {
 		const stream = newStream();
 		const headers = { tenant: 'acme' };
