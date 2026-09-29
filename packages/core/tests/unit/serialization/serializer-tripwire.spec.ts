@@ -5,6 +5,7 @@ import {
 	EventMap,
 	EventSerializationException,
 	EventSerializer,
+	EventSourcingConfigurationException,
 	EventSourcingModule,
 	EventStore,
 	EventStream,
@@ -20,8 +21,9 @@ import {
 	loadClassTransformerDecorators,
 } from '../../../lib/helpers/class-transformer-decorators.js';
 
-// ADR 0001 §6: an event with class-transformer decorators can't switch to the JSON default silently. The bootstrap
-// loads class-transformer's metadata storage and fails for such an event, naming the fix.
+// ADR 0001 §3, §6: an event with class-transformer decorators can't switch to the JSON default silently. The module
+// loads class-transformer's metadata storage, and the bootstrap fails with a configuration issue for such an event,
+// naming the fix.
 
 class Money {
 	constructor(
@@ -336,9 +338,9 @@ describe('the class-transformer tripwire', () => {
 		it('fails for a decorated event on the JSON default, and names the fix', async () => {
 			const bootstrapping = bootstrap(EventSourcingModule.forRoot({ events: [Plain, Deposited] }));
 
-			await expect(bootstrapping).rejects.toThrow(EventSerializationException);
+			await expect(bootstrapping).rejects.toThrow(EventSourcingConfigurationException);
 			await expect(bootstrapping).rejects.toThrow(
-				"The event Deposited uses class-transformer decorators (@Type on Deposited.amount), which the default JsonEventSerializer ignores. Serialize it with class-transformer: set defaultEventSerializer: ClassTransformerEventSerializer (from '@ocoda/event-sourcing/class-transformer') in EventSourcingModule.forRoot(), or register an @EventSerializer() for the event.",
+				"Invalid EventSourcingModule configuration (1 issue)\n- [class-transformer-decorators] The event Deposited uses class-transformer decorators (@Type on Deposited.amount), which the default JsonEventSerializer ignores: set defaultEventSerializer: ClassTransformerEventSerializer (from '@ocoda/event-sourcing/class-transformer') in EventSourcingModule.forRoot(), or register an @EventSerializer() for the event.",
 			);
 		});
 
@@ -415,8 +417,7 @@ describe('the class-transformer tripwire', () => {
 			await app.close();
 		});
 
-		// Last: forFeature registers its events for every later bootstrap in this file
-		it('fails for a decorated event registered by a feature module', async () => {
+		it('fails for a decorated event registered by a feature module, naming the decorators of its parent too', async () => {
 			@Module({ imports: [EventSourcingModule.forFeature({ events: [Inherited] })] })
 			class FeatureModule {}
 
@@ -424,7 +425,18 @@ describe('the class-transformer tripwire', () => {
 				imports: [EventSourcingModule.forRoot({ events: [Plain] }), FeatureModule],
 			}).compile();
 
-			await expect(moduleRef.init()).rejects.toMatchObject({ event: 'Inherited' });
+			await expect(moduleRef.init()).rejects.toMatchObject({
+				issues: [
+					{
+						kind: 'class-transformer-decorators',
+						message: expect.stringContaining(
+							'The event Inherited uses class-transformer decorators (@Transform on Inherited.note, @Expose on ExcludedBase.id, @Exclude on ExcludedBase)',
+						),
+					},
+				],
+			});
+			// The failed init rejects close() too
+			await moduleRef.close().catch(() => undefined);
 		});
 	});
 });

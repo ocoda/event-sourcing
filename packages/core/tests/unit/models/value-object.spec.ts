@@ -32,6 +32,36 @@ describe(ValueObject, () => {
 		expect(point1.equals(point2)).toBe(true);
 	});
 
+	it('is never equal to null or undefined', () => {
+		const point = Point.from(2.5, 6.3);
+
+		expect(point.equals(null)).toBe(false);
+		expect(point.equals(undefined)).toBe(false);
+	});
+
+	it('is equal to itself', () => {
+		const point = Point.from(2.5, 6.3);
+
+		expect(point.equals(point)).toBe(true);
+	});
+
+	it('compares the keys of the props, not only their number', () => {
+		class Bag extends ValueObject<Record<string, unknown>> {
+			protected constructor(props: Record<string, unknown>) {
+				super(props);
+			}
+
+			static from(props: Record<string, unknown>) {
+				return new Bag(props);
+			}
+		}
+
+		expect(Bag.from({ a: undefined }).equals(Bag.from({ b: undefined }))).toBe(false);
+		expect(Bag.from({ a: 1, b: 2 }).equals(Bag.from({ b: 2, a: 1 }))).toBe(true);
+		expect(Bag.from({ a: 1 }).equals(Bag.from({ a: 1, b: 2 }))).toBe(false);
+		expect(Bag.from({ a: 1 }).equals(Bag.from({ a: 2 }))).toBe(false);
+	});
+
 	it('returns false for different types', () => {
 		class Size extends ValueObject<{ width: number }> {
 			protected constructor(width: number) {

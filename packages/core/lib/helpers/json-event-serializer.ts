@@ -28,7 +28,8 @@ import { type ClassTransformerDecoratorsOf, nestedClassCheckOf } from './class-t
  *
  * Events with class-transformer decorators (`@Type`, `@Transform`, `@Expose`, `@Exclude`) need
  * `ClassTransformerEventSerializer` from `@ocoda/event-sourcing/class-transformer`. When the module gives an event this
- * serializer by default, the application fails to bootstrap if the event class has such decorators, and an append
+ * serializer by default, the application fails to bootstrap if the event class has such decorators (a
+ * `class-transformer-decorators` issue of an `EventSourcingConfigurationException`), and an append
  * fails, before it writes anything, if the event holds an instance of a class whose decorators would have changed the
  * payload that 3.x stored.
  *

@@ -6,9 +6,10 @@ import { EventSourcingError, EventSourcingErrorCode } from '../event-sourcing-er
  *   infinite. `path` is the property that closes the cycle.
  * - `'class-transformer-decorators'`: the default `JsonEventSerializer` would ignore class-transformer decorators
  *   (`@Type`, `@Transform`, `@Expose` or `@Exclude`), so it would store or read the event differently than 3.x did.
- *   `decorators` lists them. Thrown at bootstrap for decorators on the event class or a parent class, and by an append,
- *   before it writes anything, for decorators on the class of an instance that the event holds; `path` is the
- *   property that holds it.
+ *   `decorators` lists them. Thrown by an append, before it writes anything, for decorators on the class of an
+ *   instance that the event holds (`path` is the property that holds it), and by `EventMap.registerSerializers()` for
+ *   decorators on the event class or a parent class. In the `EventSourcingModule`, the bootstrap reports the latter as
+ *   `class-transformer-decorators` issues of an `EventSourcingConfigurationException` instead.
  */
 export type EventSerializationFailure = 'circular-reference' | 'class-transformer-decorators';
 

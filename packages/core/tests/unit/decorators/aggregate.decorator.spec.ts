@@ -24,6 +24,22 @@ describe('@Aggregate', () => {
 		expect(streamName).toEqual('account');
 	});
 
+	it('should keep the policy for events without a handler', () => {
+		@Aggregate({ missingHandler: 'ignore' })
+		class Account extends AggregateRoot {}
+
+		@Aggregate()
+		class Order extends AggregateRoot {}
+
+		expect(Reflect.getMetadata(AGGREGATE_METADATA, Account)).toEqual({
+			streamName: 'account',
+			missingHandler: 'ignore',
+		});
+		// No policy means 'throw'
+		expect(Reflect.getMetadata(AGGREGATE_METADATA, Order).missingHandler).toBeUndefined();
+		expectTypeOf<AggregateMetadata['missingHandler']>().toEqualTypeOf<'throw' | 'ignore' | undefined>();
+	});
+
 	it('should throw when an aggregate name exceeds 50 characters', () => {
 		const decorate = (length: number) => {
 			@Aggregate({ streamName: 'a'.repeat(length) })

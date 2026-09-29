@@ -10,7 +10,7 @@ Everything in this library is wired together by the `EventSourcingModule`. It ex
 | --- | --- | --- |
 | [`forRoot(options)`](#for-root) | Your root module, **once** | Configure the module with static options. |
 | [`forRootAsync(options)`](#for-root-async) | Your root module, **once** | Configure the module when the options depend on other providers, e.g. a config service. |
-| [`forFeature({ events })`](#for-feature) | Any feature module | Register the events that belong to that feature module. |
+| [`forFeature({ events, serializers, imports })`](#for-feature) | Any feature module | Register the events that belong to that feature module, and provide their serializers. |
 
 ## Root configuration with `forRoot` [#for-root]
 
@@ -19,12 +19,12 @@ Everything in this library is wired together by the `EventSourcingModule`. It ex
 | Option | Description |
 | --- | --- |
 | `events` | The event classes to register globally. Optional, because feature modules can register their own events with [`forFeature`](#for-feature). |
-| `eventStore` | The configuration of the event store. Needs a `driver` (the store class), can contain `useDefaultPool` and any option that the driver needs to connect. Defaults to the in-memory event store. |
+| `eventStore` | The configuration of the event store. Needs a `driver` (the store class), can contain `useDefaultPool` and any option that the driver needs to connect. The module passes the driver every option except `driver` and `useDefaultPool`. Defaults to the in-memory event store. |
 | `snapshotStore` | The configuration of the snapshot store, which has the same shape as `eventStore`. Defaults to the in-memory snapshot store. |
 | `publishing` | `{ publisherTimeout, shutdownTimeout }`: how long, in milliseconds, one call of an event publisher may take (30 000 by default), and how long the application's shutdown waits for the running publishers and subscribers (10 000 by default). `0` disables a timeout. See [event pub/sub](/advanced/event-pubsub#when-idle). |
 | `defaultEventSerializer` | The serializer of every event without an `@EventSerializer()` of its own. Defaults to `JsonEventSerializer`; use `ClassTransformerEventSerializer` from `@ocoda/event-sourcing/class-transformer` for events with class-transformer decorators. See [event serialization](/advanced/event-serialization#serializing-with-class-transformer). |
 
-The in-memory stores are handy for testing and prototyping, but they lose everything when the process stops. Each integration library exports its own drivers and configuration interfaces, see [installation](/start/install#advanced-setup).
+The in-memory stores are handy for testing and prototyping, but they lose everything when the process stops. When `NODE_ENV` is `production` and `eventStore` or `snapshotStore` is left out, the module logs a warning. Each integration library exports its own drivers and configuration interfaces, see [installation](/start/install#advanced-setup).
 
 ```typescript {13-20}
 import { Module } from '@nestjs/common';
@@ -66,12 +66,12 @@ export class AppModule {}
 ```
 
 <Aside>
-By default the module creates the default pool (a collection named `events` and one named `snapshots`) when it starts. Set `useDefaultPool: false` on the store configuration when you only want to work with pools per tenant, see [multitenancy](/advanced/multitenancy).
+The module creates and connects the stores while Nest instantiates the providers, and creates the default pool (a collection named `events` and one named `snapshots`) right after. So a wrong connection string, an unreachable database or a table that still needs its [4.0 migration](/upgrading/v4#data-migration) fails the bootstrap, and a store that failed is disconnected again (the snapshot store starts after the event store, which is disconnected too when the snapshot store fails). The error is thrown inside `NestFactory.create()`: with Nest's default `abortOnError: true`, Nest logs it and exits the process with code 1, so pass `NestFactory.create(AppModule, { abortOnError: false })` to catch it yourself. Set `useDefaultPool: false` on the store configuration when you only want to work with pools per tenant, see [multitenancy](/advanced/multitenancy).
 </Aside>
 
 ## Asynchronous configuration with `forRootAsync` [#for-root-async]
 
-Use `EventSourcingModule.forRootAsync()` when the options depend on something that isn't available yet when the module is declared, such as environment configuration or a secrets provider. The options are resolved before the stores are created, and can be provided in four ways.
+Use `EventSourcingModule.forRootAsync()` when the options depend on something that isn't available yet when the module is declared, such as environment configuration or a secrets provider. The options are resolved before the stores are created, and can be provided in three ways.
 
 <Tabs>
 <TabItem label="useFactory">
@@ -167,7 +167,7 @@ The class has to implement `EventSourcingOptionsFactory`, just like with `useCla
 </TabItem>
 </Tabs>
 
-You can also pass the options object directly with `useValue`, which comes down to the same as calling `forRoot`. Since 3.0.1 `forRootAsync` throws a descriptive error when none of `useFactory`, `useClass`, `useExisting` or `useValue` is provided.
+`forRootAsync` also accepts the options object directly with `useValue`, which comes down to calling `forRoot`. It is deprecated in 4.0 and removed in 5.0: use `forRoot(options)` instead. Without `useFactory`, `useClass` or `useExisting`, `forRootAsync` throws an [`EventSourcingConfigurationException`](#configuration-checks).
 
 ## Registering events per feature module with `forFeature` [#for-feature]
 
@@ -176,6 +176,14 @@ You can also pass the options object directly with `useValue`, which comes down 
 </Aside>
 
 Every event that ends up in the event store has to be registered, otherwise the library can't serialize or deserialize it and an `UnregisteredEventException` is thrown. Instead of collecting all events of your application in the root module, each feature module can register its own events. This keeps a bounded context self-contained: the module that owns the events, aggregates and handlers is also the one that registers them.
+
+`forFeature()` takes three options, all of them optional:
+
+| Option | Description |
+| --- | --- |
+| `events` | The event classes of the feature module. |
+| `serializers` | The [event serializers](/advanced/event-serialization) of those events. The feature module provides them, so you don't list them in `providers` as well. |
+| `imports` | The modules that provide what the serializers inject. |
 
 In the example below an application has two feature modules, each registering its own events:
 
@@ -229,14 +237,32 @@ import { PostgresEventStore, PostgresSnapshotStore } from '@ocoda/event-sourcing
 export class AppModule {}
 ```
 
+A serializer that needs other providers gets them from the feature's `imports`:
+
+```typescript {6-10} title="accounts/accounts.module.ts"
+import { Module } from '@nestjs/common';
+import { EventSourcingModule } from '@ocoda/event-sourcing';
+
+@Module({
+    imports: [
+        EventSourcingModule.forFeature({
+            events: [AccountOpenedEvent],
+            serializers: [AccountOpenedEventSerializer],
+            imports: [CryptoModule], // provides what AccountOpenedEventSerializer injects
+        }),
+    ],
+})
+export class AccountsModule {}
+```
+
 A few things to keep in mind:
-- `forFeature` doesn't create or export any providers, it only registers events. The stores and buses come from the root module, which is global, see [below](#global-module).
-- The events are collected in a registry that is shared by the whole Node.js process, and they are added when `forFeature` is called, which happens when the file of the module is loaded. Together with the events of the root module they form the set of registered events at startup. If you create several Nest applications in one process, for example in tests, they share the events registered by `forFeature`.
-- Register an event in one place only, either in `forRoot`/`forRootAsync` or in a single `forFeature`.
+- `forFeature` exports nothing. The stores and buses come from the root module, which is global, see [below](#global-module).
+- The events belong to the application that imports the feature module. Each `forFeature` call is a module of its own, which the root module finds through Nest's discovery when the application starts. Several Nest applications in one process, for example in tests, each register only the events of the modules they import. (3.x collected them in a registry shared by the whole process, when the file of the module was loaded.)
+- Registering the same event class in several places, in `forRoot` and in a `forFeature` for instance, is harmless: it is registered once. Two different classes with the same event name fail the bootstrap.
 
 ## The module is global [#global-module]
 
-`forRoot` and `forRootAsync` register a **global** module. It provides and exports the `EventStore`, the `SnapshotStore`, the `EventBus`, the `CommandBus`, the `QueryBus` and the `EventMap`. That means you can inject them in any provider of your application without importing `EventSourcingModule` again.
+`forRoot` and `forRootAsync` register one **global** module. It provides and exports the `EventStore`, the `SnapshotStore`, the `EventBus`, the `CommandBus`, the `QueryBus`, the `EventMap` and the options (`@InjectEventSourcingOptions()`). That means you can inject them in any provider of your application without importing `EventSourcingModule` again.
 
 ```typescript
 import { Injectable } from '@nestjs/common';
@@ -255,9 +281,9 @@ export class TransferService {
 Import `EventSourcingModule.forRoot()` or `EventSourcingModule.forRootAsync()` **once**, in your root module. Importing them in several modules can result in separate configurations, each with their own stores and buses.
 </Aside>
 
-## Discovery at application bootstrap [#discovery]
+## Discovery and registration [#discovery]
 
-Command handlers, query handlers, event subscribers, event publishers and event serializers don't have to be registered anywhere. When the application has bootstrapped, the library scans the providers of **all modules** of the application, regardless of where `forRoot` or `forFeature` were imported, and registers every provider that is decorated with one of these decorators:
+Command handlers, query handlers, event subscribers, event publishers and event serializers don't have to be registered anywhere. When the application starts, the library scans the providers of **all modules** of the application, regardless of where `forRoot` or `forFeature` were imported, and registers every provider that is decorated with one of these decorators:
 
 | Decorator | Registered in |
 | --- | --- |
@@ -267,13 +293,86 @@ Command handlers, query handlers, event subscribers, event publishers and event 
 | `@EventPublisher()` | the `EventBus`, see [event pub/sub](/advanced/event-pubsub) |
 | `@EventSerializer()` | the `EventMap`, see [event serialization](/advanced/event-serialization) |
 
-Adding them to the `providers` of any module is enough. Register them as regular (singleton-scoped) providers. Other classes, such as aggregate repositories and snapshot repositories (`@Snapshot()`), aren't discovered: they are ordinary providers that you inject where you need them.
+Adding them to the `providers` of any module is enough, whether as a class, with `useFactory` or with `useValue`: the decorator is read from the class of the instance. Other classes, such as aggregate repositories and snapshot repositories (`@Snapshot()`), aren't discovered: they are ordinary providers that you inject where you need them.
 
-The module goes through these steps when the application starts:
+The module goes through these steps:
 
-1. **Module initialization:** the event store and the snapshot store connect, and the default pools are created (unless `useDefaultPool` is `false`).
-2. **Application bootstrap:** the providers of all modules are scanned, the handlers, subscribers, publishers and serializers are registered, and the event store is connected to the event bus so appended events get published.
+1. **Instantiating the providers:** the event store and the snapshot store are created, connect, and create their default pools (unless `useDefaultPool` is `false`). A failure fails the bootstrap.
+2. **Module initialization (`onModuleInit`):** the providers of all modules are scanned, the whole configuration is [checked](#configuration-checks), and the events, serializers, handlers, subscribers and publishers are registered. If a provider of another module uses the event store or a bus in its own `onModuleInit` before that, which can happen with a `@Global()` module of yours, the registration runs right then.
+3. **Shutdown (`app.close()`):** the `EventBus` waits for the running publishers and subscribers (at most `publishing.shutdownTimeout`), then the stores disconnect.
+
+So from `onModuleInit` on, you can execute commands and queries and append or read events, and the publishers and subscribers receive every event appended from then on. That can be before the `onModuleInit` of your publisher has run: Nest initializes the deepest modules first, so a publisher that connects to its broker in its own `onModuleInit` may get events appended from an earlier hook before it is connected. Connect it in an async provider factory instead, or buffer until it is connected.
 
 <Aside type="caution">
-Because the registration happens when the application has bootstrapped, don't execute commands or queries, or append or read events, from lifecycle hooks such as `onModuleInit`. Run that logic once the application has started, for example from a request handler or a scheduled job.
+Don't append or read events, execute commands or queries, or publish from a provider factory (`useFactory`) or a constructor. They run while Nest is still instantiating the providers, before the handlers exist, so the call fails with an `EventSourcingNotReadyException`, before anything is read, written or published. That includes appends of pre-built envelopes and appends with `publish: false`. Move it to `onModuleInit` or a later lifecycle hook. Only reading envelopes (`getEnvelope`, `getEnvelopes`, `readAll`) works there, since it needs no registration.
 </Aside>
+
+### Request-scoped command and query handlers [#request-scoped-handlers]
+
+Command and query handlers may be request-scoped, transient, or depend on a request-scoped provider. The bus then resolves the handler for every call. Pass the request to `execute` to resolve the handler in the DI context of that request, where it can inject it with `@Inject(REQUEST)`:
+
+```typescript {6,13-14,23}
+import { Controller, Inject, Injectable, Post, Req, Scope } from '@nestjs/common';
+import { REQUEST } from '@nestjs/core';
+import { CommandBus, CommandHandler, type ICommandHandler } from '@ocoda/event-sourcing';
+import type { Request } from 'express';
+
+@Injectable({ scope: Scope.REQUEST })
+@CommandHandler(OpenAccountCommand)
+export class OpenAccountCommandHandler implements ICommandHandler<OpenAccountCommand> {
+    constructor(
+        private readonly accountRepository: AccountRepository,
+        @Inject(REQUEST) private readonly request: Request,
+    ) {}
+
+    async execute(command: OpenAccountCommand) {
+        // this.request is the request that the command was executed for
+    }
+}
+
+@Controller('accounts')
+export class AccountController {
+    constructor(private readonly commandBus: CommandBus) {}
+
+    @Post()
+    open(@Req() request: Request) {
+        return this.commandBus.execute(new OpenAccountCommand(), { request });
+    }
+}
+```
+
+The commands and queries executed for one request share its request-scoped instances, and those of a request-scoped controller that handles the request. Without a request, every call gets new instances and `REQUEST` is `undefined`. A singleton handler is used as it is, and ignores the request.
+
+A request-scoped handler provided with `useFactory` has no instance to read its decorator from until it is resolved, so use the handler class as its token: `{ provide: OpenAccountCommandHandler, useFactory, inject: [REQUEST], scope: Scope.REQUEST }`.
+
+Subscribers, publishers and serializers are called outside of any request, for as long as the application runs, so they must be singletons (the default scope). A request-scoped or transient one fails the bootstrap; resolve request-scoped dependencies per call with `ModuleRef.resolve()` instead.
+
+## Configuration checks [#configuration-checks]
+
+Before the module registers anything, it checks the whole configuration. When something is wrong, the bootstrap fails with one `EventSourcingConfigurationException`, whose `issues` list every problem that was found, each with a `kind` and a `message` that names the classes involved:
+
+| `kind` | What is wrong |
+| --- | --- |
+| `invalid-options` | Options that can't work: `forRootAsync()` without `useFactory`, `useClass` or `useExisting`, a store without a `driver` class, an entry of `events` that isn't a class, or a `defaultEventSerializer` without a `for()` method. |
+| `missing-metadata` | A registered event without `@Event()`, a serializer in `forFeature({ serializers })` without `@EventSerializer()`, a handler whose decorator names no command or query class, or a subscriber that names no events. |
+| `duplicate-event-name` | Two event classes with the same event name. |
+| `duplicate-command-handler`, `duplicate-query-handler` | Two classes that handle the same command or query. |
+| `duplicate-event-serializer` | Two classes that serialize the same event. |
+| `unregistered-event` | A serializer or subscriber for an event that isn't registered in `forRoot` or a `forFeature`. |
+| `non-static-provider` | A request-scoped or transient subscriber, publisher or serializer, see [above](#request-scoped-handlers). |
+| `class-transformer-decorators` | An event class, or a parent class, with class-transformer decorators (`@Type`, `@Transform`, `@Expose` or `@Exclude`) that would get the default `JsonEventSerializer`, which ignores them. Checked only when class-transformer is installed; see [event serialization](/advanced/event-serialization#serializing-with-class-transformer). |
+
+Providing the same class in several modules, or listing the same event more than once, is not a duplicate: it is registered once.
+
+```typescript
+import { EventSourcingErrorCode, isEventSourcingError } from '@ocoda/event-sourcing';
+
+try {
+    await app.init();
+} catch (error) {
+    if (isEventSourcingError(error, EventSourcingErrorCode.EventSourcingConfiguration)) {
+        for (const { kind, message } of error.issues) console.error(kind, message);
+    }
+    throw error;
+}
+```

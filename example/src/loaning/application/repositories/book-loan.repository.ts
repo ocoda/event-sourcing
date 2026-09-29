@@ -50,6 +50,7 @@ export class BookLoanRepository {
 				const id = BookLoanId.from(metadata.aggregateId);
 				const eventStream = EventStream.for<BookLoan>(BookLoan, id);
 				const bookLoan = this.bookLoanSnapshotRepository.deserialize(payload);
+				bookLoan.version = metadata.version;
 
 				const eventCursor = this.eventStore.getEvents(eventStream, { fromVersion: metadata.version + 1 });
 				await bookLoan.loadFromHistory(eventCursor);
@@ -62,10 +63,11 @@ export class BookLoanRepository {
 	}
 
 	async save(bookLoan: BookLoan): Promise<void> {
-		const events = bookLoan.commit();
+		const events = bookLoan.getUncommittedEvents();
 		const stream = EventStream.for<BookLoan>(BookLoan, bookLoan.id);
 
-		await this.eventStore.appendEvents(stream, bookLoan.version, events);
+		await this.eventStore.appendEvents(stream, events, { expectedVersion: bookLoan.committedVersion });
+		bookLoan.markCommitted();
 		await this.bookLoanSnapshotRepository.save(bookLoan.id, bookLoan);
 	}
 }

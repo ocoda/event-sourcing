@@ -25,7 +25,7 @@ describe('public entrypoint', () => {
 	it('does not expose internal helpers', () => {
 		expect(
 			Object.keys(EventSourcing).filter((key) =>
-				/CommittedVersions|isSnapshotDue|brandEventSourcingError|nameOf|describeValue|EVENT_SOURCING_ERROR|^validate/.test(
+				/CommittedVersions|isSnapshotDue|bindStaticFactories|brandEventSourcingError|nameOf|describeValue|EVENT_SOURCING_ERROR|^validate/.test(
 					key,
 				),
 			),
@@ -39,6 +39,21 @@ describe('public entrypoint', () => {
 		expect(EventSourcing.resolveCapabilities).toEqual(expect.any(Function));
 		expect(EventSourcing.toPosition).toEqual(expect.any(Function));
 		expect(EventSourcing.assertEventStoreImplementation).toEqual(expect.any(Function));
+	});
+
+	it('keeps the internals of the module out of the exports', () => {
+		// 3.x exported a static event registry, the explorer and the options token getter; the module discovers per
+		// application now (ADR 0001 §3)
+		expect(
+			Object.keys(EventSourcing).filter((key) =>
+				/EventRegistry|ExplorerService|getOptionsToken|CoreModule|FeatureModule|EventSourcingFeature|Registrar|Registration|ScopedHandler|planRegistration|Provider$|createCoreProviders|CORE_EXPORTS/.test(
+					key,
+				),
+			),
+		).toEqual([]);
+		expect(EventSourcing.EventSourcingModule).toEqual(expect.any(Function));
+		expect(EventSourcing.EventSourcingConfigurationException).toEqual(expect.any(Function));
+		expect(EventSourcing.EventSourcingNotReadyException).toEqual(expect.any(Function));
 	});
 
 	it('keeps the internals of the store template out of the exports', () => {

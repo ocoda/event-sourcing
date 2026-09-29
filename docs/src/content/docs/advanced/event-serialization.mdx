@@ -88,10 +88,10 @@ export class FundsDepositedEventSerializer extends ClassTransformerEventSerializ
 ```
 
 <Aside type="caution" title="Decorated events on the JSON serializer">
-The JSON serializer ignores class-transformer decorators, so it refuses the events whose payload they would change, with an `EventSerializationException` that names the event, its decorators and the fix:
+The JSON serializer ignores class-transformer decorators, so the events whose payload they would change are refused, with an error that names the event, its decorators and the fix:
 
-- An event class, or a parent class, with `@Type`, `@Transform`, `@Expose` or `@Exclude` fails the bootstrap.
-- An event that holds an instance of a class with `@Expose`, `@Exclude`, `@Transform`, or a `@Type` with a discriminator, such as a value object with an `@Exclude()`d field, fails the append before anything is written. The exception's `path` names the property that holds the instance. The bootstrap can't find these classes, because nothing refers to them until an event holds one, so look for decorators on the classes your events hold before you upgrade.
+- An event class, or a parent class, with `@Type`, `@Transform`, `@Expose` or `@Exclude` fails the bootstrap with an [`EventSourcingConfigurationException`](/start/module-configuration#configuration-checks), with one `class-transformer-decorators` issue per event.
+- An event that holds an instance of a class with `@Expose`, `@Exclude`, `@Transform`, or a `@Type` with a discriminator, such as a value object with an `@Exclude()`d field, fails the append with an `EventSerializationException` (`reason: 'class-transformer-decorators'`) before anything is written. The exception's `path` names the property that holds the instance. The bootstrap can't find these classes, because nothing refers to them until an event holds one, so look for decorators on the classes your events hold before you upgrade.
 
 The checks see the decorators that reach class-transformer the way Node loads it. A bundler that resolves class-transformer's ES module build keeps a second copy of its metadata, which the checks can't see: check the events of a bundled application, and the classes they hold, yourself.
 </Aside>

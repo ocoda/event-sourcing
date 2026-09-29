@@ -75,16 +75,21 @@ describe(Aggregate, () => {
 		expect(account.balance).toBe(30);
 	});
 
-	it('should commit events', () => {
+	it('should hand out the uncommitted events until they are marked as committed', () => {
 		const account = Account.open();
 		account.credit(50);
 		account.debit(20);
 
-		expect(account.commit()).toEqual([
+		expect(account.getUncommittedEvents()).toEqual([
 			new AccountOpenedEvent(),
 			new AccountCreditedEvent(50),
 			new AccountDebitedEvent(20),
 		]);
+		expect(account.committedVersion).toBe(0);
+
+		account.markCommitted();
+		expect(account.getUncommittedEvents()).toEqual([]);
+		expect(account.committedVersion).toBe(3);
 	});
 
 	it('should throw when applying an event that has no handler', () => {

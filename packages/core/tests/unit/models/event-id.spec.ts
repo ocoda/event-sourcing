@@ -4,6 +4,11 @@ describe(EventId, () => {
 	it('should generate an EventId', () => {
 		const generatedEventId = EventId.generate();
 		expect(generatedEventId.value).toBeDefined();
+		expect(generatedEventId).toBeInstanceOf(EventId);
+		expect(EventId.factory()()).toBeInstanceOf(EventId);
+		expectTypeOf(generatedEventId).toEqualTypeOf<EventId>();
+		expectTypeOf(EventId.factory()).returns.toEqualTypeOf<EventId>();
+		expectTypeOf(EventId.from(generatedEventId.value)).toEqualTypeOf<EventId>();
 	});
 
 	it('should create an EventId from an existing value', () => {
@@ -53,7 +58,13 @@ describe(EventId, () => {
 		});
 
 		it('does not validate, so ids that from() rejects stay readable', () => {
-			for (const value of ['123-abc', 'not a ulid', '01ja50f56am0ccdbnvqw3ttwny-legacy']) {
+			// The last one is a 3.x id that is not Crockford base32: 3.x accepted any 26 letters and numbers
+			for (const value of [
+				'123-abc',
+				'not a ulid',
+				'01ja50f56am0ccdbnvqw3ttwny-legacy',
+				'01JA50F56AM0CCDBNVQW3TILOU',
+			]) {
 				expect(() => EventId.from(value)).toThrow(InvalidIdException);
 				expect(EventId.fromTrusted(value).value).toBe(value);
 			}

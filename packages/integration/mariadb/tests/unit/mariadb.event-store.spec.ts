@@ -453,22 +453,81 @@ describe(MariaDBEventStore, () => {
 			};
 		};
 
-		/** Waits until a statement that locks the counter row of the collection waits for its lock (true), or 3 s. */
-		const counterReadWaits = async (collection: string): Promise<boolean> => {
+		/**
+		 * Follows the reads of the store's pool on the collection: the positions of its first plain batch, and the
+		 * high-water mark read (the counter row, `LOCK IN SHARE MODE`), once sent and once its result is back.
+		 */
+		const followReads = (collection: string) => {
+			const target = poolOf(store);
+			const query = target.query.bind(target);
+			const reads = {
+				firstBatch: undefined as bigint[] | undefined,
+				highWaterMarkSent: false,
+				highWaterMarkSettled: false,
+			};
+			const spy = vi.spyOn(target, 'query').mockImplementation(((sql: string, values?: unknown) => {
+				const result = query(sql, values);
+				if (typeof sql !== 'string') {
+					return result;
+				}
+				if (sql.includes('LOCK IN SHARE MODE') && Array.isArray(values) && values[0] === collection) {
+					reads.highWaterMarkSent = true;
+					const settle = () => {
+						reads.highWaterMarkSettled = true;
+					};
+					result.then(settle, settle);
+				} else if (
+					reads.firstBatch === undefined &&
+					sql.includes('e.global_position >= ?') &&
+					!sql.includes('<= ?') &&
+					sql.includes(target.escapeId(collection))
+				) {
+					result.then(
+						(rows) => {
+							reads.firstBatch = (rows as { global_position: string }[]).map(({ global_position }) =>
+								BigInt(global_position),
+							);
+						},
+						() => undefined,
+					);
+				}
+				return result;
+			}) as Pool['query']);
+			return { reads, restore: () => spy.mockRestore() };
+		};
+
+		/**
+		 * Polls INNODB_TRX until a transaction waits for a lock in a `LOCK IN SHARE MODE` read of the collection's
+		 * counter, while `pending()` holds, for up to `timeout` ms. InnoDB refreshes the rows of INNODB_TRX only once
+		 * they went unread for 100 ms (`CACHE_MIN_IDLE_TIME_NS` in trx0i_s.cc): a faster poll reads the rows of its first
+		 * read again and again, and misses a wait that began after it. So the polls are 250 ms apart. Resolves with
+		 * whether it saw the wait, and the last rows it read: the waiting transactions and those that name the collection.
+		 */
+		const counterReadWaits = async (
+			collection: string,
+			pending: () => boolean,
+			timeout = 10_000,
+		): Promise<{ waited: boolean; rows: { trx_state: string; trx_query: string | null }[] }> => {
 			const root = await rootConnection();
 			try {
-				for (let tries = 0; tries < 300; tries++) {
-					const [{ waiting }] = await root.query<{ waiting: bigint | number }[]>(
-						`SELECT COUNT(*) AS waiting FROM information_schema.INNODB_TRX
-						 WHERE trx_state = 'LOCK WAIT' AND trx_query LIKE '%LOCK IN SHARE MODE%' AND LOCATE(?, trx_query) > 0`,
+				const deadline = Date.now() + timeout;
+				while (true) {
+					const rows = await root.query<{ trx_state: string; trx_query: string | null }[]>(
+						`SELECT trx_state, LEFT(trx_query, 300) AS trx_query FROM information_schema.INNODB_TRX
+						 WHERE trx_state = 'LOCK WAIT' OR LOCATE(?, trx_query) > 0`,
 						[collection],
 					);
-					if (Number(waiting) > 0) {
-						return true;
+					const waited = rows.some(
+						({ trx_state, trx_query }) =>
+							trx_state === 'LOCK WAIT' &&
+							trx_query?.includes('LOCK IN SHARE MODE') === true &&
+							trx_query.includes(collection),
+					);
+					if (waited || !pending() || Date.now() >= deadline) {
+						return { waited, rows };
 					}
-					await sleep(10);
+					await sleep(250);
 				}
-				return false;
 			} finally {
 				await root.end();
 			}
@@ -476,15 +535,37 @@ describe(MariaDBEventStore, () => {
 
 		it('waits at a gap for the append that holds the counter, then delivers what it wrote', async () => {
 			const inFlight = await appendInFlight();
+			const { reads, restore } = followReads(inFlight.collection);
 			try {
-				const reading = drain(store.readAll({ pool: inFlight.eventPool, fromPosition: 3n, batch: 10 }));
+				let finished = false;
+				const reading = drain(store.readAll({ pool: inFlight.eventPool, fromPosition: 3n, batch: 10 })).finally(() => {
+					finished = true;
+				});
+				// Awaited below: this only keeps a rejection during the polls from going unhandled
+				reading.catch(() => undefined);
 				// The first batch shows 4 without 3: the reader reads the counter with a shared lock, and waits
-				const waited = await counterReadWaits(inFlight.collection);
+				const sentBy = Date.now() + 10_000;
+				while (!reads.highWaterMarkSent && !finished && Date.now() < sentBy) {
+					await sleep(10);
+				}
+				const wait = await counterReadWaits(
+					inFlight.collection,
+					() => reads.highWaterMarkSent && !reads.highWaterMarkSettled,
+				);
+				const sent = reads.highWaterMarkSent;
+				const pendingAtCommit = !reads.highWaterMarkSettled;
 				await inFlight.commit();
 
 				expect((await reading).map(({ metadata }) => metadata.globalPosition)).toEqual([3n, 4n]);
-				expect(waited, 'the high-water mark read waited for the counter').toBe(true);
+				expect(reads.firstBatch, 'the first batch shows 4 without 3').toEqual([4n]);
+				expect(sent, 'the reader sent its high-water mark read while the append was in flight').toBe(true);
+				expect(
+					wait.waited,
+					`INNODB_TRX shows the high-water mark read waiting for the counter; its last rows: ${JSON.stringify(wait.rows)} (InnoDB refreshes INNODB_TRX only after 100 ms without a read: a client that polls INNODB_TRX, INNODB_LOCKS or INNODB_LOCK_WAITS more often keeps these rows stale)`,
+				).toBe(true);
+				expect(pendingAtCommit, 'the high-water mark read was still waiting when the append committed').toBe(true);
 			} finally {
+				restore();
 				await inFlight.release();
 			}
 		});

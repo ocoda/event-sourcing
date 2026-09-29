@@ -9,14 +9,26 @@ export abstract class ValueObject<T extends ValueObjectProps = ValueObjectProps>
 		this.props = Object.freeze(props);
 	}
 
-	public equals(other: ValueObject<T>): boolean {
+	/**
+	 * Tells whether another value object is of the same class and has the same props (compared with `===`).
+	 * Value objects of different classes are never equal, even with the same props, and `null` or `undefined` is never
+	 * equal to a value object.
+	 */
+	public equals(other: ValueObject<T> | null | undefined): boolean {
+		if (other === null || other === undefined) {
+			return false;
+		}
+		if (other === this) {
+			return true;
+		}
 		if (this.constructor !== other.constructor) {
 			return false;
 		}
 
+		const keys = Object.keys(this.props);
 		return (
-			Object.keys(this.props).length === Object.keys(other.props).length &&
-			Object.keys(this.props).every((key) => this.props[key] === other.props[key])
+			keys.length === Object.keys(other.props).length &&
+			keys.every((key) => Object.hasOwn(other.props, key) && this.props[key] === other.props[key])
 		);
 	}
 }

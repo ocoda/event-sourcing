@@ -16,9 +16,9 @@ import {
 	type EventDeliveryError,
 	type EventEnvelope,
 	EventHandler,
+	EventSourcingConfigurationException,
 	EventSourcingModule,
 	EventStore,
-	EventSerializationException,
 	EventStoreVersionConflictException,
 	EventStream,
 	EventSubscriber,
@@ -306,7 +306,9 @@ async function serializers(): Promise<void> {
 		(error: unknown) => error,
 	);
 	check(
-		refused instanceof EventSerializationException && refused.reason === 'class-transformer-decorators',
+		refused instanceof EventSourcingConfigurationException &&
+			refused.issues.length === 1 &&
+			refused.issues[0]?.kind === 'class-transformer-decorators',
 		'the JSON default serializer refuses an event with class-transformer decorators at bootstrap',
 	);
 
