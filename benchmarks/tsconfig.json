@@ -7,8 +7,6 @@
 			"@ocoda/event-sourcing/*": ["../packages/core/lib/*"],
 			"@ocoda/event-sourcing-example": ["../example/src"],
 			"@ocoda/event-sourcing-example/*": ["../example/src/*"],
-			"@ocoda/event-sourcing-dynamodb": ["../packages/integration/dynamodb/lib"],
-			"@ocoda/event-sourcing-dynamodb/*": ["../packages/integration/dynamodb/lib/*"],
 			"@ocoda/event-sourcing-mariadb": ["../packages/integration/mariadb/lib"],
 			"@ocoda/event-sourcing-mariadb/*": ["../packages/integration/mariadb/lib/*"],
 			"@ocoda/event-sourcing-mongodb": ["../packages/integration/mongodb/lib"],

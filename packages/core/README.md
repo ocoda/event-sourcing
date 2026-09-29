@@ -24,7 +24,6 @@
 This is the core module of `@ocoda/event-sourcing`, a powerful library designed to simplify the implementation of advanced architectural patterns in your [**NestJS**](https://nestjs.com/) application. It provides essential building blocks to help you implement Domain-Driven Design (DDD), CQRS and leverage Event Sourcing to tackle the complexities of modern systems.
 
 This core module needs to be implemented in conjunction with a store-driver such as:
-- `@ocoda/event-sourcing-dynamodb`
 - `@ocoda/event-sourcing-mariadb`
 - `@ocoda/event-sourcing-mongodb`
 - `@ocoda/event-sourcing-postgres`
