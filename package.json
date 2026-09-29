@@ -10,9 +10,11 @@
 		"docs:build": "turbo docs:build",
 		"test": "turbo test",
 		"test:cov": "turbo test:cov",
+		"test:consumers": "turbo build --filter=\"./packages/**\" --output-logs=errors-only && node scripts/test-consumers.mjs",
 		"ci": "turbo ci",
 		"lint": "oxlint",
 		"typecheck": "turbo typecheck",
+		"check:packages": "turbo build --filter=\"./packages/**\" --output-logs=errors-only && node scripts/check-packages.mjs",
 		"format": "oxfmt",
 		"format:check": "oxfmt --check",
 		"benchmark": "turbo benchmark --",
@@ -22,6 +24,7 @@
 		"node": ">=22.12"
 	},
 	"devDependencies": {
+		"@arethetypeswrong/cli": "0.18.5",
 		"@changesets/changelog-github": "^0.5.1",
 		"@changesets/cli": "^2.29.6",
 		"@faker-js/faker": "^10.2.0",
@@ -33,6 +36,7 @@
 		"@vitest/coverage-v8": "5.0.2",
 		"oxfmt": "0.71.0",
 		"oxlint": "1.86.0",
+		"publint": "0.3.24",
 		"reflect-metadata": "0.2.2",
 		"rxjs": "7.8.2",
 		"turbo": "2.11.5",
