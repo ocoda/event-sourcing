@@ -45,6 +45,14 @@ const sidebar: (SidebarLink | { label: string; items: SidebarLink[] })[] = [
 		],
 	},
 	{
+		label: 'Integrations',
+		items: [
+			{ label: 'PostgreSQL', slug: 'integrations/postgres' },
+			{ label: 'MariaDB', slug: 'integrations/mariadb' },
+			{ label: 'MongoDB', slug: 'integrations/mongodb' },
+		],
+	},
+	{
 		label: 'Under the hood',
 		items: [
 			{ label: 'Streams', slug: 'under-the-hood/streams' },

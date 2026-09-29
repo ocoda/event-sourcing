@@ -1,0 +1,11 @@
+---
+title: PostgreSQL
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+`@ocoda/event-sourcing-postgres` provides the `PostgresEventStore` and the `PostgresSnapshotStore`. It needs the `pg` and `pg-cursor` drivers, which are peer dependencies: see [Installation](/start/install) and [Database drivers are peer dependencies](/upgrading/v4#drivers).
+
+<Aside type="note" title="Schema v2 lands in a later prerelease">
+This page will describe the 4.0 schema, its limits and capabilities, the privileges the store needs, and how to migrate 3.x tables. Until then, see [PostgreSQL schema v2](/upgrading/v4#postgres-schema-v2) in the 4.0 migration guide.
+</Aside>
