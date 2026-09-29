@@ -4,6 +4,10 @@ title: Snapshot Store
 
 import { Aside } from '@astrojs/starlight/components';
 
+<Aside type="note" title="4.0 prerelease">
+This page describes the snapshot store contract, which ships in the next 4.0 prerelease. See [Snapshot store](/upgrading/v4#snapshot-store).
+</Aside>
+
 The snapshot store keeps the [snapshots](/start/snapshots) of your aggregates. A `SnapshotRepository` uses it behind the scenes, so you rarely call it yourself, unless you [build your own store](/advanced/custom-stores#how-to-create-your-own-snapshot-store).
 
 Every store extends the abstract `SnapshotStore` class and is registered as the `snapshotStore` of the module. The library ships an in-memory store, and PostgreSQL, MariaDB and MongoDB stores in their own packages.
@@ -31,7 +35,7 @@ The last snapshot of a stream is the one with the **highest version**. `appendSn
 A store may flag the latest snapshot of each stream, to list the streams of an aggregate quickly. The reads of a single stream (`getLastSnapshot`, `getLastEnvelope` and their bulk forms) don't rely on that flag: they read the highest version.
 
 <Aside type="note" title="Database stores">
-The in-memory store works this way. The PostgreSQL, MariaDB and MongoDB stores follow with their [schema v2](/upgrading/v4#store-and-schema), in a later prerelease, which enforces one flagged snapshot per stream with a unique index. Until then they read the last snapshot through the flag, and on MariaDB and MongoDB racing appends to one stream can leave more than one flagged snapshot.
+The in-memory store works this way, and so do the PostgreSQL, MariaDB and MongoDB stores with their [schema v2](/upgrading/v4#store-and-schema), in the next prerelease, which enforces one flagged snapshot per stream with a unique index.
 </Aside>
 
 ## Paging through an aggregate
@@ -54,7 +58,7 @@ do {
 } while (cursor);
 ```
 
-The in-memory store pages this way. The PostgreSQL, MariaDB and MongoDB stores get the same cursor and order with their schema v2, in a later prerelease.
+The in-memory store pages this way, and so do the PostgreSQL, MariaDB and MongoDB stores with their schema v2, in the next prerelease.
 
 ## Defaults for custom stores
 
