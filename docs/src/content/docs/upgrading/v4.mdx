@@ -1,0 +1,184 @@
+---
+title: Migrating from 3.x to 4.0
+---
+
+import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
+
+4.0 is the next major release. It is published as prereleases (`4.0.0-next.N`) under the npm `next` tag, while 3.x stays on `latest` and keeps receiving fixes. See [Versioning and support](/upgrading/versioning) for what each release line gets.
+
+This guide covers the changes that have been released so far, in `4.0.0-next.0`. More breaking changes are planned before 4.0.0, see [Coming in later 4.0 prereleases](#coming-next). The guide is extended with each prerelease.
+
+<Aside type="caution" title="Prerelease">
+There is no stability or support guarantee until 4.0.0 is released, and a later prerelease can break things again. Pin the exact version, and read the [changelog](https://github.com/ocoda/event-sourcing/blob/master/packages/core/CHANGELOG.md) before you move to the next prerelease.
+</Aside>
+
+## Installing the prerelease [#installing-the-prerelease]
+
+Install the core and the integration you use from the `next` tag, together with the integration's database driver. For example, for PostgreSQL:
+
+<Tabs syncKey="package-manager">
+<TabItem label="pnpm">
+
+```bash
+pnpm add --save-exact @ocoda/event-sourcing@next @ocoda/event-sourcing-postgres@next
+pnpm add pg pg-cursor
+```
+
+</TabItem>
+<TabItem label="npm">
+
+```bash
+npm install --save-exact @ocoda/event-sourcing@next @ocoda/event-sourcing-postgres@next
+npm install pg pg-cursor
+```
+
+</TabItem>
+<TabItem label="yarn">
+
+```bash
+yarn add --exact @ocoda/event-sourcing@next @ocoda/event-sourcing-postgres@next
+yarn add pg pg-cursor
+```
+
+</TabItem>
+</Tabs>
+
+The core and the integrations are released together with the same version number, so keep them on the same prerelease. The driver for each store is listed under [Database drivers are peer dependencies](#drivers).
+
+## Upgrade steps [#upgrade-steps]
+
+1. Upgrade the application to [NestJS 12 and Node.js 22.12 or later](#nestjs-and-node).
+2. Install `@ocoda/event-sourcing` and your integrations from the `next` tag, see [Installing the prerelease](#installing-the-prerelease).
+3. Install the [driver](#drivers) of every integration you use.
+4. Replace [imports of paths inside the packages](#imports) with imports from the package name.
+5. On MariaDB, check code that depends on the [order of `loadAll`](#mariadb-snapshot-order).
+6. If you use DynamoDB, read [DynamoDB is not part of 4.0](#dynamodb) first.
+
+The stored event and snapshot formats are unchanged, so no data migration is needed.
+
+## NestJS 12 and Node.js 22.12 [#nestjs-and-node]
+
+The core peers on `@nestjs/common` and `@nestjs/core` `^12.0.0`, on `rxjs` `^7.8.0` and on `reflect-metadata` `^0.2.0`. All packages require Node.js 22.12 or later (`engines.node` is `>=22.12`).
+
+Upgrade the application itself first, following the [NestJS migration guide](https://docs.nestjs.com/migration-guide). NestJS 11 applications stay on 3.x.
+
+## ES modules only [#esm-only]
+
+Every package ships a single ES module build (`"type": "module"`). The `exports` map points `import`, `require` and `default` at the same file, so there is no separate CommonJS build.
+
+- **ES module applications** import the packages as before.
+- **CommonJS applications**, including TypeScript compiled to CommonJS, keep using `require()` and need no code changes. Node.js 22.12 and later can `require()` an ES module natively.
+- **Jest** has its own module loader. It loads these packages with the same setup it needs for NestJS 12, which is ESM-only as well, so there is nothing extra to configure for this library.
+
+Because there is only one build, Nest never sees two copies of a class such as `EventStore`, which could happen when a package shipped both a CommonJS and an ES module build.
+
+## Database drivers are peer dependencies [#drivers]
+
+In 3.x each integration installed its own driver. In 4.0 the driver is a peer dependency: install it next to the integration and choose its version within the supported range.
+
+| Integration | Driver | Supported range |
+| --- | --- | --- |
+| `@ocoda/event-sourcing-postgres` | `pg`, `pg-cursor` | `pg` `^8.15.0` (the first release with an ES module entry), `pg-cursor` `^2.14.0` |
+| `@ocoda/event-sourcing-mongodb` | `mongodb` | `^6.10.0 \|\| ^7.0.0` |
+| `@ocoda/event-sourcing-mariadb` | `mariadb` | `^3.0.0` |
+
+<Tabs syncKey="package-manager">
+<TabItem label="pnpm">
+
+**PostgreSQL**
+```bash
+pnpm add pg pg-cursor
+pnpm add -D @types/pg @types/pg-cursor
+```
+**MongoDB**
+```bash
+pnpm add mongodb
+```
+**MariaDB**
+```bash
+pnpm add mariadb
+```
+
+</TabItem>
+<TabItem label="npm">
+
+**PostgreSQL**
+```bash
+npm install pg pg-cursor
+npm install -D @types/pg @types/pg-cursor
+```
+**MongoDB**
+```bash
+npm install mongodb
+```
+**MariaDB**
+```bash
+npm install mariadb
+```
+
+</TabItem>
+<TabItem label="yarn">
+
+**PostgreSQL**
+```bash
+yarn add pg pg-cursor
+yarn add -D @types/pg @types/pg-cursor
+```
+**MongoDB**
+```bash
+yarn add mongodb
+```
+**MariaDB**
+```bash
+yarn add mariadb
+```
+
+</TabItem>
+</Tabs>
+
+The `@types/pg` and `@types/pg-cursor` packages are only needed in TypeScript projects. If the application already depends on one of these drivers, check that its version is within the supported range.
+
+## Integrations peer on the core with a caret range [#core-peer]
+
+In 3.x each integration required one exact version of `@ocoda/event-sourcing`. In 4.0 the integrations peer on `@ocoda/event-sourcing` with a caret range (`^4.0.0`) and on `@nestjs/common` `^12.0.0`. They no longer list `@nestjs/core`, `rxjs` or `reflect-metadata`, which they don't import.
+
+The packages are still released together, so upgrade the core and the integrations at the same time.
+
+## Import from the package name [#imports]
+
+The root entry shims (the `index.js`, `index.d.ts` and `index.ts` files next to each `package.json`) are gone, and `exports` only exposes the package root and `package.json`. Paths into a package, such as `@ocoda/event-sourcing/dist/...`, no longer resolve:
+
+```diff
+- import { ... } from '@ocoda/event-sourcing/dist/...';
++ import { ... } from '@ocoda/event-sourcing';
+```
+
+The same applies to the integrations: import from `@ocoda/event-sourcing-postgres`, `@ocoda/event-sourcing-mongodb` or `@ocoda/event-sourcing-mariadb`.
+
+## MariaDB: snapshot order of `loadAll` [#mariadb-snapshot-order]
+
+On MariaDB, `getLastEnvelopesForAggregate`, and so `SnapshotRepository.loadAll`, now returns the streams in descending order of their stream id, like the other stores. The query had no `ORDER BY`, so MariaDB returned them in index order, which in practice was ascending.
+
+This reverses the order of `loadAll` on MariaDB, and a `limit` now returns the streams with the highest stream ids instead of the lowest. If you relied on the old order, sort the results yourself. This change is not in 3.x.
+
+## DynamoDB is not part of 4.0 [#dynamodb]
+
+The DynamoDB store (`@ocoda/event-sourcing-dynamodb`) is not released for 4.0. DynamoDB can't give the events a gap-free global order, which the 4.0 read side relies on. You have two options:
+
+- **Stay on 3.x.** 3.x keeps receiving security and critical fixes. Install `@ocoda/event-sourcing@3` with `@ocoda/event-sourcing-dynamodb@3`, on NestJS 11.
+- **Move your data to another store**: PostgreSQL, MariaDB or MongoDB. There is no migration tool for this yet. [ADR 0001](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0001-v4-core-api.md#migration-guide) plans to let a 4.0 store import exported events as pre-built envelopes that keep their ids and timestamps. This guide will describe it once it ships.
+
+## Coming in later 4.0 prereleases [#coming-next]
+
+<Aside type="note" title="Not released yet">
+Nothing in this section is in `4.0.0-next.0`. The changes are planned in [ADR 0001: v4 core API](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0001-v4-core-api.md), which is still a proposal, so the details can change before they ship. This guide will be extended with each prerelease.
+</Aside>
+
+- **Saving aggregates.** `commit()` gives way to `getUncommittedEvents()` and `markCommitted()`, and `appendEvents` takes an options object with an `expectedVersion`. Saving an unchanged aggregate becomes a no-op, and an append that leaves a gap in the versions conflicts. The 3.x methods stay as deprecated shims until 5.0.
+- **Publishing.** `eventBus.publish()` returns a promise and async publishers are awaited. In tests, `await eventBus.whenIdle()` replaces waiting for a fixed time.
+- **Bootstrap checks.** Duplicate registrations, and request-scoped subscribers, publishers and serializers, fail the bootstrap. Request-scoped command and query handlers start to work.
+- **Serialization.** A JSON serializer replaces class-transformer as the default. Events that use class-transformer decorators opt back in with `defaultEventSerializer: ClassTransformerEventSerializer`.
+- **Reading all events.** `readAll({ fromPosition })`, over a new global position, replaces `getAllEnvelopes({ since, until })`. This comes with a one-time schema migration of the event tables.
+- **Errors, ids and custom stores.** Errors get a stable `code` to match on instead of the message. `generate()` on an id class returns that class, so `AccountId.generate()` returns an `AccountId`, and ids of different classes are no longer equal. Custom stores implement a new contract that is checked by conformance test suites.
+
+See the ADR's [migration guide](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0001-v4-core-api.md#migration-guide) for the planned steps, including those for custom store authors.

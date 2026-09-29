@@ -1,0 +1,77 @@
+---
+title: Versioning and support
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+This page lists the release lines of Ocoda Event Sourcing, how to install each one, and which versions of NestJS, Node.js and the databases they are tested with. The support policy itself lives in [SECURITY.md](https://github.com/ocoda/event-sourcing/blob/master/SECURITY.md) and [SUPPORT.md](https://github.com/ocoda/event-sourcing/blob/master/SUPPORT.md) on GitHub.
+
+## Release lines [#release-lines]
+
+| Line | npm dist-tag | Branch | Status | Fixes |
+| --- | --- | --- | --- | --- |
+| 4.x | `next` | `master` | Prerelease | Fixes and breaking changes ship in the next `4.0.0-next.N`. No stability or support guarantee until 4.0.0 is released. |
+| 3.x | `latest` | `3.x` | Supported | Security and critical bug fixes, released as 3.x patch versions. |
+| 2.x and older | none | none | Not supported | None. Upgrade to 3.x. |
+
+To move an application from 3.x to 4.0, follow [Migrating from 3.x to 4.0](/upgrading/v4).
+
+## npm dist-tags [#dist-tags]
+
+- **`latest`** points to 3.x. Until 4.0.0 is released, `npm install @ocoda/event-sourcing` installs 3.x.
+- **`next`** points to the newest 4.0 prerelease. Install it with `npm install @ocoda/event-sourcing@next`.
+
+To stay on a line regardless of the tags, install it by major version, for example `npm install @ocoda/event-sourcing@3`.
+
+<Aside type="caution">
+A later prerelease can contain breaking changes. When you install from `next`, pin the exact version (`npm install --save-exact`) and read the changelog before you move to the next one.
+</Aside>
+
+## Packages [#packages]
+
+The core and its integrations are released together and always share the same version number. Install the integrations in the same version as the core.
+
+| Package | 4.x | 3.x |
+| --- | --- | --- |
+| `@ocoda/event-sourcing` | Yes | Yes |
+| `@ocoda/event-sourcing-postgres` | Yes | Yes |
+| `@ocoda/event-sourcing-mariadb` | Yes | Yes |
+| `@ocoda/event-sourcing-mongodb` | Yes | Yes |
+| `@ocoda/event-sourcing-dynamodb` | No, see [DynamoDB](/upgrading/v4#dynamodb) | Yes |
+
+## Tested versions [#tested-versions]
+
+CI runs the tests of the core on Node.js 22 and 24, and the tests of each store against every database version listed below. The same applies to both lines.
+
+| | 4.x | 3.x |
+| --- | --- | --- |
+| NestJS | 12 | 11 |
+| Node.js | 22.12 or later (tested on 22 and 24) | 20 or later (tested on 22 and 24) |
+| Module format | ES modules only; CommonJS applications load them through `require()` | CommonJS |
+| PostgreSQL | 13, 14, 15, 16, 17 | 13, 14, 15, 16, 17 |
+| MariaDB | 10.11, 11.4 | 10.11, 11.4 |
+| MongoDB | 6, 7, 8 | 6, 7, 8 |
+| DynamoDB | Not available | DynamoDB Local 3.3.1 |
+| Database drivers | Peer dependencies, installed by you | Installed by the integration |
+
+On 4.x the drivers are peer dependencies with these ranges: `pg` `^8.15.0` with `pg-cursor` `^2.14.0`, `mongodb` `^6.10.0 || ^7.0.0`, and `mariadb` `^3.0.0`. See [Database drivers are peer dependencies](/upgrading/v4#drivers).
+
+## Semantic versioning [#semver]
+
+The packages follow [semantic versioning](https://semver.org):
+
+- a **major** version for a breaking change, with a migration note in the changelog
+- a **minor** version for a new feature
+- a **patch** version for a bug fix
+
+Every change to a published package comes with a [changeset](https://github.com/changesets/changesets), which becomes its entry in the changelog. The changelog of each package is in its folder on GitHub, for example [the core's CHANGELOG.md](https://github.com/ocoda/event-sourcing/blob/master/packages/core/CHANGELOG.md).
+
+- **4.x:** until 4.0.0 is released, every release is a `4.0.0-next.N` prerelease under the `next` tag. Prereleases carry no compatibility promise, so each one can contain breaking changes. They are listed in the changelog with the steps to migrate, and in [Migrating from 3.x to 4.0](/upgrading/v4).
+- **3.x:** only patch releases, from the `3.x` branch.
+
+## Getting help and reporting problems [#help]
+
+- For questions, bugs and feature requests, see [SUPPORT.md](https://github.com/ocoda/event-sourcing/blob/master/SUPPORT.md).
+- Report a vulnerability privately, never in a public issue. [SECURITY.md](https://github.com/ocoda/event-sourcing/blob/master/SECURITY.md) explains how.
+
+One volunteer maintains this project, so support is best-effort.
