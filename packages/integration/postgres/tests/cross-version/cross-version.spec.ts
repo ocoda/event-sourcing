@@ -111,7 +111,7 @@ describe('PostgreSQL migrates the 3.0.2 corpus to schema v2 and reads it as 3.0.
 			.map(({ name }) => name);
 
 	/**
-	 * The order the migration numbers a pool in (ADR 0001 D33): the rank `r` in 3.x's order (`getAllEnvelopes`, where
+	 * The order the migration numbers a pool in (ADR 0001 D33): the rank `r` in the order 3.x read all events in (where
 	 * rows that share an event id come by stream id and version), and per stream the running maximum `key` of `r` by
 	 * version; the positions follow `(key, version)`.
 	 */

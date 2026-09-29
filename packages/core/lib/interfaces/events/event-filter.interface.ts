@@ -28,19 +28,6 @@ export interface IEventFilter {
 	batch?: number;
 }
 
-export interface IAllEventsFilter extends Pick<IEventFilter, 'pool' | 'batch'> {
-	/**
-	 * The year and month from where the events should be read.
-	 */
-	since: { year: number; month: number };
-
-	/**
-	 * The year and month up until where the events should be read.
-	 * @default now
-	 */
-	until?: { year: number; month: number };
-}
-
 /**
  * What `readAll` reads: the events of a pool, across streams, in the order of their global position.
  */

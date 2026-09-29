@@ -10,7 +10,6 @@ describe(ULID, () => {
 		const generatedUlid = ULID.from('01JAD3JSA97C385R2GKERK1VK7');
 		expect(generatedUlid.time).toBe(1729164305737);
 		expect(generatedUlid.date).toEqual(new Date(1729164305737));
-		expect(generatedUlid.yearMonth).toBe('2024-10');
 	});
 
 	it('should create a ULID from an existing value', () => {

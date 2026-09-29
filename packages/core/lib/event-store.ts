@@ -1,13 +1,11 @@
 import { setTimeout as sleep } from 'node:timers/promises';
 import { Logger } from '@nestjs/common';
 import { ANY_MAX_ATTEMPTS, ExpectedVersion } from './constants.js';
-import type { EventMap } from './event-map.js';
 import {
 	EventSourcingErrorCode,
 	EventStorePersistenceException,
 	EventStoreVersionConflictException,
 	InvalidAppendOptionsException,
-	UnsupportedOperationException,
 	isEventSourcingError,
 } from './exceptions/index.js';
 import type {
@@ -15,7 +13,6 @@ import type {
 	EventSourcingModuleOptions,
 	EventStoreCapabilities,
 	EventStoreContext,
-	IAllEventsFilter,
 	IEvent,
 	IEventCollection,
 	IEventCollectionFilter,
@@ -34,19 +31,6 @@ import {
 } from './stores/append-validation.js';
 import { resolveCapabilities } from './stores/capabilities.js';
 import { EVENT_STORE_BASE } from './stores/implementation-guard.js';
-import { createLegacyEventStoreProxy, isLegacyEventStore } from './stores/legacy-event-store.js';
-
-/**
- * The arguments of `appendEvents` after the stream:
- * - `[events, options]`: append the events (and pre-built envelopes) to a stream that is at `options.expectedVersion`;
- * - `[aggregateVersion, events, pool?]`: **deprecated**, the 3.x form, where `aggregateVersion` is the version of the
- *   aggregate after the append, so the stream is expected at `aggregateVersion - events.length`. Removed in 5.0.
- */
-// INTERIM(H): one signature with a rest tuple instead of two overloads, so that stores that still override
-// appendEvents in the 3.x form (the database stores until schema v2) remain assignable to EventStore.
-export type AppendEventsArguments =
-	| [events: readonly AppendItem[], options: AppendOptions]
-	| [aggregateVersion: number, events: readonly AppendItem[], pool?: IEventPool];
 
 const describeError = (error: unknown): string =>
 	error instanceof Error ? error.stack || error.message : String(error);
@@ -91,27 +75,7 @@ export abstract class EventStore<
 	constructor(
 		protected readonly context: EventStoreContext,
 		protected readonly options: TOptions,
-	) {
-		// INTERIM(H): a store that overrides appendEvents in the 3.x way gets the 3.x publishing wrapper instead of the
-		// template. Removed once the built-in database stores implement the contract.
-		if (Object.getPrototypeOf(this).appendEvents !== EventStore.prototype.appendEvents) {
-			return createLegacyEventStoreProxy(this, {
-				eventMap: context?.eventMap,
-				publisher: context?.publisher,
-				logger: this.logger,
-			});
-		}
-	}
-
-	/**
-	 * The event map of the store context.
-	 * @deprecated For stores that still override `appendEvents`, `getEvent` or `getEvents`; the base class serializes
-	 * and deserializes for the others. Removed before 4.0.
-	 */
-	// INTERIM(H)
-	protected get eventMap(): EventMap {
-		return this.context.eventMap;
-	}
+	) {}
 
 	/**
 	 * Appends events to a stream, all or nothing, and publishes their envelopes.
@@ -135,16 +99,30 @@ export abstract class EventStore<
 	 * - The returned envelopes carry their `globalPosition`. Unless `publish` is `false`, they are published once
 	 *   stored; publishing never makes the append fail.
 	 *
-	 * The deprecated form `appendEvents(stream, aggregateVersion, events, pool?)` passes the version of the aggregate
-	 * after the append, and emits a `DeprecationWarning` (`OCODA_ES_POSITIONAL_APPEND`) once per process.
-	 *
 	 * @throws InvalidAppendOptionsException, InvalidEventMetadataException, InvalidEventEnvelopeException or
 	 * UnsupportedOperationException before any I/O, when the arguments are invalid
 	 * @throws EventStoreVersionConflictException when the stream is not at the expected version
 	 * @throws EventStorePersistenceException when the append failed otherwise; its `outcome` says whether the events
 	 * may have been stored
 	 */
-	async appendEvents(stream: EventStream, ...args: AppendEventsArguments): Promise<EventEnvelope[]> {
+	appendEvents(
+		stream: EventStream,
+		events: readonly (IEvent | EventEnvelope)[],
+		options: AppendOptions,
+	): Promise<EventEnvelope[]>;
+	/**
+	 * Appends events to a stream in the 3.x form, where `aggregateVersion` is the version of the aggregate after the
+	 * append: the stream is expected at `aggregateVersion - events.length`, and the append works like the options form
+	 * with that expected version. Emits a `DeprecationWarning` (`OCODA_ES_POSITIONAL_APPEND`) once per process.
+	 * @deprecated Use `appendEvents(stream, events, { expectedVersion, pool })`. Removed in 5.0.
+	 */
+	appendEvents(
+		stream: EventStream,
+		aggregateVersion: number,
+		events: readonly (IEvent | EventEnvelope)[],
+		pool?: IEventPool,
+	): Promise<EventEnvelope[]>;
+	async appendEvents(stream: EventStream, ...args: unknown[]): Promise<EventEnvelope[]> {
 		const { items, expectedVersion, pool, metadata, publish } = normalizeAppendArguments(args);
 		const capabilities = resolveCapabilities(this.capabilities);
 		const component = this.constructor.name;
@@ -188,9 +166,7 @@ export abstract class EventStore<
 			const outcome = await this.persist(envelopes, { stream, collection, expectedVersion: head, pool });
 			if (outcome.status === 'committed') {
 				const committed = this.stampPositions(envelopes, outcome.positions, collection);
-				// INTERIM(H): a store on the legacy path whose own appendEvents calls this one through `super` is published
-				// by the legacy wrapper, which also honours `publish: false`; `this` is the wrapper then
-				if (publish && !isLegacyEventStore(this)) {
+				if (publish) {
 					await this.publishCommitted(committed);
 				}
 				return committed;
@@ -267,20 +243,14 @@ export abstract class EventStore<
 	 * Reads the version of a stream: the version of its last event, 0 when it has none.
 	 * @throws EventCollectionNotFoundException when the pool's collection doesn't exist
 	 */
-	// INTERIM(H): abstract once every store implements it
-	async getStreamVersion(_stream: EventStream, _pool?: IEventPool): Promise<number> {
-		throw new UnsupportedOperationException({ operation: 'getStreamVersion', component: this.constructor.name });
-	}
+	abstract getStreamVersion(stream: EventStream, pool?: IEventPool): Promise<number>;
 
 	/**
 	 * Reads the envelopes of a pool across streams, in the order of their global position, in batches. `fromPosition`
 	 * is inclusive: resume after a checkpoint with `fromPosition: checkpoint + 1n`.
 	 * @throws EventCollectionNotFoundException when the pool's collection doesn't exist
 	 */
-	// INTERIM(H): abstract once every store implements it
-	readAll(_filter?: IReadAllFilter): AsyncGenerator<EventEnvelope[]> {
-		return failing(new UnsupportedOperationException({ operation: 'readAll', component: this.constructor.name }));
-	}
+	abstract readAll(filter?: IReadAllFilter): AsyncGenerator<EventEnvelope[]>;
 
 	/**
 	 * Stores the envelopes of an append, all or nothing, and assigns their global positions. The envelopes are
@@ -295,54 +265,7 @@ export abstract class EventStore<
 	 *
 	 * It checks no versions and serializes nothing; the base class does. Never overwrites an event.
 	 */
-	// INTERIM(H): abstract once every store implements it
-	protected async persistEvents(_envelopes: readonly EventEnvelope[], _target: PersistTarget): Promise<PersistOutcome> {
-		throw new UnsupportedOperationException({ operation: 'persistEvents', component: this.constructor.name });
-	}
-
-	/**
-	 * @deprecated Replaced by `readAll()`; removed before 4.0.
-	 */
-	// INTERIM(H)
-	getAllEnvelopes(_filter: IAllEventsFilter): AsyncGenerator<EventEnvelope[]> {
-		return failing(
-			new UnsupportedOperationException({ operation: 'getAllEnvelopes', component: this.constructor.name }),
-		);
-	}
-
-	/**
-	 * The UTC year-months (`YYYY-MM`) from `sinceDate` to `untilDate` (default: the current month), for the 3.x
-	 * `getAllEnvelopes`.
-	 * @deprecated Removed before 4.0, with `getAllEnvelopes`.
-	 */
-	// INTERIM(H)
-	protected getYearMonthRange(
-		sinceDate: { year: number; month: number },
-		untilDate?: { year: number; month: number },
-	): string[] {
-		// Event buckets are based on UTC dates, so the current month has to be determined in UTC as well
-		const now = new Date();
-		const [untilYear, untilMonth] = untilDate
-			? [untilDate.year, untilDate.month]
-			: [now.getUTCFullYear(), now.getUTCMonth() + 1];
-		const since = Date.UTC(sinceDate.year, sinceDate.month - 1, 1, 0, 0, 0, 0);
-		const until = Date.UTC(untilYear, untilMonth, 0, 23, 59, 59, 999);
-
-		const yearMonthArray: string[] = [];
-		const currentDate = new Date(since);
-
-		// Continue looping until we pass the 'until' date
-		while (currentDate.getTime() <= until) {
-			const year = currentDate.getUTCFullYear();
-			const month = String(currentDate.getUTCMonth() + 1).padStart(2, '0'); // Convert month to 'MM' format
-			yearMonthArray.push(`${year}-${month}`);
-
-			// Move to the next month
-			currentDate.setUTCMonth(currentDate.getUTCMonth() + 1);
-		}
-
-		return yearMonthArray;
-	}
+	protected abstract persistEvents(envelopes: readonly EventEnvelope[], target: PersistTarget): Promise<PersistOutcome>;
 
 	/**
 	 * The envelope an item of an append is stored as: a new envelope for an event, or a copy of a pre-built envelope
@@ -472,14 +395,6 @@ export abstract class EventStore<
 
 // The walk of the implementation guard up a store's prototype chain stops here
 Object.defineProperty(EventStore.prototype, EVENT_STORE_BASE, { value: true });
-
-/**
- * A generator that fails on its first `next()`, like a read that fails.
- */
-// oxlint-disable-next-line require-yield -- it only throws
-async function* failing(error: Error): AsyncGenerator<never> {
-	throw error;
-}
 
 const withPresent = <K extends string, V>(key: K, value: V | null | undefined): { [P in K]?: V } =>
 	(isPresent(value) ? { [key]: value } : {}) as { [P in K]?: V };

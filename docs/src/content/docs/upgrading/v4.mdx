@@ -295,7 +295,7 @@ The database stores keep their 3.x appends until they move to schema v2. They ch
 
 **Reads.** `getEvent()` and `getEnvelope()` always return a promise, also on the in-memory store. On the in-memory store now, and on the database stores with schema v2, every read of a pool whose collection doesn't exist throws an `EventCollectionNotFoundException`; the in-memory store's `getEvents()` and `getEnvelopes()` yielded nothing and its `getEvent()` threw an `EventNotFoundException`. An append to such a pool throws an `EventStorePersistenceException` with `outcome: 'not-persisted'`, whose `cause` is the `EventCollectionNotFoundException`.
 
-**Custom stores.** The store is constructed with `(context, options)`, where `context` holds the event map and the publisher, and `options` no longer includes `useDefaultPool`. `EventStoreDriver` is now the type of that constructor rather than an interface of the store instance. A store implements the driver methods (`getStreamVersion`, `getEnvelope`, `getEnvelopes`, `readAll`, `persistEvents`) and declares its `capabilities`; the base class implements `appendEvents`, `getEvent` and `getEvents`, and a store that overrides one of them fails the bootstrap with an `InvalidEventStoreImplementationException`. A store that still overrides `appendEvents` the 3.x way keeps working in this prerelease, with the deprecated `this.eventMap`, once it takes `(context, options)`, returns promises from every method, and implements `getEnvelope` and `getEnvelopes`, which are required now; that path is removed before 4.0.0. See [Custom Event and Snapshot Stores](/advanced/custom-stores#migrating-a-3x-store).
+**Custom stores.** The store is constructed with `(context, options)`, where `context` holds the event map and the publisher, and `options` no longer includes `useDefaultPool`. `EventStoreDriver` is now the type of that constructor rather than an interface of the store instance. A store implements the driver methods (`getStreamVersion`, `getEnvelope`, `getEnvelopes`, `readAll`, `persistEvents`) and declares its `capabilities`; the base class implements `appendEvents`, `getEvent` and `getEvents`, and a store that overrides one of them fails the bootstrap with an `InvalidEventStoreImplementationException`. `this.eventMap` is gone: the base class serializes and deserializes the events. See [Custom Event and Snapshot Stores](/advanced/custom-stores#migrating-a-3x-store).
 
 ### Metadata and headers [#metadata-headers]
 
@@ -328,7 +328,7 @@ for await (const envelopes of eventStore.getAllEnvelopes({ since: { year: 2024, 
 for await (const envelopes of eventStore.readAll({ fromPosition: checkpoint + 1n })) { … }
 ```
 
-The in-memory store no longer has `getAllEnvelopes`. The database stores keep it until schema v2, and `getAllEnvelopes`, `IAllEventsFilter` and `EventStore.getYearMonthRange` are removed before 4.0.0. `capabilities.globalOrder` says whether a reader that tails the store can miss an event (`'best-effort'`) or not (`'gap-safe'`); the in-memory store is gap-safe.
+`getAllEnvelopes`, `IAllEventsFilter`, `EventStore.getYearMonthRange` and `ULID.yearMonth` are removed. `capabilities.globalOrder` says whether a reader that tails the store can miss an event (`'best-effort'`) or not (`'gap-safe'`); the in-memory store is gap-safe.
 
 ### Snapshot store [#snapshot-store]
 

@@ -114,7 +114,9 @@ The driver methods:
 
 Every method returns a promise (or an async generator), and every read throws an `EventCollectionNotFoundException` when the collection of the pool doesn't exist. `getEnvelope` throws an `EventNotFoundException` for an event that doesn't exist. Envelopes read from the database are built with `EventEnvelope.from(event, payload, metadata)`.
 
-**Don't override `appendEvents`, `getEvent` or `getEvents`.** The base class implements them for every store, and the module refuses a store that overrides one with an `InvalidEventStoreImplementationException` when it creates the store. `assertEventStoreImplementation(store)` runs the same check. To decorate appends, for tracing for instance, override `persistEvents` and call `super.persistEvents(envelopes, target)`.
+The driver methods are abstract, so TypeScript reports the ones your store lacks.
+
+**Don't override `appendEvents`, `getEvent` or `getEvents`.** The base class implements them for every store, and the module refuses a store that overrides one, also as a class field, with an `InvalidEventStoreImplementationException` when it creates the store, so the application fails to bootstrap. `assertEventStoreImplementation(store)` runs the same check. To decorate appends, for tracing for instance, override `persistEvents` and call `super.persistEvents(envelopes, target)`.
 
 #### Implement `persistEvents`
 The base class calls `persistEvents` once it has validated the append, serialized the events, numbered them and checked that the stream is at `target.expectedVersion`. The first envelope has the version `target.expectedVersion + 1`. `persistEvents` checks no versions and serializes nothing:
@@ -193,13 +195,11 @@ Cases that need a capability your store doesn't claim are skipped. A case your s
 
 #### Migrating a 3.x store
 1. The constructor becomes `(context, options)`. Remove yours, or pass both arguments on.
-2. Delete `appendEvents`, `getEvents`, `getEvent` and every use of `this.eventMap`.
-3. Implement `getStreamVersion`, `getEnvelope`, `getEnvelopes`, `readAll` and `persistEvents`. `readAll` replaces `getAllEnvelopes`, and with it the year-month column and `getYearMonthRange`.
+2. Delete `appendEvents`, `getEvents`, `getEvent` and every use of `this.eventMap`, which is gone: the base class serializes and deserializes the events. A store that still overrides one of those methods fails the bootstrap.
+3. Implement `getStreamVersion`, `getEnvelope`, `getEnvelopes`, `readAll` and `persistEvents`. `readAll` replaces `getAllEnvelopes`, and with it the year-month column, `getYearMonthRange`, `IAllEventsFilter` and `ULID.yearMonth`, which are removed.
 4. Make every method `async`.
 5. Store the correlation id, causation id, headers and event version, and declare your `capabilities`.
 6. Construct exceptions with a single object argument, plus the error options for the `cause`.
-
-A store that still overrides `appendEvents` the 3.x way keeps working in the next prerelease once it has taken steps 1 and 4 and implements `getEnvelope` and `getEnvelopes`, which are required now: the base class publishes what its `appendEvents` returns, and its `this.eventMap` is the event map of the context (deprecated). Such a store gets the appends in the 3.x form, and rejects `ExpectedVersion.Any`, append metadata, and pre-built envelopes with headers or an `eventVersion`. The built-in database stores work this way until they move to schema v2. This path, `getAllEnvelopes` and `getYearMonthRange` are removed before 4.0.0.
 
 ---
 

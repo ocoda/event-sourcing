@@ -109,7 +109,7 @@ const gappedStreamsOf = (pool: ManifestEventPool): string[] => {
 };
 
 /**
- * The order the migration numbers a pool in (ADR 0001 D33): the rank `r` in 3.x's order (`getAllEnvelopes`: event
+ * The order the migration numbers a pool in (ADR 0001 D33): the rank `r` in the order 3.x read all events in (event
  * date, event id; rows that share an event id by stream id and version), and per stream the running maximum `key` of
  * `r` by version; the positions follow `(key, version)`. Streams are grouped as the 3.x table compares their ids (case
  * insensitive), like the migration's window.
