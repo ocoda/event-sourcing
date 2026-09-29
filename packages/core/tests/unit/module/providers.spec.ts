@@ -21,8 +21,14 @@ describe('provider helpers', () => {
 	it('reads the class of a provider from its instance, or from a class provider without one', () => {
 		expect(providerClassOf(wrapper({ instance: new Handler(), metatype: () => undefined, inject: [] }))).toBe(Handler);
 		expect(providerClassOf(wrapper({ instance: undefined, metatype: Handler }))).toBe(Handler);
-		// A request-scoped factory: no instance, and the metatype is the factory
-		expect(providerClassOf(wrapper({ instance: null, metatype: () => new Handler(), inject: [] }))).toBeUndefined();
+		// A request-scoped factory: no instance, and the metatype is the factory, so its token counts if it is a class
+		const requestScoped = { isDependencyTreeStatic: () => false, isTransient: false };
+		const factory = { instance: null, metatype: () => new Handler(), inject: [] };
+		expect(providerClassOf(wrapper({ ...factory, ...requestScoped, token: Handler }))).toBe(Handler);
+		expect(providerClassOf(wrapper({ ...factory, ...requestScoped, token: 'HANDLER' }))).toBeUndefined();
+		expect(providerClassOf(wrapper({ ...factory, isTransient: true, token: Handler }))).toBe(Handler);
+		// A static factory that isn't instantiated yet: its token may name another class than the one it returns
+		expect(providerClassOf(wrapper({ ...factory, token: Handler }))).toBeUndefined();
 		// A plain value
 		expect(providerClassOf(wrapper({ instance: { plain: true }, metatype: null }))).toBeUndefined();
 		// A proxy that throws on unknown properties

@@ -4,7 +4,8 @@ import type { ProviderWrapper } from '../interfaces/index.js';
 /**
  * The class of a provider, to read its decorator metadata from: the constructor of its instance, so that providers
  * created with `useFactory` or `useValue` are found too, or the class of a class provider that has no instance yet.
- * `undefined` when neither is known, as for a request-scoped factory provider.
+ * A request-scoped or transient factory provider has no instance to read it from, so its token counts when that is a
+ * class (`{ provide: TheHandler, useFactory, scope }`). `undefined` when none of these is known.
  * @internal Not exported from the package.
  */
 export const providerClassOf = (wrapper: ProviderWrapper | undefined): Function | undefined => {
@@ -23,7 +24,11 @@ export const providerClassOf = (wrapper: ProviderWrapper | undefined): Function 
 	}
 	const metatype = wrapper?.metatype;
 	const isFactory = wrapper?.inject !== undefined && wrapper?.inject !== null;
-	return typeof metatype === 'function' && !isFactory ? metatype : undefined;
+	if (typeof metatype === 'function' && !isFactory) {
+		return metatype;
+	}
+	const token = wrapper?.token;
+	return wrapper && isFactory && typeof token === 'function' && !isStaticProvider(wrapper) ? token : undefined;
 };
 
 /**

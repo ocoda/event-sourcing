@@ -129,6 +129,12 @@ class RequestScopedSubscriber implements IEventSubscriber {
 	handle() {}
 }
 
+// Request-scoped through its factory provider, which uses the class as its token
+@EventSubscriber(OpenedEvent)
+class FactorySubscriber implements IEventSubscriber {
+	handle() {}
+}
+
 @Injectable({ scope: Scope.TRANSIENT })
 @EventPublisher()
 class TransientPublisher implements IEventPublisher {
@@ -249,6 +255,15 @@ describe('bootstrap validation', () => {
 			{ imports: [root()], providers: [RequestScopedSubscriber] },
 			'non-static-provider',
 			/subscriber RequestScopedSubscriber is request-scoped/,
+		],
+		[
+			'a request-scoped subscriber provided with useFactory',
+			{
+				imports: [root()],
+				providers: [{ provide: FactorySubscriber, useFactory: () => new FactorySubscriber(), scope: Scope.REQUEST }],
+			},
+			'non-static-provider',
+			/subscriber FactorySubscriber is request-scoped/,
 		],
 		[
 			'a transient publisher',

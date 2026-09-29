@@ -104,6 +104,8 @@ export abstract class EventStore<
 	 *
 	 * @throws InvalidAppendOptionsException, InvalidEventMetadataException, InvalidEventEnvelopeException or
 	 * UnsupportedOperationException before any I/O, when the arguments are invalid
+	 * @throws EventSourcingNotReadyException before any I/O, when called while Nest is still instantiating the providers
+	 * (from a provider factory or a constructor)
 	 * @throws EventStoreVersionConflictException when the stream is not at the expected version
 	 * @throws EventStorePersistenceException when the append failed otherwise; its `outcome` says whether the events
 	 * may have been stored
@@ -148,6 +150,9 @@ export abstract class EventStore<
 				});
 			}
 		}
+		// From a provider factory, this throws EventSourcingNotReadyException before any I/O, even for pre-built
+		// envelopes, which need no EventMap lookup: the publishers would miss the committed events (ADR 0001 §3)
+		this.context.eventMap.ensureRegistered('EventStore.appendEvents');
 
 		// Numbered from `expectedVersion`; an append with ExpectedVersion.Any is renumbered once the head is known
 		const firstVersion = expectedVersion === ExpectedVersion.Any ? 1 : expectedVersion + 1;
@@ -189,19 +194,23 @@ export abstract class EventStore<
 
 	/**
 	 * Reads an event of a stream.
+	 * @throws EventSourcingNotReadyException before any I/O, when called while Nest is still instantiating the providers
 	 * @throws EventNotFoundException when the stream has no event with that version
 	 * @throws EventCollectionNotFoundException when the pool's collection doesn't exist
 	 */
 	async getEvent(stream: EventStream, version: number, pool?: IEventPool): Promise<IEvent> {
+		this.context.eventMap.ensureRegistered('EventStore.getEvent');
 		const { event, payload } = await this.getEnvelope(stream, version, pool);
 		return this.context.eventMap.deserializeEvent(event, payload);
 	}
 
 	/**
 	 * Reads the events of a stream, in batches.
+	 * @throws EventSourcingNotReadyException before any I/O, when called while Nest is still instantiating the providers
 	 * @throws EventCollectionNotFoundException when the pool's collection doesn't exist
 	 */
 	async *getEvents(stream: EventStream, filter?: IEventFilter): AsyncGenerator<IEvent[]> {
+		this.context.eventMap.ensureRegistered('EventStore.getEvents');
 		for await (const envelopes of this.getEnvelopes(stream, filter)) {
 			yield envelopes.map(({ event, payload }) => this.context.eventMap.deserializeEvent(event, payload));
 		}

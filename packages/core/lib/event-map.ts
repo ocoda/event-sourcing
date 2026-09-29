@@ -33,6 +33,21 @@ export class EventMap {
 	 */
 	constructor(@Optional() @Inject(EVENT_SOURCING_REGISTRATION) private readonly registration?: Registration) {}
 
+	/**
+	 * In the `EventSourcingModule`: registers the events, serializers, handlers, subscribers and publishers of the
+	 * application, unless that happened already. The event store calls it before an append or a read of events does any
+	 * I/O, also when no lookup is needed (an append of pre-built envelopes). Does nothing for a map created with
+	 * `new EventMap()`.
+	 *
+	 * @param operation what triggered it, for the error message
+	 * @throws EventSourcingNotReadyException while Nest is still instantiating the providers
+	 * @throws EventSourcingConfigurationException listing every problem with the configuration
+	 * @internal Used by the `EventStore` template.
+	 */
+	ensureRegistered(operation: string): void {
+		this.registration?.ensureRegistered(operation);
+	}
+
 	public register<E extends IEvent>(cls: IEventConstructor<E>, serializer?: IEventSerializer): void {
 		const { name } = getEventMetadata(cls);
 

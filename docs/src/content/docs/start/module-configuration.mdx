@@ -65,12 +65,12 @@ export class AppModule {}
 ```
 
 <Aside>
-The module creates and connects the stores while Nest instantiates the providers, and creates the default pool (a collection named `events` and one named `snapshots`) right after. So a wrong connection string, an unreachable database or a table that still needs its [4.0 migration](/upgrading/v4#data-migration) fails the bootstrap, and a store that failed is disconnected again. Set `useDefaultPool: false` on the store configuration when you only want to work with pools per tenant, see [multitenancy](/advanced/multitenancy).
+The module creates and connects the stores while Nest instantiates the providers, and creates the default pool (a collection named `events` and one named `snapshots`) right after. So a wrong connection string, an unreachable database or a table that still needs its [4.0 migration](/upgrading/v4#data-migration) fails the bootstrap, and a store that failed is disconnected again (the snapshot store starts after the event store, which is disconnected too when the snapshot store fails). The error is thrown inside `NestFactory.create()`: with Nest's default `abortOnError: true`, Nest logs it and exits the process with code 1, so pass `NestFactory.create(AppModule, { abortOnError: false })` to catch it yourself. Set `useDefaultPool: false` on the store configuration when you only want to work with pools per tenant, see [multitenancy](/advanced/multitenancy).
 </Aside>
 
 ## Asynchronous configuration with `forRootAsync` [#for-root-async]
 
-Use `EventSourcingModule.forRootAsync()` when the options depend on something that isn't available yet when the module is declared, such as environment configuration or a secrets provider. The options are resolved before the stores are created, and can be provided in four ways.
+Use `EventSourcingModule.forRootAsync()` when the options depend on something that isn't available yet when the module is declared, such as environment configuration or a secrets provider. The options are resolved before the stores are created, and can be provided in three ways.
 
 <Tabs>
 <TabItem label="useFactory">
@@ -300,10 +300,10 @@ The module goes through these steps:
 2. **Module initialization (`onModuleInit`):** the providers of all modules are scanned, the whole configuration is [checked](#configuration-checks), and the events, serializers, handlers, subscribers and publishers are registered. If a provider of another module uses the event store or a bus in its own `onModuleInit` before that, which can happen with a `@Global()` module of yours, the registration runs right then.
 3. **Shutdown (`app.close()`):** the `EventBus` waits for the running publishers and subscribers (at most `publishing.shutdownTimeout`), then the stores disconnect.
 
-So from `onModuleInit` on, you can execute commands and queries and append or read events, and the publishers and subscribers receive every event appended from then on.
+So from `onModuleInit` on, you can execute commands and queries and append or read events, and the publishers and subscribers receive every event appended from then on. That can be before the `onModuleInit` of your publisher has run: Nest initializes the deepest modules first, so a publisher that connects to its broker in its own `onModuleInit` may get events appended from an earlier hook before it is connected. Connect it in an async provider factory instead, or buffer until it is connected.
 
 <Aside type="caution">
-Don't use the event store, the `EventMap` or a bus from a provider factory (`useFactory`) or a constructor. They run while Nest is still instantiating the providers, before the handlers exist, so the call fails with an `EventSourcingNotReadyException`, before anything is read or written. Move it to `onModuleInit` or a later lifecycle hook.
+Don't append or read events, execute commands or queries, or publish from a provider factory (`useFactory`) or a constructor. They run while Nest is still instantiating the providers, before the handlers exist, so the call fails with an `EventSourcingNotReadyException`, before anything is read, written or published. That includes appends of pre-built envelopes and appends with `publish: false`. Move it to `onModuleInit` or a later lifecycle hook. Only reading envelopes (`getEnvelope`, `getEnvelopes`, `readAll`) works there, since it needs no registration.
 </Aside>
 
 ### Request-scoped command and query handlers [#request-scoped-handlers]
@@ -340,7 +340,9 @@ export class AccountController {
 }
 ```
 
-The commands and queries executed for one request share its request-scoped instances. Without a request, every call gets new instances and `REQUEST` is `undefined`. A singleton handler is used as it is, and ignores the request.
+The commands and queries executed for one request share its request-scoped instances, and those of a request-scoped controller that handles the request. Without a request, every call gets new instances and `REQUEST` is `undefined`. A singleton handler is used as it is, and ignores the request.
+
+A request-scoped handler provided with `useFactory` has no instance to read its decorator from until it is resolved, so use the handler class as its token: `{ provide: OpenAccountCommandHandler, useFactory, inject: [REQUEST], scope: Scope.REQUEST }`.
 
 Subscribers, publishers and serializers are called outside of any request, for as long as the application runs, so they must be singletons (the default scope). A request-scoped or transient one fails the bootstrap; resolve request-scoped dependencies per call with `ModuleRef.resolve()` instead.
 

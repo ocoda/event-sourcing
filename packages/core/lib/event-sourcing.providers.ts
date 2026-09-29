@@ -41,7 +41,9 @@ const assertDriver = (driver: unknown, option: 'eventStore' | 'snapshotStore'): 
 const warnIfImplicitInMemory = (config: unknown, option: 'eventStore' | 'snapshotStore'): void => {
 	if (config === undefined && process.env.NODE_ENV === 'production') {
 		logger.warn(
-			`No ${option} is configured, so the module uses the in-memory ${option === 'eventStore' ? 'event' : 'snapshot'} store, which loses everything when the process stops. Configure ${option} with the driver of your database.`,
+			option === 'eventStore'
+				? 'No eventStore is configured, so the module uses the in-memory event store, which loses every event when the process stops. Configure eventStore with the driver of your database.'
+				: 'No snapshotStore is configured, so the module uses the in-memory snapshot store, which loses the snapshots when the process stops (the aggregates are then loaded from their events). If you use snapshots, configure snapshotStore with the driver of your database.',
 		);
 	}
 };
@@ -88,18 +90,33 @@ export const EventStoreProvider: FactoryProvider<EventStore> = {
 /**
  * Creates the snapshot store from `snapshotStore` (the in-memory store by default), like the event store but without
  * the context: the driver gets the config without `driver` and `useDefaultPool`.
+ *
+ * It starts after the event store, which it injects for that reason: when the event store fails, Nest doesn't create
+ * the snapshot store, and when the snapshot store fails, the event store is disconnected again. Either way a failed
+ * bootstrap leaves no connection open.
  */
 export const SnapshotStoreProvider: FactoryProvider<SnapshotStore> = {
 	provide: SnapshotStore,
-	useFactory: async (options: EventSourcingModuleOptions | undefined) => {
-		warnIfImplicitInMemory(options?.snapshotStore, 'snapshotStore');
-		const { driver, useDefaultPool, ...driverOptions } = options?.snapshotStore ?? { driver: InMemorySnapshotStore };
-		assertDriver(driver, 'snapshotStore');
-		const store = new driver(driverOptions);
-		await open(store, useDefaultPool !== false, 'snapshotStore');
-		return store;
+	useFactory: async (options: EventSourcingModuleOptions | undefined, eventStore: EventStore) => {
+		try {
+			warnIfImplicitInMemory(options?.snapshotStore, 'snapshotStore');
+			const { driver, useDefaultPool, ...driverOptions } = options?.snapshotStore ?? {
+				driver: InMemorySnapshotStore,
+			};
+			assertDriver(driver, 'snapshotStore');
+			const store = new driver(driverOptions);
+			await open(store, useDefaultPool !== false, 'snapshotStore');
+			return store;
+		} catch (error) {
+			try {
+				await eventStore.disconnect();
+			} catch (disconnectError) {
+				logger.error('Failed to disconnect the eventStore after the snapshotStore failed to start', disconnectError);
+			}
+			throw error;
+		}
 	},
-	inject: [EVENT_SOURCING_OPTIONS],
+	inject: [EVENT_SOURCING_OPTIONS, EventStore],
 };
 
 /**

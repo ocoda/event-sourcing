@@ -8,7 +8,7 @@ export interface EnvelopePublisher {
 	/**
 	 * Publishes the envelopes of one append, in order. A failing publisher never makes it reject: the failure is logged.
 	 * The `EventBus` rejects only when it is used while Nest is still instantiating the providers
-	 * (`EventSourcingNotReadyException`); the event store logs that too.
+	 * (`EventSourcingNotReadyException`); an append checks that before any I/O, so it doesn't get there.
 	 */
 	publishAll(envelopes: readonly EventEnvelope[]): Promise<void>;
 }

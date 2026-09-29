@@ -216,6 +216,47 @@ describe('forRoot and forRootAsync', () => {
 		expect(disconnect).toHaveBeenCalledTimes(1);
 	});
 
+	it('starts the snapshot store after the event store, and disconnects the event store when it fails', async () => {
+		const order: string[] = [];
+		const connect = InMemoryEventStore.prototype.connect;
+		vi.spyOn(InMemoryEventStore.prototype, 'connect').mockImplementation(async function (this: InMemoryEventStore) {
+			await connect.call(this);
+			order.push('event store connected');
+		});
+		const eventStoreDisconnect = vi.spyOn(InMemoryEventStore.prototype, 'disconnect');
+		const cause = new Error('snapshot store down');
+		vi.spyOn(InMemorySnapshotStore.prototype, 'connect').mockImplementation(async () => {
+			order.push('snapshot store connecting');
+			throw cause;
+		});
+
+		expect(await failure(compile({ imports: [EventSourcingModule.forRoot({})] }))).toBe(cause);
+		expect(order).toEqual(['event store connected', 'snapshot store connecting']);
+		expect(eventStoreDisconnect).toHaveBeenCalledTimes(1);
+	});
+
+	it('does not start the snapshot store when the event store fails', async () => {
+		const cause = new Error('event store down');
+		vi.spyOn(InMemoryEventStore.prototype, 'connect').mockRejectedValue(cause);
+		const snapshotStoreConnect = vi.spyOn(InMemorySnapshotStore.prototype, 'connect');
+
+		expect(await failure(compile({ imports: [EventSourcingModule.forRoot({})] }))).toBe(cause);
+		expect(snapshotStoreConnect).not.toHaveBeenCalled();
+	});
+
+	it('logs an event store that fails to disconnect after the snapshot store failed, and fails with the cause', async () => {
+		const cause = new Error('snapshot store down');
+		vi.spyOn(InMemorySnapshotStore.prototype, 'connect').mockRejectedValue(cause);
+		vi.spyOn(InMemoryEventStore.prototype, 'disconnect').mockRejectedValue(new Error('event store gone'));
+		const error = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+
+		expect(await failure(compile({ imports: [EventSourcingModule.forRoot({})] }))).toBe(cause);
+		expect(error).toHaveBeenCalledWith(
+			'Failed to disconnect the eventStore after the snapshotStore failed to start',
+			expect.any(Error),
+		);
+	});
+
 	it('still fails with the connection error when disconnecting the failed store fails too', async () => {
 		const cause = new Error('connection refused');
 		vi.spyOn(InMemoryEventStore.prototype, 'connect').mockRejectedValue(cause);
@@ -541,10 +582,67 @@ describe('registration', () => {
 			expect(error).toBeInstanceOf(EventSourcingNotReadyException);
 			expect(error).toMatchObject({
 				code: 'ES_EVENT_SOURCING_NOT_READY',
-				operation: 'The EventMap (appendEvents, getEvent, getEvents)',
+				operation: 'EventStore.appendEvents',
 				pendingProviders: expect.arrayContaining(['SEED']),
 			});
 			expect(getStreamVersion).not.toHaveBeenCalled();
+		});
+
+		it.each([
+			['a publishing append', {}],
+			['an append with publish: false', { publish: false }],
+		])('rejects %s of pre-built envelopes from a provider factory, before any I/O', async (_, options) => {
+			const getStreamVersion = vi.spyOn(InMemoryEventStore.prototype, 'getStreamVersion');
+			const persistEvents = vi.spyOn(InMemoryEventStore.prototype, 'persistEvents' as never);
+			const stream = streamOf();
+			const envelope = EventEnvelope.create(
+				'bootstrap-account-opened',
+				{},
+				{ aggregateId: stream.aggregateId, version: 1 },
+			);
+			const seed: Provider = {
+				provide: 'SEED',
+				inject: [EventStore],
+				useFactory: async (eventStore: EventStore) =>
+					eventStore.appendEvents(stream, [envelope], { expectedVersion: 0, ...options }),
+			};
+
+			const error = await failure(
+				compile({ imports: [EventSourcingModule.forRoot({ events: [AccountOpenedEvent] })], providers: [seed] }),
+			);
+
+			expect(error).toBeInstanceOf(EventSourcingNotReadyException);
+			expect(error).toMatchObject({ operation: 'EventStore.appendEvents' });
+			expect(getStreamVersion).not.toHaveBeenCalled();
+			expect(persistEvents).not.toHaveBeenCalled();
+		});
+
+		it('rejects reading events from a provider factory, before any I/O', async () => {
+			const getEnvelope = vi.spyOn(InMemoryEventStore.prototype, 'getEnvelope');
+			const getEnvelopes = vi.spyOn(InMemoryEventStore.prototype, 'getEnvelopes');
+			const reader = (provide: string, read: (eventStore: EventStore) => Promise<unknown>): Provider => ({
+				provide,
+				inject: [EventStore],
+				useFactory: read,
+			});
+			const imports = [EventSourcingModule.forRoot({ events: [AccountOpenedEvent] })];
+
+			const getEvent = await failure(
+				compile({ imports, providers: [reader('GET_EVENT', (store) => store.getEvent(streamOf(), 1))] }),
+			);
+			const getEvents = await failure(
+				compile({
+					imports,
+					providers: [reader('GET_EVENTS', (store) => store.getEvents(streamOf()).next())],
+				}),
+			);
+
+			expect(getEvent).toBeInstanceOf(EventSourcingNotReadyException);
+			expect(getEvent).toMatchObject({ operation: 'EventStore.getEvent' });
+			expect(getEvents).toBeInstanceOf(EventSourcingNotReadyException);
+			expect(getEvents).toMatchObject({ operation: 'EventStore.getEvents' });
+			expect(getEnvelope).not.toHaveBeenCalled();
+			expect(getEnvelopes).not.toHaveBeenCalled();
 		});
 
 		it('rejects a command from a provider factory with EventSourcingNotReadyException', async () => {
@@ -595,6 +693,7 @@ describe('command and query handlers', () => {
 	class DependentQuery extends Query<Seen> {}
 	class FactoryCommand extends Command<string> {}
 	class ValueQuery extends Query<string> {}
+	class RequestFactoryCommand extends Command<Seen> {}
 
 	let instances = 0;
 
@@ -664,6 +763,16 @@ describe('command and query handlers', () => {
 		}
 	}
 
+	// Request-scoped through its factory provider, which uses the class as its token
+	@CommandHandler(RequestFactoryCommand)
+	class RequestFactoryCommandHandler implements ICommandHandler<RequestFactoryCommand> {
+		readonly instance = ++instances;
+		constructor(private readonly request: unknown) {}
+		async execute() {
+			return { instance: this.instance, request: this.request };
+		}
+	}
+
 	const handlersApp = () =>
 		bootstrap({
 			imports: [EventSourcingModule.forRoot({})],
@@ -676,6 +785,12 @@ describe('command and query handlers', () => {
 				DependentQueryHandler,
 				{ provide: 'FACTORY_HANDLER', useFactory: () => new FactoryCommandHandler() },
 				{ provide: 'VALUE_HANDLER', useValue: new ValueQueryHandler() },
+				{
+					provide: RequestFactoryCommandHandler,
+					useFactory: (request: unknown) => new RequestFactoryCommandHandler(request),
+					inject: [REQUEST],
+					scope: Scope.REQUEST,
+				},
 			],
 		});
 
@@ -763,6 +878,20 @@ describe('command and query handlers', () => {
 
 		await expect(app.get(CommandBus).execute(new FactoryCommand())).resolves.toBe('from a factory provider');
 		await expect(app.get(QueryBus).execute(new ValueQuery())).resolves.toBe('from a value provider');
+	});
+
+	it('resolves a request-scoped handler provided with useFactory by its class token, per call', async () => {
+		const commandBus = (await handlersApp()).get(CommandBus);
+		const request = { id: 'factory' };
+
+		const first = await commandBus.execute(new RequestFactoryCommand(), { request });
+		const again = await commandBus.execute(new RequestFactoryCommand(), { request });
+		const withoutRequest = await commandBus.execute(new RequestFactoryCommand());
+
+		expect(first.request).toBe(request);
+		expect(again.instance).toBe(first.instance);
+		expect(withoutRequest.instance).not.toBe(first.instance);
+		expect(withoutRequest.request).toBeUndefined();
 	});
 
 	it('publishes a command only once its handler is resolved', async () => {

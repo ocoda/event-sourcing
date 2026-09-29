@@ -1,9 +1,11 @@
 import { EventSourcingError, EventSourcingErrorCode } from '../event-sourcing-error.js';
 
 /**
- * Thrown when the event store, the event map or a bus is used while Nest is still instantiating the providers, for
- * instance from a provider factory or a constructor. The handlers, subscribers, publishers and serializers are
- * registered once every provider exists, so nothing was read, written or executed.
+ * Thrown when events are appended or read (`appendEvents`, `getEvent`, `getEvents`), a command or query is executed,
+ * events are published or the event map is used while Nest is still instantiating the providers, for instance from a
+ * provider factory or a constructor. The handlers, subscribers, publishers and serializers are registered once every
+ * provider exists, so it is thrown before anything was read, written, executed or published. Reading envelopes
+ * (`getEnvelope`, `getEnvelopes`, `readAll`) needs no registration and works from there.
  *
  * Move the call to a lifecycle hook (`onModuleInit` or later): from there on, the module registers everything on first
  * use.
