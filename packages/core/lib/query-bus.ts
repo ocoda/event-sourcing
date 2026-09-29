@@ -58,7 +58,7 @@ export class QueryBus<QueryBase extends IQuery = IQuery>
 	/**
 	 * Routes the instances of `query` to `handler`, replacing a handler registered for it before.
 	 */
-	bind<TQuery extends QueryBase>(handler: IQueryHandler<TQuery, unknown>, query: Type<TQuery>) {
+	bind<TQuery extends QueryBase>(handler: IQueryHandler<TQuery>, query: Type<TQuery>) {
 		this.handlers.set(query, handler);
 	}
 

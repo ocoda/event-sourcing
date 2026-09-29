@@ -57,7 +57,7 @@ export class CommandBus<CommandBase extends ICommand = ICommand>
 	/**
 	 * Routes the instances of `command` to `handler`, replacing a handler registered for it before.
 	 */
-	bind<TCommand extends CommandBase>(handler: ICommandHandler<TCommand, unknown>, command: Type<TCommand>) {
+	bind<TCommand extends CommandBase>(handler: ICommandHandler<TCommand>, command: Type<TCommand>) {
 		this.handlers.set(command, handler);
 	}
 

@@ -102,6 +102,8 @@ describe(CommandBus, () => {
 				void bus.execute(null);
 				// @ts-expect-error the result of a typed command can't be retyped
 				const _wrongResult: Promise<string> = bus.execute(new OpenAccountCommand());
+				// @ts-expect-error the bound handler resolves to a string, the command to an AccountId
+				bus.bind({ execute: async () => 'account-1' }, OpenAccountCommand);
 				// @ts-expect-error a plain object is not a Command: the result brand is required, so it is not a weak type
 				const _literal: CloseAccountCommand = { accountId: 'account-1' };
 

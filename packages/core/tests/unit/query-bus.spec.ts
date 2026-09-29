@@ -83,6 +83,8 @@ describe(QueryBus, () => {
 				void bus.execute(42);
 				// @ts-expect-error the result of a typed query can't be retyped
 				const _wrongResult: Promise<string> = bus.execute(new GetAccountQuery('account-1'));
+				// @ts-expect-error the bound handler resolves to a number, the query to an AccountDto
+				bus.bind({ execute: async () => 42 }, GetAccountQuery);
 				// @ts-expect-error Query has no default result type
 				class _UntypedQuery extends Query {}
 
