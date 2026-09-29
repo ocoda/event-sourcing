@@ -1,0 +1,63 @@
+name: Feature request
+description: Propose a new capability, API or option.
+title: "[feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for a concrete proposal. To explore an idea first, start a thread in [Discussions ideas](https://github.com/ocoda/event-sourcing/discussions/categories/ideas).
+
+        New features land in v4 on `master`. The 3.x line only receives security and critical bug fixes.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What you are trying to do, and what gets in the way today.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed API or behaviour
+      description: How it could work. A code sketch of what you would like to write helps.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives and workarounds
+      description: Other approaches you considered, and what you do today instead.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: packages
+    attributes:
+      label: Packages
+      description: Which packages the change would touch.
+      multiple: true
+      options:
+        - "@ocoda/event-sourcing (core)"
+        - "@ocoda/event-sourcing-postgres"
+        - "@ocoda/event-sourcing-mariadb"
+        - "@ocoda/event-sourcing-mongodb"
+        - "A new store integration"
+        - "Documentation"
+        - "Not sure"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: contribute
+    attributes:
+      label: Would you contribute this?
+      options:
+        - "Yes, I'd open a pull request"
+        - "Yes, with some guidance"
+        - "No"
+    validations:
+      required: true
