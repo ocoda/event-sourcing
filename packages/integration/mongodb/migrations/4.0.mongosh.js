@@ -8,11 +8,37 @@
 // 1. Take a backup, and make sure the oplog window and the disk have room (see the MongoDB integration guide).
 // 2. Stop every 3.x instance.
 // 3. Run it once, on the 3.x collections: mongosh "mongodb://<host>/<database of the stores>" 4.0.mongosh.js
-// It stops at the first error; migrate() resumes a run that stopped. After step "register" 4.0 can run.
+// It first checks what migrate() checks before it writes (and stops there, changing nothing), then stops at the first
+// error of a step. migrate() resumes a run that stopped once the script's lease expires (10 minutes after it was
+// taken), or at once with force: true. After step "register" 4.0 can run.
 
 const owner = `mongosh-${new Date().toISOString()}`;
 const catalog = db.getCollection('event_sourcing_collections');
 const canonicalIds = db.getCollection('events').countDocuments({ _id: { $not: /^[0-9A-HJKMNP-TV-Z]{26}$/ } }) === 0;
+
+// Preflight: what blocks migrate(), checked before anything is written
+const events = db.getCollection('events');
+const preflight = [
+	Number(db.version().split('.')[0]) >= 5 ||
+		`MongoDB ${db.version()} can't number the events on the server: MongoDB 5.0 or later is needed`,
+	db.getCollectionInfos({ name: 'events' }).length === 1 || 'there is no events collection',
+	catalog.countDocuments({ _id: 'events', schemaVersion: 2 }) === 0 ||
+		'events is registered with schema version 2 already: run migrate() for what is left',
+	!db.getCollectionInfos({ name: 'events' })[0]?.options?.validator ||
+		'events has a validator: a validator of your own (remove it), or a migration that stopped (run migrate(), which resumes it)',
+	catalog.countDocuments({ _id: { $in: ['lock:migrate:events', 'lock:migrate:snapshots'] } }) === 0 ||
+		'another migration holds a lease on events or snapshots: wait for it, or run migrate() with force: true if it was interrupted',
+	events.getIndexes().some(({ key, unique }) => unique && JSON.stringify(key) === '{"streamId":1,"version":1}') ||
+		'the unique { streamId: 1, version: 1 } index of events is missing; create it, then migrate',
+	events.countDocuments({ _id: { $not: { $type: 'string' } } }) === 0 ||
+		'events has event ids that are not strings; 3.x never wrote such events',
+	canonicalIds ||
+		events.countDocuments({ eventDate: { $not: { $type: 'string' } } }) === 0 ||
+		'events has events without an eventDate string; 3.x never wrote such events',
+].filter((check) => check !== true);
+if (preflight.length > 0) {
+	throw new Error(`Nothing was migrated: ${preflight.join('; ')}`);
+}
 
 // Events: fence 3.x writers off, number, index, register (the commit point), then clean up
 // events: lease (lock: none)
@@ -51,7 +77,11 @@ if (canonicalIds) {
 					output: { k: { $max: '$r', window: { documents: ['unbounded', 'current'] } } },
 				},
 			},
-			{ $set: { orderKey: { $add: [{ $multiply: [{ $toLong: '$k' }, NumberLong('2147483648')] }, '$version'] } } },
+			{
+				$set: {
+					orderKey: { $add: [{ $multiply: [{ $toLong: '$k' }, NumberLong('2147483648')] }, { $toLong: '$version' }] },
+				},
+			},
 			{ $setWindowFields: { sortBy: { orderKey: 1 }, output: { position: { $documentNumber: {} } } } },
 			{ $project: { _id: 1, globalPosition: { $toLong: '$position' } } },
 			{ $merge: { into: 'events', on: '_id', whenMatched: 'merge', whenNotMatched: 'fail' } },
@@ -70,7 +100,11 @@ if (canonicalIds) {
 					output: { k: { $max: '$r', window: { documents: ['unbounded', 'current'] } } },
 				},
 			},
-			{ $set: { orderKey: { $add: [{ $multiply: [{ $toLong: '$k' }, NumberLong('2147483648')] }, '$version'] } } },
+			{
+				$set: {
+					orderKey: { $add: [{ $multiply: [{ $toLong: '$k' }, NumberLong('2147483648')] }, { $toLong: '$version' }] },
+				},
+			},
 			{ $setWindowFields: { sortBy: { orderKey: 1 }, output: { position: { $documentNumber: {} } } } },
 			{ $project: { _id: 1, globalPosition: { $toLong: '$position' } } },
 			{ $merge: { into: 'events', on: '_id', whenMatched: 'merge', whenNotMatched: 'fail' } },
@@ -136,12 +170,18 @@ db.getCollection('snapshots')
 		],
 		{ allowDiskUse: true },
 	)
-	.forEach(({ _id, top }) => {
+	.forEach(({ _id }) => {
+		const top = db
+			.getCollection('snapshots')
+			.find({ streamId: _id }, { _id: 1, version: 1 })
+			.sort({ version: -1 })
+			.limit(1)
+			.next();
 		db.getCollection('snapshots').updateMany(
-			{ streamId: _id, _id: { $ne: top }, latest: { $exists: true } },
+			{ streamId: _id, version: { $lt: top.version }, latest: { $exists: true } },
 			{ $unset: { latest: '' } },
 		);
-		db.getCollection('snapshots').updateOne({ _id: top }, { $set: { latest: 'latest#' + _id } });
+		db.getCollection('snapshots').updateOne({ _id: top._id }, { $set: { latest: 'latest#' + _id } });
 	});
 
 // snapshots: index (lock: exclusive collection lock at the start and the end of the index build)

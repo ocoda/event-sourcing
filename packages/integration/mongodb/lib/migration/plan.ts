@@ -61,14 +61,37 @@ export interface MigrationEnvironment {
 }
 
 /**
- * The actions a migration needs on the collection it migrates (the numbering's `$merge` inserts and updates), and on
- * the catalog (registration and lease).
+ * The actions a migration needs on the collection it migrates: to inspect it, and per step it runs (the numbering's
+ * `$merge` inserts and updates); and on the catalog, for the registration and the lease, whenever a step runs.
  */
 export const MIGRATION_ACTIONS = {
-	events: ['find', 'insert', 'update', 'collMod', 'createIndex', 'dropIndex', 'listIndexes'],
-	snapshots: ['find', 'update', 'createIndex', 'dropIndex', 'listIndexes'],
+	inspect: ['find', 'listIndexes'],
+	events: {
+		fence: ['collMod'],
+		number: ['insert', 'update'],
+		index: ['createIndex'],
+		'drop-event-date-indexes': ['dropIndex'],
+		'unset-event-date': ['update'],
+	} as Partial<Record<EventStepName, readonly string[]>>,
+	snapshots: {
+		'unset-null-latest': ['update'],
+		'repair-latest-flags': ['update'],
+		index: ['createIndex', 'dropIndex'],
+		'drop-latest-indexes': ['dropIndex'],
+	} as Partial<Record<SnapshotStepName, readonly string[]>>,
 	catalog: ['find', 'insert', 'update', 'remove'],
 } as const;
+
+/** The actions the pending steps need on the collection. */
+const actionsOf = <S extends string>(
+	steps: readonly MigrationStep[],
+	actions: Partial<Record<S, readonly string[]>>,
+): string[] => [
+	...new Set([
+		...MIGRATION_ACTIONS.inspect,
+		...steps.filter(({ status }) => status === 'pending').flatMap(({ name }) => actions[name as S] ?? []),
+	]),
+];
 
 const covers = (resource: Privilege['resource'], database: string, collection: string): boolean =>
 	resource.anyResource === true ||
@@ -94,14 +117,21 @@ export const missingActions = (
 					),
 			);
 
-/** Why the privileges block the migration of a collection, if they do. */
-const privilegeBlock = (
+/**
+ * Why the privileges block the migration of a collection, if they do: the actions of the steps it still has to run,
+ * on the collection and on the catalog. Nothing to run needs nothing.
+ */
+const privilegeBlock = <S extends string>(
 	environment: MigrationEnvironment,
 	collection: string,
-	actions: readonly string[],
+	planned: readonly MigrationStep[],
+	stepActions: Partial<Record<S, readonly string[]>>,
 ): string | undefined => {
+	if (!planned.some(({ status }) => status === 'pending')) {
+		return undefined;
+	}
 	const missing = [
-		...missingActions(environment.privileges, environment.database, collection, actions).map(
+		...missingActions(environment.privileges, environment.database, collection, actionsOf(planned, stepActions)).map(
 			(action) => `${action} on ${environment.database}.${collection}`,
 		),
 		...missingActions(environment.privileges, environment.database, CATALOG_COLLECTION, MIGRATION_ACTIONS.catalog).map(
@@ -111,6 +141,16 @@ const privilegeBlock = (
 	return missing.length > 0
 		? `the user lacks privileges the migration needs: ${missing.join(', ')} (the dbAdmin and readWrite roles on the database grant them)`
 		: undefined;
+};
+
+/** Why sharding blocks the migration of a collection, if it does. */
+const shardingBlock = (sharded: boolean | 'unknown', collection: string, kind: 'event' | 'snapshot'): string[] => {
+	if (sharded === 'unknown') {
+		return [
+			`can't tell whether ${collection} is sharded: the user may not read config.collections; grant it find on config.collections (the clusterMonitor role has it), then migrate`,
+		];
+	}
+	return sharded ? [`the collection is sharded: migrating sharded ${kind} collections is not supported`] : [];
 };
 
 /** What `migrate()` found in an event collection. */
@@ -134,7 +174,8 @@ export interface EventCollectionInspection {
 	/** Events without an `eventDate` string, counted only when there are non-canonical ids. */
 	withoutEventDate: number;
 	gappedStreams: { total: number; sample: MigrationGappedStream[] };
-	sharded: boolean;
+	/** Whether the collection is sharded; `'unknown'` when the user may not read `config.collections`. */
+	sharded: boolean | 'unknown';
 	lease?: Lease;
 }
 
@@ -154,7 +195,8 @@ export interface SnapshotCollectionInspection {
 	missingLatest: number;
 	/** Streams with one flagged snapshot that isn't the one with the highest version. */
 	misflagged: number;
-	sharded: boolean;
+	/** Whether the collection is sharded; `'unknown'` when the user may not read `config.collections`. */
+	sharded: boolean | 'unknown';
 	lease?: Lease;
 }
 
@@ -227,7 +269,9 @@ export const numberingPipeline = (collection: string, key: NumberingKey): Docume
 			output: { k: { $max: '$r', window: { documents: ['unbounded', 'current'] } } },
 		},
 	},
-	{ $set: { orderKey: { $add: [{ $multiply: [{ $toLong: '$k' }, VERSION_SPAN] }, '$version'] } } },
+	// Both terms 64-bit integers: a version stored as a double (by mongosh, for instance) would make the sum a double,
+	// which rounds the version off from k >= 2^22
+	{ $set: { orderKey: { $add: [{ $multiply: [{ $toLong: '$k' }, VERSION_SPAN] }, { $toLong: '$version' }] } } },
 	{ $setWindowFields: { sortBy: { orderKey: 1 }, output: { position: { $documentNumber: {} } } } },
 	{ $project: { _id: 1, globalPosition: { $toLong: '$position' } } },
 	{ $merge: { into: collection, on: '_id', whenMatched: 'merge', whenNotMatched: 'fail' } },
@@ -248,8 +292,15 @@ export const legacyLatestIndexes = (indexes: readonly IndexInfo[]): string[] =>
 		)
 		.map(({ name }) => name);
 
-/** The owner of a lease in a statement: a placeholder in a report, a variable in the committed script. */
-const OWNER_PLACEHOLDER = '<owner>';
+/**
+ * The owner of a lease in a statement, as a mongosh expression: a string literal (the owner of the run, or a
+ * placeholder in the report of a dry run), and a variable in the committed script.
+ */
+const OWNER_PLACEHOLDER = toShell('<owner>');
+
+/** The owner of this run's lease as a mongosh expression, if it holds one. */
+const ownerExpression = (options: PlanOptions): string | undefined =>
+	options.owner === undefined ? undefined : toShell(options.owner);
 
 const leaseStatement = (collection: string, owner = OWNER_PLACEHOLDER): string =>
 	`${shellCollection(CATALOG_COLLECTION)}.insertOne({ _id: ${toShell(leaseIdOf(collection))}, kind: 'lock', owner: ${owner}, expiresAt: new Date(Date.now() + ${LEASE_MS}) })`;
@@ -305,7 +356,7 @@ export const snapshotStepStatement = (
 		case 'unset-null-latest':
 			return `${coll}.updateMany({ latest: { $type: 'null' } }, { $unset: { latest: '' } })`;
 		case 'repair-latest-flags':
-			return `${coll}.aggregate(${toShell(latestRepairPipeline())}, { allowDiskUse: true }).forEach(({ _id, top }) => { ${coll}.updateMany({ streamId: _id, _id: { $ne: top }, latest: { $exists: true } }, { $unset: { latest: '' } }); ${coll}.updateOne({ _id: top }, { $set: { latest: 'latest#' + _id } }); })`;
+			return `${coll}.aggregate(${toShell(latestRepairPipeline())}, { allowDiskUse: true }).forEach(({ _id }) => { const top = ${coll}.find({ streamId: _id }, { _id: 1, version: 1 }).sort({ version: -1 }).limit(1).next(); ${coll}.updateMany({ streamId: _id, version: { $lt: top.version }, latest: { $exists: true } }, { $unset: { latest: '' } }); ${coll}.updateOne({ _id: top._id }, { $set: { latest: 'latest#' + _id } }); })`;
 		case 'index':
 			return `${coll}.createIndex(${toShell(SNAPSHOT_INDEXES[1].key)}, ${toShell({ unique: true, partialFilterExpression: SNAPSHOT_INDEXES[1].partialFilterExpression, name: LATEST_UNIQUE_INDEX })})`;
 		case 'drop-latest-indexes': {
@@ -323,7 +374,12 @@ export const snapshotStepStatement = (
 
 /**
  * The streams whose latest flag needs repair: several flags, none, or one that isn't on the highest version. Yields
- * `{ _id: streamId, top: <the _id of the snapshot with the highest version> }`.
+ * `{ _id: streamId, top: <the _id of the snapshot with the highest version>, flags }`.
+ *
+ * The repair reads the highest version of each such stream again, then unflags the versions below it and flags it:
+ * a 4.0 store may append snapshots while the repair runs (3.x snapshot collections keep working), and such a snapshot
+ * keeps its flag. A snapshot appended between that read and the flag leaves two flags, on which the unique index
+ * build fails; a second run repairs it.
  */
 export const latestRepairPipeline = (): Document[] => [
 	{ $sort: { streamId: 1, version: -1 } },
@@ -452,9 +508,7 @@ export const planEventCollection = (
 				`MongoDB ${environment.serverVersion} can't number the events on the server: MongoDB 5.0 or later is needed`,
 			);
 		}
-		if (inspection.sharded) {
-			blocking.push('the collection is sharded: migrating sharded event collections is not supported');
-		}
+		blocking.push(...shardingBlock(inspection.sharded, name, 'event'));
 		if (inspection.nonStringIds > 0) {
 			blocking.push(
 				`${inspection.nonStringIds} event(s) have an _id that is not a string; 3.x never wrote such events`,
@@ -469,10 +523,6 @@ export const planEventCollection = (
 		if (!hasUniqueIndex(inspection.indexes, { streamId: 1, version: 1 })) {
 			blocking.push('the unique { streamId: 1, version: 1 } index is missing; create it, then migrate');
 		}
-	}
-	const privileges = privilegeBlock(environment, name, MIGRATION_ACTIONS.events);
-	if (privileges && (!registered || inspection.eventDateLeft || eventDateIndexes(inspection.indexes).length > 0)) {
-		blocking.push(privileges);
 	}
 	const leaseBlocking = leaseBlock(inspection.lease, options, environment.now);
 	if (leaseBlocking) {
@@ -500,7 +550,8 @@ export const planEventCollection = (
 			case 'fence':
 				return !registered && inspection.validator !== 'v2';
 			case 'number':
-				return !registered && (from === 'v1' ? inspection.rows > 0 : inspection.unpositioned > 0);
+				// A 3.x collection is numbered even when it looked empty: a 3.x writer may insert before the fence
+				return !registered && (from === 'v1' || inspection.unpositioned > 0);
 			case 'index':
 				return !hasUniqueIndex(inspection.indexes, { globalPosition: 1 });
 			case 'register':
@@ -513,15 +564,22 @@ export const planEventCollection = (
 				return false;
 		}
 	};
-	const list = withLease(
-		steps(
-			EVENT_STEPS,
-			pending,
-			(step) => eventStepStatement(name, step, { numbering, indexes: inspection.indexes }),
-			EVENT_LOCKS,
-			blocking.length > 0,
-		),
-	);
+	const owner = ownerExpression(options);
+	const plan = (blocked: boolean) =>
+		withLease(
+			steps(
+				EVENT_STEPS,
+				pending,
+				(step) => eventStepStatement(name, step, { numbering, indexes: inspection.indexes, owner }),
+				EVENT_LOCKS,
+				blocked,
+			),
+		);
+	const privileges = privilegeBlock(environment, name, plan(false), MIGRATION_ACTIONS.events);
+	if (privileges) {
+		blocking.push(privileges);
+	}
+	const list = plan(blocking.length > 0);
 
 	return {
 		numbering,
@@ -563,14 +621,7 @@ export const planSnapshotCollection = (
 	const unique = hasLatestUniqueIndex(inspection.indexes);
 	const from: MigrationCollectionReport['from'] = registered ? 'v2' : unique ? 'v1-partial' : 'v1';
 
-	const blocking: string[] = [];
-	if (inspection.sharded && !registered) {
-		blocking.push('the collection is sharded: migrating sharded snapshot collections is not supported');
-	}
-	const privileges = privilegeBlock(environment, name, MIGRATION_ACTIONS.snapshots);
-	if (privileges && !(registered && unique)) {
-		blocking.push(privileges);
-	}
+	const blocking: string[] = registered ? [] : shardingBlock(inspection.sharded, name, 'snapshot');
 	const leaseBlocking = leaseBlock(inspection.lease, options, environment.now);
 	if (leaseBlocking) {
 		blocking.push(leaseBlocking);
@@ -599,15 +650,22 @@ export const planSnapshotCollection = (
 				return false;
 		}
 	};
-	const list = withLease(
-		steps(
-			SNAPSHOT_STEPS,
-			pending,
-			(step) => snapshotStepStatement(name, step, { indexes: inspection.indexes }),
-			SNAPSHOT_LOCKS,
-			blocking.length > 0,
-		),
-	);
+	const owner = ownerExpression(options);
+	const plan = (blocked: boolean) =>
+		withLease(
+			steps(
+				SNAPSHOT_STEPS,
+				pending,
+				(step) => snapshotStepStatement(name, step, { indexes: inspection.indexes, owner }),
+				SNAPSHOT_LOCKS,
+				blocked,
+			),
+		);
+	const privileges = privilegeBlock(environment, name, plan(false), MIGRATION_ACTIONS.snapshots);
+	if (privileges) {
+		blocking.push(privileges);
+	}
+	const list = plan(blocking.length > 0);
 
 	return {
 		...base,

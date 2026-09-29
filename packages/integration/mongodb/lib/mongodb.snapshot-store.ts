@@ -39,9 +39,12 @@ import {
 	APPEND_LIMITS,
 	backoff,
 	batchCursor,
+	commitWithRetries,
 	duplicateKeyOf,
 	hasErrorLabel,
 	isNamespaceExistsError,
+	transactionOptions,
+	withoutOperationTimeouts,
 } from './mongodb.utils.js';
 
 type SnapshotDocument = MongoDBSnapshotEntity<AggregateRoot>;
@@ -78,13 +81,14 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 
 	/**
 	 * Migrates the 3.x snapshot collections of a database to schema v2, without bootstrapping the application. See
-	 * `migrate()`.
+	 * `migrate()`. Like `MongoDBEventStore.migrate()`, its client leaves out the `timeoutMS` and `socketTimeoutMS` of
+	 * the config and of the connection string.
 	 */
 	static async migrate(
 		config: Omit<MongoDBSnapshotStoreConfig, 'driver'>,
 		options?: MongoDBMigrationOptions,
 	): Promise<MigrationReport> {
-		const store = new MongoDBSnapshotStore({ ...config, driver: MongoDBSnapshotStore });
+		const store = new MongoDBSnapshotStore({ ...withoutOperationTimeouts(config), driver: MongoDBSnapshotStore });
 		await store.connect();
 		try {
 			return await store.migrate(options);
@@ -226,7 +230,7 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 				const outcome =
 					this.topology === 'standalone'
 						? await this.appendWithRepair(target, entity)
-						: await this.appendInTransaction(target, entity);
+						: await this.appendInTransaction(target, entity, deadline);
 				if (outcome === 'appended') {
 					return envelope;
 				}
@@ -394,17 +398,17 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 	/**
 	 * A replica set: reads the last snapshot, unflags the previous latest and inserts the new one, in one transaction.
 	 */
-	private async appendInTransaction(target: AppendTarget, entity: SnapshotDocument): Promise<'appended' | 'raced'> {
+	private async appendInTransaction(
+		target: AppendTarget,
+		entity: SnapshotDocument,
+		deadline: number,
+	): Promise<'appended' | 'raced'> {
 		if (!this.client) {
 			throw new Error('The MongoDB snapshot store is not connected: call connect() first');
 		}
 		const session = this.client.startSession();
 		try {
-			session.startTransaction({
-				readConcern: { level: 'snapshot' },
-				writeConcern: { w: 'majority' },
-				readPreference: 'primary',
-			});
+			session.startTransaction(transactionOptions(deadline));
 			await this.assertAfterLast(target, entity.version, session);
 			await this.snapshots(target.collection).updateMany(
 				{ streamId: target.stream.streamId, latest: { $exists: true }, version: { $lt: entity.version } },
@@ -412,7 +416,7 @@ export class MongoDBSnapshotStore extends SnapshotStore<MongoDBSnapshotStoreConf
 				{ session },
 			);
 			await this.snapshots(target.collection).insertOne(entity, { session });
-			await session.commitTransaction();
+			await commitWithRetries(session);
 			return 'appended';
 		} catch (error) {
 			if (session.inTransaction()) {

@@ -10,10 +10,10 @@ import {
 } from '../mongodb.schema.js';
 import { type MigrationContext, discoverCollections, inspectSnapshotCollection, readEnvironment } from './inspect.js';
 import { type SnapshotStepName, latestRepairPipeline, legacyLatestIndexes, planSnapshotCollection } from './plan.js';
-import { collectionsOf, reportOf, runUnderLease } from './runner.js';
+import { DEFAULT_LOCK_TIMEOUT_MS, collectionsOf, reportOf, runUnderLease, waitingForLock } from './runner.js';
 
 /** The fields of a snapshot document the migration touches. */
-type SnapshotFields = { _id: string; streamId: string; latest?: string | null };
+type SnapshotFields = { _id: string; streamId: string; version: number; latest?: string | null };
 
 /** Error codes of `createIndexes` for an index whose key another index has with other options. */
 const INDEX_CONFLICTS = new Set([85, 86]);
@@ -45,14 +45,23 @@ export const migrateSnapshotCollections = async (
 					{ ...environment, now: new Date() },
 					{ ...options, owner },
 				);
-				return { report, runStep: (step) => runSnapshotStep(context, name, step as SnapshotStepName) };
+				return {
+					report,
+					runStep: (step) =>
+						runSnapshotStep(context, name, step as SnapshotStepName, options.lockTimeoutMs ?? DEFAULT_LOCK_TIMEOUT_MS),
+				};
 			}),
 		);
 	}
 	return reportOf(options, environment, collections);
 };
 
-const runSnapshotStep = async ({ db }: MigrationContext, name: string, step: SnapshotStepName): Promise<void> => {
+const runSnapshotStep = async (
+	{ db }: MigrationContext,
+	name: string,
+	step: SnapshotStepName,
+	lockTimeoutMs: number,
+): Promise<void> => {
 	const collection = db.collection<SnapshotFields>(name);
 	const latestUnique = SNAPSHOT_INDEXES[1];
 	switch (step) {
@@ -60,15 +69,23 @@ const runSnapshotStep = async ({ db }: MigrationContext, name: string, step: Sna
 			await collection.updateMany({ latest: { $type: 'null' } }, { $unset: { latest: '' } });
 			return;
 		case 'repair-latest-flags': {
-			// $group is blocking, so the updates don't change what the cursor reads
-			const cursor = collection.aggregate<{ _id: string; top: string }>(latestRepairPipeline(), { allowDiskUse: true });
+			// $group is blocking, so the updates don't change what the cursor reads. A 4.0 store may append snapshots
+			// meanwhile (3.x snapshot collections keep working), so the highest version is read again right before the repair
+			const cursor = collection.aggregate<{ _id: string }>(latestRepairPipeline(), { allowDiskUse: true });
 			try {
-				for await (const { _id: streamId, top } of cursor) {
+				for await (const { _id: streamId } of cursor) {
+					const top = await collection.findOne(
+						{ streamId },
+						{ sort: { version: -1 }, projection: { _id: 1, version: 1 } },
+					);
+					if (!top) {
+						continue;
+					}
 					await collection.updateMany(
-						{ streamId, _id: { $ne: top }, latest: { $exists: true } },
+						{ streamId, version: { $lt: top.version }, latest: { $exists: true } },
 						{ $unset: { latest: '' } },
 					);
-					await collection.updateOne({ _id: top }, { $set: { latest: `latest#${streamId}` } });
+					await collection.updateOne({ _id: top._id }, { $set: { latest: `latest#${streamId}` } });
 				}
 			} finally {
 				await cursor.close().catch(() => undefined);
@@ -89,13 +106,13 @@ const runSnapshotStep = async ({ db }: MigrationContext, name: string, step: Sna
 				if (!INDEX_CONFLICTS.has((error as { code?: number }).code ?? 0)) {
 					throw error;
 				}
-				await dropLegacyLatestIndexes(collection);
+				await dropLegacyLatestIndexes(collection, name, lockTimeoutMs);
 				await create();
 			}
 			return;
 		}
 		case 'drop-latest-indexes':
-			await dropLegacyLatestIndexes(collection);
+			await dropLegacyLatestIndexes(collection, name, lockTimeoutMs);
 			return;
 		case 'register':
 			await db
@@ -109,8 +126,8 @@ const runSnapshotStep = async ({ db }: MigrationContext, name: string, step: Sna
 	}
 };
 
-const dropLegacyLatestIndexes = async (collection: Collection<SnapshotFields>) => {
+const dropLegacyLatestIndexes = async (collection: Collection<SnapshotFields>, name: string, lockTimeoutMs: number) => {
 	for (const index of legacyLatestIndexes((await collection.listIndexes().toArray()) as IndexInfo[])) {
-		await collection.dropIndex(index);
+		await waitingForLock(name, lockTimeoutMs, () => collection.dropIndex(index, { maxTimeMS: lockTimeoutMs }));
 	}
 };

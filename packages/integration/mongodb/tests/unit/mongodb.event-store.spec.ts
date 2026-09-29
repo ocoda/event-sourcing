@@ -14,7 +14,7 @@ import {
 } from '@ocoda/event-sourcing';
 import { MongoDBEventStore } from '@ocoda/event-sourcing-mongodb';
 import { Account, AccountId, getEventMap, getEvents, mongodbTestTopologies } from '@ocoda/event-sourcing-testing/unit';
-import { type Db, Long, MongoClient } from 'mongodb';
+import { Collection, Db, Long, MongoClient } from 'mongodb';
 import { V1_EVENT_INDEXES, v1EventDocument } from '../fixtures/schema-v1.js';
 import { drain, expectRejectionOfClass } from '../support/assertions.js';
 import { CATALOG, dropCollections, rawCollection } from '../support/catalog.js';
@@ -257,11 +257,43 @@ describe.each(mongodbTestTopologies())(`${MongoDBEventStore.name} ($name)`, ({ n
 				fields,
 			);
 
+			// Every call gets a new Collection object, so the catalog's lookups are told apart by the collection's name
 			const registered = await newPool('registered');
-			const findOne = vi.spyOn(eventStore['catalog'](), 'findOne');
+			const findOne = vi.spyOn(Collection.prototype, 'findOne');
+			const catalogLookups = () =>
+				findOne.mock.contexts.filter((context) => (context as Collection).collectionName === CATALOG).length;
 			await expect(drain(eventStore.readAll({ pool: registered }))).resolves.toEqual([]);
 			await expect(eventStore.getStreamVersion(stream, registered)).resolves.toBe(0);
-			expect(findOne).not.toHaveBeenCalled();
+			await expect(drain(eventStore.getEnvelopes(stream, { pool: registered }))).resolves.toEqual([]);
+			expect(catalogLookups()).toBe(0);
+		});
+
+		it('picks up a pool that another store registers after a read rejected it', async () => {
+			const later = reservePool('later');
+			await expectRejectionOfClass(eventStore.getStreamVersion(stream, later), EventCollectionNotFoundException);
+
+			const { store: other } = createEventStore({ url }, eventMap);
+			await other.connect();
+			try {
+				await other.ensureCollection(later);
+			} finally {
+				await other.disconnect();
+			}
+
+			await expect(eventStore.getStreamVersion(stream, later)).resolves.toBe(0);
+			await expect(drain(eventStore.readAll({ pool: later }))).resolves.toEqual([]);
+			const [appended] = await eventStore.appendEvents(stream, events.slice(0, 1), { expectedVersion: 0, pool: later });
+			expect(appended.metadata.globalPosition).toBe(1n);
+		});
+
+		it("reads the version of a stream from the primary, whatever the client's read preference", async () => {
+			const find = vi.spyOn(Collection.prototype, 'find');
+			await eventStore.getStreamVersion(stream, pool);
+
+			expect(find).toHaveBeenCalledWith(
+				{ streamId: stream.streamId },
+				expect.objectContaining({ readPreference: 'primary' }),
+			);
 		});
 
 		it('rejects documents without a position (a 3.x collection read without migrating) with a schema error', async () => {
@@ -321,6 +353,72 @@ describe.each(mongodbTestTopologies())(`${MongoDBEventStore.name} ($name)`, ({ n
 
 			const [envelope] = await eventStore.appendEvents(newStream(), events.slice(0, 1), { expectedVersion: 0, pool });
 			expect(envelope.metadata.globalPosition).toBe(4n);
+		});
+
+		it('restores the validator and the unique indexes of a registered collection that an append created again', async () => {
+			const pool = await newPool('implicit');
+			const collection = EventCollection.get(pool);
+			const uniqueKeys = async () =>
+				(await rawCollection(database, collection).indexes()).filter(({ unique }) => unique).map(({ key }) => key);
+			const validatorOf = async () =>
+				((await database.listCollections({ name: collection }).toArray())[0] as { options: { validator?: object } })
+					.options.validator;
+			// Dropped while the store ran: the next append creates it implicitly, without validator and unique indexes
+			await database.dropCollection(collection);
+			await eventStore.appendEvents(newStream(), events.slice(0, 2), { expectedVersion: 0, pool });
+			expect(await uniqueKeys()).toEqual([]);
+			expect(await validatorOf()).toBeUndefined();
+
+			// With ddl: 'none', the store names the statements that restore them
+			const { store: checking } = createEventStore({ url, ddl: 'none' }, eventMap);
+			await checking.connect();
+			try {
+				const error = await expectRejectionOfClass(
+					checking.ensureCollection(pool),
+					EventStoreCollectionCreationException,
+					{ collection },
+				);
+				expect((error.cause as Error).message).toContain(`db.runCommand({ collMod: '${collection}'`);
+				expect((error.cause as Error).message).toContain(`db.getCollection('${collection}').createIndexes(`);
+			} finally {
+				await checking.disconnect();
+			}
+
+			const warn = vi.spyOn(eventStore['logger'], 'warn').mockImplementation(() => undefined);
+			await expect(eventStore.ensureCollection(pool)).resolves.toBe(collection);
+
+			expect(warn).toHaveBeenCalledWith(expect.stringContaining('restoring them'));
+			expect(await uniqueKeys()).toEqual([{ streamId: 1, version: 1 }, { globalPosition: 1 }]);
+			expect(await validatorOf()).toMatchObject({
+				$jsonSchema: { required: ['globalPosition', 'streamId', 'version'] },
+			});
+			const stream = newStream();
+			await eventStore.appendEvents(stream, events.slice(0, 1), { expectedVersion: 0, pool });
+			await expect(
+				eventStore.appendEvents(stream, events.slice(0, 1), { expectedVersion: 0, pool }),
+			).rejects.toBeInstanceOf(EventStoreVersionConflictException);
+		});
+
+		it('adds the validator to a collection that an insert created while the store created it', async () => {
+			const pool = reservePool('created-meanwhile');
+			const collection = EventCollection.get(pool);
+			const createCollection = Db.prototype.createCollection;
+			vi.spyOn(Db.prototype, 'createCollection').mockImplementationOnce(async function (
+				this: Db,
+				...args: Parameters<Db['createCollection']>
+			) {
+				// What an insert does to a missing collection
+				await createCollection.call(this, collection);
+				return createCollection.apply(this, args);
+			} as never);
+
+			await expect(eventStore.ensureCollection(pool)).resolves.toBe(collection);
+
+			const [info] = await database.listCollections({ name: collection }).toArray();
+			expect((info as { options: object }).options).toMatchObject({
+				validator: { $jsonSchema: { required: ['globalPosition', 'streamId', 'version'] } },
+				validationLevel: 'strict',
+			});
 		});
 
 		it('heals a counter that fell behind the events of its collection', async () => {

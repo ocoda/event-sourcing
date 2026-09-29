@@ -32,6 +32,7 @@ import { migrateEventCollections } from './migration/events.js';
 import {
 	CATALOG_COLLECTION,
 	type CatalogDocument,
+	type CollectionShape,
 	EVENT_INDEXES,
 	EVENTS_VALIDATOR,
 	SCHEMA_VERSION,
@@ -40,7 +41,9 @@ import {
 	catalogExists,
 	classifyValidator,
 	eventCollectionDdl,
+	eventCollectionRepairDdl,
 	findIndex,
+	hasUniqueIndex,
 	readCollectionShape,
 } from './mongodb.schema.js';
 import { type MongoDBTopology, capabilitiesOf, detectTopology, warnStandaloneOnce } from './mongodb.topology.js';
@@ -48,10 +51,13 @@ import {
 	APPEND_LIMITS,
 	backoff,
 	batchCursor,
+	commitWithRetries,
 	duplicateKeyOf,
 	hasErrorLabel,
 	ifEmpty,
 	isNamespaceExistsError,
+	transactionOptions,
+	withoutOperationTimeouts,
 } from './mongodb.utils.js';
 
 /** The remedy for a 3.x collection. */
@@ -93,12 +99,18 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 	/**
 	 * Migrates the 3.x event collections of a database to schema v2, without bootstrapping the application.
 	 * Run it with `dryRun: true` first, and only while no 3.x instance runs. See `migrate()`.
+	 *
+	 * The client of the migration leaves out `timeoutMS` and `socketTimeoutMS` of the config and of the connection
+	 * string: the numbering is one long operation.
 	 */
 	static async migrate(
 		config: Omit<MongoDBEventStoreConfig, 'driver'>,
 		options?: MongoDBMigrationOptions,
 	): Promise<MigrationReport> {
-		const store = new MongoDBEventStore(MIGRATION_CONTEXT, { ...config, driver: MongoDBEventStore });
+		const store = new MongoDBEventStore(MIGRATION_CONTEXT, {
+			...withoutOperationTimeouts(config),
+			driver: MongoDBEventStore,
+		});
 		await store.connect();
 		try {
 			return await store.migrate(options);
@@ -154,6 +166,8 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 				if (!shape.exists) {
 					this.assertDdl(ddl, collection, 'missing');
 					await this.createCollection(collection);
+				} else {
+					await this.repairCollection(collection, shape, ddl);
 				}
 			} else if (!shape.exists) {
 				if (ddl === 'none' && !(await catalogExists(this.database))) {
@@ -203,8 +217,12 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 
 	public async getStreamVersion({ streamId }: EventStream, pool?: IEventPool): Promise<number> {
 		const collection = EventCollection.get(pool);
+		// From the primary, whatever the client's read preference: an append checks its expected version against this
 		const [latest] = await this.events(collection)
-			.find({ streamId }, { projection: { _id: 0, version: 1 }, sort: { version: -1 }, limit: 1 })
+			.find(
+				{ streamId },
+				{ projection: { _id: 0, version: 1 }, sort: { version: -1 }, limit: 1, readPreference: 'primary' },
+			)
 			.toArray();
 		if (latest) {
 			return Number(latest.version);
@@ -316,11 +334,7 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 			const session = client.startSession();
 			let committing = false;
 			try {
-				session.startTransaction({
-					readConcern: { level: 'snapshot' },
-					writeConcern: { w: 'majority' },
-					readPreference: 'primary',
-				});
+				session.startTransaction(transactionOptions(deadline));
 				const positions = await this.reservePositions(envelopes.length, target, session);
 				await this.events(collection).insertMany(toDocuments(target, envelopes, positions), {
 					session,
@@ -489,6 +503,39 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 			if (!isNamespaceExistsError(error)) {
 				throw error;
 			}
+			// Created meanwhile: by another store, or implicitly by an insert, which leaves it without the validator
+			const { validator } = await readCollectionShape(this.database, collection);
+			if (classifyValidator(validator) === 'none') {
+				await this.database.command({ collMod: collection, validator: EVENTS_VALIDATOR, ...VALIDATION_OPTIONS });
+			}
+		}
+		await this.events(collection).createIndexes([...EVENT_INDEXES]);
+	}
+
+	/**
+	 * Restores the validator and the unique indexes of a registered collection that lacks them: a collection that was
+	 * dropped while a store ran, which the next append created again implicitly, without them. An index build fails
+	 * when the events that were appended meanwhile violate it.
+	 */
+	private async repairCollection(
+		collection: IEventCollection,
+		shape: CollectionShape,
+		ddl: 'auto' | 'none',
+	): Promise<void> {
+		const unfenced = classifyValidator(shape.validator) === 'none';
+		const unindexed = EVENT_INDEXES.some(({ key }) => !hasUniqueIndex(shape.indexes, key as Record<string, number>));
+		if (!unfenced && !unindexed) {
+			return;
+		}
+		const lacks = [unfenced && 'its validator', unindexed && 'its unique indexes'].filter(Boolean).join(' and ');
+		if (ddl === 'none') {
+			throw new Error(
+				`The ${collection} collection lacks ${lacks}, and the store runs with ddl: 'none'; restore them with: ${eventCollectionRepairDdl(collection).join('; ')}`,
+			);
+		}
+		this.logger.warn(`The ${collection} collection lacks ${lacks}: restoring them`);
+		if (unfenced) {
+			await this.database.command({ collMod: collection, validator: EVENTS_VALIDATOR, ...VALIDATION_OPTIONS });
 		}
 		await this.events(collection).createIndexes([...EVENT_INDEXES]);
 	}
@@ -537,24 +584,6 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 		return this.database.collection<EventDocument>(collection);
 	}
 }
-
-/**
- * Commits, retrying a commit whose result is unknown (a network error or a failover while committing) up to
- * `APPEND_LIMITS.commitRetries` times; the server commits a transaction at most once.
- */
-const commitWithRetries = async (session: ClientSession): Promise<void> => {
-	for (let retry = 0; ; retry++) {
-		try {
-			await session.commitTransaction();
-			return;
-		} catch (error) {
-			if (retry < APPEND_LIMITS.commitRetries && hasErrorLabel(error, 'UnknownTransactionCommitResult')) {
-				continue;
-			}
-			throw error;
-		}
-	}
-};
 
 const toDocuments = (
 	{ stream }: PersistTarget,

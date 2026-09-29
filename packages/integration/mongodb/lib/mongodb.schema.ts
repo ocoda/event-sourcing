@@ -174,6 +174,14 @@ export const eventCollectionDdl = (name: string): string[] => [
 ];
 
 /**
+ * The mongosh statements that restore the validator and the unique indexes of a registered 4.0 event collection.
+ */
+export const eventCollectionRepairDdl = (name: string): string[] => [
+	`db.runCommand(${toShell({ collMod: name, validator: EVENTS_VALIDATOR, ...VALIDATION_OPTIONS })})`,
+	`${shellCollection(name)}.createIndexes(${toShell(EVENT_INDEXES)})`,
+];
+
+/**
  * The mongosh statements that create a 4.0 snapshot collection and register it, for databases whose store runs with
  * `ddl: 'none'`.
  */

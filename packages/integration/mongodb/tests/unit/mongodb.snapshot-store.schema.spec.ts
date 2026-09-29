@@ -8,7 +8,7 @@ import {
 } from '@ocoda/event-sourcing';
 import type { MongoDBSnapshotStore } from '@ocoda/event-sourcing-mongodb';
 import { Account, AccountId, mongodbTestTopologies } from '@ocoda/event-sourcing-testing/unit';
-import { Collection, type Db, type MongoClient } from 'mongodb';
+import { ClientSession, Collection, type Db, type MongoClient, MongoServerError } from 'mongodb';
 import { APPEND_LIMITS } from '../../lib/mongodb.utils.js';
 import { createV1SnapshotCollection, v1SnapshotDocument } from '../fixtures/schema-v1.js';
 import { drain, expectRejectionOfClass } from '../support/assertions.js';
@@ -223,6 +223,34 @@ describe.each(mongodbTestTopologies())('MongoDBSnapshotStore schema v2 ($name)',
 		});
 
 		describe.runIf(name === 'replica-set')('on a replica set', () => {
+			it('appends in a bounded transaction, and retries a commit whose result is unknown', async () => {
+				const pool = reservePool('commit-retry');
+				await store.ensureCollection(pool);
+				const stream = newStream();
+				const startTransaction = vi.spyOn(ClientSession.prototype, 'startTransaction');
+				const commitTransaction = ClientSession.prototype.commitTransaction;
+				const commit = vi.spyOn(ClientSession.prototype, 'commitTransaction').mockImplementationOnce(async function (
+					this: ClientSession,
+				) {
+					// The commit happens, the answer is lost
+					await commitTransaction.call(this);
+					const lost = new MongoServerError({ code: 6, errmsg: 'connection lost' });
+					lost.addErrorLabel('UnknownTransactionCommitResult');
+					throw lost;
+				});
+
+				await expect(store.appendSnapshot(stream, 1, { balance: 1 }, pool)).resolves.toBeDefined();
+
+				expect(commit).toHaveBeenCalledTimes(2);
+				expect(startTransaction).toHaveBeenCalledWith({
+					readConcern: { level: 'snapshot' },
+					writeConcern: { w: 'majority' },
+					readPreference: 'primary',
+					maxCommitTimeMS: expect.any(Number),
+				});
+				expect((await store.getLastEnvelope(stream, pool))?.metadata.version).toBe(1);
+			});
+
 			it('retries an append whose transaction conflicted, and gives up once the budget is spent', async () => {
 				const pool = reservePool('transient');
 				await store.ensureCollection(pool);

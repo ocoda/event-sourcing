@@ -7,6 +7,7 @@ import {
 	EventStorePersistenceException,
 	EventStoreVersionConflictException,
 	EventStream,
+	ExpectedVersion,
 	type IEventPool,
 	UnregisteredEventException,
 	isEventSourcingError,
@@ -208,12 +209,17 @@ describe.each(mongodbTestTopologies())(`${MongoDBEventStore.name} resilience ($n
 			try {
 				const findOne = vi.spyOn(Collection.prototype, 'findOne');
 
+				const catalogLookups = () =>
+					findOne.mock.contexts.filter((context) => (context as Collection).collectionName === CATALOG).length;
+
 				const stream = newStream();
 				await otherStore.appendEvents(stream, events.slice(0, 2), { expectedVersion: 0, pool: eventPool });
 				await otherStore.appendEvents(stream, events.slice(2, 4), { expectedVersion: 2, pool: eventPool });
 				await drain(otherStore.readAll({ pool: eventPool }));
+				await expect(otherStore.getStreamVersion(newStream(), eventPool)).resolves.toBe(0);
 
 				// Only the first read that finds nothing (the version of the new stream) asks the catalog
+				expect(catalogLookups()).toBe(1);
 				expect(findOne).toHaveBeenCalledTimes(1);
 			} finally {
 				await otherStore.disconnect();
@@ -282,6 +288,126 @@ describe.each(mongodbTestTopologies())(`${MongoDBEventStore.name} resilience ($n
 				expect(await eventsOf(eventPool).countDocuments()).toBe(0);
 			} finally {
 				await otherStore.disconnect();
+			}
+		});
+
+		it('should reject an append whose pool lost its catalog document after the store checked the pool', async () => {
+			// The store knows the pool (it registered it), so the version check passes and the counter is missing
+			const eventPool = await newPool('lost-registration');
+			const collection = EventCollection.get(eventPool);
+			await catalog().deleteOne({ _id: collection });
+
+			const error = await expectRejectionOfClass(
+				eventStore.appendEvents(newStream(), events.slice(0, 2), { expectedVersion: 0, pool: eventPool }),
+				EventStorePersistenceException,
+				{ outcome: 'not-persisted' },
+			);
+			expect(error.cause).toBeInstanceOf(EventCollectionNotFoundException);
+			expect(error.cause).toMatchObject({ collection, pool: eventPool });
+			expect(await eventsOf(eventPool).countDocuments()).toBe(0);
+			// Nothing upserted the counter
+			expect(await catalog().countDocuments({ _id: collection })).toBe(0);
+		});
+
+		it('should report a conflict when an event id of the append was stored by the same append before', async () => {
+			const eventPool = await newPool('same-append-id');
+			const stream = newStream();
+			await eventStore.appendEvents(stream, events.slice(0, 2), { expectedVersion: 0, pool: eventPool });
+			// A retry of an append that was stored (an 'unknown' outcome): the version check read the stream before, and the
+			// insert fails on an event id
+			vi.spyOn(MongoDBEventStore.prototype, 'getStreamVersion').mockResolvedValueOnce(0);
+			const duplicate = new MongoServerError({
+				code: 11000,
+				keyPattern: { _id: 1 },
+				errmsg: 'E11000 duplicate key error collection: es.events index: _id_ dup key: { _id: "01H" }',
+			});
+			vi.spyOn(Collection.prototype, 'insertMany').mockRejectedValueOnce(duplicate);
+
+			await expectRejectionOfClass(
+				eventStore.appendEvents(stream, events.slice(0, 2), { expectedVersion: 0, pool: eventPool }),
+				EventStoreVersionConflictException,
+				{ expectedVersion: 0, actualVersion: 2, cause: duplicate },
+			);
+		});
+
+		it.each([
+			['a newline', 'a\nb'],
+			['quotes, commas and colons', 'a"b, c: d'],
+		])('should report a lost race as a conflict for a stream id with %s', async (_, aggregateId) => {
+			const WRITERS = 4;
+			const eventPool = await newPool('odd-stream-ids');
+			const streamOf = (suffix: string) =>
+				EventStream.for(Account, { value: `${aggregateId}-${suffix}-${randomBytes(2).toString('hex')}` } as never);
+
+			// Every writer reads the version of the stream before any of them appends, so the unique index decides
+			let waiting = 0;
+			let releaseWriters: () => void = () => undefined;
+			const allChecked = new Promise<void>((resolve) => {
+				releaseWriters = resolve;
+			});
+			const getStreamVersion = MongoDBEventStore.prototype.getStreamVersion;
+			vi.spyOn(MongoDBEventStore.prototype, 'getStreamVersion').mockImplementation(async function (
+				this: MongoDBEventStore,
+				...args: Parameters<MongoDBEventStore['getStreamVersion']>
+			) {
+				const version = await getStreamVersion.apply(this, args);
+				if (++waiting === WRITERS) {
+					releaseWriters();
+				}
+				await allChecked;
+				return version;
+			});
+
+			const exact = streamOf('exact');
+			const results = await Promise.allSettled(
+				Array.from({ length: WRITERS }, () =>
+					eventStore.appendEvents(exact, events.slice(0, 2), {
+						expectedVersion: ExpectedVersion.NoStream,
+						pool: eventPool,
+					}),
+				),
+			);
+			expect(results.filter(({ status }) => status === 'fulfilled')).toHaveLength(1);
+			for (const result of results.filter((result): result is PromiseRejectedResult => result.status === 'rejected')) {
+				expect(result.reason).toBeInstanceOf(EventStoreVersionConflictException);
+			}
+
+			// ExpectedVersion.Any retries the lost races
+			waiting = 0;
+			const any = streamOf('any');
+			await Promise.all(
+				Array.from({ length: WRITERS }, () =>
+					eventStore.appendEvents(any, events.slice(0, 2), { expectedVersion: ExpectedVersion.Any, pool: eventPool }),
+				),
+			);
+			await expect(eventStore.getStreamVersion(any, eventPool)).resolves.toBe(WRITERS * 2);
+		});
+
+		it('should read the pool with majority read concern on a replica set, and append in a bounded transaction', async () => {
+			const eventPool = await newPool('read-concern');
+			const startTransaction = vi.spyOn(ClientSession.prototype, 'startTransaction');
+			await eventStore.appendEvents(newStream(), events.slice(0, 3), { expectedVersion: 0, pool: eventPool });
+			const find = vi.spyOn(Collection.prototype, 'find');
+
+			await drain(eventStore.readAll({ pool: eventPool, batch: 2 }));
+
+			const reads = find.mock.calls.filter(([filter]) => filter !== undefined && 'globalPosition' in filter);
+			expect(reads).toHaveLength(2);
+			for (const [, options] of reads) {
+				expect(options?.readConcern).toEqual(replicaSet ? { level: 'majority' } : undefined);
+			}
+			if (replicaSet) {
+				expect(startTransaction).toHaveBeenCalledWith({
+					readConcern: { level: 'snapshot' },
+					writeConcern: { w: 'majority' },
+					readPreference: 'primary',
+					maxCommitTimeMS: expect.any(Number),
+				});
+				const [[{ maxCommitTimeMS }]] = startTransaction.mock.calls as [[{ maxCommitTimeMS: number }]];
+				expect(maxCommitTimeMS).toBeGreaterThan(1_000);
+				expect(maxCommitTimeMS).toBeLessThanOrEqual(APPEND_LIMITS.transactionBudgetMs);
+			} else {
+				expect(startTransaction).not.toHaveBeenCalled();
 			}
 		});
 

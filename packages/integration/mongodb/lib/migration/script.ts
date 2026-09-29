@@ -35,7 +35,37 @@ const HEADER = `// @ocoda/event-sourcing-mongodb 4.0: migrates the collections o
 // 1. Take a backup, and make sure the oplog window and the disk have room (see the MongoDB integration guide).
 // 2. Stop every 3.x instance.
 // 3. Run it once, on the 3.x collections: mongosh "mongodb://<host>/<database of the stores>" 4.0.mongosh.js
-// It stops at the first error; migrate() resumes a run that stopped. After step "register" 4.0 can run.
+// It first checks what migrate() checks before it writes (and stops there, changing nothing), then stops at the first
+// error of a step. migrate() resumes a run that stopped once the script's lease expires (10 minutes after it was
+// taken), or at once with force: true. After step "register" 4.0 can run.
+`;
+
+/**
+ * The checks the planner blocks on, for the default pools: the script stops before its first write when one fails.
+ * Sharding and privileges aren't checked here; a failing step stops the script.
+ */
+const PREFLIGHT = `// Preflight: what blocks migrate(), checked before anything is written
+const events = ${shellCollection('events')};
+const preflight = [
+	Number(db.version().split('.')[0]) >= 5 || \`MongoDB \${db.version()} can't number the events on the server: MongoDB 5.0 or later is needed\`,
+	db.getCollectionInfos({ name: 'events' }).length === 1 || 'there is no events collection',
+	catalog.countDocuments({ _id: 'events', schemaVersion: 2 }) === 0 ||
+		'events is registered with schema version 2 already: run migrate() for what is left',
+	!db.getCollectionInfos({ name: 'events' })[0]?.options?.validator ||
+		'events has a validator: a validator of your own (remove it), or a migration that stopped (run migrate(), which resumes it)',
+	catalog.countDocuments({ _id: { $in: ['lock:migrate:events', 'lock:migrate:snapshots'] } }) === 0 ||
+		'another migration holds a lease on events or snapshots: wait for it, or run migrate() with force: true if it was interrupted',
+	events.getIndexes().some(({ key, unique }) => unique && JSON.stringify(key) === '{"streamId":1,"version":1}') ||
+		'the unique { streamId: 1, version: 1 } index of events is missing; create it, then migrate',
+	events.countDocuments({ _id: { $not: { $type: 'string' } } }) === 0 ||
+		'events has event ids that are not strings; 3.x never wrote such events',
+	canonicalIds ||
+		events.countDocuments({ eventDate: { $not: { $type: 'string' } } }) === 0 ||
+		'events has events without an eventDate string; 3.x never wrote such events',
+].filter((check) => check !== true);
+if (preflight.length > 0) {
+	throw new Error(\`Nothing was migrated: \${preflight.join('; ')}\`);
+}
 `;
 
 /** One statement of the script, with a comment naming its step and lock. */
@@ -79,6 +109,7 @@ export const renderMigrationScript = (): string =>
 		`const catalog = ${shellCollection(CATALOG_COLLECTION)};`,
 		`const canonicalIds = ${shellCollection('events')}.countDocuments({ _id: { $not: ${toShell(CANONICAL_EVENT_ID)} } }) === 0;`,
 		'',
+		PREFLIGHT,
 		'// Events: fence 3.x writers off, number, index, register (the commit point), then clean up',
 		...EVENT_STEPS.map(eventBlock),
 		'// Snapshots: one latest flag per stream, on its highest version, enforced by a unique index',

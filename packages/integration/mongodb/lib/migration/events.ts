@@ -22,7 +22,7 @@ import {
 	numberingPipeline,
 	planEventCollection,
 } from './plan.js';
-import { collectionsOf, reportOf, runUnderLease } from './runner.js';
+import { DEFAULT_LOCK_TIMEOUT_MS, collectionsOf, reportOf, runUnderLease, waitingForLock } from './runner.js';
 
 /** The fields of an event document the migration touches. */
 type EventFields = { _id: string; globalPosition?: Long | number | bigint; eventDate?: string };
@@ -64,7 +64,13 @@ export const migrateEventCollections = async (
 				return {
 					report,
 					runStep: (step, progress) =>
-						runEventStep(context, name, step as EventStepName, { numbering, rows: report.rows }, progress),
+						runEventStep(
+							context,
+							name,
+							step as EventStepName,
+							{ numbering, rows: report.rows, lockTimeoutMs: options.lockTimeoutMs ?? DEFAULT_LOCK_TIMEOUT_MS },
+							progress,
+						),
 				};
 			}),
 		);
@@ -76,13 +82,16 @@ const runEventStep = async (
 	{ db }: MigrationContext,
 	name: string,
 	step: EventStepName,
-	{ numbering, rows }: { numbering: NumberingKey; rows: number },
+	{ numbering, rows, lockTimeoutMs }: { numbering: NumberingKey; rows: number; lockTimeoutMs: number },
 	progress: (done: number, total: number) => void,
 ): Promise<void> => {
 	const collection = db.collection<EventFields>(name);
 	switch (step) {
 		case 'fence':
-			await db.command({ collMod: name, validator: EVENTS_VALIDATOR, ...VALIDATION_OPTIONS });
+			// The exclusive lock of the collMod waits for the running operations on the collection, at most lockTimeoutMs
+			await waitingForLock(name, lockTimeoutMs, () =>
+				db.command({ collMod: name, validator: EVENTS_VALIDATOR, ...VALIDATION_OPTIONS, maxTimeMS: lockTimeoutMs }),
+			);
 			return;
 		case 'number':
 			progress(0, rows);
@@ -110,7 +119,9 @@ const runEventStep = async (
 		}
 		case 'drop-event-date-indexes':
 			for (const index of eventDateIndexes((await collection.listIndexes().toArray()) as IndexInfo[])) {
-				await collection.dropIndex(index).catch((error) => {
+				await waitingForLock(name, lockTimeoutMs, () =>
+					collection.dropIndex(index, { maxTimeMS: lockTimeoutMs }),
+				).catch((error) => {
 					if ((error as { code?: unknown }).code !== INDEX_NOT_FOUND) {
 						throw error;
 					}

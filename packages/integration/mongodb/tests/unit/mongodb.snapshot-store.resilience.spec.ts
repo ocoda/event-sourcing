@@ -275,8 +275,42 @@ describe.each(mongodbTestTopologies())(`${MongoDBSnapshotStore.name} resilience 
 				}
 			});
 
-			// On a replica set the check, the unflagging and the insert are one transaction, so the writers can't all get past
-			// the check: the first one's unflagging makes the others' transactions conflict and start over
+			// On a replica set the check, the unflagging and the insert are one transaction: every writer passes the check in
+			// its snapshot, and the first unflagging makes the others' updates conflict, so they start over and see the winner
+			describe.runIf(name === 'replica-set')('on a replica set', () => {
+				it('should report a version conflict to the writers whose unflagging conflicted', async () => {
+					const snapshotPool = await newPool('concurrent-unflag');
+					const collection = SnapshotCollection.get(snapshotPool);
+					const stream = newStream();
+					await snapshotStore.appendSnapshot(stream, 1, { balance: 0 }, snapshotPool);
+
+					// Hold every writer at its unflagging, so after its check, until all of them got there
+					let waiting = 0;
+					let releaseWriters: () => void = () => undefined;
+					const allChecked = new Promise<void>((resolve) => {
+						releaseWriters = resolve;
+					});
+					const updateMany = Collection.prototype.updateMany;
+					const updateManySpy = vi.spyOn(Collection.prototype, 'updateMany').mockImplementation(async function (
+						this: Collection,
+						...args: Parameters<Collection['updateMany']>
+					) {
+						if (this.collectionName === collection && ++waiting === WRITERS) {
+							releaseWriters();
+						}
+						await allChecked;
+						return updateMany.apply(this, args);
+					});
+
+					await expectExactlyOneWinner(await settle(stream, 2, snapshotPool), stream, 2, [1, 2], snapshotPool);
+					// Every writer got past its check before one of them unflagged
+					expect(
+						updateManySpy.mock.contexts.filter((context) => (context as Collection).collectionName === collection)
+							.length,
+					).toBeGreaterThanOrEqual(WRITERS);
+				});
+			});
+
 			describe.runIf(name === 'standalone')('on a standalone server', () => {
 				it('should report a version conflict when the race is lost after the version check passed', async () => {
 					const snapshotPool = await newPool('concurrent-check');

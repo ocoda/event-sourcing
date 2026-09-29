@@ -11,8 +11,17 @@ import {
 } from '@ocoda/event-sourcing';
 import { MongoDBEventStore, MongoDBSnapshotStore } from '@ocoda/event-sourcing-mongodb';
 import { Account, AccountId, getEventMap, getEvents, mongodbTestTopologies } from '@ocoda/event-sourcing-testing/unit';
-import type { Db, Document } from 'mongodb';
-import { migrationHooks } from '../../lib/migration/runner.js';
+import {
+	Collection,
+	Db,
+	type Document,
+	Double,
+	type MongoClient,
+	type MongoClientOptions,
+	MongoServerError,
+} from 'mongodb';
+import { numberingPipeline } from '../../lib/migration/plan.js';
+import { MIGRATION_LIMITS, migrationHooks } from '../../lib/migration/runner.js';
 import {
 	createV1EventCollection,
 	createV1SnapshotCollection,
@@ -434,6 +443,249 @@ describe.each(mongodbTestTopologies())('MongoDB migration ($name)', ({ url }) =>
 			});
 		});
 
+		it('blocks, and numbers nothing, when another run leases the collection after its first look', async () => {
+			const eventPool = await seedEvents(corpus());
+			const collection = EventCollection.get(eventPool);
+			const before = await dump(collection);
+			// The other run's lease lands between this run's first look (which saw none) and its own lease
+			const insertOne = Collection.prototype.insertOne;
+			vi.spyOn(Collection.prototype, 'insertOne').mockImplementationOnce(async function (
+				this: Collection,
+				...args: Parameters<Collection['insertOne']>
+			) {
+				await catalog().insertOne({
+					_id: `lock:migrate:${collection}`,
+					kind: 'lock',
+					owner: 'other',
+					expiresAt: new Date(Date.now() + 60_000),
+				});
+				return insertOne.apply(this, args);
+			});
+
+			const report = await reportOf(migrateEvents(eventPool));
+
+			expect(report).toMatchObject({ action: 'blocked', blocking: [expect.stringContaining('another migration')] });
+			expect(report.steps.every(({ status }) => status === 'skipped')).toBe(true);
+			// Only the other run's lease was written
+			const after = await dump(collection);
+			expect({ ...after, registered: before.registered }).toEqual(before);
+			expect(after.registered).toEqual([{ kind: 'lock', owner: 'other', expiresAt: expect.any(Date) }]);
+		});
+
+		it('renews its lease while it runs', async () => {
+			const eventPool = await seedEvents(corpus());
+			const collection = EventCollection.get(eventPool);
+			MIGRATION_LIMITS.leaseRenewalMs = 20;
+			onTestFinished(() => {
+				MIGRATION_LIMITS.leaseRenewalMs = 60_000;
+			});
+			const expiries: number[] = [];
+			migrationHooks.onStepComplete = async (_, step) => {
+				if (step === 'fence') {
+					const leaseExpiry = async () =>
+						Number((await catalog().findOne({ _id: `lock:migrate:${collection}` }))?.expiresAt);
+					expiries.push(await leaseExpiry());
+					// A slow step
+					await new Promise((resolve) => setTimeout(resolve, 150));
+					expiries.push(await leaseExpiry());
+				}
+			};
+
+			await expect(reportOf(migrateEvents(eventPool))).resolves.toMatchObject({ action: 'migrate' });
+
+			expect(expiries[1]).toBeGreaterThan(expiries[0]);
+		});
+
+		it('stops before its next step, blocked, when another run took its lease over', async () => {
+			const eventPool = await seedEvents(corpus());
+			const collection = EventCollection.get(eventPool);
+			migrationHooks.onStepComplete = async (_, step) => {
+				if (step === 'fence') {
+					// Another run, started with force: true
+					await catalog().updateOne({ _id: `lock:migrate:${collection}` }, { $set: { owner: 'usurper' } });
+				}
+			};
+
+			const report = await reportOf(migrateEvents(eventPool));
+
+			expect(report).toMatchObject({ action: 'blocked', blocking: [expect.stringContaining('took the lease')] });
+			expect(report.steps.map(({ name, status }) => [name, status])).toEqual(
+				EVENT_STEPS.map((step) => [step, step === 'lease' || step === 'fence' ? 'done' : 'skipped']),
+			);
+			expect(await rawCollection(database, collection).countDocuments({ globalPosition: { $exists: true } })).toBe(0);
+			// The lease of the other run stays
+			expect(await catalog().findOne({ _id: `lock:migrate:${collection}` })).toMatchObject({ owner: 'usurper' });
+		});
+
+		it('leaves the lease of a run that died, which blocks a rerun until force takes it over', async () => {
+			const events = corpus();
+			const clean = await seedEvents(events, 'clean');
+			await migrateEvents(clean);
+			const expected = await dump(EventCollection.get(clean));
+
+			const eventPool = await seedEvents(events, 'died');
+			const collection = EventCollection.get(eventPool);
+			migrationHooks.onStepComplete = async (_, step) => {
+				if (step === 'number') {
+					// The process dies: nothing releases its lease (the lease now belongs to nobody that runs)
+					await catalog().updateOne({ _id: `lock:migrate:${collection}` }, { $set: { owner: 'dead-run' } });
+					throw new Error('the process died');
+				}
+			};
+			await expect(migrateEvents(eventPool)).rejects.toThrow('the process died');
+			migrationHooks.onStepComplete = undefined;
+			const afterCrash = await dump(collection);
+
+			const blocked = await reportOf(migrateEvents(eventPool));
+			expect(blocked).toMatchObject({ action: 'blocked', blocking: [expect.stringContaining('force: true')] });
+			expect(await dump(collection)).toEqual(afterCrash);
+
+			const forced = await reportOf(migrateEvents(eventPool, { force: true }));
+			expect(forced).toMatchObject({ action: 'resume' });
+			expect(forced.steps.filter(({ status }) => status === 'skipped').map(({ name }) => name)).toEqual([
+				'fence',
+				'number',
+			]);
+			expect(await dump(collection)).toEqual(expected);
+		});
+
+		it('numbers a 3.x collection that looked empty, when a 3.x writer inserts before the fence', async () => {
+			const eventPool = await seedEvents([]);
+			const collection = EventCollection.get(eventPool);
+			const late = v1EventDocument(newStream(), 1);
+			migrationHooks.onStepComplete = async (_, step) => {
+				if (step === 'lease') {
+					await rawCollection(database, collection).insertOne(late);
+				}
+			};
+
+			const report = await reportOf(migrateEvents(eventPool));
+
+			expect(report.steps.find(({ name }) => name === 'number')?.status).toBe('done');
+			expect(await drain(eventStore.readAll({ pool: eventPool }))).toMatchObject([
+				{ metadata: { eventId: expect.objectContaining({ value: late._id }), globalPosition: 1n } },
+			]);
+		});
+
+		it('keeps the versions of a stream apart when they are stored as doubles', async () => {
+			const orderKey = numberingPipeline('events', 'id').find((stage) => '$set' in stage) as Document;
+			// k past 2^22: (k * 2^31 + version) is past 2^53, where a double can't tell the versions apart
+			const keys = await database
+				.aggregate([
+					{
+						$documents: [
+							{ k: 4_194_309, version: new Double(3) },
+							{ k: 4_194_309, version: new Double(4) },
+						],
+					},
+					orderKey,
+					{ $project: { _id: 0, orderKey: 1, type: { $type: '$orderKey' } } },
+				])
+				.toArray();
+
+			expect(keys.map(({ type }) => type)).toEqual(['long', 'long']);
+			expect(String(keys[1].orderKey)).not.toBe(String(keys[0].orderKey));
+		});
+
+		it('reports a collection as blocked when the fence does not get its lock within lockTimeoutMs', async () => {
+			const eventPool = await seedEvents(corpus());
+			const collection = EventCollection.get(eventPool);
+			const command = Db.prototype.command;
+			const commands: Document[] = [];
+			vi.spyOn(Db.prototype, 'command').mockImplementation(async function (
+				this: Db,
+				...args: Parameters<Db['command']>
+			) {
+				if ('collMod' in args[0]) {
+					commands.push(args[0]);
+					throw new MongoServerError({
+						code: 50,
+						codeName: 'MaxTimeMSExpired',
+						errmsg: 'operation exceeded time limit',
+					});
+				}
+				return command.apply(this, args);
+			});
+
+			const report = await reportOf(migrateEvents(eventPool, { lockTimeoutMs: 1234 }));
+
+			expect(commands).toEqual([expect.objectContaining({ collMod: collection, maxTimeMS: 1234 })]);
+			expect(report).toMatchObject({ action: 'blocked', blocking: [expect.stringContaining('lockTimeoutMs')] });
+			expect(report.steps.map(({ name, status }) => [name, status])).toEqual(
+				EVENT_STEPS.map((step) => [step, step === 'lease' ? 'done' : 'skipped']),
+			);
+			expect(await catalog().countDocuments({ _id: { $in: [collection, `lock:migrate:${collection}`] } })).toBe(0);
+		});
+
+		it('rethrows a failure to drop an eventDate index, other than an index that is gone', async () => {
+			const eventPool = await seedEvents(corpus());
+			const denied = new MongoServerError({ code: 13, codeName: 'Unauthorized', errmsg: 'not authorized' });
+			const dropIndex = vi.spyOn(Collection.prototype, 'dropIndex').mockRejectedValueOnce(denied);
+
+			await expect(migrateEvents(eventPool)).rejects.toBe(denied);
+			expect(dropIndex).toHaveBeenCalledWith('eventDate_1__id_1', { maxTimeMS: 10_000 });
+
+			// An index that is gone by now is no failure
+			dropIndex.mockRejectedValueOnce(new MongoServerError({ code: 27, codeName: 'IndexNotFound', errmsg: 'gone' }));
+			await expect(reportOf(migrateEvents(eventPool))).resolves.toMatchObject({ action: 'resume' });
+		});
+
+		it('reports the privileges an authenticated user lacks, before writing', async () => {
+			const eventPool = await seedEvents(corpus());
+			const collection = EventCollection.get(eventPool);
+			const command = Db.prototype.command;
+			vi.spyOn(Db.prototype, 'command').mockImplementation(async function (
+				this: Db,
+				...args: Parameters<Db['command']>
+			) {
+				if ('connectionStatus' in args[0]) {
+					// A user with the readWrite role only, as connectionStatus reports it
+					return {
+						authInfo: {
+							authenticatedUsers: [{ user: 'app', db: 'admin' }],
+							authenticatedUserRoles: [{ role: 'readWrite', db: database.databaseName }],
+							authenticatedUserPrivileges: [
+								{
+									resource: { db: database.databaseName, collection: '' },
+									actions: ['find', 'insert', 'update', 'remove', 'listIndexes', 'createIndex', 'dropIndex'],
+								},
+							],
+						},
+						ok: 1,
+					};
+				}
+				return command.apply(this, args);
+			});
+
+			const report = await reportOf(migrateEvents(eventPool, { dryRun: true }));
+
+			expect(report).toMatchObject({
+				action: 'blocked',
+				blocking: [expect.stringContaining(`collMod on ${database.databaseName}.${collection}`)],
+			});
+		});
+
+		it('leaves the client timeouts of the config out of the client of a static migration', async () => {
+			const clientOptions: Partial<MongoClientOptions>[] = [];
+			const capture = function (this: { client: MongoClient }) {
+				clientOptions.push(this.client.options);
+				return Promise.resolve({ dryRun: true, environment: {}, collections: [] } as never);
+			};
+			vi.spyOn(MongoDBEventStore.prototype, 'migrate').mockImplementation(capture);
+			vi.spyOn(MongoDBSnapshotStore.prototype, 'migrate').mockImplementation(capture);
+			const separator = url.includes('?') ? '&' : '?';
+			const config = { url: `${url}${separator}socketTimeoutMS=1500&timeoutMS=2000`, socketTimeoutMS: 1500 };
+
+			await MongoDBEventStore.migrate(config, { dryRun: true });
+			await MongoDBSnapshotStore.migrate({ ...config, timeoutMS: 2000 }, { dryRun: true });
+
+			for (const options of clientOptions) {
+				expect(options).toMatchObject({ socketTimeoutMS: 0 });
+				expect(options.timeoutMS).toBeUndefined();
+			}
+			expect(clientOptions).toHaveLength(2);
+		});
+
 		it('migrates without a bootstrapped store, and discovers the collections by name and shape', async () => {
 			const databaseName = `es_mgo_discovery_${randomBytes(4).toString('hex')}`;
 			const own = new URL(url);
@@ -463,17 +715,14 @@ describe.each(mongodbTestTopologies())('MongoDB migration ($name)', ({ url }) =>
 
 	describe('snapshots', () => {
 		/**
-		 * A 3.x snapshot collection: a healthy stream, one with two flags, one without a flag and one whose flag sits on a
-		 * lower version.
+		 * The snapshots of a 3.x collection: a healthy stream, one with two flags, one without a flag and one whose flag
+		 * sits on a lower version.
 		 */
-		const seedSnapshots = async () => {
-			const snapshotPool = pool('snapshots');
-			const collection = SnapshotCollection.get(snapshotPool);
-			await createV1SnapshotCollection(database, collection);
+		const snapshotCorpus = () => {
 			const [healthy, duplicate, missing, misflagged] = Array.from({ length: 4 }, () =>
 				SnapshotStream.for(Account, AccountId.generate()),
 			);
-			await rawCollection(database, collection).insertMany([
+			const documents = [
 				v1SnapshotDocument(healthy, 1, false),
 				v1SnapshotDocument(healthy, 2, false),
 				v1SnapshotDocument(healthy, 3, true),
@@ -483,8 +732,17 @@ describe.each(mongodbTestTopologies())('MongoDB migration ($name)', ({ url }) =>
 				v1SnapshotDocument(missing, 2, false),
 				v1SnapshotDocument(misflagged, 1, true),
 				v1SnapshotDocument(misflagged, 2, false),
-			]);
-			return { snapshotPool, collection, streams: { healthy, duplicate, missing, misflagged } };
+			];
+			return { documents, streams: { healthy, duplicate, missing, misflagged } };
+		};
+
+		/** A 3.x snapshot collection of its own with the corpus (a new one, or the given one: the same documents). */
+		const seedSnapshots = async ({ documents, streams } = snapshotCorpus()) => {
+			const snapshotPool = pool('snapshots');
+			const collection = SnapshotCollection.get(snapshotPool);
+			await createV1SnapshotCollection(database, collection);
+			await rawCollection(database, collection).insertMany(documents.map((document) => ({ ...document })));
+			return { snapshotPool, collection, streams };
 		};
 
 		const flags = async (collection: string) =>
@@ -548,9 +806,16 @@ describe.each(mongodbTestTopologies())('MongoDB migration ($name)', ({ url }) =>
 			expect(again).toMatchObject({ from: 'v2', action: 'skip' });
 		});
 
-		it('resumes after a crash after any step, to the same flags and indexes', async () => {
+		it('resumes after a crash after any step, to the same collection as a run without one', async () => {
+			const corpus = snapshotCorpus();
+			const clean = await seedSnapshots(corpus);
+			await snapshotStore.migrate({ pools: [clean.snapshotPool] });
+			const expected = await dump(clean.collection);
+			expect(expected.documents.filter(({ latest }) => latest === null)).toEqual([]);
+			expect(expected.registered).toEqual([{ kind: 'snapshots', schemaVersion: 2 }]);
+
 			for (const crashAfter of SNAPSHOT_STEPS) {
-				const { snapshotPool, collection, streams } = await seedSnapshots();
+				const { snapshotPool, collection, streams } = await seedSnapshots(corpus);
 				migrationHooks.onStepComplete = (_, step) => {
 					if (step === crashAfter) throw new Error(`crash after ${step}`);
 				};
@@ -559,18 +824,63 @@ describe.each(mongodbTestTopologies())('MongoDB migration ($name)', ({ url }) =>
 
 				await snapshotStore.migrate({ pools: [snapshotPool] });
 
-				expect(
-					(await flags(collection)).map(([, version]) => version).sort(),
-					`after a crash after ${crashAfter}`,
-				).toEqual([2, 2, 2, 3]);
-				expect((await rawCollection(database, collection).indexes()).map(({ name }) => name)).toEqual([
-					'_id_',
-					'streamId_1_version_1',
-					'latest_unique',
-				]);
-				expect(await catalog().findOne({ _id: collection })).toMatchObject({ schemaVersion: 2 });
+				// Flags, indexes, registration, and no lease left
+				expect(await dump(collection), `after a crash after ${crashAfter}`).toEqual(expected);
 				expect((await snapshotStore.getLastEnvelope(streams.healthy, snapshotPool))?.metadata.version).toBe(3);
 			}
+		});
+
+		it('keeps the flag of a snapshot that a 4.0 store appends while the flags are repaired', async () => {
+			const { snapshotPool, collection, streams } = await seedSnapshots();
+			// 3.x snapshot collections keep working under 4.0, with a warning
+			vi.spyOn(snapshotStore['logger'], 'warn').mockImplementation(() => undefined);
+			await snapshotStore.ensureCollection(snapshotPool);
+			const findOne = Collection.prototype.findOne;
+			migrationHooks.onStepComplete = (_, step) => {
+				if (step === 'unset-null-latest') {
+					// The repair reads the aggregation, then the first stream it repairs; the append lands in between
+					vi.spyOn(Collection.prototype, 'findOne').mockImplementationOnce(async function (
+						this: Collection,
+						...args: Parameters<Collection['findOne']>
+					) {
+						await snapshotStore.appendSnapshot(streams.duplicate, 3, { balance: 3 }, snapshotPool);
+						return findOne.apply(this, args as never);
+					} as never);
+				}
+			};
+
+			await expect(reportOf(snapshotStore.migrate({ pools: [snapshotPool] }))).resolves.toMatchObject({
+				action: 'migrate',
+			});
+
+			expect(await flags(collection)).toEqual(
+				Object.values(streams)
+					.map((stream) => [
+						stream.streamId,
+						stream === streams.healthy || stream === streams.duplicate ? 3 : 2,
+						`latest#${stream.streamId}`,
+					])
+					.sort(([x], [y]) => (String(x) < String(y) ? -1 : 1)),
+			);
+		});
+
+		it('drops the 3.x latest index first when the server refuses a second index on its key', async () => {
+			const { snapshotPool, collection } = await seedSnapshots();
+			const createIndex = vi
+				.spyOn(Collection.prototype, 'createIndex')
+				.mockRejectedValueOnce(
+					new MongoServerError({ code: 85, codeName: 'IndexOptionsConflict', errmsg: 'an index with this key exists' }),
+				);
+
+			const report = await reportOf(snapshotStore.migrate({ pools: [snapshotPool] }));
+
+			expect(report.steps.every(({ status }) => status === 'done')).toBe(true);
+			expect(createIndex).toHaveBeenCalledTimes(2);
+			expect((await rawCollection(database, collection).indexes()).map(({ name }) => name)).toEqual([
+				'_id_',
+				'streamId_1_version_1',
+				'latest_unique',
+			]);
 		});
 	});
 });

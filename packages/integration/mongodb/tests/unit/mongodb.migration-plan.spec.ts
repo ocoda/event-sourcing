@@ -96,11 +96,12 @@ describe('planEventCollection', () => {
 			['lease', 'fence', 'number', 'index', 'register', 'drop-event-date-indexes', 'unset-event-date', 'release'],
 		],
 		[
+			// Numbered all the same: a 3.x writer may insert between this look and the fence
 			'an empty 3.x collection',
 			{ rows: 0, unpositioned: 0, eventDateLeft: false },
 			'v1',
 			'migrate',
-			['lease', 'fence', 'index', 'register', 'drop-event-date-indexes', 'release'],
+			['lease', 'fence', 'number', 'index', 'register', 'drop-event-date-indexes', 'release'],
 		],
 		[
 			'a fenced collection',
@@ -170,7 +171,7 @@ describe('planEventCollection', () => {
 		expect(report.warnings).toEqual([expect.stringContaining('1 stream(s) have gaps')]);
 		const statement = (name: string) => report.steps.find((step) => step.name === name)?.statement;
 		expect(statement('lease')).toBe(
-			"db.getCollection('event_sourcing_collections').insertOne({ _id: 'lock:migrate:events', kind: 'lock', owner: <owner>, expiresAt: new Date(Date.now() + 600000) })",
+			"db.getCollection('event_sourcing_collections').insertOne({ _id: 'lock:migrate:events', kind: 'lock', owner: '<owner>', expiresAt: new Date(Date.now() + 600000) })",
 		);
 		expect(statement('fence')).toBe(
 			"db.runCommand({ collMod: 'events', validator: { $jsonSchema: { bsonType: 'object', required: ['globalPosition', 'streamId', 'version'], properties: { globalPosition: { bsonType: 'long' } } } }, validationLevel: 'strict', validationAction: 'error' })",
@@ -187,9 +188,20 @@ describe('planEventCollection', () => {
 		expect(statement('unset-event-date')).toBe(
 			"db.getCollection('events').updateMany({ eventDate: { $exists: true } }, { $unset: { eventDate: '' } })",
 		);
-		expect(statement('release')).toContain("deleteOne({ _id: 'lock:migrate:events', owner: <owner> })");
+		expect(statement('release')).toContain("deleteOne({ _id: 'lock:migrate:events', owner: '<owner>' })");
 		expect(report.steps.find(({ name }) => name === 'fence')?.lock).toContain('exclusive');
 		expect(report.steps.find(({ name }) => name === 'number')?.lock).toContain('intent');
+	});
+
+	it('names the owner of the run in the lease statements, as a string', () => {
+		const { report } = planEventCollection(v1Events(), ENVIRONMENT, { owner: "run-'1'" });
+		const statement = (name: string) => report.steps.find((step) => step.name === name)?.statement;
+
+		expect(statement('lease')).toContain("owner: 'run-\\'1\\''");
+		expect(statement('release')).toContain("owner: 'run-\\'1\\''");
+		expect(planSnapshotCollection(v1Snapshots(), ENVIRONMENT, { owner: 'run-2' }).steps[0].statement).toContain(
+			"owner: 'run-2'",
+		);
 	});
 
 	it('numbers by (eventDate, _id) when an id is not a canonical ULID, and warns', () => {
@@ -232,6 +244,12 @@ describe('planEventCollection', () => {
 	it.each([
 		['a server older than 5.0', {}, { serverVersion: '4.4.29', serverMajor: 4 }, 'MongoDB 5.0 or later'],
 		['a sharded collection', { sharded: true }, {}, 'sharded'],
+		[
+			'a collection that may be sharded (config.collections is not readable)',
+			{ sharded: 'unknown' as const },
+			{},
+			'grant it find on config.collections',
+		],
 		['ids that are not strings', { nonStringIds: 3 }, {}, '3 event(s) have an _id that is not a string'],
 		[
 			'non-canonical ids without an eventDate',
@@ -253,6 +271,33 @@ describe('planEventCollection', () => {
 		expect(report.action).toBe('blocked');
 		expect(report.blocking).toEqual([expect.stringContaining(reason)]);
 		expect(pendingOf(report.steps)).toEqual([]);
+	});
+
+	it('needs the privileges of the steps that are left', () => {
+		const catalog = {
+			resource: { db: 'es', collection: 'event_sourcing_collections' },
+			actions: ['find', 'insert', 'update', 'remove'],
+		};
+		// Enough for the clean-up after the commit point, not for the numbering
+		const cleanUp = {
+			resource: { db: 'es', collection: 'events' },
+			actions: ['find', 'listIndexes', 'update', 'dropIndex'],
+		};
+		const environment = { ...ENVIRONMENT, privileges: [catalog, cleanUp] };
+
+		expect(planEventCollection(v1Events(registered), environment).report).toMatchObject({
+			action: 'resume',
+			blocking: [],
+		});
+		expect(planEventCollection(v1Events(), environment).report.blocking).toEqual([
+			expect.stringContaining('collMod on es.events, insert on es.events, createIndex on es.events'),
+		]);
+		// Nothing left to do needs nothing
+		const migrated = { ...registered, indexes: [ID_INDEX, STREAM_INDEX, POSITION_INDEX], eventDateLeft: false };
+		expect(planEventCollection(v1Events(migrated), { ...ENVIRONMENT, privileges: [] }).report).toMatchObject({
+			action: 'skip',
+			blocking: [],
+		});
 	});
 
 	it('does not block non-canonical ids that all have an eventDate, nor canonical ids without one', () => {
@@ -366,7 +411,16 @@ describe('planSnapshotCollection', () => {
 		expect(statement('unset-null-latest')).toBe(
 			"db.getCollection('snapshots').updateMany({ latest: { $type: 'null' } }, { $unset: { latest: '' } })",
 		);
-		expect(statement('repair-latest-flags')).toContain('.forEach(({ _id, top }) => {');
+		// The highest version is read again at the repair: only the versions below it lose their flag
+		expect(statement('repair-latest-flags')).toContain(
+			".forEach(({ _id }) => { const top = db.getCollection('snapshots').find({ streamId: _id }, { _id: 1, version: 1 }).sort({ version: -1 }).limit(1).next();",
+		);
+		expect(statement('repair-latest-flags')).toContain(
+			"updateMany({ streamId: _id, version: { $lt: top.version }, latest: { $exists: true } }, { $unset: { latest: '' } })",
+		);
+		expect(statement('repair-latest-flags')).toContain(
+			"updateOne({ _id: top._id }, { $set: { latest: 'latest#' + _id } })",
+		);
 		expect(statement('index')).toBe(
 			"db.getCollection('snapshots').createIndex({ aggregateName: 1, latest: 1 }, { unique: true, partialFilterExpression: { latest: { $type: 'string' } }, name: 'latest_unique' })",
 		);
@@ -380,6 +434,7 @@ describe('planSnapshotCollection', () => {
 
 	it.each([
 		['a sharded collection', { sharded: true }, {}, 'sharded'],
+		['a collection that may be sharded', { sharded: 'unknown' as const }, {}, 'config.collections'],
 		[
 			'another run',
 			{ lease: { owner: 'another-run', expiresAt: new Date(NOW.getTime() + 1000) } },
@@ -440,6 +495,14 @@ describe('numberingPipeline', () => {
 				partitionBy: '$streamId',
 				sortBy: { version: 1 },
 				output: { k: { $max: '$r', window: { documents: ['unbounded', 'current'] } } },
+			},
+		});
+		// (k, version) as one 64-bit key: both terms converted, so a version stored as a double can't round it
+		expect(pipeline).toContainEqual({
+			$set: {
+				orderKey: {
+					$add: [{ $multiply: [{ $toLong: '$k' }, Long.fromNumber(2 ** 31)] }, { $toLong: '$version' }],
+				},
 			},
 		});
 		expect(pipeline.at(-2)).toEqual({ $project: { _id: 1, globalPosition: { $toLong: '$position' } } });
@@ -509,6 +572,45 @@ describe('driver errors', () => {
 			'values with commas and colons',
 			{ code: 11000, errmsg: 'dup key: { aggregateName: "a, b: c", latest: "latest#x: y" }' },
 			'latest',
+		],
+		[
+			'the index of a bulk write, whose values may hold quotes and newlines',
+			{
+				code: 11000,
+				errmsg:
+					'E11000 duplicate key error collection: es.a-events index: streamId_1_version_1 dup key: { streamId: "a"b, c: d", version: 1 }',
+			},
+			'stream-version',
+		],
+		[
+			'a stream id with a newline',
+			{
+				code: 11000,
+				writeErrors: [
+					{
+						code: 11000,
+						errmsg:
+							'E11000 duplicate key error collection: es.events index: streamId_1_version_1 dup key: { streamId: "a\nb", version: 1 }',
+					},
+				],
+			},
+			'stream-version',
+		],
+		['the _id index', { code: 11000, errmsg: 'E11000 index: _id_ dup key: { _id: "a, b: c" }' }, 'id'],
+		[
+			'the position index',
+			{ code: 11000, errmsg: 'E11000 index: globalPosition_1 dup key: { globalPosition: 7 }' },
+			'position',
+		],
+		[
+			'the latest flag index',
+			{ code: 11000, errmsg: 'E11000 index: latest_unique dup key: { aggregateName: "a", latest: "b" }' },
+			'latest',
+		],
+		[
+			'the fields of an index with another name',
+			{ code: 11000, errmsg: 'E11000 index: own_name dup key: { streamId: "a\nb", version: 1 }' },
+			'stream-version',
 		],
 		['another index', { code: 11000, keyPattern: { email: 1 } }, 'other'],
 		['no key at all', { code: 11000, message: 'E11000' }, 'other'],

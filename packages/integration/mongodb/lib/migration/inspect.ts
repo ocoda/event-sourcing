@@ -111,16 +111,32 @@ const readBytes = async (collection: Collection): Promise<number | undefined> =>
 	}
 };
 
-/** Whether a collection is sharded, on a `mongos`. */
-const readSharded = async ({ client, db, topology }: MigrationContext, name: string): Promise<boolean> => {
+/** Error code of an operation the user has no privilege for (`Unauthorized`). */
+const UNAUTHORIZED = 13;
+
+/**
+ * Whether a collection is sharded, on a `mongos`; `'unknown'` when the user may not read `config.collections` (the
+ * `readWrite` and `dbAdmin` roles of the application's database don't grant it).
+ */
+export const readSharded = async (
+	{ client, db, topology }: MigrationContext,
+	name: string,
+): Promise<boolean | 'unknown'> => {
 	if (topology !== 'sharded') {
 		return false;
 	}
-	const entry = await client
-		.db('config')
-		.collection('collections')
-		.findOne({ _id: `${db.databaseName}.${name}` as never });
-	return Boolean(entry && !entry.dropped && !entry.unsplittable);
+	try {
+		const entry = await client
+			.db('config')
+			.collection('collections')
+			.findOne({ _id: `${db.databaseName}.${name}` as never });
+		return Boolean(entry && !entry.dropped && !entry.unsplittable);
+	} catch (error) {
+		if ((error as { code?: unknown }).code === UNAUTHORIZED) {
+			return 'unknown';
+		}
+		throw error;
+	}
 };
 
 /**

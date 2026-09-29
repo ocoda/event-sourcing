@@ -7,8 +7,41 @@ import { isDuplicateKeyError } from '../mongodb.utils.js';
 import type { MigrationContext } from './inspect.js';
 import { LEASE_MS, type Lease, type MigrationEnvironment, leaseIdOf } from './plan.js';
 
-/** How often a running migration renews its lease, in milliseconds. */
-const LEASE_RENEWAL_MS = 60_000;
+/** @internal The timing of a migration run. Not exported from the package; the specs shorten it. */
+export const MIGRATION_LIMITS = {
+	/** How often a running migration renews its lease, in milliseconds. */
+	leaseRenewalMs: 60_000,
+};
+
+/** How long the steps that take an exclusive collection lock wait for it by default (`lockTimeoutMs`), in milliseconds. */
+export const DEFAULT_LOCK_TIMEOUT_MS = 10_000;
+
+/** Error code of an operation that ran out of its `maxTimeMS` (`MaxTimeMSExpired`). */
+const MAX_TIME_MS_EXPIRED = 50;
+
+/**
+ * A step that can't run now: its lock wasn't free within `lockTimeoutMs`, or another run took the lease over. The run
+ * reports the collection as blocked, with the reason, instead of failing; a later run resumes it.
+ */
+export class StepBlocked extends Error {}
+
+/**
+ * Runs an operation that waits for an exclusive collection lock at most `maxTimeMS` (the caller passes
+ * `lockTimeoutMs`), and turns its timeout into a `StepBlocked`.
+ */
+export const waitingForLock = async <T>(collection: string, lockTimeoutMs: number, operation: () => Promise<T>) => {
+	try {
+		return await operation();
+	} catch (error) {
+		if ((error as { code?: unknown } | null)?.code === MAX_TIME_MS_EXPIRED) {
+			throw new StepBlocked(
+				`the exclusive lock of ${collection} was not free within ${lockTimeoutMs} ms (lockTimeoutMs): retry when the collection is idle, or raise lockTimeoutMs`,
+				{ cause: error },
+			);
+		}
+		throw error;
+	}
+};
 
 /**
  * @internal Crash injection for the migration specs: a hook that throws after a step stops the run there, like a crash.
@@ -94,16 +127,32 @@ export const runUnderLease = async (
 		};
 	}
 
-	const release = () => catalog.deleteOne({ _id: leaseIdOf(collection), owner });
+	const leaseId = leaseIdOf(collection);
+	const release = () => catalog.deleteOne({ _id: leaseId, owner });
+	// A run whose lease another run took over (force: true) stops before its next step
+	let lost = false;
+	const assertLeaseHeld = async () => {
+		if (lost || (await catalog.countDocuments({ _id: leaseId, owner }, { limit: 1 })) === 0) {
+			lost = true;
+			throw new StepBlocked(
+				'another run took the lease of this collection over (force: true) while this run migrated it; that run continues the migration',
+			);
+		}
+	};
 	const renewal = setInterval(() => {
 		catalog
-			.updateOne({ _id: leaseIdOf(collection), owner }, { $set: { expiresAt: new Date(Date.now() + LEASE_MS) } })
+			.updateOne({ _id: leaseId, owner }, { $set: { expiresAt: new Date(Date.now() + LEASE_MS) } })
+			.then(({ matchedCount }) => {
+				lost ||= matchedCount === 0;
+			})
 			.catch((error) => context.logger.warn(`Could not renew the migration lease of ${collection}: ${String(error)}`));
-	}, LEASE_RENEWAL_MS);
+	}, MIGRATION_LIMITS.leaseRenewalMs);
 	renewal.unref();
 
+	let report: MigrationCollectionReport | undefined;
 	try {
-		const { report, runStep } = await plan(owner);
+		const planned = await plan(owner);
+		report = planned.report;
 		report.warnings = [...new Set([...firstLook.warnings, ...report.warnings])];
 		if (report.action === 'skip' || report.action === 'blocked') {
 			return report;
@@ -115,14 +164,28 @@ export const runUnderLease = async (
 			if (step.name === 'release') {
 				await release();
 			} else if (step.name !== 'lease') {
+				await assertLeaseHeld();
 				context.logger.log(`Migrating ${collection}: ${step.name}`);
-				await runStep(step.name, (done, total) => options.onProgress?.({ collection, step: step.name, done, total }));
+				await planned.runStep(step.name, (done, total) =>
+					options.onProgress?.({ collection, step: step.name, done, total }),
+				);
 			}
 			step.status = 'done';
 			options.onProgress?.({ collection, step: step.name });
 			await migrationHooks.onStepComplete?.(collection, step.name);
 		}
 		return report;
+	} catch (error) {
+		if (!(error instanceof StepBlocked) || !report) {
+			throw error;
+		}
+		context.logger.warn(`Migrating ${collection} stopped: ${error.message}`);
+		return {
+			...report,
+			action: 'blocked',
+			steps: report.steps.map((step) => (step.status === 'pending' ? { ...step, status: 'skipped' } : step)),
+			blocking: [...report.blocking, error.message],
+		};
 	} finally {
 		clearInterval(renewal);
 		await release().catch(() => undefined);
