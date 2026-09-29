@@ -67,14 +67,14 @@ describe('EventSourcingModule.forRootAsync (bootstrapped)', () => {
 	};
 
 	beforeEach(() => {
-		jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
-		jest.spyOn(Logger.prototype, 'debug').mockImplementation(() => undefined);
+		vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+		vi.spyOn(Logger.prototype, 'debug').mockImplementation(() => undefined);
 	});
 
 	afterEach(async () => {
 		await moduleRef?.close();
 		moduleRef = undefined;
-		jest.restoreAllMocks();
+		vi.restoreAllMocks();
 	});
 
 	it('bootstraps with useFactory', async () => {
@@ -93,7 +93,7 @@ describe('EventSourcingModule.forRootAsync (bootstrapped)', () => {
 	const spyOnOptionsFactories = () => {
 		const factories: EventSourcingOptionsService[] = [];
 		const original = EventSourcingOptionsService.prototype.createEventSourcingOptions;
-		jest.spyOn(EventSourcingOptionsService.prototype, 'createEventSourcingOptions').mockImplementation(function (
+		vi.spyOn(EventSourcingOptionsService.prototype, 'createEventSourcingOptions').mockImplementation(function (
 			this: EventSourcingOptionsService,
 		) {
 			factories.push(this);

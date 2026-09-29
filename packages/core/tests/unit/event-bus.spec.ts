@@ -73,7 +73,7 @@ describe(EventBus, () => {
 			metatype: ValidSubscriber,
 			instance: new ValidSubscriber(),
 		} as unknown as ProviderWrapper;
-		const bindSpy = jest.spyOn(bus, 'bind');
+		const bindSpy = vi.spyOn(bus, 'bind');
 
 		bus.registerSubscribers([wrapper]);
 
@@ -83,7 +83,7 @@ describe(EventBus, () => {
 	it('skips registering publishers with no instance', () => {
 		const bus = new EventBus();
 		const wrapper = { metatype: { name: 'MissingPublisher' }, instance: undefined } as unknown as ProviderWrapper;
-		const addPublisherSpy = jest.spyOn(bus, 'addPublisher');
+		const addPublisherSpy = vi.spyOn(bus, 'addPublisher');
 
 		bus.registerPublishers([wrapper]);
 

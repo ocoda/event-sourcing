@@ -1,4 +1,4 @@
 {
-	"recommendations": ["oxc.oxc-vscode", "ms-azuretools.vscode-docker", "redhat.vscode-yaml"],
+	"recommendations": ["oxc.oxc-vscode", "vitest.explorer", "ms-azuretools.vscode-docker", "redhat.vscode-yaml"],
 	"unwantedRecommendations": []
 }

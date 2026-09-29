@@ -14,6 +14,7 @@ import {
 	SnapshotStream,
 	UUID,
 } from '@ocoda/event-sourcing';
+import type { Mocked } from 'vitest';
 
 describe(SnapshotRepository, () => {
 	@Aggregate()
@@ -57,7 +58,7 @@ describe(SnapshotRepository, () => {
 	let snapshot: ISnapshot<Account>;
 	let snapshotStream: SnapshotStream;
 	let snapshotEnvelope: SnapshotEnvelope<Account>;
-	let snapshotStore: jest.Mocked<SnapshotStore>;
+	let snapshotStore: Mocked<SnapshotStore>;
 
 	beforeEach(() => {
 		account = new Account();
@@ -78,19 +79,19 @@ describe(SnapshotRepository, () => {
 		snapshotStore = {
 			options: {},
 			logger: new Logger(),
-			appendSnapshot: jest.fn(),
+			appendSnapshot: vi.fn(),
 			getLastEnvelope: <any>(
-				jest.fn((_snapshotStream: SnapshotStream, _pool?: ISnapshotPool) => Promise.resolve(snapshotEnvelope))
+				vi.fn((_snapshotStream: SnapshotStream, _pool?: ISnapshotPool) => Promise.resolve(snapshotEnvelope))
 			),
-			getManyLastSnapshotEnvelopes: jest.fn((snapshotStream: SnapshotStream, _pool?: ISnapshotPool) =>
+			getManyLastSnapshotEnvelopes: vi.fn((snapshotStream: SnapshotStream, _pool?: ISnapshotPool) =>
 				Promise.resolve(new Map([[snapshotStream, snapshotEnvelope]])),
 			),
-			getLastSnapshot: jest.fn(),
-			getSnapshot: jest.fn(),
-			getSnapshots: jest.fn(),
-			start: jest.fn(),
-			stop: jest.fn(),
-		} as unknown as jest.Mocked<SnapshotStore>;
+			getLastSnapshot: vi.fn(),
+			getSnapshot: vi.fn(),
+			getSnapshots: vi.fn(),
+			start: vi.fn(),
+			stop: vi.fn(),
+		} as unknown as Mocked<SnapshotStore>;
 
 		snapshotRepository = new AccountSnapshotRepository(snapshotStore);
 	});
@@ -300,7 +301,7 @@ describe(SnapshotRepository, () => {
 	});
 
 	it('returns a new aggregate when no snapshots are found', async () => {
-		snapshotStore.getLastEnvelope = jest.fn().mockResolvedValue(undefined);
+		snapshotStore.getLastEnvelope = vi.fn().mockResolvedValue(undefined);
 
 		const loadedAccount = await snapshotRepository.load(account.id);
 

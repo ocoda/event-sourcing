@@ -18,8 +18,10 @@ import {
 	getEvents,
 } from '@ocoda/event-sourcing-testing/unit';
 import type { Pool, PoolConnection } from 'mariadb';
+import type { MockInstance } from 'vitest';
 
-jest.setTimeout(30_000);
+// Pool exhaustion and concurrency scenarios: allow slow tests and setup/teardown hooks.
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
 type Config = ConstructorParameters<typeof MariaDBEventStore>[1];
 
@@ -99,7 +101,7 @@ describe(`${MariaDBEventStore.name} resilience`, () => {
 
 	beforeAll(async () => {
 		eventStore = new MariaDBEventStore(eventMap, config({ connectionLimit: POOL_SIZE, acquireTimeout: 3_000 }));
-		eventStore.publish = jest.fn(async () => Promise.resolve());
+		eventStore.publish = vi.fn(async () => Promise.resolve());
 		await eventStore.connect();
 
 		pool = eventStore['pool'];
@@ -237,10 +239,10 @@ describe(`${MariaDBEventStore.name} resilience`, () => {
 
 		it('should not let a failing rollback hide the original error', async () => {
 			const getConnection = pool.getConnection.bind(pool);
-			const rollbacks: jest.SpyInstance[] = [];
-			const getConnectionSpy = jest.spyOn(pool, 'getConnection').mockImplementation(async () => {
+			const rollbacks: MockInstance[] = [];
+			const getConnectionSpy = vi.spyOn(pool, 'getConnection').mockImplementation(async () => {
 				const connection: PoolConnection = await getConnection();
-				rollbacks.push(jest.spyOn(connection, 'rollback').mockRejectedValue(new Error('rollback failure')));
+				rollbacks.push(vi.spyOn(connection, 'rollback').mockRejectedValue(new Error('rollback failure')));
 				return connection;
 			});
 
@@ -299,7 +301,7 @@ describe(`${MariaDBEventStore.name} resilience`, () => {
 
 			it('should let exactly one writer win and report a version conflict to the others', async () => {
 				const concurrentStore = new MariaDBEventStore(eventMap, config({ connectionLimit: WRITERS + 2 }));
-				concurrentStore.publish = jest.fn(async () => Promise.resolve());
+				concurrentStore.publish = vi.fn(async () => Promise.resolve());
 				await concurrentStore.connect();
 
 				try {
@@ -315,7 +317,7 @@ describe(`${MariaDBEventStore.name} resilience`, () => {
 
 			it('should report a version conflict when the race is lost after the version check passed', async () => {
 				const concurrentStore = new MariaDBEventStore(eventMap, config({ connectionLimit: WRITERS + 2 }));
-				concurrentStore.publish = jest.fn(async () => Promise.resolve());
+				concurrentStore.publish = vi.fn(async () => Promise.resolve());
 				await concurrentStore.connect();
 
 				const concurrentPool: Pool = concurrentStore['pool'];
@@ -328,10 +330,10 @@ describe(`${MariaDBEventStore.name} resilience`, () => {
 				const allChecked = new Promise<void>((resolve) => {
 					releaseWriters = resolve;
 				});
-				const getConnectionSpy = jest.spyOn(concurrentPool, 'getConnection').mockImplementation(async () => {
+				const getConnectionSpy = vi.spyOn(concurrentPool, 'getConnection').mockImplementation(async () => {
 					const connection: PoolConnection = await getConnection();
 					const query = connection.query.bind(connection);
-					jest.spyOn(connection, 'query').mockImplementation(async (sql: unknown, values?: unknown) => {
+					vi.spyOn(connection, 'query').mockImplementation(async (sql: unknown, values?: unknown) => {
 						const result = await query(sql as string, values);
 						if (typeof sql === 'string' && sql.startsWith('SELECT MAX(version)')) {
 							versionChecks++;

@@ -10,8 +10,10 @@ import {
 import { type MariaDBSnapshotEntity, MariaDBSnapshotStore } from '@ocoda/event-sourcing-mariadb';
 import { Account, AccountId } from '@ocoda/event-sourcing-testing/unit';
 import type { Pool, PoolConnection } from 'mariadb';
+import type { MockInstance } from 'vitest';
 
-jest.setTimeout(30_000);
+// Pool exhaustion and concurrency scenarios: allow slow tests and setup/teardown hooks.
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
 type Config = ConstructorParameters<typeof MariaDBSnapshotStore>[0];
 
@@ -210,10 +212,10 @@ describe(`${MariaDBSnapshotStore.name} resilience`, () => {
 
 		it('should not let a failing rollback hide the original error', async () => {
 			const getConnection = pool.getConnection.bind(pool);
-			const rollbacks: jest.SpyInstance[] = [];
-			const getConnectionSpy = jest.spyOn(pool, 'getConnection').mockImplementation(async () => {
+			const rollbacks: MockInstance[] = [];
+			const getConnectionSpy = vi.spyOn(pool, 'getConnection').mockImplementation(async () => {
 				const connection: PoolConnection = await getConnection();
-				rollbacks.push(jest.spyOn(connection, 'rollback').mockRejectedValue(new Error('rollback failure')));
+				rollbacks.push(vi.spyOn(connection, 'rollback').mockRejectedValue(new Error('rollback failure')));
 				return connection;
 			});
 
@@ -322,10 +324,10 @@ describe(`${MariaDBSnapshotStore.name} resilience`, () => {
 				const allChecked = new Promise<void>((resolve) => {
 					releaseWriters = resolve;
 				});
-				const getConnectionSpy = jest.spyOn(concurrentPool, 'getConnection').mockImplementation(async () => {
+				const getConnectionSpy = vi.spyOn(concurrentPool, 'getConnection').mockImplementation(async () => {
 					const connection: PoolConnection = await getConnection();
 					const query = connection.query.bind(connection);
-					jest.spyOn(connection, 'query').mockImplementation(async (sql: unknown, values?: unknown) => {
+					vi.spyOn(connection, 'query').mockImplementation(async (sql: unknown, values?: unknown) => {
 						const result = await query(sql as string, values);
 						if (typeof sql === 'string' && sql.includes('WHERE latest IN (?)')) {
 							versionChecks++;

@@ -1,6 +1,6 @@
 {
 	"$schema": "./node_modules/oxlint/configuration_schema.json",
-	"plugins": ["typescript", "import", "unicorn", "promise", "node", "jest", "oxc"],
+	"plugins": ["typescript", "import", "unicorn", "promise", "node", "vitest", "oxc"],
 	"categories": {
 		"correctness": "error"
 	},
@@ -33,10 +33,13 @@
 		"typescript/no-extraneous-class": ["error", { "allowWithDecorator": true, "allowStaticOnly": true }],
 		// False positive on Nest's ExceptionFilter#catch(exception, host).
 		"promise/valid-params": "off",
-		"jest/expect-expect": ["error", { "assertFunctionNames": ["expect", "expect*"] }],
-		"jest/no-conditional-expect": "off",
-		"jest/require-to-throw-message": "off",
-		"jest/valid-title": ["error", { "ignoreTypeOfDescribeName": true }]
+		"vitest/expect-expect": ["error", { "assertFunctionNames": ["expect", "expect*"] }],
+		"vitest/no-conditional-expect": "off",
+		"vitest/require-to-throw-message": "off",
+		// Mocks take their types from the implementation or the property they replace; spelling out
+		// vi.fn<...>() on every stub adds noise without catching anything the type checker misses.
+		"vitest/require-mock-type-parameters": "off",
+		"vitest/valid-title": ["error", { "ignoreTypeOfDescribeName": true }]
 	},
 	"overrides": [
 		{
@@ -50,7 +53,7 @@
 		{
 			"files": ["**/tests/**", "packages/testing/**"],
 			"env": {
-				"jest": true
+				"vitest": true
 			},
 			"rules": {
 				// Empty classes are the usual fixture for commands, queries, events and handlers.

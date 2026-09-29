@@ -11,11 +11,12 @@
 	},
 	"devDependencies": {
 		"@ocoda/event-sourcing-config": "workspace:*",
-		"@types/jest": "30.0.0",
-		"@types/node": "20.17.6",
-		"typescript": "5.9.2"
+		"@types/node": "22.13.4",
+		"typescript": "5.9.2",
+		"vitest": "5.0.2"
 	},
 	"peerDependencies": {
-		"@ocoda/event-sourcing": "workspace:*"
+		"@ocoda/event-sourcing": "workspace:*",
+		"vitest": "^5.0.0"
 	}
 }

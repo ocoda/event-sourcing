@@ -18,7 +18,8 @@ import {
 } from '@ocoda/event-sourcing-testing/unit';
 import { AbstractCursor, Collection, type Db, type MongoClient } from 'mongodb';
 
-jest.setTimeout(30_000);
+// Pool exhaustion and concurrency scenarios: allow slow tests and setup/teardown hooks.
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
 type Config = ConstructorParameters<typeof MongoDBEventStore>[1];
 
@@ -38,7 +39,7 @@ describe(`${MongoDBEventStore.name} resilience`, () => {
 
 	const newStore = async () => {
 		const store = new MongoDBEventStore(eventMap, config());
-		store.publish = jest.fn(async () => Promise.resolve());
+		store.publish = vi.fn(async () => Promise.resolve());
 		await store.connect();
 		return store;
 	};
@@ -96,7 +97,7 @@ describe(`${MongoDBEventStore.name} resilience`, () => {
 	});
 
 	afterEach(() => {
-		jest.restoreAllMocks();
+		vi.restoreAllMocks();
 	});
 
 	describe('reading', () => {
@@ -135,7 +136,7 @@ describe(`${MongoDBEventStore.name} resilience`, () => {
 		it('should close the cursor of the collections listing when the consumer stops reading early', async () => {
 			await newPool('listing-a');
 			await newPool('listing-b');
-			const close = jest.spyOn(AbstractCursor.prototype, 'close');
+			const close = vi.spyOn(AbstractCursor.prototype, 'close');
 
 			for await (const batch of eventStore.listCollections({ batch: 1 })) {
 				expect(batch).toHaveLength(1);
@@ -195,7 +196,7 @@ describe(`${MongoDBEventStore.name} resilience`, () => {
 		describe('to known collections', () => {
 			it('should not look up the collection again on every append', async () => {
 				const eventPool = await newPool('known');
-				const listCollections = jest.spyOn(database, 'listCollections');
+				const listCollections = vi.spyOn(database, 'listCollections');
 
 				const stream = newStream();
 				await eventStore.appendEvents(stream, 2, events.slice(0, 2), eventPool);
@@ -210,7 +211,7 @@ describe(`${MongoDBEventStore.name} resilience`, () => {
 				const otherStore = await newStore();
 
 				try {
-					const listCollections = jest.spyOn(otherStore['database'], 'listCollections');
+					const listCollections = vi.spyOn(otherStore['database'], 'listCollections');
 
 					const stream = newStream();
 					await otherStore.appendEvents(stream, 2, events.slice(0, 2), eventPool);
@@ -228,7 +229,7 @@ describe(`${MongoDBEventStore.name} resilience`, () => {
 			it('should keep rejecting them and check the server each time', async () => {
 				const eventPool = uniquePool('unknown');
 				pools.push(eventPool);
-				const listCollections = jest.spyOn(database, 'listCollections');
+				const listCollections = vi.spyOn(database, 'listCollections');
 
 				await expect(eventStore.appendEvents(newStream(), 1, events.slice(0, 1), eventPool)).rejects.toThrow(
 					EventStorePersistenceException,
@@ -309,7 +310,7 @@ describe(`${MongoDBEventStore.name} resilience`, () => {
 					releaseWriters = resolve;
 				});
 				const insertMany = Collection.prototype.insertMany;
-				const insertManySpy = jest.spyOn(Collection.prototype, 'insertMany').mockImplementation(async function (
+				const insertManySpy = vi.spyOn(Collection.prototype, 'insertMany').mockImplementation(async function (
 					this: Collection,
 					...args: Parameters<Collection['insertMany']>
 				) {
@@ -335,7 +336,7 @@ describe(`${MongoDBEventStore.name} resilience`, () => {
 				const raced = getAccountEventEnvelopes(accountId, eventMap, events)[4];
 				const collection = database.collection<MongoDBEventEntity>(EventCollection.get(eventPool));
 				const insertMany = Collection.prototype.insertMany;
-				jest.spyOn(Collection.prototype, 'insertMany').mockImplementationOnce(async function (
+				vi.spyOn(Collection.prototype, 'insertMany').mockImplementationOnce(async function (
 					this: Collection,
 					...args: Parameters<Collection['insertMany']>
 				) {

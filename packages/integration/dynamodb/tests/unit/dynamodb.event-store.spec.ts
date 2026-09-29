@@ -38,12 +38,13 @@ import {
 	getEventMap,
 	getEvents,
 } from '@ocoda/event-sourcing-testing/unit';
+import type { MockInstance } from 'vitest';
 
 describe(DynamoDBEventStore, () => {
 	let eventStore: DynamoDBEventStore;
 	let envelopesAccountA: EventEnvelope[];
 	let envelopesAccountB: EventEnvelope[];
-	const publish = jest.fn(async () => Promise.resolve());
+	const publish = vi.fn(async () => Promise.resolve());
 
 	let client: DynamoDBClient;
 
@@ -370,7 +371,7 @@ describe(DynamoDBEventStore, () => {
 		// Makes the version check see an empty stream, like a stale (eventually consistent) read or a concurrent writer would
 		const simulateStaleVersionCheck = () => {
 			const send = client.send.bind(client);
-			return jest
+			return vi
 				.spyOn(client, 'send')
 				.mockImplementation((async (command: unknown) =>
 					command instanceof QueryCommand && command.input.Limit === 1
@@ -386,7 +387,7 @@ describe(DynamoDBEventStore, () => {
 			const released = new Promise<void>((resolve) => {
 				release = resolve;
 			});
-			return jest.spyOn(client, 'send').mockImplementation((async (command: unknown) => {
+			return vi.spyOn(client, 'send').mockImplementation((async (command: unknown) => {
 				if (command instanceof TransactWriteItemsCommand) {
 					arrived++;
 					if (arrived === count) {
@@ -405,7 +406,7 @@ describe(DynamoDBEventStore, () => {
 		});
 
 		afterEach(() => {
-			jest.restoreAllMocks();
+			vi.restoreAllMocks();
 		});
 
 		afterAll(async () => {
@@ -433,7 +434,7 @@ describe(DynamoDBEventStore, () => {
 
 		it('should reject appending more than 100 events before writing anything', async () => {
 			const stream = newStream();
-			const send = jest.spyOn(client, 'send');
+			const send = vi.spyOn(client, 'send');
 
 			const append = eventStore.appendEvents(stream, 101, countedEvents(101), pool);
 
@@ -473,7 +474,7 @@ describe(DynamoDBEventStore, () => {
 			await expect(append).rejects.toThrow(new EventStoreVersionConflictException(stream, 4, 4));
 			await expect(append).rejects.toHaveProperty('stack', expect.stringContaining('ConditionalCheckFailed'));
 
-			jest.restoreAllMocks();
+			vi.restoreAllMocks();
 			expect(await readItems(stream)).toEqual(storedItems);
 		});
 
@@ -509,7 +510,7 @@ describe(DynamoDBEventStore, () => {
 				writers.map((events) => eventStore.appendEvents(stream, 2, events, pool)),
 			);
 
-			jest.restoreAllMocks();
+			vi.restoreAllMocks();
 
 			const rejected = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected');
 			expect(results.filter(({ status }) => status === 'fulfilled')).toHaveLength(1);
@@ -565,7 +566,7 @@ describe(DynamoDBEventStore, () => {
 				}
 				return items;
 			};
-			const send = jest.spyOn(client, 'send');
+			const send = vi.spyOn(client, 'send');
 
 			await eventStore.appendEvents(stream, 2, countedEvents(2), pool);
 			await eventStore.appendEvents(stream, 3, countedEvents(1, 2), pool);
@@ -614,14 +615,14 @@ describe(DynamoDBEventStore, () => {
 	describe('ensureCollection', () => {
 		const pools = ['dynamodb-on-demand', 'dynamodb-provisioned', 'dynamodb-concurrent'];
 
-		const createTableInputs = (send: jest.SpyInstance) =>
+		const createTableInputs = (send: MockInstance) =>
 			send.mock.calls
 				.map(([command]) => command)
 				.filter((command): command is CreateTableCommand => command instanceof CreateTableCommand)
 				.map(({ input }): CreateTableCommandInput => input);
 
 		afterEach(() => {
-			jest.restoreAllMocks();
+			vi.restoreAllMocks();
 		});
 
 		afterAll(async () => {
@@ -633,7 +634,7 @@ describe(DynamoDBEventStore, () => {
 		});
 
 		it('should not provision throughput for on-demand tables and wait until they are active', async () => {
-			const send = jest.spyOn(client, 'send');
+			const send = vi.spyOn(client, 'send');
 
 			await expect(eventStore.ensureCollection('dynamodb-on-demand')).resolves.toBe('dynamodb-on-demand-events');
 
@@ -648,7 +649,7 @@ describe(DynamoDBEventStore, () => {
 		});
 
 		it('should provision throughput for the table and its index for provisioned tables', async () => {
-			const send = jest.spyOn(client, 'send');
+			const send = vi.spyOn(client, 'send');
 			const ProvisionedThroughput = { ReadCapacityUnits: 2, WriteCapacityUnits: 3 };
 
 			await eventStore.ensureCollection('dynamodb-provisioned', {
@@ -667,12 +668,10 @@ describe(DynamoDBEventStore, () => {
 
 		it('should throw when a collection cannot be created', async () => {
 			const send = client.send.bind(client);
-			jest
-				.spyOn(client, 'send')
-				.mockImplementation((async (command: unknown) =>
-					command instanceof CreateTableCommand
-						? Promise.reject(new Error('LimitExceededException'))
-						: send(command as QueryCommand)) as any);
+			vi.spyOn(client, 'send').mockImplementation((async (command: unknown) =>
+				command instanceof CreateTableCommand
+					? Promise.reject(new Error('LimitExceededException'))
+					: send(command as QueryCommand)) as any);
 
 			await expect(eventStore.ensureCollection('dynamodb-create-failure')).rejects.toThrow(
 				new EventStoreCollectionCreationException('dynamodb-create-failure-events', new Error()),

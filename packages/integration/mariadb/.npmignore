@@ -10,7 +10,7 @@ tests
 .vscode
 .turbo
 docker-compose.yml
-jest.config.js
+vitest.config.mts
 pnpm-lock.yaml
 renovate.json
 tsconfig.build.json

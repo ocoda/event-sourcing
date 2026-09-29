@@ -4,8 +4,8 @@ import type { EventEnvelope } from '@ocoda/event-sourcing';
 describe(EventBus, () => {
 	it('binds subscribers without a name to the main stream', () => {
 		const bus = new EventBus();
-		const handler = { handle: jest.fn() };
-		const spy = jest.spyOn(bus, 'ofEventName' as never);
+		const handler = { handle: vi.fn() };
+		const spy = vi.spyOn(bus, 'ofEventName' as never);
 
 		bus.bind(handler, '');
 		bus.publish({ event: 'test', payload: {}, metadata: {} } as EventEnvelope);
@@ -17,7 +17,7 @@ describe(EventBus, () => {
 
 	it('publishes to all registered publishers', () => {
 		const bus = new EventBus();
-		const publisher = { publish: jest.fn() };
+		const publisher = { publish: vi.fn() };
 		const envelope = { event: 'test', payload: {}, metadata: {} } as EventEnvelope;
 
 		bus.addPublisher(publisher);
@@ -28,8 +28,8 @@ describe(EventBus, () => {
 
 	it('cleans up subscriptions on module destroy', () => {
 		const bus = new EventBus();
-		const handler = { handle: jest.fn() };
-		const unsubscribe = jest.fn();
+		const handler = { handle: vi.fn() };
+		const unsubscribe = vi.fn();
 
 		bus.bind(handler, '');
 		(bus as any).subscriptions.push({ unsubscribe } as any);

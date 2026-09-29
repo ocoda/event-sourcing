@@ -28,7 +28,7 @@ describe(MongoDBEventStore, () => {
 	let eventStore: MongoDBEventStore;
 	let envelopesAccountA: EventEnvelope[];
 	let envelopesAccountB: EventEnvelope[];
-	const publish = jest.fn(async () => Promise.resolve());
+	const publish = vi.fn(async () => Promise.resolve());
 
 	let client: MongoClient;
 
