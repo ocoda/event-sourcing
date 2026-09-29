@@ -132,6 +132,23 @@ const opening = <TName extends string>(table: string, options: PlanOptions): Pla
 const closing = <TName extends string>(table: string, options: PlanOptions): PlannedStep<TName> =>
 	step('release-lock' as TName, releaseLockSql(table, options), LOCKS.none);
 
+/** What a migration on a Galera node must take care of, for the tables it migrates or resumes. */
+export const GALERA_WARNINGS = {
+	events:
+		'Galera: run the migration against one node only (the named lock is per node, not cluster-wide). The copy replicates in fragments (wsrep_trx_fragment_size), and every node needs the free space of the copy.',
+	snapshots:
+		'Galera: run the migration against one node only (the named lock is per node, not cluster-wide). The ALTER TABLE runs on every node at once (total order isolation) and holds the writes to the table on the whole cluster while it runs.',
+} as const;
+
+const withGaleraWarning = <TName extends string>(
+	plan: MigrationPlan<TName>,
+	options: PlanOptions,
+	warning: string,
+): MigrationPlan<TName> =>
+	options.galera && (plan.action === 'migrate' || plan.action === 'resume')
+		? { ...plan, warnings: [...plan.warnings, warning] }
+		: plan;
+
 /**
  * Plans the migration of an event table:
  * - `v1`: copy into the v2 schema, swap, catch up, register (`migrate`);
@@ -139,7 +156,10 @@ const closing = <TName extends string>(table: string, options: PlanOptions): Pla
  * - `v2` without a catalog row: register (`resume`); with one: nothing (`skip`), unless the backup is to be dropped;
  * - `absent`: nothing (`skip`).
  */
-export const planEventMigration = (input: EventPlanInput, options: PlanOptions): MigrationPlan<EventStepName> => {
+export const planEventMigration = (input: EventPlanInput, options: PlanOptions): MigrationPlan<EventStepName> =>
+	withGaleraWarning(planEventSteps(input, options), options, GALERA_WARNINGS.events);
+
+const planEventSteps = (input: EventPlanInput, options: PlanOptions): MigrationPlan<EventStepName> => {
 	const { table, state } = input;
 	const warnings: string[] = [];
 	const blocking: string[] = [];
@@ -246,7 +266,10 @@ export const planEventMigration = (input: EventPlanInput, options: PlanOptions):
 export const planSnapshotMigration = (
 	input: SnapshotPlanInput,
 	options: PlanOptions,
-): MigrationPlan<SnapshotStepName> => {
+): MigrationPlan<SnapshotStepName> =>
+	withGaleraWarning(planSnapshotSteps(input, options), options, GALERA_WARNINGS.snapshots);
+
+const planSnapshotSteps = (input: SnapshotPlanInput, options: PlanOptions): MigrationPlan<SnapshotStepName> => {
 	const { table, state } = input;
 	const warnings: string[] = [];
 	const blocking: string[] = [];

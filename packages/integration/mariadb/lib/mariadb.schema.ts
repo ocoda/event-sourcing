@@ -217,7 +217,12 @@ export interface IndexInfo {
 	columns: string[];
 }
 
-/** The columns of a table of the current database, by name; empty when the table doesn't exist. */
+/**
+ * The columns of a table of the current database, by name; empty when the table doesn't exist.
+ *
+ * The lookups of `information_schema` compare the name as it is (the server finds the table directly) and in binary
+ * (the name's case matters, like MariaDB's own lookups with `lower_case_table_names = 0`).
+ */
 export const tableColumns = async (db: Queryable, table: string): Promise<Map<string, ColumnInfo>> => {
 	const rows = await db.query<
 		{
@@ -231,8 +236,9 @@ export const tableColumns = async (db: Queryable, table: string): Promise<Map<st
 		}[]
 	>(
 		`SELECT COLUMN_NAME, DATA_TYPE, COLUMN_TYPE, IS_NULLABLE, COLLATION_NAME, CHARACTER_MAXIMUM_LENGTH, EXTRA
-		 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND BINARY TABLE_NAME = ? ORDER BY ORDINAL_POSITION`,
-		[table],
+		 FROM information_schema.COLUMNS
+		 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND BINARY TABLE_NAME = ? ORDER BY ORDINAL_POSITION`,
+		[table, table],
 	);
 	return new Map(
 		rows.map((row) => [
@@ -254,8 +260,8 @@ export const tableColumns = async (db: Queryable, table: string): Promise<Map<st
 export const tableIndexes = async (db: Queryable, table: string): Promise<IndexInfo[]> => {
 	const rows = await db.query<{ INDEX_NAME: string; NON_UNIQUE: bigint | number; COLUMN_NAME: string }[]>(
 		`SELECT INDEX_NAME, NON_UNIQUE, COLUMN_NAME FROM information_schema.STATISTICS
-		 WHERE TABLE_SCHEMA = DATABASE() AND BINARY TABLE_NAME = ? ORDER BY INDEX_NAME, SEQ_IN_INDEX`,
-		[table],
+		 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND BINARY TABLE_NAME = ? ORDER BY INDEX_NAME, SEQ_IN_INDEX`,
+		[table, table],
 	);
 	const indexes = new Map<string, IndexInfo>();
 	for (const row of rows) {
@@ -276,8 +282,9 @@ export const existingTables = async (db: Queryable, tables: readonly string[]): 
 		return new Set();
 	}
 	const rows = await db.query<{ TABLE_NAME: string }[]>(
-		`SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND BINARY TABLE_NAME IN (?)`,
-		[tables],
+		`SELECT TABLE_NAME FROM information_schema.TABLES
+		 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN (?) AND BINARY TABLE_NAME IN (?)`,
+		[tables, tables],
 	);
 	return new Set(rows.map(({ TABLE_NAME }) => TABLE_NAME));
 };

@@ -13,13 +13,14 @@
 --
 --   mariadb --database=<database> < migrations/4.0.sql
 --
--- Every SELECT GET_LOCK(...) must return 1: 0 means another migration of the table is running; stop there.
+-- The acquire-lock statements fail with error 1242 (Subquery returns more than 1 row) when another migration of the
+-- table holds its lock, which stops the client there.
 
 
 -- Events: copied into a schema v2 table, numbered in 3.x order (event_date, event_id, stream_id, version) with every stream in version order, and swapped in. 3.x inserts fail from the swap on (1136).
 
 -- session (lock: none)
-SET SESSION time_zone = '+00:00', lock_wait_timeout = 10, innodb_lock_wait_timeout = 10, max_statement_time = 0;
+SET SESSION time_zone = '+00:00', lock_wait_timeout = 10, innodb_lock_wait_timeout = 10, max_statement_time = 0, tx_isolation = 'REPEATABLE-READ';
 
 -- create-catalog (lock: metadata lock on the catalog)
 CREATE TABLE IF NOT EXISTS `event_sourcing_collections` (
@@ -30,7 +31,7 @@ CREATE TABLE IF NOT EXISTS `event_sourcing_collections` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 -- acquire-lock (lock: named lock (GET_LOCK), one migration per table)
-SELECT GET_LOCK(CONCAT('ocoda:migrate:', SHA1(CONCAT(DATABASE(), '.', 'events'))), 0) AS acquired;
+SELECT IF(GET_LOCK(CONCAT('ocoda:migrate:', SHA1(CONCAT(DATABASE(), '.', 'events'))), 0) = 1, 1, (SELECT 1 UNION SELECT 2)) AS acquired;
 
 -- drop-copy (lock: exclusive metadata lock on the dropped table)
 DROP TABLE IF EXISTS `events__es_v2`;
@@ -112,7 +113,7 @@ SELECT RELEASE_LOCK(CONCAT('ocoda:migrate:', SHA1(CONCAT(DATABASE(), '.', 'event
 -- Snapshots: converted in place (binary collation, DATETIME(3) in UTC), one latest flag per stream, on its highest version.
 
 -- session (lock: none)
-SET SESSION time_zone = '+00:00', lock_wait_timeout = 10, innodb_lock_wait_timeout = 10, max_statement_time = 0;
+SET SESSION time_zone = '+00:00', lock_wait_timeout = 10, innodb_lock_wait_timeout = 10, max_statement_time = 0, tx_isolation = 'REPEATABLE-READ';
 
 -- create-catalog (lock: metadata lock on the catalog)
 CREATE TABLE IF NOT EXISTS `event_sourcing_collections` (
@@ -123,7 +124,7 @@ CREATE TABLE IF NOT EXISTS `event_sourcing_collections` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 -- acquire-lock (lock: named lock (GET_LOCK), one migration per table)
-SELECT GET_LOCK(CONCAT('ocoda:migrate:', SHA1(CONCAT(DATABASE(), '.', 'snapshots'))), 0) AS acquired;
+SELECT IF(GET_LOCK(CONCAT('ocoda:migrate:', SHA1(CONCAT(DATABASE(), '.', 'snapshots'))), 0) = 1, 1, (SELECT 1 UNION SELECT 2)) AS acquired;
 
 -- convert (lock: shared table lock (LOCK=SHARED): reads continue, writes wait)
 ALTER TABLE `snapshots` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,

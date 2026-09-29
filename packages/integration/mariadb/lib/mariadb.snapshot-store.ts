@@ -46,6 +46,7 @@ import {
 	isFatalConnectionError,
 	streamRows,
 	toDateTime,
+	withReadCommitted,
 } from './mariadb.utils.js';
 import { runMigration } from './migration/migrate.js';
 
@@ -100,7 +101,7 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 	public async connect(): Promise<void> {
 		this.logger.log('Starting store');
 		const { driver: _driver, useDefaultPool: _useDefaultPool, ddl: _ddl, ...poolConfig } = this.options ?? {};
-		const pool = createPool(poolConfig);
+		const pool = createPool(withReadCommitted(poolConfig));
 		// Makes a bad connection fail the bootstrap
 		try {
 			await pool.query('SELECT 1');
@@ -132,11 +133,16 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 		try {
 			assertTableName(collection);
 			const none = this.options?.ddl === 'none';
+			// SnapshotStoreCollectionCreationException has no message of its own: the statements to run are logged, and
+			// in its cause
+			const missing = (what: string) => {
+				const message = `${what} doesn't exist and ddl is 'none'. ${snapshotSchemaRemedy(collection)}`;
+				this.logger.error(message);
+				return new Error(message);
+			};
 			if (none) {
 				if (!(await catalogExists(db))) {
-					throw new Error(
-						`The catalog ${CATALOG_TABLE} doesn't exist and ddl is 'none'. ${snapshotSchemaRemedy(collection)}`,
-					);
+					throw missing(`The catalog ${CATALOG_TABLE}`);
 				}
 			} else {
 				await db.query(catalogDdl());
@@ -146,9 +152,7 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 			let version: SchemaVersion = 2;
 			if (state === 'absent') {
 				if (none) {
-					throw new Error(
-						`The ${collection} table doesn't exist and ddl is 'none'. ${snapshotSchemaRemedy(collection)}`,
-					);
+					throw missing(`The ${collection} table`);
 				}
 				await db.query(snapshotTableDdl(collection));
 			} else if (state !== 'v2') {

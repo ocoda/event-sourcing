@@ -47,8 +47,10 @@ import {
 	inBatches,
 	isDuplicateEntryError,
 	isFatalConnectionError,
+	isGaleraNode,
 	streamRows,
 	toDateTime,
+	withReadCommitted,
 } from './mariadb.utils.js';
 import { runMigration } from './migration/migrate.js';
 
@@ -106,19 +108,17 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 	public async connect(): Promise<void> {
 		this.logger.log('Starting store');
 		const { driver: _driver, useDefaultPool: _useDefaultPool, ddl: _ddl, ...poolConfig } = this.options ?? {};
-		const pool = createPool(poolConfig);
+		const pool = createPool(withReadCommitted(poolConfig));
 
 		// Also makes a bad connection fail the bootstrap
-		let wsrep: unknown;
+		let galera: boolean;
 		try {
-			[{ wsrep }] = await pool.query<{ wsrep: unknown }[]>('SELECT @@wsrep_on AS wsrep');
+			galera = await isGaleraNode(pool);
 		} catch (error) {
-			if (errorNumberOf(error) !== MariaDBErrorNumber.UnknownSystemVariable) {
-				await pool.end().catch(() => undefined);
-				throw error;
-			}
+			await pool.end().catch(() => undefined);
+			throw error;
 		}
-		if (wsrep === 1 || wsrep === 1n || String(wsrep).toUpperCase() === 'ON') {
+		if (galera) {
 			Object.assign(this.capabilities, { globalOrder: 'best-effort' });
 			this.logger.warn(
 				"Galera (wsrep_on) orders the global positions per node only: globalOrder is 'best-effort' on this cluster",
@@ -288,6 +288,9 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 	 * positions are contiguous from where the read is. At a gap, the reader reads the counter with a shared lock, which
 	 * waits for the append that holds it: every position up to it is committed and visible then, and a gap below it is
 	 * permanent (a deleted event, or a pool that was dropped and created again).
+	 *
+	 * Both reads must reach the server the appends run on: behind a proxy that sends plain reads to a replica, a gap of
+	 * the replica's lag would pass for a permanent one.
 	 */
 	public async *readAll(filter?: IReadAllFilter): AsyncGenerator<EventEnvelope[]> {
 		const batch = toBatchSize(filter?.batch);
@@ -402,11 +405,13 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 			return { status: 'committed', positions };
 		} catch (error) {
 			broken = isFatalConnectionError(error);
-			if (committing) {
-				// The commit was sent: it may have happened
+			if (committing && (broken || errorNumberOf(error) !== MariaDBErrorNumber.Deadlock)) {
+				// The commit was sent and got no answer, or one that doesn't say whether it happened
 				throw new EventStorePersistenceException({ collection, outcome: 'unknown' }, { cause: error });
 			}
-			// Also after a lock wait timeout, which doesn't roll the transaction back (innodb_rollback_on_timeout is off)
+			// Nothing is stored: the failure came before the commit, or the commit was refused with a deadlock (a Galera
+			// certification failure), which rolled the transaction back. The rollback is explicit, because a lock wait
+			// timeout doesn't roll the transaction back (innodb_rollback_on_timeout is off).
 			await connection.rollback().catch(() => {
 				broken = true;
 			});

@@ -40,29 +40,56 @@ export interface StatementOptions {
 	lockWaitSeconds: number;
 	/** Whether the session's `sql_mode` has `NO_BACKSLASH_ESCAPES`, which changes how literals are quoted. */
 	noBackslashEscapes: boolean;
+	/** Whether the server is a Galera node (`@@wsrep_on`): a copy then replicates in fragments. */
+	galera: boolean;
 }
 
-export const DEFAULT_STATEMENT_OPTIONS: StatementOptions = { lockWaitSeconds: 10, noBackslashEscapes: false };
+export const DEFAULT_STATEMENT_OPTIONS: StatementOptions = {
+	lockWaitSeconds: 10,
+	noBackslashEscapes: false,
+	galera: false,
+};
+
+/**
+ * The fragment size of Galera's streaming replication for the migration's statements: a copy is one write set, and
+ * `wsrep_max_ws_size` (2 GiB at most) refuses a bigger one.
+ */
+export const GALERA_FRAGMENT_BYTES = 64 * 1024 * 1024;
 
 /** The lock wait of the statements for a `lockTimeoutMs`: whole seconds, at least 1. */
 export const lockWaitSecondsOf = (lockTimeoutMs = 10_000): number => Math.max(1, Math.ceil(lockTimeoutMs / 1000));
 
 /**
- * The session of the migration: UTC, so that `TIMESTAMP` values convert to UTC wall times; bounded lock waits, so that
- * a table a 3.x instance still uses blocks the migration instead of hanging it; no statement time limit.
+ * The session of the migration:
+ * - UTC, so that `TIMESTAMP` values convert to UTC wall times;
+ * - bounded lock waits, so that a table a 3.x instance still uses blocks the migration instead of hanging it;
+ * - no statement time limit;
+ * - `REPEATABLE READ`, whatever the server's default: the copy then locks the rows it reads, a fence against 3.x
+ *   writes, and a binary log in `STATEMENT` format accepts it;
+ * - on Galera, streaming replication in fragments, so that the copy doesn't exceed the largest write set.
  */
-export const sessionSql = ({ lockWaitSeconds }: StatementOptions): string =>
-	`SET SESSION time_zone = '+00:00', lock_wait_timeout = ${lockWaitSeconds}, innodb_lock_wait_timeout = ${lockWaitSeconds}, max_statement_time = 0`;
+export const sessionSql = ({ lockWaitSeconds, galera }: StatementOptions): string =>
+	[
+		`SET SESSION time_zone = '+00:00', lock_wait_timeout = ${lockWaitSeconds}, innodb_lock_wait_timeout = ${lockWaitSeconds}`,
+		"max_statement_time = 0, tx_isolation = 'REPEATABLE-READ'",
+		...(galera ? [`wsrep_trx_fragment_unit = 'bytes', wsrep_trx_fragment_size = ${GALERA_FRAGMENT_BYTES}`] : []),
+	].join(', ');
 
 /**
  * The named lock of the migration of a table: `ocoda:migrate:` and the SHA-1 of `<database>.<table>`, which keeps the
  * name short (MariaDB 10.11 refuses names over 192 characters).
  */
-export const lockNameSql = (table: string, { noBackslashEscapes }: StatementOptions): string =>
-	`CONCAT('ocoda:migrate:', SHA1(CONCAT(DATABASE(), '.', ${escapeString(table, noBackslashEscapes)})))`;
+export const lockNameSql = (
+	table: string,
+	{ noBackslashEscapes }: Pick<StatementOptions, 'noBackslashEscapes'>,
+): string => `CONCAT('ocoda:migrate:', SHA1(CONCAT(DATABASE(), '.', ${escapeString(table, noBackslashEscapes)})))`;
 
+/**
+ * Takes the named lock, or fails with error 1242 (`Subquery returns more than 1 row`) when another session holds it, so
+ * that the `mariadb` command-line client stops there too when it runs the statements of a file.
+ */
 export const acquireLockSql = (table: string, options: StatementOptions): string =>
-	`SELECT GET_LOCK(${lockNameSql(table, options)}, 0) AS acquired`;
+	`SELECT IF(GET_LOCK(${lockNameSql(table, options)}, 0) = 1, 1, (SELECT 1 UNION SELECT 2)) AS acquired`;
 
 export const releaseLockSql = (table: string, options: StatementOptions): string =>
 	`SELECT RELEASE_LOCK(${lockNameSql(table, options)}) AS released`;
@@ -102,6 +129,10 @@ const rankedRowsSql = (from: string, where = ''): string =>
  * The rows with their numbering key (ADR 0001 D33): the running maximum of `ord_rank` over the row's stream, by
  * version. Numbering by `(ord_key, version)` follows 3.x's order, except that a stream's events keep their version
  * order.
+ *
+ * The stream is the 3.x stream: the partition compares stream ids in the 3.x table's collation, which usually ignores
+ * case. Stream ids that differ in case only are one stream there and two in schema v2; each of the two keeps its
+ * version order, since the key never decreases along the 3.x stream's versions.
  */
 const keyedRowsSql = (ranked: string): string =>
 	`SELECT r.*, MAX(r.ord_rank) OVER (PARTITION BY r.stream_id ORDER BY r.version ROWS UNBOUNDED PRECEDING) AS ord_key

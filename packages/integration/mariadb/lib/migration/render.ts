@@ -23,7 +23,8 @@ const HEADER = `-- @ocoda/event-sourcing-mariadb: migration of the 3.x tables of
 --
 --   mariadb --database=<database> < migrations/4.0.sql
 --
--- Every SELECT GET_LOCK(...) must return 1: 0 means another migration of the table is running; stop there.
+-- The acquire-lock statements fail with error 1242 (Subquery returns more than 1 row) when another migration of the
+-- table holds its lock, which stops the client there.
 `;
 
 const renderPlan = (title: string, plan: MigrationPlan): string =>

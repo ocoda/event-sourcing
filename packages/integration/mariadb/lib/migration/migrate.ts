@@ -22,7 +22,7 @@ import {
 	snapshotColumnsAreV2,
 	tableIndexes,
 } from '../mariadb.schema.js';
-import { MariaDBErrorNumber, errorNumberOf } from '../mariadb.utils.js';
+import { MariaDBErrorNumber, errorNumberOf, isFatalConnectionError, isGaleraNode } from '../mariadb.utils.js';
 import {
 	type MigrationPlan,
 	type PlanOptions,
@@ -31,6 +31,7 @@ import {
 	planSnapshotMigration,
 } from './plan.js';
 import {
+	GALERA_FRAGMENT_BYTES,
 	acquireLockSql,
 	caseVariantStreamsSql,
 	duplicateEventIdsSql,
@@ -40,6 +41,7 @@ import {
 	nonCrockfordEventIdsSql,
 	occurredOnRepairSql,
 	releaseLockSql,
+	lockNameSql,
 	sessionSql,
 	snapshotFlagsSql,
 } from './sql.js';
@@ -62,10 +64,14 @@ export interface MigrationHooks {
 /** The store options that are not connection options. */
 type StoreOnlyOptions = { driver?: unknown; useDefaultPool?: unknown; ddl?: unknown };
 
-/** The connection options of a store's configuration, without the options of the store itself. */
+/**
+ * The connection options of the migration: a store's configuration without the options of the store itself, and
+ * without a socket timeout. A copy runs for minutes without a byte on the socket, and an application's `socketTimeout`
+ * would drop the connection while the server goes on.
+ */
 export const connectionConfigOf = (config: ConnectionConfig & StoreOnlyOptions): ConnectionConfig => {
 	const { driver: _driver, useDefaultPool: _useDefaultPool, ddl: _ddl, ...connection } = config;
-	return connection;
+	return { ...connection, socketTimeout: 0 };
 };
 
 /**
@@ -98,18 +104,21 @@ export const runMigration = async (
 interface Environment {
 	report: MigrationReport['environment'];
 	noBackslashEscapes: boolean;
+	galera: boolean;
 }
 
 const environmentOf = async (db: Queryable): Promise<Environment> => {
-	const [row] = await db.query<
-		{ version: string; global_tz: string; system_tz: string; session_tz: string; sql_mode: string }[]
-	>(
-		'SELECT VERSION() AS version, @@global.time_zone AS global_tz, @@system_time_zone AS system_tz, @@session.time_zone AS session_tz, @@sql_mode AS sql_mode',
-	);
+	const [[row], galera] = await Promise.all([
+		db.query<{ version: string; global_tz: string; system_tz: string; session_tz: string; sql_mode: string }[]>(
+			'SELECT VERSION() AS version, @@global.time_zone AS global_tz, @@system_time_zone AS system_tz, @@session.time_zone AS session_tz, @@sql_mode AS sql_mode',
+		),
+		isGaleraNode(db),
+	]);
 	const server = row.global_tz === 'SYSTEM' ? `SYSTEM (${row.system_tz})` : row.global_tz;
 	return {
 		report: {
 			serverVersion: row.version,
+			...(galera ? { topology: 'galera' } : {}),
 			timeZones: {
 				process: Intl.DateTimeFormat().resolvedOptions().timeZone,
 				server,
@@ -117,6 +126,7 @@ const environmentOf = async (db: Queryable): Promise<Environment> => {
 			},
 		},
 		noBackslashEscapes: /NO_BACKSLASH_ESCAPES/i.test(row.sql_mode ?? ''),
+		galera,
 	};
 };
 
@@ -131,6 +141,7 @@ const migrate = async (
 	const planOptions: PlanOptions = {
 		lockWaitSeconds: lockWaitSecondsOf(options.lockTimeoutMs),
 		noBackslashEscapes: environment.noBackslashEscapes,
+		galera: environment.galera,
 		keepBackup: options.keepBackup ?? true,
 		repairOccurredOn: options.repairOccurredOn ?? true,
 	};
@@ -180,8 +191,9 @@ export const discoverTables = async (db: Queryable, kind: MigrationKind): Promis
 export const dependentsOf = async (db: Queryable, table: string): Promise<string[]> => {
 	const [triggers, foreignKeys] = await Promise.all([
 		db.query<{ TRIGGER_NAME: string }[]>(
-			'SELECT TRIGGER_NAME FROM information_schema.TRIGGERS WHERE EVENT_OBJECT_SCHEMA = DATABASE() AND BINARY EVENT_OBJECT_TABLE = ? ORDER BY TRIGGER_NAME',
-			[table],
+			`SELECT TRIGGER_NAME FROM information_schema.TRIGGERS
+			 WHERE EVENT_OBJECT_SCHEMA = DATABASE() AND EVENT_OBJECT_TABLE = ? AND BINARY EVENT_OBJECT_TABLE = ? ORDER BY TRIGGER_NAME`,
+			[table, table],
 		),
 		db.query<{ CONSTRAINT_NAME: string; TABLE_NAME: string; REFERENCED_TABLE_NAME: string }[]>(
 			`SELECT CONSTRAINT_NAME, TABLE_NAME, REFERENCED_TABLE_NAME FROM information_schema.REFERENTIAL_CONSTRAINTS
@@ -265,8 +277,7 @@ const migrateTable = async (
 	}
 
 	await connection.query(sessionSql(planOptions));
-	const [{ acquired }] = await connection.query<{ acquired: unknown }[]>(acquireLockSql(table, planOptions));
-	if (Number(acquired) !== 1) {
+	if (!(await acquireLock(connection, table, planOptions))) {
 		const inspected = await migration.inspect(connection, table, planOptions);
 		return {
 			...report(inspected, 'skipped'),
@@ -307,6 +318,19 @@ const migrateTable = async (
 
 const shouldAnalyze = (plan: MigrationPlan): boolean => plan.action === 'migrate' || plan.action === 'resume';
 
+/** Takes the named lock of a table's migration: false when another session holds it. */
+const acquireLock = async (connection: Connection, table: string, options: PlanOptions): Promise<boolean> => {
+	try {
+		const [{ acquired }] = await connection.query<{ acquired: unknown }[]>(acquireLockSql(table, options));
+		return Number(acquired) === 1;
+	} catch (error) {
+		if (errorNumberOf(error) === MariaDBErrorNumber.SubqueryReturnsMoreThanOneRow) {
+			return false;
+		}
+		throw error;
+	}
+};
+
 const runStep = async (
 	connection: Connection,
 	table: string,
@@ -323,7 +347,7 @@ const runStep = async (
 		result = await connection.query(planned.statement);
 	} catch (error) {
 		throw new Error(
-			`The migration of ${table} failed at step ${planned.name}: ${(error as Error)?.message ?? String(error)}. ${failureHint(planned.name, error)}`,
+			`The migration of ${table} failed at step ${planned.name}: ${(error as Error)?.message ?? String(error)}. ${failureHint(planned.name, error, table)}`,
 			{ cause: error },
 		);
 	}
@@ -338,13 +362,36 @@ const runStep = async (
  * READ), which can outgrow the lock memory of a small buffer pool: then the copy can run in READ COMMITTED instead,
  * by hand, and the catch-up after the swap copies the rows 3.x wrote meanwhile.
  */
-export const failureHint = (step: string, error: unknown): string => {
+export const failureHint = (step: string, error: unknown, table?: string): string => {
 	const rerun = 'Run the migration again: it continues where it stopped.';
-	if (step === 'copy' && errorNumberOf(error) === MariaDBErrorNumber.LockTableFull) {
+	const errno = errorNumberOf(error);
+	const message = String((error as { message?: unknown } | null | undefined)?.message ?? '');
+	if (step === 'copy' && errno === MariaDBErrorNumber.LockTableFull) {
 		return `The copy locks every row of the 3.x table and ran out of lock memory: increase innodb_buffer_pool_size and ${rerun.charAt(0).toLowerCase()}${rerun.slice(1)} Or run the statements of a dry run by hand, with SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED before the copy, while no 3.x instance runs: the catch-up step copies what 3.x wrote during the copy.`;
 	}
-	if (errorNumberOf(error) === MariaDBErrorNumber.LockWaitTimeout) {
+	if (errno === MariaDBErrorNumber.LockWaitTimeout) {
 		return `A session still uses the table (a 3.x instance?): stop it. ${rerun}`;
+	}
+	if (
+		errno === MariaDBErrorNumber.DiskFull ||
+		errno === MariaDBErrorNumber.RecordFileFull ||
+		/Temp file write failure|Errcode: 28|No space left/i.test(message)
+	) {
+		return `The server ran out of disk space: the copy sorts in tmpdir (@@tmpdir), which needs about 1.5 times the event table, and writes a copy of the table to the data directory. Make room, or point tmpdir at a larger volume, then ${rerun.charAt(0).toLowerCase()}${rerun.slice(1)}`;
+	}
+	if (/writeset size/i.test(message)) {
+		return `A write set exceeds Galera's largest one (wsrep_max_ws_size): the migration replicates in fragments of ${GALERA_FRAGMENT_BYTES} bytes, so wsrep_max_ws_size must be larger than that. Raise it, or run the statements of a dry run by hand with a smaller wsrep_trx_fragment_size, then ${rerun.charAt(0).toLowerCase()}${rerun.slice(1)}`;
+	}
+	if (
+		errno === MariaDBErrorNumber.TableAccessDenied ||
+		errno === MariaDBErrorNumber.DatabaseAccessDenied ||
+		errno === MariaDBErrorNumber.SpecificAccessDenied
+	) {
+		return `The migration's user lacks a privilege: it needs SELECT, INSERT, UPDATE, CREATE, ALTER and DROP on the database. Grant them, then ${rerun.charAt(0).toLowerCase()}${rerun.slice(1)}`;
+	}
+	if (isFatalConnectionError(error)) {
+		const lock = table ? `SELECT IS_USED_LOCK(${lockNameSql(table, { noBackslashEscapes: false })})` : 'IS_USED_LOCK()';
+		return `The connection was lost, and the server may still be running the step: wait until ${lock} returns NULL, then ${rerun.charAt(0).toLowerCase()}${rerun.slice(1)}`;
 	}
 	return rerun;
 };
@@ -358,8 +405,9 @@ const sizeOf = async (db: Queryable, table: string): Promise<{ rows: number; byt
 	const [[count], [size]] = await Promise.all([
 		db.query<{ total: bigint | number }[]>(`SELECT COUNT(*) AS total FROM ${escapeId(table)}`),
 		db.query<{ bytes: bigint | number | null }[]>(
-			'SELECT DATA_LENGTH + INDEX_LENGTH AS bytes FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND BINARY TABLE_NAME = ?',
-			[table],
+			`SELECT DATA_LENGTH + INDEX_LENGTH AS bytes FROM information_schema.TABLES
+			 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND BINARY TABLE_NAME = ?`,
+			[table, table],
 		),
 	]);
 	return {
