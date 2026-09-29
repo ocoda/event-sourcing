@@ -2,7 +2,7 @@
 title: Installation
 ---
 
-import { Steps, TabItem, Tabs } from '@astrojs/starlight/components';
+import { Aside, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
 
 This library consists of a core module `@ocoda/event-sourcing` that provides the building blocks and can be complemented with an integration library for setting up a persistence layer for your events using a specific database provider.
 
@@ -41,10 +41,6 @@ By default the core library will use an in-memory event- and snapshot-store, whi
    <Tabs syncKey="package-manager">
    <TabItem label="pnpm">
 
-   **DynamoDB**
-   ```bash
-   pnpm add @ocoda/event-sourcing-dynamodb
-   ```
    **MariaDB**
    ```bash
    pnpm add @ocoda/event-sourcing-mariadb
@@ -61,10 +57,6 @@ By default the core library will use an in-memory event- and snapshot-store, whi
    </TabItem>
    <TabItem label="npm">
 
-   **DynamoDB**
-   ```bash
-   npm install @ocoda/event-sourcing-dynamodb
-   ```
    **MariaDB**
    ```bash
    npm install @ocoda/event-sourcing-mariadb
@@ -81,10 +73,6 @@ By default the core library will use an in-memory event- and snapshot-store, whi
    </TabItem>
    <TabItem label="yarn">
 
-   **DynamoDB**
-   ```bash
-   yarn add @ocoda/event-sourcing-dynamodb
-   ```
    **MariaDB**
    ```bash
    yarn add @ocoda/event-sourcing-mariadb
@@ -100,6 +88,10 @@ By default the core library will use an in-memory event- and snapshot-store, whi
 
    </TabItem>
    </Tabs>
+
+   <Aside title="DynamoDB">
+   The DynamoDB store is not part of 4.0: DynamoDB can't give the events a gap-free global order, which the 4.0 read side relies on. It remains available on the 3.x line, which still receives fixes, as `@ocoda/event-sourcing-dynamodb@3`.
+   </Aside>
 
 </Steps>
 

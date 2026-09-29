@@ -11,11 +11,10 @@ describeSnapshotStoreConformance(
 	},
 	{
 		skip: {
-			// TODO: reads from an unknown pool yield nothing or undefined instead of failing like the SQL and DynamoDB
-			// stores do.
+			// TODO: reads from an unknown pool yield nothing or undefined instead of failing like the SQL stores do.
 			'unknown-pool-read': 'reads from a collection that does not exist yield nothing instead of failing',
 			// TODO: snapshots are kept as appended, so a Date in a payload is returned as the same Date instead of the
-			// ISO-8601 string the SQL and DynamoDB stores return.
+			// ISO-8601 string the SQL stores return.
 			'payload-dates-as-iso-strings': 'payloads are kept in memory as is, so dates stay Date instances',
 		},
 	},

@@ -38,7 +38,6 @@ flag_management:
       carryforward: true
     - name: integrations
       paths:
-        - packages/integration/dynamodb
         - packages/integration/mariadb
         - packages/integration/mongodb
         - packages/integration/postgres
