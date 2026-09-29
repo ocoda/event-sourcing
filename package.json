@@ -12,6 +12,7 @@
 		"test:cov": "turbo test:cov",
 		"ci": "turbo ci",
 		"lint": "turbo lint",
+		"typecheck": "turbo typecheck",
 		"format": "turbo format",
 		"benchmark": "turbo benchmark --",
 		"benchmark:report": "turbo benchmark:report"

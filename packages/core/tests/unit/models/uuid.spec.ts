@@ -13,7 +13,7 @@ describe(UUID, () => {
 	});
 
 	it('should throw when trying to create a UUID from an undefined variable', () => {
-		let value: string;
+		const value = undefined as unknown as string;
 		expect(() => UUID.from(value)).toThrow(InvalidIdException.becauseEmpty());
 	});
 

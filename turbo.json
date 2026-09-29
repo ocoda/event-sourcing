@@ -9,6 +9,9 @@
 		"test:cov": {},
 		"ci": {},
 		"lint": {},
+		"typecheck": {
+			"cache": false
+		},
 		"format": {},
 		"benchmark": {},
 		"benchmark:report": {}

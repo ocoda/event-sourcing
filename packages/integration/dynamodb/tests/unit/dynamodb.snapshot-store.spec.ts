@@ -47,7 +47,7 @@ describe(DynamoDBSnapshotStore, () => {
 
 	beforeAll(async () => {
 		snapshotStore = new DynamoDBSnapshotStore({
-			driver: undefined,
+			driver: undefined as never,
 			region: 'us-east-1',
 			endpoint: 'http://127.0.0.1:8000',
 			credentials: { accessKeyId: 'foo', secretAccessKey: 'bar' },
@@ -287,7 +287,13 @@ describe(DynamoDBSnapshotStore, () => {
 
 	it('should retrieve the last snapshot-envelope', async () => {
 		const lastEnvelope = envelopesAccountA[envelopesAccountA.length - 1];
-		const { metadata, payload } = await snapshotStore.getLastEnvelope(snapshotStreamAccountA);
+		const snapshotEnvelope = await snapshotStore.getLastEnvelope(snapshotStreamAccountA);
+
+		if (!snapshotEnvelope) {
+			throw new Error('Snapshot envelope not found');
+		}
+
+		const { metadata, payload } = snapshotEnvelope;
 
 		expect(payload).toEqual(lastEnvelope.payload);
 		expect(metadata.aggregateId).toEqual(lastEnvelope.metadata.aggregateId);
@@ -378,6 +384,10 @@ describe(DynamoDBSnapshotStore, () => {
 
 		const resolvedAccountAEnvelope = resolvedSnapshots.get(snapshotStreamAccountA);
 		const resolvedAccountBEnvelope = resolvedSnapshots.get(snapshotStreamAccountB);
+
+		if (!resolvedAccountAEnvelope || !resolvedAccountBEnvelope) {
+			throw new Error('Snapshot envelope not found');
+		}
 
 		expect(resolvedAccountAEnvelope.payload).toEqual(envelopeAccountA.payload);
 		expect(resolvedAccountAEnvelope.metadata.aggregateId).toEqual(envelopeAccountA.metadata.aggregateId);

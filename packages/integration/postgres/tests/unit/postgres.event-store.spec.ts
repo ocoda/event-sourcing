@@ -46,7 +46,7 @@ describe(PostgresEventStore, () => {
 	const events = getEvents();
 
 	beforeAll(async () => {
-		eventStore = new PostgresEventStore(eventMap, { driver: undefined, ...connectionOptions });
+		eventStore = new PostgresEventStore(eventMap, { driver: undefined as never, ...connectionOptions });
 		eventStore.publish = publish;
 
 		await eventStore.connect();
@@ -309,7 +309,11 @@ describe(PostgresEventStore, () => {
 		afterEach(() => jest.restoreAllMocks());
 
 		it('should fail to connect when the database is unreachable', async () => {
-			const unreachableStore = new PostgresEventStore(eventMap, { driver: undefined, ...connectionOptions, port: 1 });
+			const unreachableStore = new PostgresEventStore(eventMap, {
+				driver: undefined as never,
+				...connectionOptions,
+				port: 1,
+			});
 
 			await expect(unreachableStore.connect()).rejects.toMatchObject({ code: 'ECONNREFUSED' });
 			await unreachableStore.disconnect();
@@ -563,7 +567,7 @@ describe(PostgresEventStore, () => {
 			let smallPool: Pool;
 
 			beforeEach(async () => {
-				smallStore = new PostgresEventStore(eventMap, { driver: undefined, ...connectionOptions, max: 2 });
+				smallStore = new PostgresEventStore(eventMap, { driver: undefined as never, ...connectionOptions, max: 2 });
 				await smallStore.connect();
 				// biome-ignore lint/complexity/useLiteralKeys: Needed to check the connections of the store
 				smallPool = smallStore['pool'];
