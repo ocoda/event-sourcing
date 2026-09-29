@@ -64,18 +64,12 @@ try {
 		console.log(`\n### ${variant}: install, compile, run`);
 		// Every peer is listed explicitly: nothing may be auto-installed from the registry, and an unmet peer range fails
 		// the install. That covers the drivers and the integrations' peer on core, which pnpm checks against the
-		// version inside the core tarball.
-		run(
-			'pnpm',
-			[
-				'install',
-				'--ignore-workspace',
-				'--prefer-offline',
-				'--config.auto-install-peers=false',
-				'--config.strict-peer-dependencies=true',
-			],
-			{ cwd: dir },
-		);
+		// version inside the core tarball (pnpm >= 12.7.0). The settings go through the environment: pnpm 12 ignores
+		// `--config.auto-install-peers` and other dotted `--config.*` flags (pnpm/pnpm#16276).
+		run('pnpm', ['install', '--ignore-workspace', '--prefer-offline'], {
+			cwd: dir,
+			env: { ...process.env, pnpm_config_auto_install_peers: 'false', pnpm_config_strict_peer_dependencies: 'true' },
+		});
 		run(process.execPath, [tsc, '-p', dir]);
 
 		const emitted = readFileSync(join(dir, 'dist', 'main.js'), 'utf8');

@@ -67,21 +67,20 @@
 		"pg-cursor": "^2.14.0"
 	},
 	"devDependencies": {
-		"@faker-js/faker": "^10.2.0",
-		"@nestjs/common": "12.1.1",
-		"@nestjs/core": "12.1.1",
-		"@nestjs/platform-express": "12.1.1",
-		"@nestjs/testing": "12.1.1",
+		"@nestjs/common": "catalog:",
+		"@nestjs/core": "catalog:",
+		"@nestjs/platform-express": "catalog:",
+		"@nestjs/testing": "catalog:",
 		"@ocoda/event-sourcing": "workspace:*",
 		"@ocoda/event-sourcing-config": "workspace:*",
 		"@ocoda/event-sourcing-testing": "workspace:*",
-		"@types/node": "22.20.4",
+		"@types/node": "catalog:",
 		"@types/pg": "^8.15.5",
 		"@types/pg-cursor": "^2.7.2",
 		"pg": "^8.16.3",
 		"pg-cursor": "^2.15.3",
-		"reflect-metadata": "0.2.2",
-		"rxjs": "7.8.2",
-		"typescript": "7.0.2"
+		"reflect-metadata": "catalog:",
+		"rxjs": "catalog:",
+		"typescript": "catalog:"
 	}
 }
