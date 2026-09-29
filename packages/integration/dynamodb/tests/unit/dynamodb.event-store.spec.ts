@@ -335,6 +335,54 @@ describe(DynamoDBEventStore, () => {
 		expect(resolvedCollections.includes('c-events')).toBe(true);
 	});
 
+	it('should hand out event batches that stay intact while the next batches are read', async () => {
+		const eventBatches: IEvent[][] = [];
+		for await (const batch of eventStore.getEvents(eventStreamAccountA, { batch: 2 })) {
+			eventBatches.push(batch);
+		}
+
+		expect(eventBatches).toHaveLength(3);
+		expect(eventBatches.flat()).toEqual(events);
+	});
+
+	it('should hand out event-envelope batches that stay intact while the next batches are read', async () => {
+		const envelopeBatches: EventEnvelope[][] = [];
+		for await (const batch of eventStore.getEnvelopes(eventStreamAccountA, { batch: 2 })) {
+			envelopeBatches.push(batch);
+		}
+
+		expect(envelopeBatches).toHaveLength(3);
+		expect(envelopeBatches.flat().map(({ metadata }) => metadata.version)).toEqual(
+			envelopesAccountA.map(({ metadata }) => metadata.version),
+		);
+	});
+
+	it('should hand out batches of all event-envelopes that stay intact while the next batches are read', async () => {
+		const envelopeBatches: EventEnvelope[][] = [];
+		for await (const batch of eventStore.getAllEnvelopes({ since: { year: 2021, month: 1 }, batch: 2 })) {
+			envelopeBatches.push(batch);
+		}
+
+		expect(envelopeBatches.length).toBeGreaterThan(1);
+		expect(envelopeBatches.flat().map(({ metadata }) => metadata.eventId.value)).toEqual(
+			[...envelopesAccountA, ...envelopesAccountB]
+				.map(({ metadata }) => metadata.eventId.value)
+				.sort((a, b) => (a < b ? -1 : 1)),
+		);
+	});
+
+	it('should list the collections of every page as it reads them', async () => {
+		const collectionBatches: IEventCollection[][] = [];
+		for await (const collections of eventStore.listCollections({ batch: 1 })) {
+			collectionBatches.push(collections);
+		}
+
+		for (const collections of collectionBatches) {
+			expect(collections).toHaveLength(1);
+		}
+		expect(collectionBatches.flat()).toEqual(expect.arrayContaining(['a-events', 'b-events', 'c-events']));
+	});
+
 	describe('transactional appends', () => {
 		const pool = 'dynamodb-appends';
 		const collection = EventCollection.get(pool);

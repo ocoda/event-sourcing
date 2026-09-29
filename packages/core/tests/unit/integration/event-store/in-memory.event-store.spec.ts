@@ -118,6 +118,24 @@ describe(InMemoryEventStore, () => {
 		);
 	});
 
+	it('should throw when the first appended version already exists in the stream', async () => {
+		const pool = 'overlapping-appends';
+		const stream = EventStream.for(Account, AccountId.generate());
+
+		await eventStore.ensureCollection(pool);
+		await eventStore.appendEvents(stream, 3, events.slice(0, 3), pool);
+
+		// Two events appended at version 4 take versions 3 and 4, and version 3 exists already
+		await expect(eventStore.appendEvents(stream, 4, events.slice(3, 5), pool)).rejects.toThrow(
+			new EventStoreVersionConflictException(stream, 4, 3),
+		);
+
+		const versions = (eventStore.collections.get(`${pool}-events`) || [])
+			.filter(({ streamId }) => streamId === stream.streamId)
+			.map(({ version }) => version);
+		expect(versions).toEqual([1, 2, 3]);
+	});
+
 	it("should throw when event envelopes can't be appended", async () => {
 		await expect(eventStore.appendEvents(eventStreamAccountA, 3, events.slice(0, 3), 'not-a-pool')).rejects.toThrow(
 			EventStorePersistenceException,
