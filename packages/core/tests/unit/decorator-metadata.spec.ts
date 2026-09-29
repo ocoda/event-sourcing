@@ -75,10 +75,11 @@ describe('decorator metadata', () => {
 	});
 });
 
-// The shared tsconfig sets useDefineForClassFields: false, which Oxc mirrors for the tests. The EventStore
-// constructor returns a Proxy that wraps appendEvents to publish, reading `_publish`, a field that is declared
-// without an initializer and only assigned through the `publish` setter.
-describe('EventStore publish wiring (useDefineForClassFields: false)', () => {
+// The shared tsconfig keeps define semantics for class fields (useDefineForClassFields: true), matching the
+// published build, and Oxc mirrors it for the tests. The EventStore constructor returns a Proxy that wraps
+// appendEvents to publish, reading `_publish`, a field that is declared without an initializer and only assigned
+// through the `publish` setter.
+describe('EventStore publish wiring (define semantics for class fields)', () => {
 	const events = getEvents();
 	let eventStore: InMemoryEventStore;
 
@@ -92,12 +93,11 @@ describe('EventStore publish wiring (useDefineForClassFields: false)', () => {
 		await eventStore.disconnect();
 	});
 
-	it('does not define class fields without an initializer', () => {
+	it('defines class fields without an initializer, like the published build', () => {
 		const store = new InMemoryEventStore(getEventMap(), { driver: InMemoryEventStore });
 
-		// With define semantics these would be own properties initialised to undefined.
-		expect(Object.hasOwn(store, '_publish')).toBe(false);
-		expect(Object.hasOwn(store, 'collections')).toBe(false);
+		// Define semantics: fields declared without an initializer are own properties initialised to undefined.
+		expect(Object.hasOwn(store, '_publish')).toBe(true);
 		// Fields with an initializer are still assigned in the constructor.
 		expect(Object.hasOwn(store, 'logger')).toBe(true);
 	});

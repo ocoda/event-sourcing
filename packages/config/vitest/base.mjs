@@ -8,21 +8,15 @@
  */
 export default {
 	// Vite 8 transforms TypeScript with Oxc, which also applies the nearest tsconfig.json (experimentalDecorators,
-	// emitDecoratorMetadata, useDefineForClassFields: false), so every package tsconfig must include its tests.
-	// The options are repeated here (and take precedence over the tsconfig) so that a file no tsconfig covers
-	// still gets legacy decorators with the `design:paramtypes` metadata Nest DI needs, rather than TC39
-	// decorators, and TypeScript's useDefineForClassFields: false class-field semantics.
+	// emitDecoratorMetadata, useDefineForClassFields: true), so every package tsconfig must include its tests.
+	// The decorator options are repeated here (and take precedence over the tsconfig) so that a file no tsconfig
+	// covers still gets legacy decorators with the `design:paramtypes` metadata Nest DI needs, rather than TC39
+	// decorators. Class fields keep define semantics, matching the published build.
 	// packages/core/tests/unit/decorator-metadata.spec.ts guards this.
 	oxc: {
 		decorator: {
 			legacy: true,
 			emitDecoratorMetadata: true,
-		},
-		assumptions: {
-			setPublicClassFields: true,
-		},
-		typescript: {
-			removeClassFieldsWithoutInitializer: true,
 		},
 	},
 	test: {
