@@ -14,6 +14,8 @@ import {
 	UUID,
 } from '@ocoda/event-sourcing';
 
+export * from './db.js';
+
 // #region *Account*
 export class AccountId extends UUID {}
 

@@ -23,12 +23,13 @@ import {
 	getEvents,
 } from '@ocoda/event-sourcing-testing/unit';
 import type { Pool } from 'mariadb';
+import { type TestEventStore, createEventStore } from '../support/stores.js';
 
 describe(MariaDBEventStore, () => {
 	let eventStore: MariaDBEventStore;
 	let envelopesAccountA: EventEnvelope[];
 	let envelopesAccountB: EventEnvelope[];
-	const publish = vi.fn(async () => Promise.resolve());
+	let publish: TestEventStore['publish'];
 
 	let pool: Pool;
 
@@ -36,15 +37,7 @@ describe(MariaDBEventStore, () => {
 	const events = getEvents();
 
 	beforeAll(async () => {
-		eventStore = new MariaDBEventStore(eventMap, {
-			driver: undefined as never,
-			host: '127.0.0.1',
-			port: 3306,
-			user: 'mariadb',
-			password: 'mariadb',
-			database: 'mariadb',
-		});
-		eventStore.publish = publish;
+		({ store: eventStore, publish } = createEventStore({}, eventMap));
 
 		await eventStore.connect();
 		await eventStore.ensureCollection();

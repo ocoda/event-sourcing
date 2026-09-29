@@ -7,6 +7,7 @@ import {
 	type PostgresSnapshotStoreConfig,
 } from '@ocoda/event-sourcing-postgres';
 import { Events, testProviders } from '@ocoda/event-sourcing-testing/e2e';
+import { postgresTestConfig } from '@ocoda/event-sourcing-testing/unit';
 
 @Module({
 	imports: [
@@ -15,20 +16,12 @@ import { Events, testProviders } from '@ocoda/event-sourcing-testing/e2e';
 				events: Events,
 				eventStore: {
 					driver: PostgresEventStore,
-					host: '127.0.0.1',
-					port: 5432,
-					user: 'postgres',
-					password: 'postgres',
-					database: 'postgres',
+					...postgresTestConfig(),
 					useDefaultPool: false,
 				},
 				snapshotStore: {
 					driver: PostgresSnapshotStore,
-					host: '127.0.0.1',
-					port: 5432,
-					user: 'postgres',
-					password: 'postgres',
-					database: 'postgres',
+					...postgresTestConfig(),
 					useDefaultPool: false,
 				},
 			}),

@@ -23,15 +23,13 @@ import {
 	getAccountEventEnvelopes,
 	getEventMap,
 	getEvents,
+	postgresTestConfig,
 } from '@ocoda/event-sourcing-testing/unit';
 import { Client, DatabaseError, type Pool, escapeIdentifier } from 'pg';
+import { type TestEventStore, createEventStore } from '../support/stores.js';
 
 const connectionOptions = {
-	host: '127.0.0.1',
-	port: 5432,
-	user: 'postgres',
-	password: 'postgres',
-	database: 'postgres',
+	...postgresTestConfig(),
 	application_name: 'postgres-event-store-spec',
 };
 
@@ -39,7 +37,7 @@ describe(PostgresEventStore, () => {
 	let eventStore: PostgresEventStore;
 	let envelopesAccountA: EventEnvelope[];
 	let envelopesAccountB: EventEnvelope[];
-	const publish = vi.fn(async () => Promise.resolve());
+	let publish: TestEventStore['publish'];
 
 	let pool: Pool;
 
@@ -47,8 +45,7 @@ describe(PostgresEventStore, () => {
 	const events = getEvents();
 
 	beforeAll(async () => {
-		eventStore = new PostgresEventStore(eventMap, { driver: undefined as never, ...connectionOptions });
-		eventStore.publish = publish;
+		({ store: eventStore, publish } = createEventStore(connectionOptions, eventMap));
 
 		await eventStore.connect();
 		await eventStore.ensureCollection();
@@ -323,11 +320,7 @@ describe(PostgresEventStore, () => {
 		afterEach(() => vi.restoreAllMocks());
 
 		it('should fail to connect when the database is unreachable', async () => {
-			const unreachableStore = new PostgresEventStore(eventMap, {
-				driver: undefined as never,
-				...connectionOptions,
-				port: 1,
-			});
+			const { store: unreachableStore } = createEventStore({ ...connectionOptions, port: 1 }, eventMap);
 
 			await expect(unreachableStore.connect()).rejects.toMatchObject({ code: 'ECONNREFUSED' });
 			await unreachableStore.disconnect();
@@ -340,7 +333,7 @@ describe(PostgresEventStore, () => {
 			await Promise.all([pool.query('SELECT pg_sleep(0.05)'), pool.query('SELECT pg_sleep(0.05)')]);
 			const { rows } = await pool.query<{ terminated: boolean }>(
 				`SELECT pg_terminate_backend(pid) AS terminated FROM pg_stat_activity
-				WHERE application_name = $1 AND state = 'idle' AND pid <> pg_backend_pid()`,
+				WHERE datname = current_database() AND application_name = $1 AND state = 'idle' AND pid <> pg_backend_pid()`,
 				[connectionOptions.application_name],
 			);
 			expect(rows.length).toBeGreaterThan(0);
@@ -582,7 +575,7 @@ describe(PostgresEventStore, () => {
 			let smallPool: Pool;
 
 			beforeEach(async () => {
-				smallStore = new PostgresEventStore(eventMap, { driver: undefined as never, ...connectionOptions, max: 2 });
+				({ store: smallStore } = createEventStore({ ...connectionOptions, max: 2 }, eventMap));
 				await smallStore.connect();
 				smallPool = smallStore['pool'];
 			});

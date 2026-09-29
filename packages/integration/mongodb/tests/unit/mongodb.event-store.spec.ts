@@ -21,14 +21,16 @@ import {
 	getAccountEventEnvelopes,
 	getEventMap,
 	getEvents,
+	mongodbTestTopologies,
 } from '@ocoda/event-sourcing-testing/unit';
 import type { MongoClient } from 'mongodb';
+import { type TestEventStore, createEventStore } from '../support/stores.js';
 
-describe(MongoDBEventStore, () => {
+describe.each(mongodbTestTopologies())(`${MongoDBEventStore.name} ($name)`, ({ url }) => {
 	let eventStore: MongoDBEventStore;
 	let envelopesAccountA: EventEnvelope[];
 	let envelopesAccountB: EventEnvelope[];
-	const publish = vi.fn(async () => Promise.resolve());
+	let publish: TestEventStore['publish'];
 
 	let client: MongoClient;
 
@@ -36,10 +38,7 @@ describe(MongoDBEventStore, () => {
 	const events = getEvents();
 
 	beforeAll(async () => {
-		eventStore = new MongoDBEventStore(eventMap, {
-			url: 'mongodb://localhost:27017',
-		} as unknown as ConstructorParameters<typeof MongoDBEventStore>[1]);
-		eventStore.publish = publish;
+		({ store: eventStore, publish } = createEventStore({ url }, eventMap));
 
 		await eventStore.connect();
 		await eventStore.ensureCollection();

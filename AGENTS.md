@@ -27,6 +27,8 @@ The `ci-ok` check is the only required check on `master` and `3.x`. Before openi
 6. For every integration you touched, and for all of them when core or `packages/testing` changed:
    - Start the database: `docker compose up -d --wait <service>`. Service names are in `docker-compose.yml`, e.g. `postgres`, `mongodb`, `mariadb`.
    - Then run `pnpm test:cov --filter=@ocoda/event-sourcing-<db>`.
+   - Connection settings come from `packages/testing/unit/db.ts` (`ES_TEST_*` variables, defaults match the compose services). For MongoDB, CI also sets `ES_TEST_MONGODB_RS_URL=mongodb://localhost:27018/?replicaSet=rs0` (service `mongodb-N-rs`; required when `CI` is set): the unit, resilience and conformance specs run on both topologies, e2e on the standalone server.
+   - Driver specs build stores only through `packages/integration/<db>/tests/support/stores.ts` (`createEventStore`, `createSnapshotStore`).
 
 ## Invariants that no config enforces
 

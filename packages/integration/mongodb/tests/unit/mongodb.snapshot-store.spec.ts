@@ -18,6 +18,7 @@ import {
 	Account,
 	AccountId,
 	customerSnapshot,
+	mongodbTestTopologies,
 	snapshotEnvelopesAccountA,
 	snapshotEnvelopesAccountB,
 	snapshotStreamAccountA,
@@ -27,8 +28,9 @@ import {
 	snapshotsAccountB,
 } from '@ocoda/event-sourcing-testing/unit';
 import type { MongoClient } from 'mongodb';
+import { createSnapshotStore } from '../support/stores.js';
 
-describe(MongoDBSnapshotStore, () => {
+describe.each(mongodbTestTopologies())(`${MongoDBSnapshotStore.name} ($name)`, ({ url }) => {
 	let snapshotStore: MongoDBSnapshotStore;
 	const envelopesAccountA = snapshotEnvelopesAccountA;
 	const envelopesAccountB = snapshotEnvelopesAccountB;
@@ -36,9 +38,7 @@ describe(MongoDBSnapshotStore, () => {
 	let client: MongoClient;
 
 	beforeAll(async () => {
-		snapshotStore = new MongoDBSnapshotStore({ url: 'mongodb://localhost:27017' } as unknown as ConstructorParameters<
-			typeof MongoDBSnapshotStore
-		>[0]);
+		snapshotStore = createSnapshotStore({ url });
 
 		await snapshotStore.connect();
 		await snapshotStore.ensureCollection();
