@@ -1,6 +1,6 @@
 {
-	"name": "@ocoda/event-sourcing",
-	"description": "NestJS Event Sourcing Library",
+	"name": "event-sourcing-monorepo",
+	"description": "Monorepo for the @ocoda/event-sourcing packages",
 	"author": "Dries Hooghe <dries@drieshooghe.com>",
 	"license": "MIT",
 	"private": true,
@@ -20,12 +20,6 @@
 	},
 	"engines": {
 		"node": ">= 20.0.0"
-	},
-	"peerDependencies": {
-		"@nestjs/common": "^11.0.0",
-		"@nestjs/core": "^11.0.0",
-		"reflect-metadata": "^0.2.0",
-		"rxjs": "^7.2.0"
 	},
 	"devDependencies": {
 		"@changesets/changelog-github": "^0.5.1",
