@@ -1,5 +1,6 @@
 {
 	"$schema": "https://turborepo.dev/schema.json",
+	"agentGuidance": false,
 	"tasks": {
 		"build": {
 			"description": "Bundle lib/ into dist/ with tsup.",
