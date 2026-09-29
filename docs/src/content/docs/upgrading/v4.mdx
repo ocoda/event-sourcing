@@ -166,7 +166,7 @@ Since `4.0.0-next.1`, every exception class the library exports, except `DomainE
 - **Stores.** A version conflict from the PostgreSQL, MariaDB and MongoDB stores carries the pool and the version the stream was at, and leaves `actualVersion` out when the append lost a race on the unique key. MongoDB throws an `EventStorePersistenceException` with `outcome: 'unknown'` (its `cause` is an `AggregateError`) instead of a version conflict when an append that lost a race can't remove the events it already stored. Not-found exceptions name the pool they searched.
 - **Messages changed**, for version conflicts in particular.
 - **The stack is kept.** A wrapping exception no longer replaces its own stack with the stack of the driver error. The driver error is its `cause`.
-- **`UnsupportedOperationException` replaces `NotImplementedException`.** `SnapshotRepository.loadMany()` and `loadAll()` threw the `NotImplementedException` of `@nestjs/common` when the snapshot store lacks the method they need. They now throw `UnsupportedOperationException`, with the method name in `operation`. An HTTP exception filter that relied on the 501 status of the Nest exception should map the new code.
+- **`UnsupportedOperationException` replaces `NotImplementedException`.** In 3.x, `SnapshotRepository.loadMany()` and `loadAll()` threw the `NotImplementedException` of `@nestjs/common` when the snapshot store lacked the method they need. `loadMany()` now works with every store (see [Snapshot store](#snapshot-store)). `loadAll()` throws `UnsupportedOperationException`, with the method name in `operation`, when the store keeps the base `getLastEnvelopesForAggregate`. An HTTP exception filter that relied on the 501 status of the Nest exception should map the new code.
 - **`DomainException`** gets a `name`, the class name of your subclass, and takes the standard error options as a third argument: `super(message, id, { cause })`. It has no `code`, so your subclasses compile unchanged. `InvalidIdException` still extends it, and is also an `EventSourcingError` with a code.
 - **One object argument.** Every exported exception is constructed with a single details object, plus the error options for the `cause`. The 3.x static factories, such as `InvalidIdException.becauseInvalid()` and `IdNotFoundException.withId()`, still work, but are deprecated and will be removed in 5.0.
 - **`ExpectedVersion`** is a new export: `ExpectedVersion.NoStream` (0) and `ExpectedVersion.Any`, and the type of an expected version.
@@ -200,7 +200,7 @@ To migrate:
 
    The `expectedVersion` of a conflict is the version the stream had to have **before** the append, not the aggregate version after it.
 
-3. Where you catch the errors of `SnapshotRepository.loadMany()` and `loadAll()`, replace `NotImplementedException` with `UnsupportedOperationException`, or match `EventSourcingErrorCode.UnsupportedOperation`.
+3. Where you catch the errors of `SnapshotRepository.loadAll()`, replace `NotImplementedException` with `UnsupportedOperationException`, or match `EventSourcingErrorCode.UnsupportedOperation`. `loadMany()` no longer throws it.
 4. Read the underlying error of a wrapping exception from `error.cause` instead of from its stack.
 
 ## MariaDB: snapshot order of `loadAll` [#mariadb-snapshot-order]
