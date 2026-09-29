@@ -4,6 +4,10 @@ title: Snapshot Store
 
 import { Aside } from '@astrojs/starlight/components';
 
+<Aside type="note" title="4.0 prerelease">
+This page describes the snapshot store contract, which ships in the next 4.0 prerelease. See [Snapshot store](/upgrading/v4#snapshot-store).
+</Aside>
+
 The snapshot store keeps the [snapshots](/start/snapshots) of your aggregates. A `SnapshotRepository` uses it behind the scenes, so you rarely call it yourself, unless you [build your own store](/advanced/custom-stores#how-to-create-your-own-snapshot-store).
 
 Every store extends the abstract `SnapshotStore` class and is registered as the `snapshotStore` of the module. The library ships an in-memory store, and PostgreSQL, MariaDB and MongoDB stores in their own packages.

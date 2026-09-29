@@ -425,7 +425,7 @@ await MariaDBSnapshotStore.migrate(config);
 - The event tables are copied into schema v2 and swapped in, numbered in 3.x's order with every stream in version order; the 3.x tables are kept as `<table>__es_v1` backups until you drop them. `occurred_on` is restored to the millisecond from the event ids, which also corrects the hours 3.x was off when the application ran in another time zone than the database server.
 - The snapshot tables are converted in place, and every stream gets exactly one latest snapshot, its highest version.
 - After the migration, a 3.x instance that still runs fails to append events (error 1136) instead of writing rows without positions. Its snapshot writes still succeed, so stop every 3.x instance before you migrate.
-- Plan for about 3 minutes per million events, and free space of 1.5 times the event tables in the data directory and again in `tmpdir`. A failed migration can be run again: it continues where it stopped.
+- Plan for about 3 minutes per million events (a provisional estimate: a million events were not measured with the copy that ships), and free space of 1.5 times the event tables in the data directory and again in `tmpdir`. A failed migration can be run again: it continues where it stopped.
 - Stream ids that differ in case only become separate streams, and a stream with a gap in its versions conflicts on its next append; the dry run lists both.
 
 ## Publishing [#publishing]

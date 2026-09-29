@@ -80,6 +80,10 @@ export class BatchEventPublisher implements IEventPublisher {
 
 ## Delivery semantics [#delivery-semantics]
 
+<Aside type="note" title="4.0 prerelease">
+The awaited publishers, their order per stream, `publisherTimeout`, `deliveryErrors$`, `whenIdle()` and the drained shutdown described below ship in the next prerelease. See [Publishing](/upgrading/v4#publishing).
+</Aside>
+
 Knowing how events are delivered matters, especially when you publish them to other systems.
 
 - **In-process:** the envelopes are published in the process that appended the events. Subscribers in other instances of your application don't receive them, and neither do consumers outside your application unless you add an event publisher that sends them there.

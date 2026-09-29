@@ -5,7 +5,7 @@
 - **Scope:** plan milestone M7: the 4.0 event and snapshot schemas of the PostgreSQL, MariaDB and MongoDB stores, the global position technique behind [ADR 0001](./0001-v4-core-api.md) §9, and the one-time `migrate()` from 3.x
 - **Depends on:** ADR 0001 §1, §8 and §9, and its [store contract amendments](./0001-v4-core-api.md#amendments-store-contract) (D1–D35)
 - **Baseline:** `origin/master` `0c345dd` (`4.0.0-next.1`); the 3.x schemas that 3.0.0 to 3.0.2 create
-- **Amendments:** 2026-09-29: §1, §2, §4 and §6 now describe the PostgreSQL (#570) and MongoDB (#572) drivers as merged, where they follow the Wave 0 spikes and the reviews: the PostgreSQL append is one statement and its migration rewrites the table; MongoDB numbers on the server. The MariaDB text (§3 and the MariaDB parts of §6) still describes the plan; the MariaDB driver (#571) lists where it departs from it in its [evidence](#mariadb), and bringing the text in line is a follow-up. The [Evidence](#evidence) section is filled in by the driver PRs; the [owner decisions](#owner-decisions) have defaults applied.
+- **Amendments:** 2026-09-29: §1 to §4 and §6 now describe the PostgreSQL (#570), MariaDB (#571) and MongoDB (#572) drivers as merged, where they follow the Wave 0 spikes and the reviews. The PostgreSQL append is one statement, and its migration rewrites the table. MariaDB reads with a hybrid reader, appends in `READ COMMITTED`, and its dry run doesn't check privileges. MongoDB numbers on the server. Each driver's [evidence](#evidence) gives the reasons. The [owner decisions](#owner-decisions) have defaults applied.
 
 ## Context
 
@@ -88,8 +88,8 @@ The core module's `onModuleInit` calls `ensureCollection()` for the default pool
 **`ensureCollection(pool)` for snapshots**
 
 - `absent`: create the v2 table and register it (kind `'snapshots'`).
-- `v1`: `logger.warn` once, register it with `schema_version 1`, and keep working. The v2 SQL lists its columns, which have the same names in v1.
-- `ddl: 'none'` and `absent`: `SnapshotStoreCollectionCreationException`, with the DDL in the message.
+- `v1`: `logger.warn` (once per table on PostgreSQL and MongoDB, on every call on MariaDB), register it with `schema_version 1`, and keep working. The v2 SQL lists its columns, which have the same names in v1.
+- `ddl: 'none'` and `absent`: `SnapshotStoreCollectionCreationException`, with the DDL in its cause (MariaDB also logs it).
 
 **Unknown pools** (ADR 0001 amendment D4; the same in every event store)
 
@@ -197,7 +197,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS "<deriveIndexName(t, 'latest')>" ON "<t>" (agg
 
 ### 3. MariaDB
 
-*This section still describes the plan. Where the MariaDB driver (#571) departs from it is listed in its [evidence](#mariadb), under "Amendments to §3 and §6"; bringing the text in line is a follow-up.*
+*Amended:* this section describes the MariaDB driver as merged (#571). Where it departs from the plan, the [evidence](#mariadb) gives the reason, under "Amendments to §3 and §6".
 
 **Catalog**
 
@@ -207,6 +207,8 @@ CREATE TABLE IF NOT EXISTS event_sourcing_collections (
   schema_version SMALLINT NOT NULL, last_position BIGINT NOT NULL DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 ```
+
+With `ddl: 'auto'`, `ensureCollection` runs this statement on every call; with `ddl: 'none'`, it only checks that the catalog exists.
 
 **Events** (the collation is [owner decision 1](#owner-decisions))
 
@@ -218,40 +220,59 @@ CREATE TABLE IF NOT EXISTS `<t>` (
   global_position BIGINT NOT NULL, headers JSON NULL, event_version INT NULL,
   PRIMARY KEY (stream_id, version), UNIQUE KEY ux_global_position (global_position)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-INSERT INTO event_sourcing_collections (name, kind, schema_version, last_position)
-  SELECT ?, 'events', 2, COALESCE(MAX(global_position), 0) FROM `<t>`
+-- registration by ensureCollection (amended): the highest position first, without locks, then the upsert
+SELECT CAST(COALESCE(MAX(global_position), 0) AS CHAR) AS last FROM `<t>`;
+INSERT INTO event_sourcing_collections (name, kind, schema_version, last_position) VALUES (?, 'events', 2, ?)
   ON DUPLICATE KEY UPDATE schema_version = 2, last_position = GREATEST(last_position, VALUES(last_position));
 ```
+
+- The `INSERT … SELECT COALESCE(MAX(global_position), 0) FROM <t> … ON DUPLICATE KEY UPDATE` form of the plan locks the table's last row and deadlocked with concurrent appends, so `ensureCollection` reads the maximum first. A position committed in between is already counted, and the counter never decreases. The `ddl: 'none'` remedy and the migration keep the `INSERT … SELECT` form.
+- Both stores create their pools with the user's `initSql` followed by `SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED`, so a server or `initSql` default of `READ UNCOMMITTED` can't let `readAll` hand out an append that then rolls back.
 
 **Dates.** `DATETIME(3)` holds UTC wall time, independent of the connector's `timezone` and the session's `time_zone`:
 
 - Write `d.toISOString().slice(0, 23).replace('T', ' ')`.
 - Read `CAST(occurred_on AS CHAR)` and parse it with `new Date(s.replace(' ', 'T') + 'Z')`.
 
-**`persistEvents`.** It encodes before `getConnection()`, then runs on a dedicated connection:
+**`persistEvents`.** It encodes first (`JSON.stringify` of each payload and headers, the `DATETIME(3)` text of each `occurredOn`) **before** `getConnection()`; a value that JSON can't hold is `not-persisted`. Then, on a dedicated connection:
 
 ```sql
-START TRANSACTION;
+SET TRANSACTION ISOLATION LEVEL READ COMMITTED;   -- amended: innodb_snapshot_isolation fails REPEATABLE READ with 1020
+START TRANSACTION;                                -- these first three statements are pipelined
 UPDATE event_sourcing_collections SET last_position = LAST_INSERT_ID(last_position + ?) WHERE name = ? AND kind = 'events';
--- affectedRows 0: ROLLBACK, not-persisted. last = BigInt(String(result.insertId)),
--- or SELECT CAST(LAST_INSERT_ID() AS CHAR) as a fallback
+-- affectedRows 0 (the pool isn't in the catalog): ROLLBACK, not-persisted (cause EventCollectionNotFoundException)
+-- last = insertId as a bigint, or SELECT CAST(LAST_INSERT_ID() AS CHAR) when the connector returns an unsafe number
 INSERT INTO `<t>` (stream_id, version, event, payload, event_id, aggregate_id, occurred_on,
                    correlation_id, causation_id, global_position, headers, event_version) VALUES (?, …), …;
 COMMIT;
 ```
 
 - The version pre-check stays outside the transaction, in the template.
-- An InnoDB `UPDATE` is a locking read of the latest committed row, even under `REPEATABLE READ`, so the default isolation is correct.
-- `1062`: parse `/for key '(?:[^.']*\.)?([^']+)'/` from `sqlMessage`. `PRIMARY` is a conflict; `ux_global_position` is counter drift.
-- After `1205`, issue an explicit `ROLLBACK` (`innodb_rollback_on_timeout` is off by default).
-- `readAll`: a keyset with `CAST(global_position AS CHAR)`, one autocommit statement per batch, so each batch gets a fresh read view.
+- The counter update is the first write, and its row lock lasts until the transaction ends. The positions are `last - n + 1n … last`, in the order of the envelopes.
+- `innodb_snapshot_isolation=ON` (the default from 11.6.2) fails a `REPEATABLE READ` transaction with `1020` once a row it read has changed, hence the explicit `READ COMMITTED`. An InnoDB `UPDATE` is a locking read of the latest committed row either way.
+- A failure before the `COMMIT` issues an explicit `ROLLBACK` (a `1205` lock wait timeout doesn't roll back, `innodb_rollback_on_timeout` is off), then:
+  - `1062` names its key at the end of the message, which is parsed with `/for key '(?:[^']*\.)?([^.']+)'$/`, because the duplicate value isn't escaped and a stream id can contain `for key '…'`. `PRIMARY` is a conflict (without an `actualVersion`); another key, such as `ux_global_position`, is counter drift: logged, then `not-persisted`.
+  - `1146` is `not-persisted` with an `EventCollectionNotFoundException` as its cause, and everything else (`1020` included) is `not-persisted`.
+- A `1213` deadlock in answer to the `COMMIT`, on a connection that is still usable, is how Galera reports a failed certification; the transaction was rolled back, so it is `not-persisted`. Any other failure of the `COMMIT` is `unknown`.
+- A connection that the connector marked `fatal`, or whose `ROLLBACK` failed, is destroyed, not released.
+
+**Reads**
+
+- `getStreamVersion`: `SELECT COALESCE(MAX(version), 0) AS version FROM <t> WHERE stream_id = ?`.
+- `getEnvelope(s)`: stream reads with `queryStream` on a dedicated connection, which is released when the consumer stops early.
+- `readAll` (*amended:* the hybrid reader, because a plain keyset is not gap-safe on MariaDB; see the [evidence](#mariadb)). Each batch is one autocommit statement: `SELECT <columns>, CAST(global_position AS CHAR) AS global_position … FROM <t> e WHERE e.global_position >= ? ORDER BY e.global_position LIMIT ?`. The column is qualified, because the unqualified name in `ORDER BY` would be the text alias.
+  - The reader hands out a batch only as far as its positions follow on from where it reads, without a gap (reading from `0n` expects `1n`).
+  - When the first position isn't the next one, it reads `H`: `SELECT CAST(last_position AS CHAR) AS last_position FROM event_sourcing_collections WHERE name = ? AND kind = 'events' LOCK IN SHARE MODE`. That read waits for the append that holds the counter. It reads the batch again with `AND e.global_position <= ?` (`H`) and hands out every row: a gap below `H` is permanent (a deleted event, or a pool that was dropped and created again).
+  - When that second read is empty, the table holds positions above its counter (drift): the reader logs a warning and hands out the rows of the first read.
+  - Both reads must reach the server the appends run on. Behind a proxy that sends plain reads to a replica, a gap of the replica's lag would look permanent.
+- `listCollections`: `SELECT name FROM event_sourcing_collections WHERE kind = 'events' AND schema_version = 2 AND name > ? ORDER BY name LIMIT ?`, in binary order; no catalog (`1146`) lists nothing.
 
 **`connect()`**
 
-- `createPool`, then probe with `SELECT @@wsrep_on AS wsrep`; an unknown variable counts as `OFF`. The probe also makes a bad connection fail at bootstrap.
-- `wsrep = ON` (Galera) gives `globalOrder: 'best-effort'`, because row locks aren't cluster-wide.
+- `createPool`, then probe with `SELECT @@wsrep_on AS wsrep`. An unknown variable (`1193`) means no Galera, and any other error ends the pool and fails the bootstrap.
+- `wsrep = ON` (Galera) gives `globalOrder: 'best-effort'`, with a warning, because row locks aren't cluster-wide.
 
-**Capabilities:** `{ atomicAppend: true, headers: true, globalOrder: 'gap-safe' }` on InnoDB, **only if** the [evidence](#evidence) (the stress test, the source citation and `read-all-gap-safe` on 10.11, 11.4 and 11.8) holds. Otherwise `'best-effort'`.
+**Capabilities:** `{ atomicAppend: true, headers: true, globalOrder: 'gap-safe' }` on InnoDB, and `'best-effort'` on Galera. The [evidence](#mariadb) supports this with the source citation, the hybrid reader and `read-all-gap-safe` on 10.11, 11.4 and 11.8.
 
 **Snapshots**
 
@@ -264,8 +285,21 @@ CREATE TABLE IF NOT EXISTS `<t>` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 ```
 
-- `appendSnapshot`: `START TRANSACTION`, then `SELECT … WHERE latest = ? FOR UPDATE` (moved **inside** the transaction), then unflag with `registered_on = registered_on`, then an `INSERT` that lists its columns, then `COMMIT`.
-- A `1062` on `PRIMARY` or `ux_latest` is a snapshot conflict.
+- `ensureCollection` registers a table that isn't v2 (3.x, or a migration that stopped) with `schema_version 1`, and warns. The store reads and writes `registered_on` according to the column's type: a 3.x `TIMESTAMP` gets a `Date`, a `DATETIME(3)` the UTC wall-time text. With `ddl: 'none'`, a missing catalog or table is logged with the statements to run, which are also in the exception's cause.
+- `appendSnapshot` runs one attempt in a transaction:
+
+  ```sql
+  SET TRANSACTION ISOLATION LEVEL READ COMMITTED; START TRANSACTION;   -- pipelined; no gap locks
+  SELECT version FROM `<t>` WHERE aggregate_name = ? AND latest = ? FOR UPDATE;   -- a version ≥ the new one: conflict
+  UPDATE `<t>` SET latest = NULL, registered_on = registered_on WHERE stream_id = ? AND version = ?;   -- keeps a legacy ON UPDATE from firing
+  INSERT INTO `<t>` (stream_id, version, payload, snapshot_id, aggregate_id, registered_on, aggregate_name, latest) VALUES (…);
+  COMMIT;
+  ```
+
+  - *Amended:* a `1213` deadlock runs the attempt again, up to 10 attempts, after a jittered backoff of `random(0, min(100, 2 ** attempt))` ms. The duplicate checks of `ux_latest` lock neighbouring keys, so appends to different streams of one aggregate can deadlock.
+  - Any `1062`, on `PRIMARY` or `ux_latest`, is a `SnapshotStoreVersionConflictException`, with the stream's highest version as its `latestVersion`.
+- `getLastEnvelope`: `ORDER BY version DESC LIMIT 1`. `getManyLastSnapshotEnvelopes` joins each stream to its `MAX(version)`.
+- `getLastEnvelopesForAggregate`: `WHERE aggregate_name = ? AND latest IS NOT NULL [AND latest < ?] ORDER BY latest DESC`, where `?` is `latest#<streamName>-<aggregateId>`, in binary order on a v2 table. The cursor is exclusive.
 
 ### 4. MongoDB
 
@@ -395,14 +429,14 @@ migrate(options?: MigrationOptions): Promise<MigrationReport>; // on a connected
 - Numbering follows 3.x's order `(event_date, event_id, stream_id, version)` (MongoDB: `eventDate, _id`), adjusted so each stream keeps version order: rows are numbered by `(key, version)`, where `key` is the running maximum, over the row's stream ordered by version, of the row's rank in 3.x's order ([ADR 0001 D33](./0001-v4-core-api.md#amendments-store-contract)). The `ROW_NUMBER() OVER (ORDER BY event_date, event_id, stream_id, version)` expressions below are the rank `r`, not the final position.
 - **Offline.** 3.x writers must be stopped. After the migration, a 3.x write fails loudly:
   - PostgreSQL: `event_date` is gone (`23502` / `42703`).
-  - MariaDB: the column count doesn't match (`1136`).
+  - MariaDB: the column count of an event insert doesn't match (`1136`). The v2 snapshot table keeps the 3.x columns, so a 3.x snapshot write still succeeds.
   - MongoDB: the validator rejects it (`121`).
 - `blocking` issues abort before any write:
   - PostgreSQL (*amended:* read from `pg_depend` and the privilege functions): a role that doesn't own the table; a missing catalog without `CREATE` on the schema, or an existing catalog without `SELECT`, `INSERT` and `UPDATE`; no `TEMPORARY` on the database; views and rules that use a column the migration drops or converts; policies, triggers, publication row filters and column lists, generated columns and other normal dependencies on `event_date`, or objects other than indexes, constraints and statistics on a converted column; foreign keys of other tables that reference the table (`TRUNCATE` fails); a table name that PostgreSQL truncated for 3.x (over 63 bytes, or 63 bytes without the `-events` / `-snapshots` suffix); an event table without `event_date`
-  - MariaDB (the plan): triggers or foreign keys on the table, and missing privileges
+  - MariaDB: a table without the columns of an event or snapshot table; triggers, or foreign keys from or to the table (a swap would leave them on the backup); a 3.x event table whose `<t>__es_v1` backup already exists; a `v1-partial` event table without a backup; a table name over 64 characters; the named lock of another migration of the table. *Amended:* missing privileges are not checked; a step that lacks one fails with a hint that names the privileges, and the rerun continues (see the [evidence](#mariadb)).
   - MongoDB: a server older than 5.0; a sharded collection, or one whose sharding the user may not read; non-string `_id`s; events without an `eventDate` string when the collection is numbered by `eventDate`; a validator of another shape; a missing unique `{ streamId: 1, version: 1 }` index; a live lease of another run; privileges that the pending steps need, read with `connectionStatus`
 
-**Gapped streams** (PostgreSQL and MariaDB):
+**Gapped streams** (PostgreSQL and MariaDB; MariaDB groups by `CAST(stream_id AS BINARY)`, the way schema v2 compares stream ids):
 
 ```sql
 SELECT stream_id, COUNT(*) AS events, MIN(version) AS min_version, MAX(version) AS max_version
@@ -468,47 +502,82 @@ The same migration lock, transaction settings, table lock and re-inspection as t
 
 #### MariaDB events: copy and swap, per table
 
-*The MariaDB parts of §6 still describe the plan; see the note on §3.*
-
 The copy never `UPDATE`s a 3.x row, so the `ON UPDATE` hazard can't fire. The `TIMESTAMP → DATETIME(3)` change needs a copy anyway, and the swap leaves a backup.
 
+The migration connects on a connection of its own with `socketTimeout: 0`: a copy runs for minutes without a byte on the socket. It sets the session, takes the named lock, then inspects and plans the table under the lock, so a run continues where the previous one stopped. Every step is one statement in autocommit. A failed step destroys the connection, which releases the lock and the session settings.
+
 ```sql
-SET SESSION time_zone = '+00:00'; SET SESSION lock_wait_timeout = <s>; SET SESSION max_statement_time = 0;
-SELECT GET_LOCK('ocoda:migrate:<db>.<t>', 0);          -- 0: blocked
-DROP TABLE IF EXISTS `<t>__es_v2`;                      -- leftover of a crashed run (names hashed when > 64 characters)
+-- session (amended: REPEATABLE READ pinned; the fragment settings on Galera only)
+SET SESSION time_zone = '+00:00', lock_wait_timeout = <s>, innodb_lock_wait_timeout = <s>, max_statement_time = 0,
+  tx_isolation = 'REPEATABLE-READ'[, wsrep_trx_fragment_unit = 'bytes', wsrep_trx_fragment_size = 67108864];
+CREATE TABLE IF NOT EXISTS event_sourcing_collections (…);
+-- amended: a hashed lock name, and a taken lock raises 1242 (blocked), which also stops the mariadb client
+SELECT IF(GET_LOCK(CONCAT('ocoda:migrate:', SHA1(CONCAT(DATABASE(), '.', '<t>'))), 0) = 1, 1, (SELECT 1 UNION SELECT 2)) AS acquired;
+DROP TABLE IF EXISTS `<t>__es_v2`;                     -- leftover of a crashed run (derived names are hashed when > 64 characters)
 CREATE TABLE `<t>__es_v2` ( …the v2 DDL… );
+SET SESSION unique_checks = 0, foreign_key_checks = 0;  -- amended: a bulk load into the empty copy
 INSERT INTO `<t>__es_v2` (stream_id, version, event, payload, event_id, aggregate_id, occurred_on,
                           correlation_id, causation_id, global_position)
-SELECT stream_id, version, event, payload, event_id, aggregate_id,
-       <occurredOnExpr>,                                -- see below; `occurred_on` when repairOccurredOn is false
-       correlation_id, causation_id,
-       ROW_NUMBER() OVER (ORDER BY event_date, event_id, stream_id, version)   -- source collation = 3.x order
-FROM `<t>`;
+SELECT k.stream_id, k.version, k.event, k.payload, k.event_id, k.aggregate_id, <occurredOnExpr>,
+       k.correlation_id, k.causation_id, ROW_NUMBER() OVER (ORDER BY k.ord_key, k.version) AS global_position
+FROM (
+  SELECT r.*, MAX(r.ord_rank) OVER (PARTITION BY r.stream_id ORDER BY r.version ROWS UNBOUNDED PRECEDING) AS ord_key
+  FROM (
+    SELECT o.<3.x columns>, CAST(UNIX_TIMESTAMP(o.occurred_on) AS SIGNED) AS occurred_ts,
+           o.event_id REGEXP '<ULID_TIME_PATTERN>' AS ulid_valid, <ulidMs(o.event_id)> AS ulid_ms,
+           ROW_NUMBER() OVER (ORDER BY o.event_date, o.event_id, o.stream_id, o.version) AS ord_rank   -- source collation = 3.x order
+    FROM `<t>` o
+  ) r
+) k;
+SET SESSION unique_checks = 1, foreign_key_checks = 1;
 RENAME TABLE `<t>` TO `<t>__es_v1`, `<t>__es_v2` TO `<t>`;   -- atomic; 3.x inserts now fail with 1136
--- catch up rows 3.x wrote between the copy's snapshot and the RENAME (normally none; reported as a warning):
-INSERT INTO `<t>` (…) SELECT …, @base + ROW_NUMBER() OVER (ORDER BY o.event_date, o.event_id, o.stream_id, o.version)
-  FROM `<t>__es_v1` o LEFT JOIN `<t>` n ON n.stream_id = o.stream_id COLLATE utf8mb4_bin AND n.version = o.version
-  WHERE n.stream_id IS NULL;                            -- @base = COALESCE(MAX(global_position), 0) of `<t>`
-INSERT INTO event_sourcing_collections … ON DUPLICATE KEY UPDATE schema_version = 2, last_position = GREATEST(…);
-SELECT RELEASE_LOCK('ocoda:migrate:<db>.<t>');
--- keepBackup false: DROP TABLE `<t>__es_v1`; otherwise the report prints the DROP statement
+-- catch up the rows 3.x wrote between the copy's read and the RENAME (normally none; reported as a warning):
+INSERT INTO `<t>` (…) SELECT …, b.base + ROW_NUMBER() OVER (ORDER BY k.ord_key, k.version)
+FROM ( …the same ranking and key over `<t>__es_v1` o LEFT JOIN `<t>` n
+         ON n.stream_id = CONVERT(o.stream_id USING utf8mb4) COLLATE utf8mb4_bin AND n.version = o.version
+       WHERE n.stream_id IS NULL… ) k
+CROSS JOIN (SELECT COALESCE(MAX(global_position), 0) AS base FROM `<t>`) b;
+INSERT INTO event_sourcing_collections (…) SELECT '<t>', 'events', 2, COALESCE(MAX(global_position), 0) FROM `<t>`
+  ON DUPLICATE KEY UPDATE schema_version = 2, last_position = GREATEST(last_position, VALUES(last_position));
+-- keepBackup false: DROP TABLE IF EXISTS `<t>__es_v1`; otherwise the report prints that statement as a warning
+SELECT RELEASE_LOCK(CONCAT('ocoda:migrate:', SHA1(CONCAT(DATABASE(), '.', '<t>')))) AS released;
 ```
 
-- **Crash recovery.** Before the `RENAME`, the state is still `v1`, and a rerun drops the leftover copy. After the `RENAME`, the state is `v1-partial` (the backup exists and there is no catalog row), and a rerun does the catch-up and registers the table.
-- **`occurredOnExpr`** repairs 3.x's `TIMESTAMP(0)` truncation and a Node.js time zone that differs from the server's. Let `u` be the ULID millisecond time of `event_id` (its first 10 Crockford base32 characters, decoded by a generated 10-term `LOCATE(…) * POW(32, k)` sum, with a JavaScript reference implementation for the tests), and `d = UNIX_TIMESTAMP(occurred_on) - FLOOR(u / 1000)`.
-  - If `event_id` matches `^[0-9A-HJKMNP-TV-Z]{26}$` (case-insensitive), `ABS(d) <= 50400` and `MOD(d, 900) = 0`, use `u`, to the millisecond.
-  - Otherwise keep the column's value.
-  - The dry run reports the four counts (`exact`, `precisionOnly`, `tzShifted`, `kept`).
-- **Case-variant streams.** The dry run counts the streams that the change to a binary collation splits (`GROUP BY BINARY stream_id` against `GROUP BY stream_id`) and reports them as gapped.
+- **The copy is the fence.** Under `REPEATABLE READ` the `INSERT … SELECT` takes a shared lock on every row it reads, so a 3.x write waits and fails with `1205` while reads continue; a `READ COMMITTED` `INSERT … SELECT` would also be refused by a binary log in `STATEMENT` format. The locks take about 3.4 MB of lock memory per million rows. When they outgrow the buffer pool (`1206`), the failure hint suggests a bigger buffer pool, or the dry run's statements by hand with a `READ COMMITTED` copy (the catch-up copies what 3.x wrote meanwhile).
+- **Crash recovery.** Before the `RENAME`, the state is still `v1`, and a rerun drops the leftover copy. After the `RENAME`, the state is `v1-partial` (the backup exists and there is no catalog row), and a rerun does the catch-up and registers the table. A `v2` table without its catalog row only gets registered; with `keepBackup: false`, a registered table whose backup still exists only gets the backup dropped.
+- **Numbering** follows D33 in the copy and in the catch-up. The partition compares stream ids in the 3.x table's collation, which usually ignores case: ids that differ in case only are one 3.x stream for the key, and each of the two schema v2 streams keeps its version order. Ties break by version.
+- **`occurredOnExpr`** repairs 3.x's `TIMESTAMP(0)` truncation and a Node.js time zone that differs from the server's; the session is UTC, so a `TIMESTAMP` reads as UTC wall time:
+
+  ```sql
+  CASE WHEN k.ulid_valid = 1 AND ABS(k.occurred_ts - k.ulid_ms DIV 1000) <= 50400 AND MOD(k.occurred_ts - k.ulid_ms DIV 1000, 900) = 0
+       THEN FROM_UNIXTIME(k.ulid_ms DIV 1000) + INTERVAL (k.ulid_ms MOD 1000) * 1000 MICROSECOND
+       ELSE k.occurred_on END   -- just k.occurred_on when repairOccurredOn is false
+  ```
+
+  - `ulid_ms` decodes the first 10 characters of `event_id` as Crockford base32, with a generated 10-term sum of `(LOCATE(UPPER(SUBSTRING(id, i, 1)), '0123456789ABCDEFGHJKMNPQRSTVWXYZ') - 1) * 32^(10 - i)`, where the powers are integer constants. A JavaScript twin checks it in the specs.
+  - *Amended:* `ULID_TIME_PATTERN` is `^[0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{10}[0-9A-Za-z]{16}$`. Only the time part must be Crockford base32, as 3.x accepted ids, so ids like `…ILOU` are repaired too.
+  - The dry run reports the four counts (`exact`, `precisionOnly`, `tzShifted`, `kept`), computing the decoded time once per row in a derived table: about 0.75 minutes per million rows. A migration doesn't compute them.
+- **The dry run** writes nothing: it skips the session settings, the named lock and the catalog. For a `v1` table it reports:
+  - `rows` and `bytes`;
+  - `gappedStreams`, grouped by `CAST(stream_id AS BINARY)`, the way schema v2 compares stream ids;
+  - `caseVariantStreams`: `GROUP BY stream_id HAVING COUNT(DISTINCT CAST(stream_id AS BINARY)) > 1`. The streams it splits also show up as gapped;
+  - `duplicateEventIds`, and `nonCrockfordEventIds` (ids that aren't canonical ULIDs);
+  - `dependents` (triggers, and foreign keys from or to the table);
+  - `droppedIndexes`: every index but `PRIMARY`. An index other than 3.x's `(event_date, event_id)` gets a warning that the migrated table doesn't have it.
+- **Galera** (`wsrep_on`): the report's `topology` is `'galera'`. It warns to run the migration against one node, because the named lock is per node, and that every node needs the copy's free space.
+- **Failure hints** name the remedy for a lock wait (`1205`: a session still uses the table), a full disk or `tmpdir` (`1021`, `1114`, `Temp file write failure`: the sorts need about 1.5 times the event table in `tmpdir`), a Galera write set over `wsrep_max_ws_size`, a missing privilege (`1044`, `1142`, `1227`: the user needs `SELECT`, `INSERT`, `UPDATE`, `CREATE`, `ALTER` and `DROP`) and a lost connection (wait until `IS_USED_LOCK(<name>)` returns `NULL`, because the server may still run the step). Every other failure says to run the migration again.
 
 #### MariaDB snapshots (in place, session `time_zone` `'+00:00'`)
 
-1. De-duplicate the flags with `SET s.latest = NULL, s.registered_on = s.registered_on`, through a derived-table `JOIN` (which avoids error 1093).
-2. Re-flag streams without a flag, the same way.
-3. `ALTER TABLE s CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_bin, MODIFY stream_id VARCHAR(255) NOT NULL, MODIFY latest VARCHAR(270) NULL, MODIFY registered_on DATETIME(3) NOT NULL, DROP INDEX <each index on (aggregate_name, latest)>, ADD UNIQUE KEY ux_latest (aggregate_name, latest), ALGORITHM=COPY, LOCK=SHARED`. `MODIFY` removes the `ON UPDATE` attribute.
-4. Register the table in the catalog.
+The same session, catalog and named lock as the events, then (*amended:* the conversion first, so the flag repairs compare stream ids in binary and the `ON UPDATE` attribute is gone before any `UPDATE`):
 
-The dry run warns that on servers created before 10.10, 3.x may already have overwritten the `registered_on` of superseded snapshots. That can't be repaired.
+1. Unless the columns are converted and no other index on `(aggregate_name, latest)` is left: `ALTER TABLE s CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_bin, MODIFY stream_id VARCHAR(255) NOT NULL, MODIFY aggregate_id VARCHAR(255) NOT NULL, MODIFY registered_on DATETIME(3) NOT NULL, MODIFY aggregate_name VARCHAR(255) NOT NULL, MODIFY latest VARCHAR(270) NULL, DROP INDEX <each non-unique index on (aggregate_name, latest)>, ALGORITHM=COPY, LOCK=SHARED`. `MODIFY` removes the `ON UPDATE` attribute, and the UTC session converts `registered_on` to UTC wall time.
+2. Unflag the superseded snapshots: `UPDATE s JOIN (SELECT stream_id, MAX(version) AS version FROM s GROUP BY stream_id) m ON s.stream_id = m.stream_id SET s.latest = NULL, s.registered_on = s.registered_on WHERE s.latest IS NOT NULL AND s.version < m.version`. The derived table avoids error `1093`.
+3. Flag the highest version of every stream, through the same join on `s.version = m.version`: `SET s.latest = CONCAT('latest#', s.stream_id), s.registered_on = s.registered_on WHERE s.latest IS NULL OR s.latest <> CONCAT('latest#', s.stream_id)`.
+4. Unless it exists: `ALTER TABLE s ADD UNIQUE KEY ux_latest (aggregate_name, latest), ALGORITHM=INPLACE, LOCK=SHARED`.
+5. Register the table in the catalog (`snapshots`, 2), then release the lock.
+
+The dry run reports `snapshotFlags` and the streams whose flag is not on their highest version. It warns that on servers created before 10.10, 3.x may already have overwritten the `registered_on` of superseded snapshots, which can't be repaired. It also warns that a snapshot a 3.x process wrote in another time zone than the server's stays off by that offset, because snapshots carry no id to take the time from. On Galera it warns that the `ALTER TABLE` runs on every node at once (total order isolation) and holds the table's writes on the whole cluster. The v2 snapshot table keeps the 3.x columns in their 3.x order, so a 3.x snapshot write still succeeds after the migration, with `registered_on` off by the offset of the 3.x process.
 
 #### MongoDB events: in place, fenced first
 
@@ -631,7 +700,7 @@ Appends per second per pool, 1–3 events per append, 8 writers unless noted (me
 
 ### MariaDB
 
-**Verdict: `globalOrder: 'gap-safe'` on InnoDB, with the hybrid reader below; `'best-effort'` on Galera (`wsrep_on`).** The plain keyset reader of §3 is **not** gap-safe on MariaDB.
+**Verdict: `globalOrder: 'gap-safe'` on InnoDB, with the hybrid reader below; `'best-effort'` on Galera (`wsrep_on`).** A plain keyset reader, as §3 was first written, is **not** gap-safe on MariaDB.
 
 **InnoDB source citation** (MariaDB 10.11.15, commit `cb0d6dd`; the same order in 11.4.8 and 11.8.3):
 
@@ -654,7 +723,7 @@ Appends per second per pool, 1–3 events per append, 8 writers unless noted (me
 - **Torn read views observed so far:** on 10.11 in the spike (3 of 3 amplified runs with 16,277 prepared transactions) and on 11.4 once (the run above). None on 11.8 (1 local run with 12,000, 3 CI rounds with 1,000), which shows how rare they are, not that 11.8 is free of them: its read view walk is the same (11.8.3 source). The claim for every version rests on the source citation, the hybrid reader, and the deterministic check of its settle path below.
 - Migration of a synthetic 3.x table of 100,000 events (91.5 MB, 10 per stream, 5% written an hour off, 0.1% unrepairable): 10.11.15: dry run 2.1 s (the `occurred_on` counts 1.9 s), migration 2.5 s (copy 1.97 s, catch-up 0.17 s), 104,846 rows S-locked by the copy in 0.52 MB of lock memory, 56 MB of redo, 99 MB of page writes; 11.8.9: dry run 3.5 s, migration 2.7 s (copy 2.2 s). Positions `1..100000`, no stream out of version order, 99,900 `occurred_on` values restored from the event ids, the next append at 100,001.
 
-**S2, migration timing** (spike, 1M events, 10.11.15 on tmpfs, 128 MB buffer pool): as written in §6, 307.5 s (copy 295.8 s, 26.2 GB of page writes); with `unique_checks=0, foreign_key_checks=0` for the copy into the empty table, **74.9 s** (copy 68.2 s, catch-up 6.4 s, 0.39 GB of page writes, 397 MB of redo), same result. The copy S-locks every source row (1,032,688 rows, 3.4 MB of lock memory), so a 3.x insert during the copy waits and fails with 1205 while reads continue. Peak extra disk ≤ 0.93 × the v1 table plus a temporary table in `tmpdir`. Dry run: gapped streams 1.8 s, case variants 5.9 s, `occurred_on` counts 35–37 s. 10M rows were not run (tmpfs too small; a disk-backed attempt filled the host disk). The spike's copy numbered the events with one window; the shipped copy needs three (the rank, the D33 running maximum per stream, the numbering), and the operations review measured it on 11.8 (tmpfs, same synthetic table) at about twice the spike copy's time: 1.12–1.18 s against 0.56 s for 50,000 events, 2.38–2.54 s against 1.35 s for 100,000 (also with a 20 MB buffer pool). Its sorts took about 1.35 × the table's data and indexes in `tmpdir` (+44 MB at 50,000, +88 MB at 100,000), not 0.6 ×; a 40 MB `tmpdir` failed the copy with `1296 Got error 59 'Temp file write failure'`, and every rerun failed the same way. **Runbook figures:** ~3 min per million events for the migration (the spike's 75 s per million, doubled, with headroom; a 1M run of the shipped copy is still to be measured on a host with room), ~0.75 min per million for the dry run, free space 1.5 × the event table in the data directory and 1.5 × in `tmpdir`; a binary log in `MIXED` format logs the copy as one statement, so replicas rerun it (same `tmpdir`, lag of the copy's duration).
+**S2, migration timing** (spike, 1M events, 10.11.15 on tmpfs, 128 MB buffer pool): as first written in §6, 307.5 s (copy 295.8 s, 26.2 GB of page writes); with `unique_checks=0, foreign_key_checks=0` for the copy into the empty table, **74.9 s** (copy 68.2 s, catch-up 6.4 s, 0.39 GB of page writes, 397 MB of redo), same result. The copy S-locks every source row (1,032,688 rows, 3.4 MB of lock memory), so a 3.x insert during the copy waits and fails with 1205 while reads continue. Peak extra disk ≤ 0.93 × the v1 table plus a temporary table in `tmpdir`. Dry run: gapped streams 1.8 s, case variants 5.9 s, `occurred_on` counts 35–37 s. 10M rows were not run (tmpfs too small; a disk-backed attempt filled the host disk). The spike's copy numbered the events with one window; the shipped copy needs three (the rank, the D33 running maximum per stream, the numbering), and the operations review measured it on 11.8 (tmpfs, same synthetic table) at about twice the spike copy's time: 1.12–1.18 s against 0.56 s for 50,000 events, 2.38–2.54 s against 1.35 s for 100,000 (also with a 20 MB buffer pool). Its sorts took about 1.35 × the table's data and indexes in `tmpdir` (+44 MB at 50,000, +88 MB at 100,000), not 0.6 ×; a 40 MB `tmpdir` failed the copy with `1296 Got error 59 'Temp file write failure'`, and every rerun failed the same way. **Runbook figures:** ~3 min per million events for the migration (the spike's 75 s per million, doubled, with headroom; a 1M run of the shipped copy is still to be measured on a host with room), ~0.75 min per million for the dry run, free space 1.5 × the event table in the data directory and 1.5 × in `tmpdir`; a binary log in `MIXED` format logs the copy as one statement, so replicas rerun it (same `tmpdir`, lag of the copy's duration).
 
 **CI** ([#571](https://github.com/ocoda/event-sourcing/pull/571)), green on MariaDB 10.11, 11.4 and 11.8:
 
@@ -665,7 +734,7 @@ Appends per second per pool, 1–3 events per append, 8 writers unless noted (me
 
 **Cross-version fixture** (3.0.2 writer in `America/New_York`, 200 events in 4 pools, 37 snapshots): every pool is refused before the migration; the dry run changes no table or checksum and reports, per pool, `from: 'v1'`, the duplicate event id, the gapped stream plus the lower-case twin that the binary collation splits off (`caseVariantStreams: 1`), and `occurredOnRepair` with `tzShifted` = every row and `kept: 0` (119, 56, 16 and 9 events); after `migrate()` positions are `1..N` in 3.x order with every stream in version order (D33, including the inverted and out-of-order streams), `occurredOn` equals what 3.0.2 appended, to the millisecond (3.x read it an hour off in the repeated hour of the end of daylight saving time), the next appends continue at `N + 1`, the gapped stream conflicts with its `actualVersion`, every snapshot stream has exactly one flag on its highest version, the legacy pool's `registered_on` values survive (the `ON UPDATE` attribute never fires), and a 3.0.2 append afterwards fails with 1136 in every pool.
 
-**Amendments to §3 and §6 (MariaDB) from this evidence** (addendum M1–M8):
+**Amendments to §3 and §6 (MariaDB) from this evidence** (addendum M1–M8; §3 and §6 now describe them):
 
 - `readAll` is the hybrid reader above, not a plain keyset.
 - An append runs `SET TRANSACTION ISOLATION LEVEL READ COMMITTED` before `START TRANSACTION` (`innodb_snapshot_isolation=ON`, the default from 11.6.2, fails a `REPEATABLE READ` transaction with 1020); a 1020 is `not-persisted`. `appendSnapshot` also runs in `READ COMMITTED`.
@@ -745,14 +814,14 @@ From the MongoDB schema v2 PR. The spikes ran on MongoDB 8.2.4 in Docker (a sing
 
 - Every built-in store has a per-pool global order. It is gap-safe on the SQL stores and on MongoDB replica sets where the [evidence](#evidence) holds (MariaDB: InnoDB, not Galera), so 4.x subscriptions, projections and the outbox can checkpoint it, and each claim is backed by a conformance case.
 - One catalog lists collections, registers schema versions and counts positions, and `ensureCollection` heals counter drift.
-- 3.x writers that are still running after the migration fail loudly instead of writing rows without positions.
+- 3.x writers that are still running after the migration fail loudly instead of writing events without positions. (A 3.x MariaDB snapshot write still succeeds; the runbook says to stop every 3.x instance first.)
 - MariaDB `occurred_on` values that 3.x truncated to the second or shifted by a time zone are restored to the millisecond where the ULID proves the value.
 - Appends are no longer limited to about 6,500 events on PostgreSQL.
 
 **Negative**
 
 - Appends within a pool serialize on its counter row. Pools are the unit of write scale, and the docs say so with the S1 numbers.
-- The migration is offline, rewrites every event row (PostgreSQL, MongoDB) or copies every event table (MariaDB), and holds an exclusive lock per table while it runs.
+- The migration is offline, rewrites every event row (PostgreSQL, MongoDB) or copies every event table (MariaDB), and blocks the writes to each table while it runs (PostgreSQL: `ACCESS EXCLUSIVE`; MariaDB: the copy's shared row locks and `LOCK=SHARED`; MongoDB: the validator fence).
 - MariaDB stream ids become case-sensitive (owner decision 1).
 - MongoDB standalone servers stay `'best-effort'` and burn positions on failed appends.
 - A bigint in a payload fails on the SQL stores.
