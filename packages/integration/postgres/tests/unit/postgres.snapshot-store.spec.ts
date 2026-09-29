@@ -1112,6 +1112,73 @@ describe(PostgresSnapshotStore, () => {
 			expect(await drain(snapshotStore.listCollections())).toContain(collection);
 		});
 
+		it("should refuse to create the catalog with ddl: 'none' in a schema without one", async () => {
+			const schema = `es_pg_nocatalog_${suffix}`;
+			await pool.query(`CREATE SCHEMA ${escapeIdentifier(schema)}`);
+			const store = createSnapshotStore({ ...connectionOptions, ddl: 'none', options: `-c search_path=${schema}` });
+			try {
+				await store.connect();
+				const error = await store.ensureCollection().catch((rejection: unknown) => rejection);
+
+				expect(error).toBeInstanceOf(SnapshotStoreCollectionCreationException);
+				expect(String((error as Error).cause)).toContain('CREATE TABLE IF NOT EXISTS event_sourcing_collections');
+				const { rows } = await pool.query('SELECT 1 FROM pg_tables WHERE schemaname = $1', [schema]);
+				expect(rows).toEqual([]);
+			} finally {
+				await store.disconnect();
+				await pool.query(`DROP SCHEMA ${escapeIdentifier(schema)} CASCADE`);
+			}
+		});
+
+		it('should keep using a v2 table that lost its unique index, warn, and leave the repair to migrate()', async () => {
+			const schema = `es_pg_unindexed_${suffix}`;
+			await pool.query(`CREATE SCHEMA ${escapeIdentifier(schema)}`);
+			const options = { ...connectionOptions, options: `-c search_path=${schema}` };
+			const store = createSnapshotStore(options);
+			try {
+				await store.connect();
+				const table = await store.ensureCollection();
+				const own = store['pool']!;
+				await own.query(`DROP INDEX ${escapeIdentifier(`idx_${table}_latest`)}`);
+				const warn = vi.spyOn(store['logger'], 'warn').mockImplementation(() => undefined);
+
+				await store.ensureCollection();
+
+				expect(warn).toHaveBeenCalledWith(
+					expect.stringContaining('lacks parts of snapshot schema v2 (such as the unique index on its latest flags)'),
+				);
+				const { rows } = await own.query('SELECT schema_version FROM event_sourcing_collections WHERE name = $1', [
+					table,
+				]);
+				expect(rows).toEqual([{ schema_version: 1 }]);
+
+				const report = await store.migrate({ legacyTimeZone: 'UTC' });
+				expect(report.collections).toMatchObject([{ name: table, from: 'v1-partial', action: 'resume' }]);
+				expect(report.collections[0].steps.map(({ name }) => name)).toEqual([
+					'migration-lock',
+					'begin',
+					'lock',
+					'unflag',
+					'flag',
+					'index-latest',
+					'register',
+					'commit',
+					'vacuum',
+				]);
+				warn.mockClear();
+				await store.ensureCollection();
+				expect(warn).not.toHaveBeenCalled();
+				const { rows: repaired } = await own.query(
+					'SELECT schema_version FROM event_sourcing_collections WHERE name = $1',
+					[table],
+				);
+				expect(repaired).toEqual([{ schema_version: 2 }]);
+			} finally {
+				await store.disconnect();
+				await pool.query(`DROP SCHEMA ${escapeIdentifier(schema)} CASCADE`);
+			}
+		});
+
 		it('should list nothing without a catalog', async () => {
 			const schema = `es_pg_empty_${suffix}`;
 			await pool.query(`CREATE SCHEMA ${escapeIdentifier(schema)}`);

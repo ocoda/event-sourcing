@@ -25,7 +25,7 @@ import { type Pool, type PoolClient, escapeIdentifier } from 'pg';
 import type { PostgresSnapshotEntity, PostgresSnapshotStoreConfig } from './interfaces/index.js';
 import { runMigration } from './migration/migrate.js';
 import { UNDEFINED_TABLE, UNIQUE_VIOLATION, hasErrorCode, readInBatches, withTransaction } from './postgres.helpers.js';
-import { createPool, poolConfigOf } from './postgres.pool.js';
+import { createPool, migrationPoolConfigOf, poolConfigOf } from './postgres.pool.js';
 import {
 	CATALOG,
 	SCHEMA_VERSION,
@@ -72,7 +72,7 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 		config: Omit<PostgresSnapshotStoreConfig, 'driver'>,
 		options?: MigrationOptions,
 	): Promise<MigrationReport> {
-		const pool = createPool(poolConfigOf(config), () => undefined);
+		const pool = createPool(migrationPoolConfigOf(config), () => undefined);
 		try {
 			return await runMigration(pool, 'snapshots', options);
 		} finally {
@@ -143,8 +143,12 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 					schemaVersion = 1;
 					if (!this.warnedLegacyTables.has(collection)) {
 						this.warnedLegacyTables.add(collection);
+						const schema =
+							state === 'v1'
+								? 'has the 3.x snapshot schema'
+								: 'lacks parts of snapshot schema v2 (such as the unique index on its latest flags)';
 						this.logger.warn(
-							`Collection ${collection} has the 3.x snapshot schema, which doesn't keep a single latest snapshot per stream when appends race. It keeps working; migrate it with PostgresSnapshotStore.migrate(config, { dryRun: true }), then migrate().`,
+							`Collection ${collection} ${schema}, which doesn't keep a single latest snapshot per stream when appends race. It keeps working; migrate it with PostgresSnapshotStore.migrate(config, { dryRun: true }), then migrate().`,
 						);
 					}
 				}

@@ -38,7 +38,7 @@ import {
 	readInBatches,
 	withTransaction,
 } from './postgres.helpers.js';
-import { createPool, poolConfigOf } from './postgres.pool.js';
+import { createPool, migrationPoolConfigOf, poolConfigOf } from './postgres.pool.js';
 import {
 	CATALOG,
 	assertTableName,
@@ -107,10 +107,10 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 	private pool: Pool | undefined;
 
 	/**
-	 * The name of the primary key constraint of each table, read on its first unique violation, to tell a version
+	 * The names of the primary key constraints of each table, read on its first unique violation, to tell a version
 	 * conflict from a duplicate position.
 	 */
-	private readonly primaryKeys = new Map<IEventCollection, string>();
+	private readonly primaryKeys = new Map<IEventCollection, ReadonlySet<string>>();
 
 	/**
 	 * Migrates the event tables of a 3.x store to schema v2, without a Nest application: inspects them, plans the steps
@@ -121,7 +121,7 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 		config: Omit<PostgresEventStoreConfig, 'driver'>,
 		options?: MigrationOptions,
 	): Promise<MigrationReport> {
-		const pool = createPool(poolConfigOf(config), () => undefined);
+		const pool = createPool(migrationPoolConfigOf(config), () => undefined);
 		try {
 			return await runMigration(pool, 'events', options);
 		} finally {
@@ -394,6 +394,7 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 		client.on('error', onError);
 
 		let committing = false;
+		let failure: unknown;
 		try {
 			await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
 			const {
@@ -436,11 +437,15 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 			if (!broken) {
 				await rollback(client).catch(onError);
 			}
-			return await this.classifyAppendError(error, collection, pool);
+			failure = error;
 		} finally {
 			client.removeListener('error', onError);
 			client.release(broken);
 		}
+
+		// Classified once the connection is back in the pool: telling a conflict from a drift may take a connection of
+		// its own, and appends that held every connection of the pool while they waited for one would never finish
+		return this.classifyAppendError(failure, collection, pool);
 	}
 
 	/**
@@ -456,8 +461,8 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 
 		if (hasErrorCode(error, UNIQUE_VIOLATION)) {
 			const constraint = (error as DatabaseError).constraint;
-			const primaryKey = await this.primaryKeyOf(collection).catch(() => undefined);
-			if (constraint !== undefined && constraint === primaryKey) {
+			const primaryKeys = await this.primaryKeysOf(collection).catch(() => undefined);
+			if (constraint !== undefined && primaryKeys?.has(constraint)) {
 				return { status: 'conflict', cause: error };
 			}
 			this.logger.error(
@@ -477,23 +482,26 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 	}
 
 	/**
-	 * The name of the primary key constraint of a table, cached.
+	 * The names of the primary key constraints of a table, cached: its own and, when it is partitioned, those of its
+	 * partitions (a duplicate key names the constraint of the partition).
 	 */
-	private async primaryKeyOf(collection: IEventCollection): Promise<string | undefined> {
+	private async primaryKeysOf(collection: IEventCollection): Promise<ReadonlySet<string>> {
 		const cached = this.primaryKeys.get(collection);
 		if (cached) {
 			return cached;
 		}
 		const { rows } = await this.connection.query<{ name: string }>(
-			`SELECT conname AS name FROM pg_constraint
-			WHERE conrelid = to_regclass(format('%I.%I', current_schema(), $1::text)) AND contype = 'p'`,
+			`SELECT c.conname AS name
+			FROM (SELECT to_regclass(format('%I.%I', current_schema(), $1::text)) AS oid) t
+			JOIN pg_constraint c ON c.conrelid = t.oid OR c.conrelid IN (SELECT relid FROM pg_partition_tree(t.oid))
+			WHERE c.contype = 'p'`,
 			[collection],
 		);
-		const name = rows[0]?.name;
-		if (name) {
-			this.primaryKeys.set(collection, name);
+		const names = new Set(rows.map(({ name }) => name));
+		if (names.size > 0) {
+			this.primaryKeys.set(collection, names);
 		}
-		return name;
+		return names;
 	}
 
 	/**
@@ -544,11 +552,21 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 }
 
 /**
- * Whether the server answered a statement with an error (it was rejected, and the connection still works), as opposed
- * to a lost connection or an ended session. A server that localizes the severity counts as a lost connection, which is
- * the cautious reading.
+ * The SQLSTATEs after which the session is gone: a connection exception (class 08), a shutdown or crash of the server
+ * (57P01 to 57P05), or a session that was idle in a transaction for too long (25P03).
  */
-const isRejectedStatement = (error: unknown): boolean => error instanceof DatabaseError && error.severity === 'ERROR';
+const SESSION_ENDED = /^(08|57P0|25P03)/;
+
+/**
+ * Whether the server answered a statement with an error (it was rejected, and the connection still works), as opposed
+ * to a lost connection or an ended session. `pg` reads the severity that `lc_messages` translates (`FEHLER`, `ERREUR`),
+ * not the untranslated one: any severity but `FATAL` and `PANIC` counts as a rejection, unless the SQLSTATE says that
+ * the session ended.
+ */
+const isRejectedStatement = (error: unknown): boolean =>
+	error instanceof DatabaseError &&
+	(error.severity === 'ERROR' ||
+		(error.severity !== 'FATAL' && error.severity !== 'PANIC' && !SESSION_ENDED.test(error.code ?? '')));
 
 const rollback = async (client: Pick<PoolClient, 'query'>): Promise<void> => {
 	await client.query('ROLLBACK');

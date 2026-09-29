@@ -14,6 +14,7 @@ import {
 	ExpectedVersion,
 	type IEvent,
 	type IEventCollection,
+	SnapshotStream,
 	StreamReadingDirection,
 	UnregisteredEventException,
 	isEventSourcingError,
@@ -31,8 +32,8 @@ import {
 	getEvents,
 	postgresTestConfig,
 } from '@ocoda/event-sourcing-testing/unit';
-import { Client, DatabaseError, type Pool, escapeIdentifier } from 'pg';
-import { type TestEventStore, createEventStore, dropCollections } from '../support/stores.js';
+import { Client, DatabaseError, type Pool, escapeIdentifier, escapeLiteral } from 'pg';
+import { type TestEventStore, createEventStore, createSnapshotStore, dropCollections } from '../support/stores.js';
 
 const connectionOptions = {
 	...postgresTestConfig(),
@@ -875,6 +876,129 @@ describe(PostgresEventStore, () => {
 			}
 		}, 15_000);
 
+		it.each([
+			['one connection, two appends at the same version', 1, 2, 0],
+			['two connections, sixteen appends at any version', 2, 16, ExpectedVersion.Any],
+			['the default ten connections, thirty-two appends at any version', undefined, 32, ExpectedVersion.Any],
+		] as const)(
+			'should tell conflicts from drift without a second connection, with %s',
+			async (_, max, appends, expectedVersion) => {
+				for (let round = 0; round < 3; round++) {
+					// A new store each round, so the primary key names aren't cached yet
+					const { store } = createEventStore({ ...connectionOptions, ...(max ? { max } : {}) }, eventMap);
+					await store.connect();
+					try {
+						const stream = newStream();
+						const results = await withinTimeout(
+							Promise.allSettled(
+								Array.from({ length: appends }, () =>
+									store.appendEvents(stream, events.slice(0, 1), { expectedVersion, pool: concurrencyPool }),
+								),
+							),
+							15_000,
+						);
+
+						const failed = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected');
+						for (const { reason } of failed) {
+							// An `Any` append can still lose every retry under contention (ADR 0001 D2)
+							expect(reason).toBeInstanceOf(EventStoreVersionConflictException);
+						}
+						if (expectedVersion === 0) {
+							expect(failed).toHaveLength(appends - 1);
+						}
+						await expect(store.getStreamVersion(stream, concurrencyPool)).resolves.toBe(appends - failed.length);
+					} finally {
+						await withinTimeout(store.disconnect());
+					}
+				}
+			},
+			60_000,
+		);
+
+		it('should append under explicit READ COMMITTED when the database defaults to REPEATABLE READ', async () => {
+			const { store } = createEventStore(
+				{ ...connectionOptions, options: '-c default_transaction_isolation=repeatable\\ read' },
+				eventMap,
+			);
+			await store.connect();
+			try {
+				const { rows } = await store['pool']!.query<{ isolation: string }>('SELECT current_setting($1) AS isolation', [
+					'default_transaction_isolation',
+				]);
+				expect(rows).toEqual([{ isolation: 'repeatable read' }]);
+
+				// Every append waits for the counter row of the pool that the others update
+				const results = await Promise.allSettled(
+					Array.from({ length: 8 }, async () => {
+						const stream = newStream();
+						for (let version = 0; version < 20; version += 2) {
+							await store.appendEvents(stream, events.slice(0, 2), {
+								expectedVersion: version,
+								pool: concurrencyPool,
+							});
+						}
+					}),
+				);
+
+				expect(results.filter(({ status }) => status === 'rejected')).toEqual([]);
+			} finally {
+				await store.disconnect();
+			}
+		}, 30_000);
+
+		it('should report a duplicate stream version in a partition of a partitioned table as a version conflict', async () => {
+			const partitioned = uniquePool('partitioned');
+			const table = track(EventCollection.get(partitioned));
+			await pool.query(
+				`CREATE TABLE ${escapeIdentifier(table)} (
+					stream_id TEXT NOT NULL, version INTEGER NOT NULL, event TEXT NOT NULL, payload JSONB NOT NULL,
+					event_id TEXT NOT NULL, aggregate_id TEXT NOT NULL, occurred_on TIMESTAMPTZ NOT NULL,
+					correlation_id TEXT, causation_id TEXT, global_position BIGINT NOT NULL, headers JSONB, event_version INTEGER,
+					PRIMARY KEY (stream_id, version)
+				) PARTITION BY HASH (stream_id)`,
+			);
+			for (const remainder of [0, 1]) {
+				await pool.query(
+					`CREATE TABLE ${escapeIdentifier(`${table}_${remainder}`)} PARTITION OF ${escapeIdentifier(table)}
+					FOR VALUES WITH (MODULUS 2, REMAINDER ${remainder})`,
+				);
+			}
+			// No unique index on the positions (it would have to include the partition key): register it by hand
+			await pool.query(
+				"INSERT INTO event_sourcing_collections (name, kind, schema_version, last_position) VALUES ($1, 'events', 2, 0)",
+				[table],
+			);
+			const { store } = createEventStore(connectionOptions, eventMap);
+			await store.connect();
+			const blocker = new Client(connectionOptions);
+			await blocker.connect();
+			try {
+				const stream = newStream();
+				await blocker.query('BEGIN');
+				await blocker.query(
+					`INSERT INTO ${escapeIdentifier(table)} (stream_id, version, event, payload, event_id, aggregate_id, occurred_on, global_position)
+					VALUES ($1, 1, 'account-opened', '{}', 'blocker', 'blocker', now(), 1000)`,
+					[stream.streamId],
+				);
+				const append = store.appendEvents(stream, events.slice(0, 1), { expectedVersion: 0, pool: partitioned }).then(
+					() => undefined,
+					(error: Error) => error,
+				);
+				await waitForBlockedInsert(table);
+				await blocker.query('COMMIT');
+
+				const error = await append;
+				expect(error).toBeInstanceOf(EventStoreVersionConflictException);
+				expect(error).toMatchObject({
+					cause: expect.objectContaining({ code: '23505', constraint: expect.stringMatching(/_[01]_pkey$/) }),
+				});
+			} finally {
+				await blocker.end();
+				await store.disconnect();
+				await pool.query(`DROP TABLE IF EXISTS ${escapeIdentifier(table)}`);
+			}
+		}, 15_000);
+
 		it('should refuse an append when the position counter drifted, and heal the counter on ensureCollection', async () => {
 			const drift = uniquePool('drift');
 			const table = track(await eventStore.ensureCollection(drift));
@@ -1023,6 +1147,30 @@ describe(PostgresEventStore, () => {
 			failStatement('COMMIT', cause);
 
 			await expect(append()).rejects.toMatchObject({ outcome: 'not-persisted', cause });
+		});
+
+		// lc_messages translates the severity pg reads: the SQLSTATE tells a rejected statement from an ended session
+		it("should report 'not-persisted' when the server rejects the COMMIT in another language", async () => {
+			const cause = databaseError('FEHLER', '40001');
+			failStatement('COMMIT', cause);
+
+			await expect(append()).rejects.toMatchObject({ outcome: 'not-persisted', cause });
+		});
+
+		it("should report 'unknown' when the session ends during the COMMIT in another language", async () => {
+			const cause = databaseError('ВАЖНО', '57P01');
+			failStatement('COMMIT', cause);
+
+			await expect(append()).rejects.toMatchObject({ outcome: 'unknown', cause });
+		});
+
+		it('should roll back and keep the connection when the server rejects a statement in another language', async () => {
+			await expect(pool.query('SELECT 1')).resolves.toBeDefined();
+			const connections = pool.totalCount;
+			failStatement('WITH counter AS', databaseError('ERREUR', '40P01'));
+
+			await expect(append()).rejects.toMatchObject({ outcome: 'not-persisted' });
+			expect(pool.totalCount).toBe(connections);
 		});
 
 		it("should report 'not-persisted' without a connection when a payload can't be serialized", async () => {
@@ -1233,6 +1381,103 @@ describe(PostgresEventStore, () => {
 					ddlNone.appendEvents(newStream(), events.slice(0, 1), { expectedVersion: 0, pool: absent }),
 				).resolves.toHaveLength(1);
 			});
+
+			it.each([
+				['a 3.x table', 'v1', ''],
+				['a partly migrated table', 'v1-partial', 'ADD COLUMN global_position BIGINT'],
+			])('should refuse %s, like with ddl: auto', async (_, found, alter) => {
+				const legacy = uniquePool(`ddl-none-${found}`);
+				const table = EventCollection.get(legacy);
+				await createV1Table(table);
+				if (alter) {
+					await pool.query(`ALTER TABLE ${escapeIdentifier(table)} ${alter}`);
+				}
+
+				await expect(ddlNone.ensureCollection(legacy)).rejects.toMatchObject({
+					name: EventStoreSchemaException.name,
+					collection: table,
+					found,
+				});
+				await expect(catalogRow(table)).resolves.toBeUndefined();
+			});
+
+			it('should heal the position counter of a registered table', async () => {
+				const healed = uniquePool('ddl-none-heal');
+				const table = track(await eventStore.ensureCollection(healed));
+				await eventStore.appendEvents(newStream(), events.slice(0, 3), { expectedVersion: 0, pool: healed });
+				await pool.query('UPDATE event_sourcing_collections SET last_position = 1 WHERE name = $1', [table]);
+
+				await expect(ddlNone.ensureCollection(healed)).resolves.toBe(table);
+
+				expect(await catalogRow(table)).toEqual({ kind: 'events', schema_version: 2, last_position: '3' });
+			});
+
+			it('should work with only the documented privileges', async () => {
+				const schema = `es_pg_privileges_${randomUUID().slice(0, 8)}`;
+				const role = schema;
+				const password = randomUUID();
+				await pool.query(`CREATE SCHEMA ${escapeIdentifier(schema)}`);
+				const inSchema = { ...connectionOptions, options: `-c search_path=${schema}` };
+				// Provisioned by the owner: the catalog and the tables of the default pools
+				const { store: owner } = createEventStore(inSchema, eventMap);
+				const ownerSnapshots = createSnapshotStore(inSchema);
+				await owner.connect();
+				await ownerSnapshots.connect();
+				await owner.ensureCollection();
+				await ownerSnapshots.ensureCollection();
+				await owner.disconnect();
+				await ownerSnapshots.disconnect();
+
+				await pool.query(`CREATE ROLE ${escapeIdentifier(role)} LOGIN PASSWORD ${escapeLiteral(password)}`);
+				const s = escapeIdentifier(schema);
+				for (const grant of [
+					`GRANT USAGE ON SCHEMA ${s} TO ${escapeIdentifier(role)}`,
+					`GRANT SELECT, INSERT ON ${s}.events TO ${escapeIdentifier(role)}`,
+					`GRANT SELECT, INSERT, UPDATE ON ${s}.snapshots TO ${escapeIdentifier(role)}`,
+					`GRANT SELECT, INSERT, UPDATE ON ${s}.event_sourcing_collections TO ${escapeIdentifier(role)}`,
+				]) {
+					await pool.query(grant);
+				}
+
+				const asRole = { ...inSchema, user: role, password };
+				const { store } = createEventStore({ ...asRole, ddl: 'none' }, eventMap);
+				const { store: autoStore } = createEventStore(asRole, eventMap);
+				const snapshots = createSnapshotStore({ ...asRole, ddl: 'none' });
+				try {
+					await store.connect();
+					await autoStore.connect();
+					await snapshots.connect();
+
+					await expect(store.ensureCollection()).resolves.toBe('events');
+					// ddl: 'auto' on a provisioned schema creates nothing, so it needs no CREATE either
+					await expect(autoStore.ensureCollection()).resolves.toBe('events');
+					const accountId = AccountId.generate();
+					const stream = EventStream.for(Account, accountId);
+					await store.appendEvents(stream, events.slice(0, 2), { expectedVersion: ExpectedVersion.NoStream });
+					await expect(
+						store.appendEvents(stream, events.slice(2, 3), { expectedVersion: ExpectedVersion.NoStream }),
+					).rejects.toBeInstanceOf(EventStoreVersionConflictException);
+					await store.appendEvents(stream, events.slice(2, 3), { expectedVersion: ExpectedVersion.Any });
+					await expect(store.getStreamVersion(stream)).resolves.toBe(3);
+					expect(positionsOf(await drain(store.readAll()))).toEqual([1n, 2n, 3n]);
+					expect(await drain(store.getEnvelopes(stream))).toHaveLength(3);
+					expect(await drain(store.listCollections())).toEqual(['events']);
+
+					await expect(snapshots.ensureCollection()).resolves.toBe('snapshots');
+					const snapshotStream = SnapshotStream.for(Account, accountId);
+					await snapshots.appendSnapshot(snapshotStream, 2, { balance: 2 });
+					const last = await snapshots.appendSnapshot(snapshotStream, 3, { balance: 3 });
+					await expect(snapshots.getLastEnvelope(snapshotStream)).resolves.toEqual(last);
+					expect(await drain(snapshots.getLastEnvelopesForAggregate(Account))).toEqual([last]);
+				} finally {
+					await store.disconnect();
+					await autoStore.disconnect();
+					await snapshots.disconnect();
+					await pool.query(`DROP SCHEMA ${s} CASCADE`);
+					await pool.query(`DROP OWNED BY ${escapeIdentifier(role)}`);
+					await pool.query(`DROP ROLE ${escapeIdentifier(role)}`);
+				}
+			}, 15_000);
 
 			it('should refuse to create the catalog in a schema without one', async () => {
 				const schema = `es_pg_nocatalog_${randomUUID().slice(0, 8)}`;

@@ -15,6 +15,15 @@ export const poolConfigOf = (config: PoolConfig & StoreOnlyOptions): PoolConfig 
 };
 
 /**
+ * The `pg` pool config of a static `migrate()`: without `query_timeout`, which `pg` enforces on the client for every
+ * query and would stop the inspection or a step on a large table (the migration clears `statement_timeout` itself).
+ */
+export const migrationPoolConfigOf = (config: PoolConfig & StoreOnlyOptions): PoolConfig => {
+	const { query_timeout: _queryTimeout, ...poolConfig } = poolConfigOf(config);
+	return poolConfig;
+};
+
+/**
  * Creates a pool. Idle connections that fail are discarded by the pool and reported to `onIdleError`: without a
  * listener, the error would crash the process.
  */
