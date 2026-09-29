@@ -2,10 +2,6 @@
 	"$schema": "https://turborepo.dev/schema.json",
 	"extends": ["//"],
 	"tasks": {
-		"build": {
-			"description": "Core is only a peer dependency, which turbo does not follow, so depend on its build explicitly.",
-			"dependsOn": ["$TURBO_EXTENDS$", "@ocoda/event-sourcing#build"]
-		},
 		"test": {
 			"description": "Runs against a live database, which is not part of the task hash. Never replay a cached result.",
 			"cache": false

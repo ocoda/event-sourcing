@@ -28,8 +28,6 @@
 		"**/*.yml",
 		"**/*.yaml",
 		"docs/next-env.d.ts",
-		"packages/core/index.js",
-		"packages/integration/*/index.js",
 		"benchmarks/report"
 	]
 }

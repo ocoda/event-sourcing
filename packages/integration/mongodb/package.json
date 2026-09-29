@@ -2,12 +2,50 @@
 	"name": "@ocoda/event-sourcing-mongodb",
 	"version": "3.0.1",
 	"description": "NestJS Event Sourcing Library (@mongodb)",
-	"author": "Dries Hooghe <dries@drieshooghe.com>",
+	"keywords": [
+		"nestjs",
+		"nest",
+		"event-sourcing",
+		"cqrs",
+		"ddd",
+		"domain-driven-design",
+		"event-store",
+		"aggregate",
+		"mongodb",
+		"mongo"
+	],
+	"homepage": "https://ocoda.github.io/event-sourcing",
+	"bugs": {
+		"url": "https://github.com/ocoda/event-sourcing/issues"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/ocoda/event-sourcing.git",
+		"directory": "packages/integration/mongodb"
+	},
+	"funding": {
+		"type": "github",
+		"url": "https://github.com/sponsors/drieshooghe"
+	},
 	"license": "MIT",
+	"author": "Dries Hooghe <dries@drieshooghe.com>",
+	"type": "module",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js",
+			"require": "./dist/index.js",
+			"default": "./dist/index.js"
+		},
+		"./package.json": "./package.json"
+	},
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
+	"files": [
+		"dist"
+	],
 	"scripts": {
-		"build": "rm -rf dist && tsup lib/index.ts --format cjs --dts",
+		"build": "rm -rf dist && tsc -p tsconfig.build.json",
 		"test": "vitest run",
 		"test:cov": "vitest run --coverage",
 		"ci": "oxlint --deny-warnings && oxfmt --check",
@@ -16,39 +54,27 @@
 		"lint": "oxlint",
 		"typecheck": "tsc --noEmit -p tsconfig.json"
 	},
-	"bugs": {
-		"url": "https://github.com/ocoda/event-sourcing/issues"
-	},
 	"engines": {
-		"node": ">= 20.0.0"
-	},
-	"dependencies": {
-		"mongodb": "^6.19.0"
+		"node": ">=22.12"
 	},
 	"peerDependencies": {
-		"@nestjs/core": "^11.0.0",
-		"@ocoda/event-sourcing": "workspace:*",
-		"reflect-metadata": "^0.2.0",
-		"rxjs": "^7.2.0"
+		"@nestjs/common": "^12.0.0",
+		"@ocoda/event-sourcing": "workspace:^",
+		"mongodb": "^6.10.0 || ^7.0.0"
 	},
 	"devDependencies": {
 		"@faker-js/faker": "^10.2.0",
-		"@nestjs/common": "11.1.6",
-		"@nestjs/core": "11.1.6",
-		"@nestjs/platform-express": "11.1.6",
-		"@nestjs/testing": "11.1.6",
+		"@nestjs/common": "12.1.1",
+		"@nestjs/core": "12.1.1",
+		"@nestjs/platform-express": "12.1.1",
+		"@nestjs/testing": "12.1.1",
+		"@ocoda/event-sourcing": "workspace:*",
 		"@ocoda/event-sourcing-config": "workspace:*",
 		"@ocoda/event-sourcing-testing": "workspace:*",
-		"@swc/core": "1.13.5",
-		"@types/node": "20.17.6",
+		"@types/node": "22.20.4",
+		"mongodb": "^7.7.0",
 		"reflect-metadata": "0.2.2",
 		"rxjs": "7.8.2",
-		"tsup": "^8.5.0",
-		"typescript": "5.9.2"
-	},
-	"repository": {
-		"type": "git",
-		"url": "https://github.com/ocoda/event-sourcing",
-		"directory": "packages/integration/mongodb"
+		"typescript": "7.0.2"
 	}
 }
