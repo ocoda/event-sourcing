@@ -4,7 +4,27 @@ packages:
   - 'packages/*'
   - 'packages/integration/*'
 
-pnpm:
-  store: .pnpm-store
-  hoistPattern: '*'
-  linkWorkspacePackages: true
+# Dependency install scripts: `true` runs them, `false` skips them after review. With strictDepBuilds (on by default
+# since pnpm 11), an install fails on any unlisted dependency that has one.
+allowBuilds:
+  # Its postinstall only validates the binary of the platform package, which the JS API also finds without it.
+  esbuild: false
+
+# Supply chain: resolve only versions that are at least a day old (our own packages excepted), and fail the install
+# when a package's trust evidence (trusted publisher, provenance) is weaker than that of an earlier release.
+minimumReleaseAge: 1440
+minimumReleaseAgeExclude:
+  - '@ocoda/*'
+trustPolicy: no-downgrade
+# Transitive versions that an earlier release outranks in trust evidence. Review an entry before adding one, and drop
+# it once the lockfile no longer resolves that version.
+trustPolicyExclude:
+  - 'chokidar@4.0.3' # @astrojs/check (docs)
+  - 'undici-types@6.21.0' # @types/node 22
+  - 'why-is-node-running@3.2.2' # vitest
+
+# pnpm 12 records the packageManager version in a leading YAML document of pnpm-lock.yaml unless pmOnFail is
+# `ignore`. GitHub's dependency graph reads only the first document, so a two-document lockfile would leave
+# Dependabot alerts and the dependency-review job without any npm dependency (dependabot/dependabot-core#15904).
+# CI and Renovate still run exactly the packageManager version; drop this once GitHub reads the last document.
+pmOnFail: ignore

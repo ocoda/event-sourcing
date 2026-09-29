@@ -46,5 +46,5 @@
 		"type": "git",
 		"url": "https://github.com/ocoda/event-sourcing"
 	},
-	"packageManager": "pnpm@10.4.0"
+	"packageManager": "pnpm@12.7.0+sha512.9c56477e360068d6e9dca6a92efb4e46b3dc5a52fcebf3d84d78b9736c0ded589a561621a52f68219a7a39facc63cdc079c3226ef9c9d5f02b79f74e69a807b6"
 }
