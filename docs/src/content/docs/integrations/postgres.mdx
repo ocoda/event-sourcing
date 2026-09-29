@@ -120,17 +120,36 @@ Appends per second, with 1 to 3 events per append, each writer on streams of its
 
 These are laptop numbers (Apple silicon, PostgreSQL in a 6-CPU VM, all writers in one Node.js process); measure your own setup. The disk figure is dominated by the commit's WAL flush.
 
+An append holds the counter row from its first statement to its commit, so a writer that stalls in between (a frozen process, a lost network, a long pause of the event loop) holds up every append to the pool, from every instance, until its session ends. Without a timeout, a lost client can take until TCP keepalive notices, about 2 hours by default. Let the server end such sessions, and let `pg` notice a dead connection:
+
+```sql
+ALTER ROLE app SET idle_in_transaction_session_timeout = '10s';
+```
+
+```typescript
+eventStore: { driver: PostgresEventStore, connectionString: process.env.DATABASE_URL, keepAlive: true },
+```
+
 `ExpectedVersion.Any` makes up to 16 attempts while concurrent appends take the versions of a stream. Under sustained contention on one stream, an `Any` append can still end in an `EventStoreVersionConflictException` (12 of about 8,000 appends to one hot stream in a soak test), so retry such a conflict in your application.
 
 ## Privileges [#privileges]
 
 | Task | Needs |
 | --- | --- |
-| Appending and reading (`ddl: 'none'`) | `SELECT` and `INSERT` on the event tables; `SELECT`, `INSERT` and `UPDATE` on the snapshot tables; `SELECT`, `INSERT` and `UPDATE` on `event_sourcing_collections` |
-| Creating missing tables (`ddl: 'auto'`, the default) | The above, plus `CREATE` on the schema |
-| `migrate()` | Ownership of the tables, `TEMPORARY` on the database, and `CREATE` on the schema if the catalog doesn't exist yet |
+| Appending and reading (`ddl: 'none'`) | `USAGE` on the schema; `SELECT` and `INSERT` on the event tables; `SELECT`, `INSERT` and `UPDATE` on the snapshot tables; `SELECT`, `INSERT` and `UPDATE` on `event_sourcing_collections` |
+| Creating missing tables (`ddl: 'auto'`, the default) | The above, plus `CREATE` on the schema. On a schema whose tables exist, `'auto'` creates nothing and needs no more than `'none'` |
+| `migrate()` | Ownership of the tables, `TEMPORARY` on the database, `SELECT`, `INSERT` and `UPDATE` on `event_sourcing_collections`, and `CREATE` on the schema if the catalog doesn't exist yet. The dry run reports a missing privilege as `blocked` |
 
-The stores also take advisory locks (to create tables, to serialize the snapshot appends of a stream, and to keep two migrations of a table apart), which need no privilege.
+The stores also take advisory locks, which need no privilege. Advisory locks are per database; these are the keys, so you can recognize them in `pg_locks` and keep your own apart:
+
+| Lock | Key | Held |
+| --- | --- | --- |
+| Creating the catalog | `hashtext('ocoda:event_sourcing_collections')` | for its transaction |
+| Creating or registering a table | `hashtext('<table>')`, for example `hashtext('events')` | for its transaction |
+| Appending a snapshot | `hashtext('<table>'), hashtext('<stream id>')` | for its transaction |
+| Migrating a table | `hashtext('ocoda:migrate'), hashtext('<schema>.<table>')`, with the names as `format('%I.%I', …)` writes them | for the migration of the table |
+
+`migrate()` works on the current schema: run it once per schema, with that schema first in the `search_path` of the connections. Migrations of different schemas can run at the same time.
 
 With `ddl: 'none'`, create the schema yourself: from the statements in the error of `ensureCollection`, from the `steps` of a dry-run `migrate()`, or, for the default pools of a 3.x database, from `node_modules/@ocoda/event-sourcing-postgres/migrations/4.0.sql`. Then call `ensureCollection`, which registers the tables in the catalog.
 
@@ -153,25 +172,30 @@ The migration is **offline**: stop every 3.x instance first.
    	legacyTimeZone: 'Europe/Brussels', // the time zone your 3.x instances ran in
    });
    console.log(JSON.stringify([events, snapshots], null, 2));
+   if ([...events.collections, ...snapshots.collections].some(({ action }) => action === 'blocked')) {
+   	throw new Error('Resolve the blocking issues before the cutover');
+   }
    ```
 
    It finds the tables by their name and columns (`pools` limits it to some pools) and reports, per table:
    - `action`: `migrate`, `skip` (already migrated) or `blocked`, with the reasons in `blocking`;
-   - `rows`, `bytes`, and in `warnings` the free disk the migration needs;
+   - `rows`, `bytes`, and in `warnings` the free disk the migration needs and the objects it drops with `event_date` (constraints, statistics);
    - `gappedStreams`: streams whose versions don't run from 1 without gaps;
    - `duplicateEventIds` and `nonCrockfordEventIds`, which are migrated as they are;
-   - `dependents` (views, rules, triggers, publications, foreign keys) and `droppedIndexes`;
+   - `dependents` (views, rules, triggers, publications, foreign keys) and `droppedIndexes` (every index on `event_date`, also through an expression or a predicate);
    - `steps`: the exact statements the migration runs, with the lock each one takes;
    - for snapshots, `snapshotFlags`: streams with several snapshots flagged as the latest, or none;
    - `environment.timeZones`: the time zones of the process, the server and the session.
 3. **Stop every 3.x instance.**
-4. **Migrate the events, then the snapshots**, with the same options without `dryRun`. `onProgress` reports each step. A second run reports every table as `skip`.
+4. **Migrate the events, then the snapshots**, with the same options without `dryRun`. `onProgress` reports each step. A `blocked` table is left as it is and nothing is thrown: check the reports as in the dry run, and stop the cutover while any table is `blocked`. A second run reports every table as `skip`.
 5. **Deploy 4.0.**
+
+Prefer the static `PostgresEventStore.migrate(config, options)` to `migrate()` on a connected store when the store's config sets `query_timeout`: `pg` enforces it on every query of the pool, and the static `migrate()` leaves it out. The migration clears the `statement_timeout` of its own connection (a role or config setting would stop the inspection or the `VACUUM` of a large table) and restores it afterwards.
 
 **What the migration does to an event table.** One transaction per table, under `ACCESS EXCLUSIVE`:
 
 1. Copy the rows into a temporary table, numbered in 3.x's order: `(event_date, event_id, stream_id, version)`, adjusted so that every stream stays in version order (two events of a stream appended in the same millisecond could be listed in the wrong order by 3.x).
-2. Add `global_position`, `headers` and `event_version`, change the `VARCHAR` columns to `TEXT`, empty the table, drop `event_date` (and with it every index on it), and insert the numbered rows back in position order.
+2. Add `global_position`, `headers` and `event_version`, change the `VARCHAR` columns to `TEXT`, empty the table, drop `event_date` (and with it every index, constraint and statistics object on it), and insert the numbered rows back in position order. Columns you added to a 3.x table keep their values; generated columns are computed again.
 3. Create the unique index on `global_position`, register the table with its counter at the highest position, and commit. Then run `VACUUM (ANALYZE)`; if that fails, the migration has committed anyway and the report has a warning with the statement to run by hand.
 
 The table keeps its OID, so its grants, its publication memberships, and the views that don't use `event_date` or the changed columns survive. A migration that stops at any point, for instance because its connection is lost, rolls back and leaves the 3.x table as it was: run it again.
@@ -179,16 +203,20 @@ The table keeps its OID, so its grants, its publication memberships, and the vie
 **Snapshot tables** are migrated in place, in one transaction: the flags are normalized to exactly one per stream on its highest version, `registered_on` becomes a `TIMESTAMPTZ`, and the unique index on the flags replaces the 3.x index. 3.x stored `registered_on` as the wall time of the process, without a time zone: pass that time zone as `legacyTimeZone` (an IANA name the server knows; default: the time zone of the process that migrates). With `UTC`, the column is converted without rewriting the table.
 
 **What blocks a table.** The migration leaves a table untouched, and reports it as `blocked`, when:
-- a view or rule uses `event_date` or a column whose type changes (drop it, migrate, create it again);
+- a view, rule, policy, trigger (its `WHEN` or `UPDATE OF` columns), publication (its row filter or column list) or generated column uses `event_date` or a column whose type changes (drop it, migrate, create it again);
 - a foreign key of another table references it (the migration empties and refills the table);
-- the current role doesn't own it, or may not create temporary tables;
+- the current role doesn't own it, may not create temporary tables, or may not read and write the catalog;
+- its name was truncated: 3.x created the table of a pool whose table name is longer than 63 bytes under the first 63 bytes of that name, and 4.0 refuses such pools. Rename the table for a pool name of at most 56 bytes (`<pool>-events`; 53 bytes for `<pool>-snapshots`) and use that pool. A dry run without `pools` lists these tables too;
 - another session still uses it after `lockTimeoutMs` (default 10 seconds): a 3.x instance may still be running;
 - another `migrate()` is migrating it.
 
 **Plan for:**
-- **Downtime and disk.** The table is locked for the whole transaction. Expect about 0.3 minutes per million rows on disk (1 million rows took 19.5 seconds, 100,000 rows about 1 second on tmpfs). The migration needs about 2.2 times the table's size in free disk while it runs, part of it in `temp_tablespaces`, and writes about as much WAL as the table's size.
-- **Replication and CDC.** Publications and logical decoding receive a `TRUNCATE` of the table followed by an insert of every row. `INSERT` and `TRUNCATE` triggers fire; disable them for the migration if they must not.
+- **Downtime.** The table is locked from the start of its transaction to the commit. Plan for about 0.5 minutes per million events under the lock, on disk, and about 5 more seconds per million for the inspection before it and the `VACUUM` after it. These figures are provisional: they are extrapolated from 100,000 events (a 70 MB table: 1.1 to 1.4 seconds under the lock, 1.6 to 1.8 seconds in all, on tmpfs) and from the 1-million-row spike, not measured at a million rows with the statements that ship. Snapshots take about 15 seconds per million on tmpfs.
+- **Disk.** Keep 3 times the event table's size free while it runs: until the commit, the old files of the table stay next to the numbered copy (in `temp_tablespaces`), the sort files of the numbering, and the new table and indexes (measured at 1.9 to 2.2 times). The migration writes about as much WAL as the table's size. Converting the snapshots' `registered_on` from a time zone other than UTC rewrites the snapshot table: keep its size free as well.
+- **Replication and CDC.** Publications and logical decoding receive a `TRUNCATE` of the table followed by an insert of every row. `INSERT` and `TRUNCATE` triggers fire; disable them for the migration if they must not. DDL isn't replicated: migrate the tables of a logical replication subscriber first (the numbering is deterministic, so both sides get the same positions), or disable the subscription, migrate both sides and enable it again. Otherwise the subscriber can't apply the reinserted rows, and the publisher keeps its WAL.
+- **Other sessions.** `TRUNCATE` isn't MVCC-safe: a `REPEATABLE READ` or `SERIALIZABLE` transaction that started before the migration committed, and reads the table for the first time after it, sees it empty. Stop such readers too.
+- **Time zones of the snapshots.** A wall time in the hour that repeats when the clocks go back is ambiguous, and may move by an hour. A 4.x process stores the snapshots it appends to a 3.x table in its own time zone: run 4.x in the time zone of 3.x until the snapshots are migrated, or migrate them before you deploy 4.x in another time zone.
 - **Gapped streams** conflict on their next append, because 4.0 checks that the stream is exactly at the expected version: load the aggregate from its events and append with its actual version.
 - **3.x writers that are still running** fail after the migration with `column "event_date" … does not exist` (`42703`): nothing is written without a position.
 
-**Without `migrate()`.** A DBA can run the statements of the dry run's `steps` instead, in order, or `migrations/4.0.sql` of the package for the default pools of a 3.0.1 or 3.0.2 schema, with psql: `psql -v legacy_time_zone='Europe/Brussels' -f migrations/4.0.sql`.
+**Without `migrate()`.** A DBA can run the statements of the dry run's `steps` instead, in order, in one session, with the steps from `begin` to `commit` in one transaction: never in autocommit, and never from a tool that opens a connection per statement (the `truncate` step refuses to empty the table when the numbered copy of its transaction is missing). For the default pools of a 3.0.1 or 3.0.2 schema, `migrations/4.0.sql` of the package holds the statements, for psql 10 or later: `psql -v legacy_time_zone='Europe/Brussels' -f migrations/4.0.sql`. It stops before any change when `legacy_time_zone` isn't set, and migrates each table only while it still has its 3.x shape, so it can run again after a failure.

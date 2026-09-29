@@ -309,7 +309,7 @@ The PostgreSQL stores implement the new contract natively: global positions, `re
 - **New option `ddl`**: `'auto'` (default) creates missing tables and the catalog; `'none'` never runs DDL and throws with the statements to run instead.
 - **Reads of a pool without a table** throw an `EventCollectionNotFoundException`, and an append to a pool that isn't registered throws an `EventStorePersistenceException` with `outcome: 'not-persisted'`. A pool name whose table name is over 63 bytes is rejected.
 - **A `bigint` in an event payload** fails the append (`not-persisted`); store large integers as strings.
-- **Throughput.** Appends to one pool serialize on the pool's position counter. Spread heavy write loads over pools.
+- **Throughput.** Appends to one pool serialize on the pool's position counter. Spread heavy write loads over pools, and set an `idle_in_transaction_session_timeout` for the store's role, so that a writer that stalls in an append can't hold up its pool for long.
 
 ### MariaDB schema v2 [#mariadb-schema-v2]
 
@@ -328,10 +328,10 @@ The PostgreSQL stores implement the new contract natively: global positions, `re
 1. Take a backup.
 2. Run `PostgresEventStore.migrate(config, { dryRun: true })` and `PostgresSnapshotStore.migrate(config, { dryRun: true, legacyTimeZone })`, where `legacyTimeZone` is the time zone your 3.x instances ran in. They need no Nest application and write nothing. Review `blocking`, `gappedStreams`, `dependents` and `warnings`.
 3. Stop every 3.x instance.
-4. Run the two migrations again without `dryRun`: the events first, then the snapshots.
+4. Run the two migrations again without `dryRun`: the events first, then the snapshots. A `blocked` table is reported, not thrown: stop the cutover while any table is `blocked`.
 5. Deploy 4.0.
 
-Each table is migrated in one transaction under an exclusive lock, keeps its OID (grants and publications survive), and gets positions in 3.x's order with every stream kept in version order. Plan for about 0.3 minutes per million events, 2.2 times the table's size in free disk, and a `TRUNCATE` plus an insert of every row in publications. A 3.x instance that still writes afterwards fails instead of writing events without positions. A stream with a gap in its versions conflicts on its next append.
+Each table is migrated in one transaction under an exclusive lock, keeps its OID (grants and publications survive) and the columns you added, and gets positions in 3.x's order with every stream kept in version order. Plan for about 0.5 minutes per million events under the lock (a provisional figure, extrapolated from 100,000 events), 3 times the table's size in free disk, and a `TRUNCATE` plus an insert of every row in publications; migrate the tables of a logical replication subscriber first. A 3.x instance that still writes afterwards fails instead of writing events without positions. A stream with a gap in its versions conflicts on its next append.
 
 ## DynamoDB is not part of 4.0 [#dynamodb]
 
