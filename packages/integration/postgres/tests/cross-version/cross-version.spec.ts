@@ -121,11 +121,14 @@ describe('PostgreSQL migrates the 3.0.2 corpus to schema v2 and reads it as 3.0.
 			...entry,
 			streamId: streamOf.get(`${entry.aggregateId} ${entry.version}`) as string,
 		}));
-		expect(entries.every(({ streamId }) => streamId !== undefined), 'every entry was written').toBe(true);
+		expect(
+			entries.every(({ streamId }) => streamId !== undefined),
+			'every entry was written',
+		).toBe(true);
 
 		// Rows that share an event id: by stream id (with the collation of the database) and version
 		const ranked: typeof entries = [];
-		for (let index = 0; index < entries.length; ) {
+		for (let index = 0; index < entries.length;) {
 			let end = index + 1;
 			while (end < entries.length && entries[end].eventId === entries[index].eventId) end++;
 			const group = entries.slice(index, end);
@@ -135,7 +138,10 @@ describe('PostgreSQL migrates the 3.0.2 corpus to schema v2 and reads it as 3.0.
 					[group.map(({ streamId }) => streamId), group.map(({ version }) => version)],
 				);
 				ranked.push(
-					...rows.map(({ s, v }) => group.find(({ streamId, version }) => streamId === s && version === v) as (typeof group)[number]),
+					...rows.map(
+						({ s, v }) =>
+							group.find(({ streamId, version }) => streamId === s && version === v) as (typeof group)[number],
+					),
 				);
 			} else {
 				ranked.push(group[0]);
@@ -144,7 +150,9 @@ describe('PostgreSQL migrates the 3.0.2 corpus to schema v2 and reads it as 3.0.
 		}
 
 		const byStream = new Map<string, { entry: (typeof ranked)[number]; rank: number }[]>();
-		ranked.forEach((entry, rank) => byStream.set(entry.streamId, [...(byStream.get(entry.streamId) ?? []), { entry, rank }]));
+		ranked.forEach((entry, rank) =>
+			byStream.set(entry.streamId, [...(byStream.get(entry.streamId) ?? []), { entry, rank }]),
+		);
 		const keyed: { key: number; version: number; row: string }[] = [];
 		for (const rows of byStream.values()) {
 			let key = -1;
@@ -177,7 +185,7 @@ describe('PostgreSQL migrates the 3.0.2 corpus to schema v2 and reads it as 3.0.
 
 	it('refuses every 3.x event table until it is migrated', async () => {
 		for (const pool of manifest.eventPools) {
-			await expect(eventStore.ensureCollection(poolOf(pool.pool)), pool.collection).rejects.toMatchObject({
+			await expect.soft(eventStore.ensureCollection(poolOf(pool.pool)), pool.collection).rejects.toMatchObject({
 				name: EventStoreSchemaException.name,
 				collection: pool.collection,
 				found: 'v1',
@@ -199,7 +207,7 @@ describe('PostgreSQL migrates the 3.0.2 corpus to schema v2 and reads it as 3.0.
 		);
 		for (const pool of manifest.eventPools) {
 			const collection = collectionReport(events, pool.collection);
-			expect(collection, pool.collection).toMatchObject({
+			expect.soft(collection, pool.collection).toMatchObject({
 				from: 'v1',
 				action: 'migrate',
 				blocking: [],
@@ -215,12 +223,18 @@ describe('PostgreSQL migrates the 3.0.2 corpus to schema v2 and reads it as 3.0.
 			expect(collection.nonCrockfordEventIds, `${pool.collection}: non-canonical ids`).toBe(nonCanonical);
 		}
 		// The index variants of the fixture: 3.0.0's fixed name, a pool without index, the derived names
-		expect(manifest.eventPools.some(({ collection }) => legacyIndexesOf(collection, 'event_date, event_id').includes('idx_event_date_id'))).toBe(true);
-		expect(manifest.eventPools.some(({ collection }) => legacyIndexesOf(collection, 'event_date, event_id').length === 0)).toBe(true);
+		expect(
+			manifest.eventPools.some(({ collection }) =>
+				legacyIndexesOf(collection, 'event_date, event_id').includes('idx_event_date_id'),
+			),
+		).toBe(true);
+		expect(
+			manifest.eventPools.some(({ collection }) => legacyIndexesOf(collection, 'event_date, event_id').length === 0),
+		).toBe(true);
 
 		for (const pool of manifest.snapshotPools) {
 			const collection = collectionReport(snapshots, pool.collection);
-			expect(collection, pool.collection).toMatchObject({
+			expect.soft(collection, pool.collection).toMatchObject({
 				from: 'v1',
 				action: 'migrate',
 				blocking: [],
@@ -244,9 +258,14 @@ describe('PostgreSQL migrates the 3.0.2 corpus to schema v2 and reads it as 3.0.
 		const snapshots = await PostgresSnapshotStore.migrate(config, { legacyTimeZone: manifest.writerTimeZone });
 
 		for (const collection of [...events.collections, ...snapshots.collections]) {
-			expect(collection.action, collection.name).toBe('migrate');
-			expect(collection.steps.map(({ status }) => status), collection.name).not.toContain('pending');
-			expect(collection.blocking, collection.name).toEqual([]);
+			expect.soft(collection.action, collection.name).toBe('migrate');
+			expect
+				.soft(
+					collection.steps.map(({ status }) => status),
+					collection.name,
+				)
+				.not.toContain('pending');
+			expect.soft(collection.blocking, collection.name).toEqual([]);
 		}
 
 		const again = [
@@ -278,9 +297,7 @@ describe('PostgreSQL migrates the 3.0.2 corpus to schema v2 and reads it as 3.0.
 		});
 
 		it('reads the pool in 3.x order, from position 1, with every stream in version order', async () => {
-			expect(read.map(({ metadata }) => metadata.globalPosition)).toEqual(
-				read.map((_, index) => BigInt(index + 1)),
-			);
+			expect(read.map(({ metadata }) => metadata.globalPosition)).toEqual(read.map((_, index) => BigInt(index + 1)));
 			expect(read.map(({ metadata }) => rowKey({ ...metadata, eventId: metadata.eventId.value }))).toEqual(
 				await expectedOrder(pool),
 			);
@@ -290,19 +307,19 @@ describe('PostgreSQL migrates the 3.0.2 corpus to schema v2 and reads it as 3.0.
 				read.filter(({ metadata }) => metadata.aggregateId === aggregateId).map(({ metadata }) => metadata.version);
 			for (const streamId of [...pool.invertedStreams, ...pool.outOfOrderStreams]) {
 				const stream = pool.streams.find((candidate) => candidate.streamId === streamId);
-				expect(stream, streamId).toBeDefined();
+				expect.soft(stream, streamId).toBeDefined();
 				const versions = versionsOf(stream?.aggregateId as string);
-				expect(versions, streamId).toEqual([...versions].sort((a, b) => a - b));
+				expect.soft(versions, streamId).toEqual([...versions].sort((a, b) => a - b));
 			}
 			for (const stream of pool.streams) {
 				const versions = versionsOf(stream.aggregateId);
-				expect(versions, stream.streamId).toEqual([...versions].sort((a, b) => a - b));
+				expect.soft(versions, stream.streamId).toEqual([...versions].sort((a, b) => a - b));
 			}
 
 			// The non-canonical ids are read back as they were written
 			const ids = new Set(read.map(({ metadata }) => metadata.eventId.value));
 			for (const eventId of pool.nonCanonicalEventIds) {
-				expect(ids.has(eventId), eventId).toBe(true);
+				expect.soft(ids.has(eventId), eventId).toBe(true);
 			}
 		});
 
@@ -314,10 +331,15 @@ describe('PostgreSQL migrates the 3.0.2 corpus to schema v2 and reads it as 3.0.
 				const eventStream = crossVersionEventStream(stream);
 				const envelopes = await collect(eventStore.getEnvelopes(eventStream, { pool: poolOf(pool.pool) }));
 				expect
-					.soft(envelopes.map((envelope) => comparable(encodeEventEnvelope(envelope))), `getEnvelopes(${stream.streamId})`)
+					.soft(
+						envelopes.map((envelope) => comparable(encodeEventEnvelope(envelope))),
+						`getEnvelopes(${stream.streamId})`,
+					)
 					.toEqual(stream.envelopes.map(comparable));
 				for (const { metadata } of envelopes) {
-					expect.soft(metadata.globalPosition).toBe(positionOf.get(rowKey({ ...metadata, eventId: metadata.eventId.value })));
+					expect
+						.soft(metadata.globalPosition)
+						.toBe(positionOf.get(rowKey({ ...metadata, eventId: metadata.eventId.value })));
 				}
 
 				const events = await collect(eventStore.getEvents(eventStream, { pool: poolOf(pool.pool) }));
@@ -328,11 +350,11 @@ describe('PostgreSQL migrates the 3.0.2 corpus to schema v2 and reads it as 3.0.
 		it('conflicts on a gapped stream with its actual version', async () => {
 			for (const streamId of pool.gappedStreams) {
 				const stream = pool.streams.find((candidate) => candidate.streamId === streamId);
-				expect(stream, streamId).toBeDefined();
+				expect.soft(stream, streamId).toBeDefined();
 				const versions = stream?.envelopes.map(({ metadata }) => withoutAbsent(metadata)) ?? [];
 				const actual = Math.max(
 					...(stream?.envelopes ?? []).map(({ metadata }) =>
-						Number((metadata as { fields: { version: number } }).fields.version),
+						Number((metadata as unknown as { fields: { version: number } }).fields.version),
 					),
 				);
 				await expect(
@@ -376,22 +398,25 @@ describe('PostgreSQL migrates the 3.0.2 corpus to schema v2 and reads it as 3.0.
 				const snapshotStream = crossVersionSnapshotStream(stream);
 				const envelopes = await collect(snapshotStore.getEnvelopes(snapshotStream, { pool: poolOf(pool.pool) }));
 				const written = pool.written.filter(({ streamId }) => streamId === stream.streamId);
-				expect(envelopes.map(({ metadata }) => metadata.version), stream.streamId).toEqual(
-					written.map(({ version }) => version).sort((a, b) => a - b),
-				);
+				expect
+					.soft(
+						envelopes.map(({ metadata }) => metadata.version),
+						stream.streamId,
+					)
+					.toEqual(written.map(({ version }) => version).sort((a, b) => a - b));
 				for (const { metadata } of envelopes) {
 					const row = written.find(({ version }) => version === metadata.version);
 					// Converted with the writer's time zone: the instant 3.x meant, to the millisecond
-					expect.soft(metadata.registeredOn.toISOString(), `${stream.streamId}@${metadata.version}`).toBe(
-						row?.registeredOn,
-					);
+					expect
+						.soft(metadata.registeredOn.toISOString(), `${stream.streamId}@${metadata.version}`)
+						.toBe(row?.registeredOn);
 					expect.soft(metadata.snapshotId).toBe(row?.snapshotId);
 				}
 
 				const last = await snapshotStore.getLastEnvelope(snapshotStream, poolOf(pool.pool));
-				expect.soft(encodeSnapshotEnvelope(last), `getLastEnvelope(${stream.streamId})`).toEqual(
-					encodeSnapshotEnvelope(envelopes.at(-1)),
-				);
+				expect
+					.soft(encodeSnapshotEnvelope(last), `getLastEnvelope(${stream.streamId})`)
+					.toEqual(encodeSnapshotEnvelope(envelopes.at(-1)));
 			}
 		});
 
@@ -404,7 +429,7 @@ describe('PostgreSQL migrates the 3.0.2 corpus to schema v2 and reads it as 3.0.
 			);
 			expect(rows.length).toBe(pool.streams.length);
 			for (const row of rows) {
-				expect(row, row.stream_id).toMatchObject({ flagged: 1, highest: true });
+				expect.soft(row, row.stream_id).toMatchObject({ flagged: 1, highest: true });
 			}
 			const { rows: indexes } = await db.query(
 				`SELECT indexdef FROM pg_indexes WHERE schemaname = current_schema() AND tablename = $1 AND indexdef LIKE 'CREATE UNIQUE INDEX%(aggregate_name, latest) WHERE (latest IS NOT NULL)'`,

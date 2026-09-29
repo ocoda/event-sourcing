@@ -9,7 +9,13 @@ import { DatabaseError, type Pool, type PoolClient } from 'pg';
 import { LOCK_NOT_AVAILABLE, hasErrorCode } from '../postgres.helpers.js';
 import { describeTable, eventTableState, snapshotTableState } from '../postgres.schema.js';
 import { type CollectionKind, discoverCollections, inspectCollection } from './inspect.js';
-import { type CollectionPlan, type PlanSettings, migrationLockKey, planEventMigration, planSnapshotMigration } from './plan.js';
+import {
+	type CollectionPlan,
+	type PlanSettings,
+	migrationLockKey,
+	planEventMigration,
+	planSnapshotMigration,
+} from './plan.js';
 
 /**
  * Test hooks of a migration run. Internal: not exported from the package.
@@ -80,7 +86,8 @@ export const runMigration = async (
 		const collections: CollectionPlan[] = [];
 		for (const name of names) {
 			const inspection = await inspectCollection(client, kind, name);
-			const plan = kind === 'events' ? planEventMigration(inspection, settings) : planSnapshotMigration(inspection, settings);
+			const plan =
+				kind === 'events' ? planEventMigration(inspection, settings) : planSnapshotMigration(inspection, settings);
 			collections.push(plan);
 
 			if (dryRun) {
@@ -89,7 +96,9 @@ export const runMigration = async (
 			if (plan.action === 'migrate' || plan.action === 'resume') {
 				logger?.log(`Migrating ${name} (${plan.from}, ${plan.rows} rows)`);
 				await execute(client, plan, options, hooks);
-				logger?.log(`${name}: ${plan.steps.every(({ status }) => status !== 'pending') && plan.blocking.length === 0 ? 'migrated' : 'not migrated'}`);
+				logger?.log(
+					`${name}: ${plan.steps.every(({ status }) => status !== 'pending') && plan.blocking.length === 0 ? 'migrated' : 'not migrated'}`,
+				);
 			} else {
 				for (const step of plan.steps) {
 					step.status = 'skipped';
@@ -192,7 +201,9 @@ const execute = async (
 					if (state !== plan.from) {
 						await client.query('ROLLBACK');
 						inTransaction = false;
-						block(`The table changed from ${plan.from} to ${state} while the migration waited for it: run migrate() again.`);
+						block(
+							`The table changed from ${plan.from} to ${state} while the migration waited for it: run migrate() again.`,
+						);
 						return;
 					}
 					break;

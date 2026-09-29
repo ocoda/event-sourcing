@@ -413,9 +413,7 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
             LIMIT $2
         `;
 
-		const params = aggregateId
-			? [streamName, limit, latestKey(`${streamName}-${aggregateId}`)]
-			: [streamName, limit];
+		const params = aggregateId ? [streamName, limit, latestKey(`${streamName}-${aggregateId}`)] : [streamName, limit];
 
 		for await (const rows of readInBatches<PostgresSnapshotEnvelopeEntity<A>>(this.connection, query, params, batch)) {
 			yield rows.map((row) => toEnvelope(row));

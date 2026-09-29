@@ -123,7 +123,9 @@ const d33Order = (ranked: readonly { stream_id: string; version: number }[]) => 
 			keyed.push({ stream_id, version, key });
 		}
 	}
-	return keyed.sort((a, b) => a.key - b.key || a.version - b.version).map(({ stream_id, version }) => ({ stream_id, version }));
+	return keyed
+		.sort((a, b) => a.key - b.key || a.version - b.version)
+		.map(({ stream_id, version }) => ({ stream_id, version }));
 };
 
 const seedEvents = async (table: string, variant: IndexVariant = '3.0.2', rows = eventCorpus()) => {
@@ -132,6 +134,12 @@ const seedEvents = async (table: string, variant: IndexVariant = '3.0.2', rows =
 	}
 	await db.query(...v1EventInsert(table, rows));
 };
+
+/**
+ * A row of a dump: every column but the position, which is a string (or `null` before the migration).
+ */
+type DumpColumns = { stream_id: string; version: number; [column: string]: unknown };
+type DumpRow = DumpColumns & { position: string | null };
 
 /**
  * Everything about a table that a migration may change: its columns, indexes (with the table name replaced), rows and
@@ -164,8 +172,8 @@ const dump = async (table: string) => {
 			`SELECT to_jsonb(t) AS row
 			FROM ${escapeIdentifier(table)} t ORDER BY ${columns.some((column) => column.startsWith('global_position ')) ? 'global_position' : 'stream_id, version'}`,
 		)
-	).rows.map(({ row: { global_position, ...row } }) => ({
-		...row,
+	).rows.map(({ row: { global_position, ...row } }): DumpRow => ({
+		...(row as DumpColumns),
 		position: global_position === undefined || global_position === null ? null : String(global_position),
 	}));
 	const catalog = (
@@ -174,9 +182,10 @@ const dump = async (table: string) => {
 		)
 	).rows[0].exists
 		? (
-				await db.query('SELECT kind, schema_version, last_position::text FROM event_sourcing_collections WHERE name = $1', [
-					table,
-				])
+				await db.query(
+					'SELECT kind, schema_version, last_position::text FROM event_sourcing_collections WHERE name = $1',
+					[table],
+				)
 			).rows
 		: 'no catalog';
 	return { columns, indexes, rows, catalog };
@@ -297,7 +306,7 @@ describe('PostgresEventStore.migrate', () => {
 		expect(s3.map(({ version }) => version)).toEqual([1, 2, 3]);
 		for (const stream of new Set(migrated.rows.map(({ stream_id }) => stream_id))) {
 			const versions = migrated.rows.filter(({ stream_id }) => stream_id === stream).map(({ version }) => version);
-			expect(versions, stream).toEqual([...versions].sort((a, b) => a - b));
+			expect.soft(versions, stream).toEqual([...versions].sort((a, b) => a - b));
 		}
 
 		// Every value is kept, occurred_on to the millisecond
@@ -306,9 +315,9 @@ describe('PostgresEventStore.migrate', () => {
 			rows.map(strip).sort((a, b) => `${a.stream_id}/${a.version}`.localeCompare(`${b.stream_id}/${b.version}`));
 		expect(byKey(migrated.rows).map(({ headers, event_version, ...row }) => row)).toEqual(byKey(seededDump.rows));
 		expect(migrated.rows.every(({ headers, event_version }) => headers === null && event_version === null)).toBe(true);
-		expect(migrated.rows.find(({ stream_id, version }) => stream_id === 'account-s2' && version === 2)?.occurred_on).toBe(
-			'2021-02-01T00:00:03.456+00:00',
-		);
+		expect(
+			migrated.rows.find(({ stream_id, version }) => stream_id === 'account-s2' && version === 2)?.occurred_on,
+		).toBe('2021-02-01T00:00:03.456+00:00');
 
 		expect(migrated.columns).toEqual([
 			'stream_id text not null',
@@ -340,7 +349,9 @@ describe('PostgresEventStore.migrate', () => {
 			[escapeIdentifier(table)],
 		);
 		expect(after).toEqual(before);
-		const { rows: amounts } = await db.query(`SELECT count(*)::int AS count FROM ${escapeIdentifier(`${schema}_amounts`)}`);
+		const { rows: amounts } = await db.query(
+			`SELECT count(*)::int AS count FROM ${escapeIdentifier(`${schema}_amounts`)}`,
+		);
 		expect(amounts).toEqual([{ count: eventCorpus().length }]);
 	});
 
@@ -385,9 +396,10 @@ describe('PostgresEventStore.migrate', () => {
 
 			// The gapped stream conflicts on its next append at the version it would have had
 			const gapped = { streamId: 'account-s4', aggregateId: 's4' } as unknown as EventStream;
-			await expect(
-				store.appendEvents(gapped, getEvents().slice(0, 1), { expectedVersion: 4 }),
-			).rejects.toMatchObject({ expectedVersion: 4, actualVersion: 5 });
+			await expect(store.appendEvents(gapped, getEvents().slice(0, 1), { expectedVersion: 4 })).rejects.toMatchObject({
+				expectedVersion: 4,
+				actualVersion: 5,
+			});
 		} finally {
 			await store.disconnect();
 		}
@@ -408,9 +420,10 @@ describe('PostgresEventStore.migrate', () => {
 			);
 		}
 		// The 3.0.0 name is schema-wide: dropping the event_date column dropped it
-		const { rows } = await db.query(`SELECT 1 FROM pg_indexes WHERE schemaname = $1 AND indexname = 'idx_event_date_id'`, [
-			schema,
-		]);
+		const { rows } = await db.query(
+			`SELECT 1 FROM pg_indexes WHERE schemaname = $1 AND indexname = 'idx_event_date_id'`,
+			[schema],
+		);
 		expect(rows).toEqual([]);
 	});
 
@@ -491,7 +504,9 @@ describe('PostgresEventStore.migrate', () => {
 		it('should not migrate a partly migrated table without event_date', async () => {
 			const partial = EventCollection.get('partial');
 			await seedEvents(partial);
-			await db.query(`ALTER TABLE ${escapeIdentifier(partial)} ADD COLUMN global_position BIGINT, DROP COLUMN event_date`);
+			await db.query(
+				`ALTER TABLE ${escapeIdentifier(partial)} ADD COLUMN global_position BIGINT, DROP COLUMN event_date`,
+			);
 
 			const report = await PostgresEventStore.migrate(config, { pools: ['partial'] });
 
@@ -501,7 +516,9 @@ describe('PostgresEventStore.migrate', () => {
 		it('should resume a partly migrated table that still has event_date', async () => {
 			const resumed = EventCollection.get('resumed');
 			await seedEvents(resumed);
-			await db.query(`ALTER TABLE ${escapeIdentifier(resumed)} ADD COLUMN global_position BIGINT, ADD COLUMN headers JSONB`);
+			await db.query(
+				`ALTER TABLE ${escapeIdentifier(resumed)} ADD COLUMN global_position BIGINT, ADD COLUMN headers JSONB`,
+			);
 
 			const report = await PostgresEventStore.migrate(config, { pools: ['resumed'] });
 
@@ -579,7 +596,9 @@ describe('PostgresEventStore.migrate', () => {
 			const afterCrash = await dump(crashed);
 			const committed = steps.indexOf(step) >= steps.indexOf('commit');
 			if (committed) {
-				expect(afterCrash.catalog).toEqual([{ kind: 'events', schema_version: 2, last_position: String(eventCorpus().length) }]);
+				expect(afterCrash.catalog).toEqual([
+					{ kind: 'events', schema_version: 2, last_position: String(eventCorpus().length) },
+				]);
 			} else {
 				expect(afterCrash).toEqual(seeded);
 			}
@@ -593,9 +612,10 @@ describe('PostgresEventStore.migrate', () => {
 			});
 
 			// The session lock was released
-			const { rows } = await db.query(`SELECT pg_try_advisory_lock(hashtext('ocoda:migrate'), hashtext($1)) AS locked`, [
-				crashed,
-			]);
+			const { rows } = await db.query(
+				`SELECT pg_try_advisory_lock(hashtext('ocoda:migrate'), hashtext($1)) AS locked`,
+				[crashed],
+			);
 			expect(rows).toEqual([{ locked: true }]);
 			await db.query(`SELECT pg_advisory_unlock_all()`);
 		});
@@ -625,9 +645,7 @@ describe('PostgresEventStore.migrate', () => {
 
 				const rerun = await runMigration(ownPool, 'events', {});
 				expect(collectionOf(rerun, 'events').steps.map(({ name }) => name)).not.toContain('create-catalog');
-				const { rows } = await ownPool.query(
-					'SELECT stream_id, version FROM events ORDER BY global_position',
-				);
+				const { rows } = await ownPool.query('SELECT stream_id, version FROM events ORDER BY global_position');
 				expect(rows).toEqual(expectedOrder);
 			} finally {
 				await ownPool.end();

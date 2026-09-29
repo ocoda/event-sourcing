@@ -216,7 +216,14 @@ describe(PostgresEventStore, () => {
 				version: 1,
 				occurredOn: new Date('2022-03-04T05:06:07.089Z'),
 				correlationId: 'imported-correlation',
-				headers: { $traceparent: '00-abc-def-01', tenant: 'acme', 'ünïcode ✓': 'ok', count: 2.5, flag: false, none: null },
+				headers: {
+					$traceparent: '00-abc-def-01',
+					tenant: 'acme',
+					'ünïcode ✓': 'ok',
+					count: 2.5,
+					flag: false,
+					none: null,
+				},
 				eventVersion: 3,
 			});
 
@@ -271,10 +278,12 @@ describe(PostgresEventStore, () => {
 
 		it('should refuse an append to a pool that was never created, without creating it', async () => {
 			const missing = uniquePool('missing');
-			const error = await eventStore.appendEvents(newStream(), events.slice(0, 3), { expectedVersion: 0, pool: missing }).then(
-				() => undefined,
-				(rejection: unknown) => rejection,
-			);
+			const error = await eventStore
+				.appendEvents(newStream(), events.slice(0, 3), { expectedVersion: 0, pool: missing })
+				.then(
+					() => undefined,
+					(rejection: unknown) => rejection,
+				);
 
 			expect(error).toMatchObject({
 				name: EventStorePersistenceException.name,
@@ -474,10 +483,9 @@ describe(PostgresEventStore, () => {
 			});
 
 			// Even with a catalog row, an append fails before anything is written
-			await pool.query(
-				"INSERT INTO event_sourcing_collections (name, kind, schema_version) VALUES ($1, 'events', 2)",
-				[table],
-			);
+			await pool.query("INSERT INTO event_sourcing_collections (name, kind, schema_version) VALUES ($1, 'events', 2)", [
+				table,
+			]);
 			const error = await eventStore
 				.appendEvents(newStream(), events.slice(0, 1), { expectedVersion: 0, pool: legacy })
 				.catch((rejection: unknown) => rejection);
@@ -716,11 +724,10 @@ describe(PostgresEventStore, () => {
 						await drain(eventStore.getEvents(streamY, { pool: connectionPool, fromVersion: version, limit: 1 })),
 					).toEqual([events[version - 1]]);
 
-					await eventStore.appendEvents(
-						streamCopy,
-						[eventMap.deserializeEvent(envelope.event, envelope.payload)],
-						{ expectedVersion: version - 1, pool: connectionPool },
-					);
+					await eventStore.appendEvents(streamCopy, [eventMap.deserializeEvent(envelope.event, envelope.payload)], {
+						expectedVersion: version - 1,
+						pool: connectionPool,
+					});
 				}
 			}
 
@@ -1068,7 +1075,9 @@ describe(PostgresEventStore, () => {
 				WHERE table_schema = current_schema() AND table_name = $1 ORDER BY ordinal_position`,
 				[collection],
 			);
-			expect(columns.map(({ column_name, data_type, is_nullable }) => `${column_name} ${data_type} ${is_nullable}`)).toEqual([
+			expect(
+				columns.map(({ column_name, data_type, is_nullable }) => `${column_name} ${data_type} ${is_nullable}`),
+			).toEqual([
 				'stream_id text NO',
 				'version integer NO',
 				'event text NO',
@@ -1112,7 +1121,9 @@ describe(PostgresEventStore, () => {
 
 			expect(error).toBeInstanceOf(EventStoreCollectionCreationException);
 			expect((error as Error).cause).toBeInstanceOf(RangeError);
-			const { rows } = await pool.query(`SELECT 1 FROM pg_tables WHERE tablename LIKE $1`, [`${tooLong.slice(0, 40)}%`]);
+			const { rows } = await pool.query(`SELECT 1 FROM pg_tables WHERE tablename LIKE $1`, [
+				`${tooLong.slice(0, 40)}%`,
+			]);
 			expect(rows).toEqual([]);
 		});
 
@@ -1259,7 +1270,11 @@ describe(PostgresEventStore, () => {
 					'SELECT tablename FROM pg_tables WHERE schemaname = $1 ORDER BY tablename',
 					[schema],
 				);
-				expect(rows.map(({ tablename }) => tablename)).toEqual(['event_sourcing_collections', 'events', 'other-events']);
+				expect(rows.map(({ tablename }) => tablename)).toEqual([
+					'event_sourcing_collections',
+					'events',
+					'other-events',
+				]);
 				expect(await drain(store.listCollections())).toEqual(['events', 'other-events']);
 			} finally {
 				await store.disconnect();

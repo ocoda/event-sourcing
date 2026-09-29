@@ -469,7 +469,9 @@ export class PostgresEventStore extends EventStore<PostgresEventStoreConfig> {
 			throw notPersisted(new EventCollectionNotFoundException({ collection, pool }, { cause: error }));
 		}
 		if (hasErrorCode(error, UNDEFINED_COLUMN)) {
-			throw notPersisted(new EventStoreSchemaException({ collection, found: 'v1', remedy: MIGRATE_REMEDY }, { cause: error }));
+			throw notPersisted(
+				new EventStoreSchemaException({ collection, found: 'v1', remedy: MIGRATE_REMEDY }, { cause: error }),
+			);
 		}
 		throw notPersisted(error);
 	}

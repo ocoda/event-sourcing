@@ -215,10 +215,11 @@ export const describeTable = async (connection: Queryable, table: string): Promi
 
 	let entry: CatalogEntry | undefined;
 	if (catalog) {
-		const { rows } = await connection.query<{ kind: CatalogEntry['kind']; schema_version: number; last_position: string }>(
-			`SELECT kind, schema_version, last_position::text AS last_position FROM ${CATALOG} WHERE name = $1`,
-			[table],
-		);
+		const { rows } = await connection.query<{
+			kind: CatalogEntry['kind'];
+			schema_version: number;
+			last_position: string;
+		}>(`SELECT kind, schema_version, last_position::text AS last_position FROM ${CATALOG} WHERE name = $1`, [table]);
 		if (rows[0]) {
 			entry = {
 				kind: rows[0].kind,

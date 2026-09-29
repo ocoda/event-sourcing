@@ -53,7 +53,16 @@ export interface CollectionInspection {
  */
 const SHAPES: Record<CollectionKind, string[]> = {
 	events: ['stream_id', 'version', 'event', 'payload', 'event_id', 'aggregate_id', 'occurred_on'],
-	snapshots: ['stream_id', 'version', 'payload', 'snapshot_id', 'aggregate_id', 'registered_on', 'aggregate_name', 'latest'],
+	snapshots: [
+		'stream_id',
+		'version',
+		'payload',
+		'snapshot_id',
+		'aggregate_id',
+		'registered_on',
+		'aggregate_name',
+		'latest',
+	],
 };
 
 /**

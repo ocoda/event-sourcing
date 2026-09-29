@@ -1,5 +1,10 @@
 import type { CollectionInspection } from '../../lib/migration/inspect.js';
-import { type CollectionPlan, type PlanSettings, planEventMigration, planSnapshotMigration } from '../../lib/migration/plan.js';
+import {
+	type CollectionPlan,
+	type PlanSettings,
+	planEventMigration,
+	planSnapshotMigration,
+} from '../../lib/migration/plan.js';
 import {
 	type ColumnInfo,
 	type IndexInfo,
@@ -119,8 +124,16 @@ describe('eventTableState', () => {
 		['no table', table([], [], { oid: null }), 'absent'],
 		['a 3.x table', table(V1_EVENT_COLUMNS), 'v1'],
 		['a v2 table', table(V2_EVENT_COLUMNS), 'v2'],
-		['event_date and global_position', table([...V1_EVENT_COLUMNS, column('global_position', 'bigint', false)]), 'v1-partial'],
-		['a nullable global_position', table([...V2_EVENT_COLUMNS.slice(0, 9), column('global_position', 'bigint', false)]), 'v1-partial'],
+		[
+			'event_date and global_position',
+			table([...V1_EVENT_COLUMNS, column('global_position', 'bigint', false)]),
+			'v1-partial',
+		],
+		[
+			'a nullable global_position',
+			table([...V2_EVENT_COLUMNS.slice(0, 9), column('global_position', 'bigint', false)]),
+			'v1-partial',
+		],
 		['neither', table(V2_EVENT_COLUMNS.slice(0, 9)), 'v1-partial'],
 	])('%s is %s', (_, info, state) => {
 		expect(eventTableState(info)).toBe(state);
@@ -172,7 +185,12 @@ describe('planEventMigration', () => {
 			settings,
 		);
 
-		expect(plan).toMatchObject({ from: 'v1', action: 'migrate', blocking: [], droppedIndexes: ['idx_events_event_date_id'] });
+		expect(plan).toMatchObject({
+			from: 'v1',
+			action: 'migrate',
+			blocking: [],
+			droppedIndexes: ['idx_events_event_date_id'],
+		});
 		expect(stepNames(plan)).toEqual([
 			'migration-lock',
 			'begin',
@@ -196,7 +214,9 @@ describe('planEventMigration', () => {
 		expect(statementOf(plan, 'number')).toContain(
 			'max(legacy_rank) OVER (PARTITION BY stream_id ORDER BY version ROWS UNBOUNDED PRECEDING) AS stream_key',
 		);
-		expect(statementOf(plan, 'number')).toContain('row_number() OVER (ORDER BY stream_key, version) AS global_position');
+		expect(statementOf(plan, 'number')).toContain(
+			'row_number() OVER (ORDER BY stream_key, version) AS global_position',
+		);
 		expect(statementOf(plan, 'widen-columns')).toBe(
 			'ALTER TABLE "events" ADD COLUMN IF NOT EXISTS global_position BIGINT, ADD COLUMN IF NOT EXISTS headers JSONB, ADD COLUMN IF NOT EXISTS event_version INTEGER, ALTER COLUMN stream_id TYPE TEXT, ALTER COLUMN event TYPE TEXT, ALTER COLUMN event_id TYPE TEXT, ALTER COLUMN aggregate_id TYPE TEXT, ALTER COLUMN correlation_id TYPE TEXT, ALTER COLUMN causation_id TYPE TEXT',
 		);
@@ -413,7 +433,11 @@ describe('planSnapshotMigration', () => {
 	it.each<[string, Partial<CollectionInspection>, string]>([
 		['a view on latest', { rewrites: [{ name: 'latest_view', columns: ['latest'] }] }, 'latest_view uses latest'],
 		['a referencing foreign key', { referencingForeignKeys: ['refs.fk'] }, 'refs.fk reference'],
-		['a table the role does not own', { privileges: { owner: false, createInSchema: true, temporary: true } }, "doesn't own"],
+		[
+			'a table the role does not own',
+			{ privileges: { owner: false, createInSchema: true, temporary: true } },
+			"doesn't own",
+		],
 	])('blocks %s', (_, extra, reason) => {
 		const plan = planSnapshotMigration(inspection('snapshots', table(V1_SNAPSHOT_COLUMNS), extra), settings);
 		expect(plan.action).toBe('blocked');

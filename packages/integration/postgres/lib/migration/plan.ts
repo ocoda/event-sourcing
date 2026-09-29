@@ -370,11 +370,7 @@ export const planSnapshotMigration = (inspection: CollectionInspection, settings
 	const latest = table.columns.latest;
 	const convertLatest = !latest || latest.type !== 'text' || latest.collation !== 'C';
 	const convertRegisteredOn = table.columns.registered_on?.type !== 'timestamp with time zone';
-	const altered = [
-		...widened,
-		...(convertLatest ? ['latest'] : []),
-		...(convertRegisteredOn ? ['registered_on'] : []),
-	];
+	const altered = [...widened, ...(convertLatest ? ['latest'] : []), ...(convertRegisteredOn ? ['registered_on'] : [])];
 
 	report.blocking.push(...commonBlocking(inspection, altered));
 	if (inspection.referencingForeignKeys.length > 0 && altered.includes('stream_id')) {

@@ -59,11 +59,7 @@ export const dropCollections = async (pool: Pool, collections: readonly string[]
  * Makes every insert of an event with the given name into the table fail, from a `BEFORE INSERT` trigger, so that the
  * rest of the append has to be rolled back. Resolves with a function that removes the trigger.
  */
-export const failInsertOf = async (
-	pool: Pool,
-	collection: string,
-	eventName: string,
-): Promise<() => Promise<void>> => {
+export const failInsertOf = async (pool: Pool, collection: string, eventName: string): Promise<() => Promise<void>> => {
 	const suffix = createHash('sha256').update(`${collection}:${eventName}`).digest('hex').slice(0, 12);
 	const fn = escapeIdentifier(`es_fault_${suffix}`);
 	const trigger = escapeIdentifier(`es_fault_${suffix}`);
