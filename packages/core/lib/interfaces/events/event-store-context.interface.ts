@@ -6,7 +6,9 @@ import type { EventEnvelope } from '../../models/index.js';
  */
 export interface EnvelopePublisher {
 	/**
-	 * Publishes the envelopes of one append, in order. Never rejects: a failing publisher is logged.
+	 * Publishes the envelopes of one append, in order. A failing publisher never makes it reject: the failure is logged.
+	 * The `EventBus` rejects only when it is used while Nest is still instantiating the providers
+	 * (`EventSourcingNotReadyException`); the event store logs that too.
 	 */
 	publishAll(envelopes: readonly EventEnvelope[]): Promise<void>;
 }

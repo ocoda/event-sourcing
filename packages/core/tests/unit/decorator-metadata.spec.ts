@@ -1,24 +1,23 @@
 import { Injectable } from '@nestjs/common';
-import { DiscoveryService } from '@nestjs/core';
+import { DiscoveryService, ModuleRef } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
 import {
 	CommandBus,
 	EventBus,
 	EventMap,
+	EventSourcingModule,
 	type EventSourcingModuleOptions,
 	EventStore,
 	type IEvent,
 	InvalidEventStoreImplementationException,
 	QueryBus,
-	SnapshotStore,
 	assertEventStoreImplementation,
 } from '@ocoda/event-sourcing';
 import { AccountRepository, OpenAccountCommandHandler } from '@ocoda/event-sourcing-testing/e2e/application';
 import { AccountSnapshotRepository } from '@ocoda/event-sourcing-testing/e2e/domain';
 import { createTestContext } from '@ocoda/event-sourcing-testing/unit';
 import { InMemoryEventStore } from '@ocoda/event-sourcing/integration/event-store';
-import { ExplorerService } from '@ocoda/event-sourcing/services';
-import { EventSourcingCoreModule } from '../../lib/event-sourcing.core.module.js';
+import { EventSourcingRegistrar } from '../../lib/registration/registrar.js';
 
 // Nest resolves constructor dependencies from `design:paramtypes`. The tests are transformed by Vite's Oxc
 // (not tsc or SWC), so these guard that it emits legacy decorators with that metadata for the library, the
@@ -45,18 +44,13 @@ class SpecLocalService {
 
 describe('decorator metadata', () => {
 	it('is emitted for library providers with constructor injection', () => {
-		// Interfaces (the injected module options) have no runtime value and are emitted as Object.
-		expect(paramTypes(EventSourcingCoreModule)).toEqual([
-			Object,
-			QueryBus,
-			EventBus,
-			EventMap,
-			CommandBus,
-			EventStore,
-			SnapshotStore,
-			ExplorerService,
-		]);
-		expect(paramTypes(ExplorerService)).toEqual([Object, DiscoveryService]);
+		// Interfaces (the injected module options, the registration) have no runtime value and are emitted as Object.
+		expect(paramTypes(EventSourcingModule)).toEqual([Object]);
+		expect(paramTypes(EventSourcingRegistrar)).toEqual([DiscoveryService, ModuleRef, Object]);
+		expect(paramTypes(CommandBus)).toEqual([ModuleRef, Object]);
+		expect(paramTypes(QueryBus)).toEqual([ModuleRef, Object]);
+		expect(paramTypes(EventMap)).toEqual([Object]);
+		expect(paramTypes(EventBus)).toEqual([Object, Object]);
 	});
 
 	it('is emitted for classes declared in a spec file', () => {

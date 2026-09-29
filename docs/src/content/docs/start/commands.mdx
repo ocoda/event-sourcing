@@ -100,7 +100,7 @@ import { Module } from '@nestjs/common';
 export class AccountModule {}
 ```
 
-The handlers are discovered when the application bootstraps, no matter in which module they are provided, see [Module configuration](/start/module-configuration#discovery).
+The handlers are discovered when the application bootstraps, no matter in which module they are provided, see [Module configuration](/start/module-configuration#discovery). A handler may be request-scoped: the bus then resolves it for every call, in the context of the request you pass as `commandBus.execute(command, { request })`, see [request-scoped handlers](/start/module-configuration#request-scoped-handlers).
 
 ## Executing a Command [#executing-a-command]
 

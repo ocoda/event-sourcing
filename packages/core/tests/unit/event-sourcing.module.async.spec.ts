@@ -2,6 +2,7 @@ import { Injectable, Logger, Module } from '@nestjs/common';
 import { Test, type TestingModule } from '@nestjs/testing';
 import {
 	EVENT_SOURCING_OPTIONS,
+	EventSourcingConfigurationException,
 	EventSourcingModule,
 	type EventSourcingModuleOptions,
 	type EventSourcingOptionsFactory,
@@ -146,15 +147,18 @@ describe('EventSourcingModule.forRootAsync (bootstrapped)', () => {
 		);
 	});
 
-	it('bootstraps with useValue', async () => {
+	it('bootstraps with the deprecated useValue', async () => {
 		const app = await bootstrap({ useValue: createOptions(new EventSourcingConfig()) });
 
 		await expectBootstrapped(app);
 	});
 
-	it('throws a descriptive error when no options provider is configured', () => {
+	it('throws a configuration issue when no options provider is configured', () => {
 		expect(() => EventSourcingModule.forRootAsync({ imports: [EventSourcingConfigModule] })).toThrow(
-			'Invalid EventSourcingModule.forRootAsync() options: provide one of "useFactory", "useClass", "useExisting" or "useValue".',
+			EventSourcingConfigurationException,
+		);
+		expect(() => EventSourcingModule.forRootAsync({ imports: [EventSourcingConfigModule] })).toThrow(
+			'EventSourcingModule.forRootAsync() needs one of "useFactory", "useClass" or "useExisting" to create the options.',
 		);
 	});
 });

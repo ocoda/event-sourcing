@@ -441,6 +441,36 @@ await MariaDBSnapshotStore.migrate(config);
 - Plan for about 3 minutes per million events, and free space of 1.5 times the event tables in the data directory and again in `tmpdir`. A failed migration can be run again: it continues where it stopped.
 - Stream ids that differ in case only become separate streams, and a stream with a gap in its versions conflicts on its next append; the dry run lists both.
 
+## Module configuration [#module-configuration]
+
+*In the next prerelease.* See [Module configuration](/start/module-configuration).
+
+- **Registration moves to `onModuleInit`.** The handlers, subscribers, publishers and serializers are registered in the module's `onModuleInit`, or on the first use of the event store or a bus if a provider of another module (your own `@Global()` module, say) uses them from its `onModuleInit` first. 3.x registered them in `onApplicationBootstrap`, so events appended from `onModuleInit` were never published. Commands, queries and appends now work from `onModuleInit` on.
+- **Provider factories can't use the library yet.** Appending, reading, executing or publishing from a provider factory or a constructor throws an `EventSourcingNotReadyException` (`ES_EVENT_SOURCING_NOT_READY`), before any I/O: the handlers don't exist yet. Move that code to `onModuleInit` or later.
+- **The stores connect while the providers are instantiated**, and create their default pools right after. A wrong connection fails the bootstrap as before, but now before any `onModuleInit` runs, and a store that fails is disconnected again. They disconnect in their own `onApplicationShutdown`, after the `EventBus` has drained.
+- **Misconfiguration fails the bootstrap** with one `EventSourcingConfigurationException` (`ES_EVENT_SOURCING_CONFIGURATION`) whose `issues` list every problem: two event classes with one name, two handlers for one command or query, two serializers for one event, a serializer or subscriber for an unregistered event, missing decorator metadata, and request-scoped or transient subscribers, publishers and serializers. 3.x kept one of the duplicates, or dropped the provider, silently. Providing one class in several modules, or listing an event twice, is still fine. See [Configuration checks](/start/module-configuration#configuration-checks).
+- **Request-scoped command and query handlers work**: the bus resolves them per call, and `execute(message, { request })` lets them inject the request with `@Inject(REQUEST)`. 3.x registered their bare prototype. See [request-scoped handlers](/start/module-configuration#request-scoped-handlers).
+- **Handlers provided with `useFactory` or `useValue` are discovered**, by the class of their instance.
+- **`forFeature` is no longer global state.** Its events belong to the applications that import the feature module; 3.x put them in a registry shared by the whole process, so several applications in one process (tests) now each see only their own events. `forFeature({ serializers, imports })` provides the serializers of the feature's events.
+- **One global module.** `forRoot` and `forRootAsync` return the global `EventSourcingModule` itself, built with Nest's `ConfigurableModuleBuilder`; there is no separate core module to import or reference. The options token (`EVENT_SOURCING_OPTIONS`), `@InjectEventSourcingOptions()`, the flat `{ driver, ...driverOptions }` store configs and the typed `forRoot<PostgresEventStoreConfig, …>()` stay the same.
+- **`forRootAsync({ useValue })` is deprecated** (`DeprecationWarning` `OCODA_ES_FOR_ROOT_ASYNC_USE_VALUE`): use `forRoot(options)`. Without `useFactory`, `useClass` or `useExisting`, `forRootAsync` throws an `EventSourcingConfigurationException` instead of a plain `Error`.
+- **Implicit in-memory stores warn in production.** When `NODE_ENV` is `production` and `eventStore` or `snapshotStore` is left out, the module logs a warning.
+- **Removed:** `EventRegistry`, `ExplorerService` and `getOptionsToken()`, which were reachable through paths inside the package in 3.x. Inject the options with `@InjectEventSourcingOptions()`.
+
+```ts
+// 3.x: appended from a provider factory, never published
+{ provide: 'SEED', inject: [EventStore], useFactory: (store: EventStore) => seed(store) }
+
+// 4.0: from a lifecycle hook
+@Injectable()
+export class Seeder implements OnModuleInit {
+	constructor(private readonly eventStore: EventStore) {}
+	onModuleInit() {
+		return seed(this.eventStore);
+	}
+}
+```
+
 ## DynamoDB is not part of 4.0 [#dynamodb]
 
 The DynamoDB store (`@ocoda/event-sourcing-dynamodb`) is not released for 4.0. DynamoDB can't give the events a gap-free global order, which the read side planned for 4.0 relies on. You have two options:
@@ -457,7 +487,7 @@ Nothing in this section is released yet. The changes are planned in [ADR 0001: v
 - **Event store, snapshots and schema v2.** See [Event store, snapshots and schema v2](#store-and-schema).
 - **Saving aggregates.** `commit()` gives way to `getUncommittedEvents()` and `markCommitted()`, and saving an unchanged aggregate becomes a no-op. `commit()` stays as a deprecated shim until 5.0.
 - **Publishing.** See [Publishing](#publishing).
-- **Bootstrap checks.** Duplicate registrations, and request-scoped subscribers, publishers and serializers, fail the bootstrap. Request-scoped command and query handlers start to work.
+- **Module configuration.** See [Module configuration](#module-configuration).
 - **Serialization.** A JSON serializer replaces class-transformer as the default. Events that use class-transformer decorators opt back in with `defaultEventSerializer: ClassTransformerEventSerializer`.
 - **Ids.** `generate()` on an id class returns that class, so `AccountId.generate()` returns an `AccountId`, and ids of different classes are no longer equal.
 

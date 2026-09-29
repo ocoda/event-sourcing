@@ -1,4 +1,4 @@
-import { Logger, type Type } from '@nestjs/common';
+import { Logger, type OnApplicationShutdown, type Type } from '@nestjs/common';
 import { UnsupportedOperationException } from './exceptions/index.js';
 import type {
 	EventSourcingModuleOptions,
@@ -18,11 +18,31 @@ import type { AggregateRoot, SnapshotEnvelope, SnapshotStream } from './models/i
  * A store implements the abstract methods. `getManyLastSnapshotEnvelopes` and `getLastEnvelopesForAggregate` have
  * defaults: the first reads the streams one by one with `getLastEnvelope`, the second throws an
  * `UnsupportedOperationException`. Override them when the database can do better.
+ *
+ * In the `EventSourcingModule`, the module connects the store while the application bootstraps, and the store
+ * disconnects in `onApplicationShutdown`.
  */
-export abstract class SnapshotStore<TOptions = Omit<EventSourcingModuleOptions['snapshotStore'], 'driver'>> {
+export abstract class SnapshotStore<
+	TOptions = Omit<EventSourcingModuleOptions['snapshotStore'], 'driver' | 'useDefaultPool'>,
+> implements OnApplicationShutdown {
 	protected readonly logger = new Logger(this.constructor.name);
 
 	constructor(protected readonly options: TOptions) {}
+
+	/**
+	 * Disconnects the store when the application shuts down, after the `EventBus` has waited for the running publishers
+	 * and subscribers. A failure is logged, so that the rest of the application still shuts down.
+	 */
+	async onApplicationShutdown(): Promise<void> {
+		try {
+			await this.disconnect();
+		} catch (error) {
+			this.logger.error(
+				'Failed to disconnect the snapshot store',
+				error instanceof Error ? error.stack || error.message : String(error),
+			);
+		}
+	}
 
 	/**
 	 * Connect to the snapshot store

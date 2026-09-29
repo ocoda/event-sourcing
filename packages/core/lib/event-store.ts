@@ -1,5 +1,5 @@
 import { setTimeout as sleep } from 'node:timers/promises';
-import { Logger } from '@nestjs/common';
+import { Logger, type OnApplicationShutdown } from '@nestjs/common';
 import { ANY_MAX_ATTEMPTS, ExpectedVersion } from './constants.js';
 import {
 	EventSourcingErrorCode,
@@ -56,10 +56,13 @@ const presentHeaders = (headers: unknown): EventEnvelope['metadata']['headers'] 
  * `getStreamVersion`, `getEnvelope`, `getEnvelopes`, `readAll` and `persistEvents`, and declares its `capabilities`.
  * It must not override `appendEvents`, `getEvent` or `getEvents`; to decorate appends, override `persistEvents` and
  * call `super`.
+ *
+ * In the `EventSourcingModule`, the module connects the store while the application bootstraps, and the store
+ * disconnects in `onApplicationShutdown`, after the `EventBus` has waited for the running publishers and subscribers.
  */
 export abstract class EventStore<
 	TOptions = Omit<EventSourcingModuleOptions['eventStore'], 'driver' | 'useDefaultPool'>,
-> {
+> implements OnApplicationShutdown {
 	protected readonly logger = new Logger(this.constructor.name);
 
 	/**
@@ -201,6 +204,19 @@ export abstract class EventStore<
 	async *getEvents(stream: EventStream, filter?: IEventFilter): AsyncGenerator<IEvent[]> {
 		for await (const envelopes of this.getEnvelopes(stream, filter)) {
 			yield envelopes.map(({ event, payload }) => this.context.eventMap.deserializeEvent(event, payload));
+		}
+	}
+
+	/**
+	 * Disconnects the store when the application shuts down. Nest calls it after `beforeApplicationShutdown`, where the
+	 * `EventBus` waits for the running publishers and subscribers, so they aren't cut off. A failure is logged, so that
+	 * the rest of the application still shuts down.
+	 */
+	async onApplicationShutdown(): Promise<void> {
+		try {
+			await this.disconnect();
+		} catch (error) {
+			this.logger.error('Failed to disconnect the event store', describeError(error));
 		}
 	}
 
