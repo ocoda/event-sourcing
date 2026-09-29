@@ -14,15 +14,17 @@ jobs:
     name: Release
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-      id-token: write
-      pull-requests: write
+      contents: write # push the changeset-release/master branch, git tags and GitHub releases
+      id-token: write # npm trusted publishing (OIDC)
+      pull-requests: write # update the version PR
     steps:
-      # changesets/action v1 pushes the release branch and tags with the checkout credentials.
-      - name: Checkout the repository # zizmor: ignore[artipacked]
+      # changesets/action v2 pushes the release branch and tags through the GitHub API with `github-token`,
+      # so the checkout does not need to keep its credentials.
+      - name: Checkout the repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Install pnpm
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
@@ -39,16 +41,26 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Until 4.0 GA, master only ships 4.0.0-next.N prereleases under the `next` dist-tag.
+      # The same script guards the publish path below, right before `changeset publish`.
+      - name: Guard - master only ships 4.0.0-next prereleases
+        run: bash .github/scripts/release-guard.sh plan
+
       - name: Build Packages
         run: pnpm build --filter="./packages/**"
 
+      # Pending changesets: version them onto the changeset-release/master branch and update the version PR. The
+      # repository does not let Actions create pull requests, so while no version PR is open this step pushes the
+      # branch and then fails; a maintainer opens the PR from that branch.
+      # No pending changesets: publish every unpublished version through npm trusted publishing (OIDC).
       - name: Create Release Pull Request or Publish
         id: changesets
-        uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
+        uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
         with:
-          version: pnpm exec changeset version
-          publish: pnpm exec changeset publish
-          commit: "[ci] release"
-          title: "[ci] release"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # TODO: pass a GitHub App installation token (actions/create-github-app-token) so the action can open
+          # the version PR and CI runs on it. GITHUB_TOKEN cannot open PRs here, and PRs it opens get no CI.
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          version-script: pnpm exec changeset version
+          publish-script: bash .github/scripts/release-guard.sh publish
+          commit-message: "[ci] release"
+          pr-title: "[ci] release"
