@@ -3,7 +3,7 @@ import {
 	Logger,
 	Module,
 	type OnApplicationBootstrap,
-	type OnModuleDestroy,
+	type OnApplicationShutdown,
 	type OnModuleInit,
 } from '@nestjs/common';
 import { DiscoveryModule } from '@nestjs/core';
@@ -39,7 +39,7 @@ import type { InMemoryEventStoreConfig, InMemorySnapshotStoreConfig } from './in
 export class EventSourcingFeatureModule {}
 
 @Module({})
-export class EventSourcingCoreModule implements OnModuleInit, OnModuleDestroy, OnApplicationBootstrap {
+export class EventSourcingCoreModule implements OnModuleInit, OnApplicationBootstrap, OnApplicationShutdown {
 	private _logger = new Logger(EventSourcingCoreModule.name);
 
 	constructor(
@@ -113,7 +113,12 @@ export class EventSourcingCoreModule implements OnModuleInit, OnModuleDestroy, O
 		];
 		await Promise.all(loadCollections);
 	}
-	async onModuleDestroy() {
+	/**
+	 * Disconnects the stores once the application has shut down. Nest runs `onModuleDestroy` first and
+	 * `beforeApplicationShutdown` after it, where the `EventBus` waits for the publishers and subscribers that are still
+	 * running; disconnecting in `onModuleDestroy` would pull the stores from under them.
+	 */
+	async onApplicationShutdown() {
 		const disconnects = await Promise.allSettled([this.eventStore.disconnect(), this.snapshotStore.disconnect()]);
 		for (const disconnect of disconnects) {
 			if (disconnect.status === 'rejected') {

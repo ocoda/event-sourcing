@@ -522,7 +522,46 @@ Each driver's schema v2 PR fills its subsection. Until then a driver claims noth
 
 ### PostgreSQL
 
-*Pending.* S1 and S2 results; `read-all-gap-safe` on PostgreSQL 13 to 17 (and 18 once it is in CI); the `relfilenode` check of the type widening.
+**Verdict:** `{ atomicAppend: true, headers: true, globalOrder: 'gap-safe' }`, claimed by the PostgreSQL schema v2 PR. Two techniques differ from §2 and §6 above, as the Wave 0 spikes recommended: the append is one data-modifying CTE (the counter `UPDATE … RETURNING`, then the `unnest` insert with positions `last_position - n + ordinality`) inside `BEGIN ISOLATION LEVEL READ COMMITTED … COMMIT`, and the event migration rewrites the table in place (numbered temporary copy, `TRUNCATE`, re-insert) instead of the backfill `UPDATE`. Both keep the properties the design relies on: the counter update is the first write and its row lock lasts until the transaction ends, and the table keeps its OID.
+
+**S1, position stress** (PostgreSQL 14.20, stock settings, in a 6-CPU colima VM on Apple silicon; data on tmpfs (A) and on disk with fsync (B)):
+
+- The counter-row design delivered every event exactly once, in strictly increasing positions, with no holes and the counter equal to `MAX(global_position)`, in every run: 29 correctness runs per environment of the 4-statement append of §2 (1 and 4 pools, 8 writers × 200 appends of 1–3 events, 20 % of the appends on one hot stream, two tailing keyset readers with batches of 100 and 10) and two 40,000-append soaks of it with over 15,000 rolled-back conflicts each. The CTE variant ran 5 times per environment in a `READ COMMITTED` transaction (the implemented variant) and 6 times in autocommit, and one 40,000-append soak ran on the autocommit variant only. The implemented variant also passed `CONFORMANCE_REPEAT=50` of the concurrency cases locally and `read-all-gap-safe` on every CI version (below). A rolled-back append returned its positions every time.
+- The detector fires: a reserve → sleep ≤ 5 ms → commit variant was caught in 16 of 16 runs (≤ 1 ms: 6 of 6, also without holes), and a `nextval()` sequence without sleep in 16 of 16.
+- Explicit `READ COMMITTED` matters: under a `REPEATABLE READ` server default, a plain `BEGIN` got about 1.5 serialization failures per append, and 1 (A) and 5 (B) appends failed after 16 attempts; with the explicit level, none.
+- Why it holds (PostgreSQL `REL_14_STABLE`, `xact.c` 2200–2268): `CommitTransaction` writes the commit record, then leaves the proc array (the commit becomes visible to new snapshots), and only then releases its locks; a waiter on the counter row (`heap_update` → `XactLockTableWait`) wakes after that, so commit visibility follows position order. The abort path has the same order.
+- `ExpectedVersion.Any` under sustained contention on one stream: 12 of about 8,000 hot appends used all 16 attempts in a soak (documented: retry in the application).
+
+Appends per second per pool, 1–3 events per append, 8 writers unless noted (median of 3 runs):
+
+| Variant | A (tmpfs) | B (disk) |
+| --- | --- | --- |
+| §2 as written (4 statements) | 663 | 324 |
+| CTE in a `READ COMMITTED` transaction (implemented) | 1,033 | 390 |
+| The driver's `appendEvents` (with the version read), PostgreSQL 14.20 / 17.8, 1 pool × 1 writer | 331 / 317 | – |
+| The same, 1 pool × 8 writers | 1,053 / 1,057 | – |
+| The same, 4 pools × 8 writers, per pool | 534 / 502 | – |
+
+**S2, migration** (the same machine). The spike's rows: the synthetic v1 table has the 3.0.2 DDL, 10 events per stream interleaved over two years, 100–150-byte payloads. The driver rows: 100,000 events with the 3.0.2 DDL, 5 per stream interleaved, about 330-byte payloads, a 70 MB table (56 MB heap); 20,000 snapshots, 14 MB, converted from `Europe/Brussels` (a rewrite). Three runs each; the driver's figures are for the statements the review fixes ship (the D33 numbering of ADR 0001, three window sorts, and a reinsert that keeps the order the copy was written in, without a sort).
+
+| Rows, procedure | Environment | Total | Under `ACCESS EXCLUSIVE` | WAL | Table after (heap / indexes) |
+| --- | --- | --- | --- | --- | --- |
+| 1M, §6 backfill `UPDATE` (spike) | B | 200.1 s | 188.8 s | 3,350 MB | 610 / 133 MB (from 300 / 135) |
+| 1M, rewrite with the spike's statements (one window sort, sorted reinsert) | B | 19.5 s | 18.2 s | 516 MB | 300 / 100 MB |
+| 100k, the driver's `migrate()`, PostgreSQL 14.20 (shared) | A | 1.71–1.81 s | 1.28–1.37 s | – | – |
+| 100k, the driver's `migrate()`, PostgreSQL 17.8 (own container) | A | 1.62–1.84 s | 1.09–1.23 s | – | – |
+| 100k, the driver's transaction with `work_mem` at 6.4 MB (the sort spill of 1M rows at 64 MB), PostgreSQL 17.8 | A | – | 0.90–1.04 s (the spike's statements: 0.64–0.73 s) | – | – |
+| 20k snapshots, the driver's `migrate()`, PostgreSQL 14.20 / 17.8 | A | 0.29–0.31 / 0.27–0.34 s | – | – | – |
+
+- Of the driver's 1.6–1.8 s at 100k, 0.2–0.4 s is the inspection before the lock and 0.2–0.3 s the `VACUUM` after the commit. The dry run takes 0.2–0.26 s.
+- Peak extra disk while the transaction ran (sampled from the database and spill directories, with the 1M-equivalent spill): 1.9–2.2 × the table's total size; the previous sorted reinsert peaked at 2.4 ×. The planner's warning asks for 3 ×.
+- **The runbook figures are provisional:** about 0.5 minutes per million events under the lock on disk (the spike's 18.2 s per million, times the 1.25–1.6 ratio of the driver's transaction to the spike's statements at the same spill), plus about 5 seconds per million for the inspection and `VACUUM`; about 15 seconds per million snapshots on tmpfs; free disk 3 × the table; WAL about the table's size. A million rows were not measured with the statements that ship, and 10M rows not at all: the spike's 10M run filled the host disk, and the process rules cap local runs at 1M, and at 100k rows while the host has less than 15 GiB free (it had 9–11 GiB for every driver run). Re-measure at 1M on a host or CI runner with room before 4.0.
+- The rewrite keeps the table's OID (grants, views and publication memberships survive); index OIDs and the relfilenode change. For snapshots, the `varchar → text` and `TIMESTAMP → TIMESTAMPTZ` conversion with `legacyTimeZone: 'UTC'` keeps the relfilenode (no rewrite), which `postgres.migration.spec.ts` asserts.
+- Robustness (spike and `postgres.migration.spec.ts`): a session idle in a transaction on the table makes the lock time out (`55P03`) and the table is reported `blocked`; a second migrator of the same table in the same schema is refused by the advisory lock (its key names the schema); a backend killed mid-migration, or a crash injected after every step, rolls back to v1, and a rerun ends in the same dump as a clean run; a table that changes while the migration waits for its lock is reported `blocked`. After the migration, a 3.x insert fails with `42703` in milliseconds. With Docker's default 64 MB `/dev/shm`, a parallel `VACUUM` fails with `53100`, so the driver runs `VACUUM (ANALYZE, PARALLEL 0)` after the commit and reports a failure as a warning (a spec forces one).
+- The dry run reads what would make the migration fail or lose something from the server: views and rules, policies, triggers (`WHEN` and `UPDATE OF` columns), publication row filters and column lists (PostgreSQL 15 and later) and generated columns on `event_date` or a converted column block the table; so do foreign keys of other tables, the catalog privileges, and table names that PostgreSQL truncated for 3.x. Columns a user added to a 3.x table are copied, not emptied. The `truncate` step refuses to run outside the transaction of the numbered copy, so the dry run's statements run one by one in autocommit leave the rows in place. `migrations/4.0.sql` is run with psql in CI (compared with `migrate()`, run twice, and without `legacy_time_zone`).
+
+**CI** ([run 36609799561](https://github.com/ocoda/event-sourcing/actions/runs/36609799561) of the schema v2 PR after its review fixes, `ci-ok` green): on PostgreSQL 13, 14, 15, 16, 17 and 18, the whole driver suite passed (361 tests; the only skips are the capability gates `headers-unsupported-rejects` and `read-all-best-effort`), including `read-all-gap-safe`, the conformance suite without skips, the migration specs with crash injection and `migrations/4.0.sql` run with psql; the cross-version fixture passed on 13, 17 and 18 (29 checks each, comparing every snapshot envelope with what 3.0.2 read, and the 3.0.2 append after the migration was refused on every pool). Locally: PostgreSQL 14.20 and 17.8 green, the concurrency cases (`read-all-gap-safe`, `conflict-concurrent-appends`, `concurrent-any`, `append-atomic-partial-failure`) green 50 times in a row on both, and the cross-version fixture green.
+- The review found that an append which lost a race classified its unique violation while it still held its connection, and asked the pool for a second one to read the primary key's name: with as many racing appends as connections, the pool deadlocked (no `connectionTimeoutMillis` by default). The append now classifies after it released its connection; specs run 2, 16 and 32 racing appends on pools of 1, 2 and 10 connections, each on a cold cache, under a timeout, and hang without the fix. A spec also appends under a `REPEATABLE READ` default (with a plain `BEGIN` instead of the explicit `READ COMMITTED`, the writers fail with `40001`).
 
 ### MariaDB
 
@@ -583,7 +622,45 @@ Each driver's schema v2 PR fills its subsection. Until then a driver claims noth
 
 ### MongoDB
 
-*Pending.* S1 and S2 results, including WriteConflict retry counts under 8 writers on a replica set and client-side against server-side numbering; `read-all-gap-safe` on replica sets of MongoDB 6, 7 and 8; `read-all-best-effort` on standalone servers.
+From the MongoDB schema v2 PR. The spikes ran on MongoDB 8.2.4 in Docker (a single-node replica set `rs0`, and the standalone test server), driver `mongodb` 7.7.0, Node.js 24, on a laptop whose load average was 13 to 20 from other runs: the timings are on the slow side.
+
+**S1, position stress** (the §4 transaction: counter first, `readConcern: 'snapshot'`, `w: 'majority'`, own 30 s retry loop with a 100 ms backoff cap; a tailing keyset reader with majority read concern; `ExpectedVersion.Any` writers on 32 shared streams):
+
+| Run | Appends/s per pool | WriteConflicts per append | Max attempts | p99 / max latency | Holes, missed, duplicates, out of order |
+| --- | --- | --- | --- | --- | --- |
+| Replica set, 8 writers × 200 appends, 5 runs | 292–329 | 1.81–1.84 | 14–19 | 279–339 / 592–753 ms | 0 |
+| Soak, 8 × 2000 appends, batch 10 | 229 | 2.12 | 23 | 399 ms / 1.67 s | 0 |
+| 1 writer × 1600 | 266 | 0 | 1 | 7.5 / 15.9 ms | 0 |
+| 16 writers × 100 | 195 | 3.35 | 26 | 869 ms / 1.96 s | 0 |
+| 4 pools, 8 writers each | 128 each, ≈ 512 together | 2.32–2.52 | 19–29 | ≈ 600 ms / 1.58 s | 0 |
+| Broken: reserve, sleep ≤ 5 ms, commit (3 runs) | – | – | – | – | 620–773 missed: **detected** |
+| Standalone, the §4 compensation path | 1298 | – | – | – | 516 holes, 69 missed: **not gap-safe** |
+
+- Every replica-set run delivered each event exactly once, in strictly increasing positions, without holes: 20 pool-runs, about 52,000 appends. The catalog's `lastPosition` equalled the highest position and the event count every time.
+- `UnknownTransactionCommitResult` never occurred, and no append came near the 30 s budget.
+- On a standalone server a transaction fails with the driver error "does not support retryable writes", not a usable server code, so the store detects the topology with `hello` before it chooses a path.
+
+**S2, migration timing** (synthetic 3.x collections, ≈ 446 B per event, ten events per stream, the two 3.x indexes; replica set):
+
+| Numbering | 1M events: numbering / to the commit point / total | Min per million | Oplog per million | Sort spill |
+| --- | --- | --- | --- | --- |
+| Client-side cursor, 1,000-update bulk writes (§6 as first planned) | 53.9 s / 60.4 s / 77.5 s | 1.29 | 567 MB | 0 |
+| Server-side, `$concat(eventDate, '#', _id)` key | 39.4 s / 42.7 s / 61.5 s | 1.03 | 425 MB | 40 MB |
+| Server-side, `_id` key | 54.4 s / 59.8 s / 83.8 s | 1.40 | 431 MB | 0 |
+
+- All three numbered 1M events identically (sha256 over `(_id, position)`).
+- At 10M the client-side numbering took 17 minutes (about 14.5 without a stray concurrent query), over the 10-minute threshold of §6, so the PR numbers on the server. The server-side 10M run wasn't done: the host disk filled up.
+- `$documentNumber` returns a 32-bit integer, which the fence's validator rejects (121): the pipeline converts it with `$toLong`. It accepts a single sort key.
+- The dry run's `$group` over the streams took 353 s at 10M; the PR scans the `{ streamId, version }` index once instead, with the counts per stream computed in the client.
+- Only `collMod`, `createIndex` and `dropIndex` took exclusive collection locks, for milliseconds; a probe reading every 50 ms never blocked. The collection's storage grew about 2.4×.
+
+**The PR's own measurements** (at most 100,000 rows locally after the disk incident; MongoDB 8.2.4 single-node replica set, load average ≈ 19): 100,000 events migrate in 5.8–6.2 s, 0.98–1.04 minutes per million: the numbering takes 3.25–3.43 s with the `_id` key and 3.60 s with the `$concat` key, the unique index 0.20–0.23 s, the `eventDate` clean-up 1.45–1.75 s, and the dry run 0.39–0.41 s. The oplog grew by 47 MB per 100,000 events. The committed `migrations/4.0.mongosh.js` and `migrate()` leave identical collections, validators, indexes and catalog documents on the same 3.x seeds, with canonical and with non-canonical ids (`mongodb.migration-script.run.spec.ts`, which runs where `mongosh` is installed).
+
+**Sort spill of the shipped pipeline** (from the PR's review). The S2 figures are those of the single-sort spike pipeline. The D33 pipeline adds two sorts over every event, by `{ streamId, version }` and by the order key, whatever the ranking key; `explain` estimated them at 70–100 MB per 100,000 events, so at the default 100 MB sort limit they spill from roughly 90,000 to 130,000 events on, and the 100,000-event timing above is of a run that didn't spill. With the sort limit lowered to 5–10 MB (standing in for a million events and more), they spilled about 100–150 MB per million events with the `_id` key and 165–250 MB with the `$concat` key. MongoDB 8.2 refuses to spill with less than 500 MB free in the `dbPath`, and 7.1 and later refuse an index build below 500 MB. Minutes per million at a million events and more remain to be measured with this pipeline.
+
+**CI** ([run 36601997169](https://github.com/ocoda/event-sourcing/actions/runs/36601997169), PR #572, and after the review fixes [run 36608855195](https://github.com/ocoda/event-sourcing/actions/runs/36608855195)): on MongoDB 6, 7 and 8, each as a standalone server and a replica set in one job, the driver suite passed (after the review: 505 passed, 28 skipped by capability, by topology or with a reason, 6 of them the mongosh run of the script, since the runner has no mongosh; coverage 97.1 % statements, 95.3 % branches). `read-all-gap-safe` passed on the replica set of every version (first run 6: 1.8 s, 7: 0.7 s, 8: 1.0 s; after the review 6: 2.0 s, 7: 1.9 s, 8: 1.7 s) and is skipped by capability on the standalone servers, where `read-all-best-effort` passed. A spec now also asserts the majority read concern of every `readAll` batch and the transaction options, which a single-node replica set can't tell apart otherwise. The migration specs, crash injection after every step included, passed on both topologies of every version. The cross-version test (MongoDB 8, both topologies) migrated the 3.0.2 corpus, read it back as 3.0.2 did with positions in 3.x's order and every stream in version order, and a 3.0.2 append afterwards was refused on every pool.
+
+**Decision.** Replica sets claim `'gap-safe'`; standalone servers and sharded clusters stay `'best-effort'`. The migration numbers on the server by default, with the `_id` key when every id of the collection is a canonical ULID and the `$concat` key otherwise (D35).
 
 ## Alternatives considered
 

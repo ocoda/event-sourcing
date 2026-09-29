@@ -10,6 +10,7 @@ import {
 import { type MongoDBSnapshotEntity, MongoDBSnapshotStore } from '@ocoda/event-sourcing-mongodb';
 import { Account, AccountId, mongodbTestTopologies } from '@ocoda/event-sourcing-testing/unit';
 import { AbstractCursor, Collection, type Db, type MongoClient } from 'mongodb';
+import { dropCollections } from '../support/catalog.js';
 import { createSnapshotStore } from '../support/stores.js';
 
 // Pool exhaustion and concurrency scenarios: allow slow tests and setup/teardown hooks.
@@ -17,7 +18,7 @@ vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
 const uniquePool = (name: string): ISnapshotPool => `mongofix-${name}-${randomBytes(4).toString('hex')}`;
 
-describe.each(mongodbTestTopologies())(`${MongoDBSnapshotStore.name} resilience ($name)`, ({ url }) => {
+describe.each(mongodbTestTopologies())(`${MongoDBSnapshotStore.name} resilience ($name)`, ({ name, url }) => {
 	let snapshotStore: MongoDBSnapshotStore;
 	let client: MongoClient;
 	let database: Db;
@@ -76,18 +77,14 @@ describe.each(mongodbTestTopologies())(`${MongoDBSnapshotStore.name} resilience 
 	beforeAll(async () => {
 		snapshotStore = await newStore();
 
-		client = snapshotStore['client'];
+		client = snapshotStore['client'] as MongoClient;
 		database = snapshotStore['database'];
 	});
 
 	afterAll(async () => {
-		await Promise.all(
-			pools.map((snapshotPool) =>
-				database
-					.collection(SnapshotCollection.get(snapshotPool))
-					.drop()
-					.catch(() => undefined),
-			),
+		await dropCollections(
+			database,
+			pools.map((snapshotPool) => SnapshotCollection.get(snapshotPool)),
 		);
 		await snapshotStore.disconnect();
 	});
@@ -278,32 +275,70 @@ describe.each(mongodbTestTopologies())(`${MongoDBSnapshotStore.name} resilience 
 				}
 			});
 
-			it('should report a version conflict when the race is lost after the version check passed', async () => {
-				const snapshotPool = await newPool('concurrent-check');
-				const stream = newStream();
-				await snapshotStore.appendSnapshot(stream, 1, { balance: 0 }, snapshotPool);
+			// On a replica set the check, the unflagging and the insert are one transaction: every writer passes the check in
+			// its snapshot, and the first unflagging makes the others' updates conflict, so they start over and see the winner
+			describe.runIf(name === 'replica-set')('on a replica set', () => {
+				it('should report a version conflict to the writers whose unflagging conflicted', async () => {
+					const snapshotPool = await newPool('concurrent-unflag');
+					const collection = SnapshotCollection.get(snapshotPool);
+					const stream = newStream();
+					await snapshotStore.appendSnapshot(stream, 1, { balance: 0 }, snapshotPool);
 
-				// Hold every writer right before its insert, so after its version check, until all of them got there.
-				// None of them can then be stopped by the check and the unique index has to decide.
-				let waiting = 0;
-				let releaseWriters: () => void;
-				const allChecked = new Promise<void>((resolve) => {
-					releaseWriters = resolve;
-				});
-				const insertOne = Collection.prototype.insertOne;
-				const insertOneSpy = vi.spyOn(Collection.prototype, 'insertOne').mockImplementation(async function (
-					this: Collection,
-					...args: Parameters<Collection['insertOne']>
-				) {
-					if (++waiting === WRITERS) {
-						releaseWriters();
-					}
-					await allChecked;
-					return insertOne.apply(this, args);
-				});
+					// Hold every writer at its unflagging, so after its check, until all of them got there
+					let waiting = 0;
+					let releaseWriters: () => void = () => undefined;
+					const allChecked = new Promise<void>((resolve) => {
+						releaseWriters = resolve;
+					});
+					const updateMany = Collection.prototype.updateMany;
+					const updateManySpy = vi.spyOn(Collection.prototype, 'updateMany').mockImplementation(async function (
+						this: Collection,
+						...args: Parameters<Collection['updateMany']>
+					) {
+						if (this.collectionName === collection && ++waiting === WRITERS) {
+							releaseWriters();
+						}
+						await allChecked;
+						return updateMany.apply(this, args);
+					});
 
-				await expectExactlyOneWinner(await settle(stream, 2, snapshotPool), stream, 2, [1, 2], snapshotPool);
-				expect(insertOneSpy).toHaveBeenCalledTimes(WRITERS);
+					await expectExactlyOneWinner(await settle(stream, 2, snapshotPool), stream, 2, [1, 2], snapshotPool);
+					// Every writer got past its check before one of them unflagged
+					expect(
+						updateManySpy.mock.contexts.filter((context) => (context as Collection).collectionName === collection)
+							.length,
+					).toBeGreaterThanOrEqual(WRITERS);
+				});
+			});
+
+			describe.runIf(name === 'standalone')('on a standalone server', () => {
+				it('should report a version conflict when the race is lost after the version check passed', async () => {
+					const snapshotPool = await newPool('concurrent-check');
+					const stream = newStream();
+					await snapshotStore.appendSnapshot(stream, 1, { balance: 0 }, snapshotPool);
+
+					// Hold every writer right before its insert, so after its version check, until all of them got there.
+					// None of them can then be stopped by the check and the unique index has to decide.
+					let waiting = 0;
+					let releaseWriters: () => void;
+					const allChecked = new Promise<void>((resolve) => {
+						releaseWriters = resolve;
+					});
+					const insertOne = Collection.prototype.insertOne;
+					const insertOneSpy = vi.spyOn(Collection.prototype, 'insertOne').mockImplementation(async function (
+						this: Collection,
+						...args: Parameters<Collection['insertOne']>
+					) {
+						if (++waiting === WRITERS) {
+							releaseWriters();
+						}
+						await allChecked;
+						return insertOne.apply(this, args);
+					});
+
+					await expectExactlyOneWinner(await settle(stream, 2, snapshotPool), stream, 2, [1, 2], snapshotPool);
+					expect(insertOneSpy).toHaveBeenCalledTimes(WRITERS);
+				});
 			});
 		});
 	});

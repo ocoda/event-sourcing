@@ -5,6 +5,9 @@ import { nameOf } from '../internal.js';
 
 /**
  * Thrown when a query class has no metadata, which `@QueryHandler()` assigns: no handler was ever declared for it.
+ *
+ * @deprecated The `QueryBus` no longer throws it: it keys its handlers by class, and rejects with a
+ * `QueryHandlerNotFoundException` for a query without a handler. Removed in 5.0.
  */
 export class MissingQueryMetadataException extends EventSourcingError {
 	override readonly name = 'MissingQueryMetadataException';

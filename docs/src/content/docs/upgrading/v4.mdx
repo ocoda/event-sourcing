@@ -209,6 +209,57 @@ On MariaDB, `getLastEnvelopesForAggregate`, and so `SnapshotRepository.loadAll`,
 
 This reverses the order of `loadAll` on MariaDB, and a `limit` now returns the streams with the highest stream ids instead of the lowest. If you relied on the old order, sort the results yourself. This change is not in 3.x.
 
+## Typed command and query buses [#typed-buses]
+
+<Aside type="note" title="Not released yet">
+The changes in this section ship in a later 4.0 prerelease. The design is in [ADR 0001](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0001-v4-core-api.md#7-typed-buses).
+</Aside>
+
+`commandBus.execute()` and `queryBus.execute()` take their result type from the command or query, and reject instead of throwing.
+
+- **`Command<TResult>` and `Query<TResult>`** are new base classes. For `OpenAccountCommand extends Command<AccountId>`, `commandBus.execute(new OpenAccountCommand())` resolves to an `AccountId` without a type argument, `ICommandHandler<OpenAccountCommand>` resolves to it, and `@CommandHandler(OpenAccountCommand)` rejects a handler whose `execute()` resolves to something else. `Command` without a type argument is `Command<void>`, and `Query` needs one. The result type exists for the compiler only: the classes add no property, so the payloads are unchanged. `ResultOf<T>` is the result type of a command or query class.
+- **3.x commands and queries keep compiling.** A class that doesn't extend `Command` or `Query` still works, and `execute()` resolves to `any` for it. Both 3.x generic forms compile: `execute<AddBookCommand>(command)` resolves to `any`, and `execute<OpenAccountCommand, AccountId>(command)` to an `AccountId`. The result type is not inferred from the variable it is assigned to, so `const id: Promise<string> = commandBus.execute(new OpenAccountCommand())` is a compile error for a typed command.
+- **TypeScript 5.4 or later.** The type declarations of `execute()` use `NoInfer`, which TypeScript 5.4 introduced. An older compiler reports `Cannot find name 'NoInfer'`, or, with `skipLibCheck`, types every result as `any`.
+- **`ICommand` and `IQuery` are `object`**, not `any`, so a primitive, `null` or `undefined` no longer type-checks as a command or query. Neither does a value typed `unknown` or an unconstrained type parameter: constrain it, as in `dispatch<C extends ICommand>(command: C)`.
+- **`execute()` rejects instead of throwing.** A command or query without a handler rejects with a `CommandHandlerNotFoundException` or `QueryHandlerNotFoundException` and publishes nothing, and a handler that throws synchronously rejects too.
+- **Handlers are registered by class.** The buses route a command or query to the handler registered for its class or, if there is none, for its nearest parent class. A subclass without a handler of its own still reaches the handler of its parent, as in 3.x. 3.x routed by an id that `@CommandHandler()` and `@QueryHandler()` store on the class, and a subclass inherited that id: when a class and its subclass both had a handler, the handler registered last handled both. Each now reaches its own handler. A class that no handler was ever declared for rejects with the not-found exception, not with a `MissingCommandMetadataException` or `MissingQueryMetadataException`. Those two exceptions, `getCommandMetadata()`, `getQueryMetadata()`, `CommandMetadata` and `QueryMetadata` are deprecated and will be removed in 5.0. `commandBus.bind(handler, command)` and `queryBus.bind(handler, query)` take the class instead of the id.
+- **The decorators take classes.** `@CommandHandler()`, `@QueryHandler()`, `@EventSubscriber()` and `@EventSerializer()` no longer accept other values, and the class you pass needs a public constructor. `@CommandHandler()` and `@QueryHandler()` also check the class they decorate: it needs an `execute()` method that returns a promise. They return a decorator typed for the handler class instead of a `ClassDecorator`, so `applyDecorators()` of `@nestjs/common` doesn't accept them under `strictFunctionTypes`. Apply them directly, or cast them: `CommandHandler(OpenAccountCommand) as ClassDecorator`, which skips the check of the result type.
+- `execute()` takes an optional second argument, `{ request }`, for request-scoped handlers. It is ignored until they arrive in a later prerelease.
+
+To migrate:
+
+1. Assert the failures of `execute()` as rejections, for example in tests:
+
+   ```ts
+   // 3.x
+   expect(() => commandBus.execute(new UnhandledCommand())).toThrow(CommandHandlerNotFoundException);
+   // 4.0
+   await expect(commandBus.execute(new UnhandledCommand())).rejects.toThrow(CommandHandlerNotFoundException);
+   ```
+
+2. Where you catch a `MissingCommandMetadataException` or `MissingQueryMetadataException`, catch the not-found exception, or match `EventSourcingErrorCode.CommandHandlerNotFound` and `EventSourcingErrorCode.QueryHandlerNotFound`.
+3. Where a command or query class and its subclass both have a handler, check that each handler expects only its own class: 3.x ran the handler registered last for both.
+4. Make the `execute()` of every decorated handler return a promise, for example by making it `async`.
+5. Fix the compile errors of code that passed other values: constrain the type parameters you pass to `execute()`, make the constructors of command and query classes public (a private constructor with a static factory doesn't type-check), and cast `@CommandHandler()` and `@QueryHandler()` where you pass them to `applyDecorators()`.
+6. Optionally, extend `Command` and `Query`, and drop the type arguments of `execute()`. A constructor then calls `super()`:
+
+   ```ts
+   // 3.x
+   export class OpenAccountCommand implements ICommand {
+   	constructor(public readonly accountOwnerIds?: string[]) {}
+   }
+   const accountId = await commandBus.execute<OpenAccountCommand, AccountId>(new OpenAccountCommand());
+   // 4.0
+   export class OpenAccountCommand extends Command<AccountId> {
+   	constructor(public readonly accountOwnerIds?: string[]) {
+   		super();
+   	}
+   }
+   const accountId = await commandBus.execute(new OpenAccountCommand());
+   ```
+
+   In a file that also imports the `@Query()` decorator of `@nestjs/common`, import one of the two under another name, such as `import { Query as QueryParam } from '@nestjs/common'`.
+
 ## Event store, snapshots and schema v2 [#store-and-schema]
 
 <Aside type="note" title="Not released yet">
@@ -240,7 +291,7 @@ The 3.x form still works, but is deprecated and will be removed in 5.0. It emits
 
 The database stores keep their 3.x appends until they move to schema v2. They check the arguments of both forms first, like the other stores: an empty pool name, or an aggregate version that is fractional or below the number of events, throws an `InvalidAppendOptionsException`. Otherwise the 3.x form keeps its 3.x behaviour there: an empty append reaches the store, a gap is accepted, and pre-built envelopes are stored as they are. They accept the options form with a numeric expected version, where pre-built envelopes must continue the stream, and reject `ExpectedVersion.Any` and metadata with an `UnsupportedOperationException`. In both forms, they reject pre-built envelopes with headers or an `eventVersion`, which they would drop, with an `UnsupportedOperationException`. Call the options form through the `EventStore` type: on a variable typed as `PostgresEventStore`, `MariaDBEventStore` or `MongoDBEventStore`, only the 3.x form type-checks until schema v2.
 
-**Publishing.** The module hands the store the `EventBus` when it creates it, and `eventStore.publish = …` is gone. Events appended before the application bootstrapped are no longer held back with a warning, but the publishers and subscribers are only registered at bootstrap, so they still don't receive them. The store calls `eventBus.publishAll(envelopes)`, so a test double that replaces the `EventBus` must implement it; spies on `eventBus.publish` keep working.
+**Publishing.** The module hands the store the `EventBus` when it creates it, and `eventStore.publish = …` is gone. Events appended before the application bootstrapped are no longer held back with a warning, but the publishers and subscribers are only registered at bootstrap, so they still don't receive them. The store calls `eventBus.publishAll(envelopes)`, so a test double that replaces the `EventBus` must implement it. The bus no longer passes the envelopes of an append through `eventBus.publish`, so a spy on it sees nothing: see [Publishing](#publishing).
 
 **Reads.** `getEvent()` and `getEnvelope()` always return a promise, also on the in-memory store. On the in-memory store now, and on the database stores with schema v2, every read of a pool whose collection doesn't exist throws an `EventCollectionNotFoundException`; the in-memory store's `getEvents()` and `getEnvelopes()` yielded nothing and its `getEvent()` threw an `EventNotFoundException`. An append to such a pool throws an `EventStorePersistenceException` with `outcome: 'not-persisted'`, whose `cause` is the `EventCollectionNotFoundException`.
 
@@ -298,7 +349,18 @@ For custom snapshot stores:
 
 ### PostgreSQL schema v2 [#postgres-schema-v2]
 
-*Planned.* The event tables gain `global_position`, `headers` and `event_version` columns and lose `event_date`. See [PostgreSQL](/integrations/postgres).
+*In the next prerelease.* See [PostgreSQL](/integrations/postgres) for the schema, the privileges and the throughput per pool.
+
+The PostgreSQL stores implement the new contract natively: global positions, `readAll`, headers, `ExpectedVersion.Any` and the metadata options, with the capabilities `{ atomicAppend: true, headers: true, globalOrder: 'gap-safe' }`. Their tables change:
+
+- **Events.** The tables gain `global_position` (a `BIGINT`, unique per pool), `headers` (`JSONB`) and `event_version`, and lose `event_date` and its index. The text columns become `TEXT`. `getAllEnvelopes` is gone: use [`readAll`](#read-all).
+- **The catalog.** A table `event_sourcing_collections` in the schema registers the tables and counts the positions of each pool. `listCollections()` lists the tables it registers, so 3.x tables no longer show up until they are migrated.
+- **Snapshots.** `registered_on` becomes a `TIMESTAMPTZ`, and a unique index keeps one `latest` flag per stream. The last snapshot of a stream is the one with the highest version, and `loadAll` pages in descending binary order of the aggregate ids, with `aggregateId` as an exclusive cursor.
+- **A 3.x event table is refused.** `ensureCollection` throws an `EventStoreSchemaException` with `found: 'v1'`, so the application doesn't bootstrap on a 3.x default pool until you [migrate the data](#data-migration). A 3.x snapshot table keeps working, with a warning, until it is migrated.
+- **New option `ddl`**: `'auto'` (default) creates missing tables and the catalog; `'none'` never runs DDL and throws with the statements to run instead.
+- **Reads of a pool without a table** throw an `EventCollectionNotFoundException`, and an append to a pool that isn't registered throws an `EventStorePersistenceException` with `outcome: 'not-persisted'`. A pool name whose table name is over 63 bytes is rejected.
+- **A `bigint` in an event payload** fails the append (`not-persisted`); store large integers as strings.
+- **Throughput.** Appends to one pool serialize on the pool's position counter. Spread heavy write loads over pools, and set an `idle_in_transaction_session_timeout` for the store's role, so that a writer that stalls in an append can't hold up its pool for long.
 
 ### MariaDB schema v2 [#mariadb-schema-v2]
 
@@ -316,11 +378,50 @@ For custom snapshot stores:
 
 ### MongoDB schema v2 [#mongodb-schema-v2]
 
-*Planned.* The event documents gain a `globalPosition` and lose `eventDate`. See [MongoDB](/integrations/mongodb).
+*In this prerelease.* See [MongoDB](/integrations/mongodb) for the schema, the capabilities per topology and the privileges.
+
+- **The MongoDB event store implements the store contract.** Everything in [Event store API](#event-store-api), [Metadata and headers](#metadata-headers) and [Reading all events](#read-all) applies to it: the options form of `appendEvents` with `ExpectedVersion.Any` and metadata, `readAll` instead of `getAllEnvelopes`, which is gone from it, and `EventCollectionNotFoundException` for every read of a pool that was never ensured. On a variable typed as `MongoDBEventStore`, the options form now type-checks.
+- **Event documents** gain a 64-bit `globalPosition`, `headers` and `eventVersion`, and lose `eventDate`. Absent metadata is left out instead of stored as `null`. A validator requires the position, so 3.x writers fail loudly on a migrated collection.
+- **Capabilities depend on the topology**, which `connect()` detects: a replica set (a single-node one is enough) is `{ atomicAppend: true, globalOrder: 'gap-safe' }`, a sharded cluster is atomic but `'best-effort'`, and a standalone server is `{ atomicAppend: false, globalOrder: 'best-effort' }`, with a warning when the store connects. Run MongoDB as a replica set.
+- **A catalog**, the `event_sourcing_collections` collection, holds the position counter of each pool and the schema version of each collection. `listCollections()` reads it, so it lists only collections that `ensureCollection` or `migrate()` registered.
+- **`ensureCollection` never migrates.** A 3.x event collection throws an `EventStoreSchemaException` (`found: 'v1'`), so an application whose default pool is a 3.x collection fails its bootstrap until you run `MongoDBEventStore.migrate()`. A 3.x snapshot collection keeps working, with a warning, until you migrate it. See [Data migration](#data-migration).
+- **`ddl: 'none'`** is a new option of both stores: `ensureCollection` then only checks and registers collections, and names the mongosh statements that create a missing one.
+- **Snapshots.** A unique index keeps a single latest snapshot per stream, also when appends race; `getLastSnapshot` and `getLastEnvelope` read the highest version; `getLastEnvelopesForAggregate` pages in descending binary order of the aggregate ids, with `aggregateId` as an exclusive cursor. An unflagged snapshot has no `latest` field (3.x stored `null`).
+- **`disconnect()`** can be called more than once, and before `connect()`.
 
 ### Data migration [#data-migration]
 
-*Planned.* A one-time, offline migration of the event and snapshot tables, run with the store's `migrate()` after a dry run, while no 3.x instance is running.
+*PostgreSQL: in the next prerelease. MariaDB and MongoDB: planned.* A one-time, offline migration of the event and snapshot tables, run with the store's `migrate()` after a dry run, while no 3.x instance is running.
+
+**PostgreSQL.** Follow the [runbook](/integrations/postgres#migrating-from-3x). In short:
+
+1. Take a backup.
+2. Run `PostgresEventStore.migrate(config, { dryRun: true })` and `PostgresSnapshotStore.migrate(config, { dryRun: true, legacyTimeZone })`, where `legacyTimeZone` is the time zone your 3.x instances ran in. They need no Nest application and write nothing. Review `blocking`, `gappedStreams`, `dependents` and `warnings`.
+3. Stop every 3.x instance.
+4. Run the two migrations again without `dryRun`: the events first, then the snapshots. A `blocked` table is reported, not thrown: stop the cutover while any table is `blocked`.
+5. Deploy 4.0.
+
+Each table is migrated in one transaction under an exclusive lock, keeps its OID (grants and publications survive) and the columns you added, and gets positions in 3.x's order with every stream kept in version order. Plan for about 0.5 minutes per million events under the lock (a provisional figure, extrapolated from 100,000 events), 3 times the table's size in free disk, and a `TRUNCATE` plus an insert of every row in publications; migrate the tables of a logical replication subscriber first. A 3.x instance that still writes afterwards fails instead of writing events without positions. A stream with a gap in its versions conflicts on its next append.
+
+**MongoDB** (in this prerelease): take a backup, run `MongoDBEventStore.migrate(config, { dryRun: true })` and `MongoDBSnapshotStore.migrate(config, { dryRun: true })` and review the reports, stop every 3.x instance, run `MongoDBEventStore.migrate(config)`, then `MongoDBSnapshotStore.migrate(config)`, and deploy 4.0. The events keep 3.x's order, `(eventDate, _id)`, as their global positions `1n…`, with every stream in version order; a stream with gaps in its versions conflicts on its next append until you append with its actual version. The migration took about a minute per million events, measured with 100,000 events (larger collections sort on disk and take longer), and writes about half a GB of oplog per million; a run that stopped resumes. See [Migrating from 3.x](/integrations/mongodb#migrating-from-3x) for the steps, the room it needs and what blocks a collection.
+
+## Publishing [#publishing]
+
+*In the next prerelease.* See [Event Publishers and Subscribers](/advanced/event-pubsub#delivery-semantics).
+
+- **Publishers are awaited.** The bus awaits the promise that a publisher's `publish` returns before it passes that publisher the next envelope of the append, and `appendEvents` resolves once every publisher is done. 3.x fired them and forgot. The publishers run concurrently, and each call may take at most `publishing.publisherTimeout` milliseconds (30 s by default, `0` disables it): after that the bus logs and reports a timeout and moves on. Each publisher gets the appends of a stream in the order in which they were stored, one after the other, even when they run concurrently; appends to other streams don't wait for each other. A slow publisher now slows down your commands: each call up to that timeout, and an append to a stream also waits for the calls of the earlier appends to that stream that the publisher still handles. A publisher may implement `publishAll(envelopes)` to get the envelopes of an append in one call.
+- **`eventBus.publish()` returns a promise**, which resolves once the publishers are done and never rejects. The envelopes of an append go through `eventBus.publishAll()`, not through `publish()`: to see what an append published in a test, register a publisher or subscribe to the bus instead of spying on `eventBus.publish`.
+- **`eventBus.whenIdle()`** resolves once no publisher or subscriber is running. In tests, `await eventBus.whenIdle()` replaces waiting for a fixed time for the subscribers.
+- **`eventBus.deliveryErrors$`** emits every publisher and subscriber failure, a timeout included. They are still logged.
+- **Shutdown.** `app.close()` waits for the running publishers and subscribers, for at most `publishing.shutdownTimeout` milliseconds (10 s by default), then unsubscribes the subscribers and disconnects the stores. 3.x unsubscribed and disconnected in `onModuleDestroy`, which dropped the deliveries in flight. NestJS still runs `onModuleDestroy` first, so if your subscribers use providers that clean up there, `await eventBus.whenIdle()` before `app.close()`.
+- **`IEventPublisher.publish`** returns `unknown` instead of `any` and no longer declares rest parameters, which the bus never passed. `IEventBus.publish` returns `Promise<void>`.
+
+```ts
+EventSourcingModule.forRoot({
+	events: [AccountOpenedEvent],
+	publishing: { publisherTimeout: 5_000, shutdownTimeout: 30_000 },
+});
+```
 
 **MariaDB** (*in the next prerelease*): follow the [runbook](/integrations/mariadb#runbook). In short, take a backup, run the dry runs with the 4.0 package, stop every 3.x instance, migrate, then deploy 4.0:
 
@@ -355,7 +456,7 @@ Nothing in this section is released yet. The changes are planned in [ADR 0001: v
 
 - **Event store, snapshots and schema v2.** See [Event store, snapshots and schema v2](#store-and-schema).
 - **Saving aggregates.** `commit()` gives way to `getUncommittedEvents()` and `markCommitted()`, and saving an unchanged aggregate becomes a no-op. `commit()` stays as a deprecated shim until 5.0.
-- **Publishing.** `eventBus.publish()` returns a promise and async publishers are awaited. In tests, `await eventBus.whenIdle()` replaces waiting for a fixed time.
+- **Publishing.** See [Publishing](#publishing).
 - **Bootstrap checks.** Duplicate registrations, and request-scoped subscribers, publishers and serializers, fail the bootstrap. Request-scoped command and query handlers start to work.
 - **Serialization.** A JSON serializer replaces class-transformer as the default. Events that use class-transformer decorators opt back in with `defaultEventSerializer: ClassTransformerEventSerializer`.
 - **Ids.** `generate()` on an id class returns that class, so `AccountId.generate()` returns an `AccountId`, and ids of different classes are no longer equal.

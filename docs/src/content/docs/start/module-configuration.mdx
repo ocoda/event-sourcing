@@ -21,6 +21,7 @@ Everything in this library is wired together by the `EventSourcingModule`. It ex
 | `events` | The event classes to register globally. Optional, because feature modules can register their own events with [`forFeature`](#for-feature). |
 | `eventStore` | The configuration of the event store. Needs a `driver` (the store class), can contain `useDefaultPool` and any option that the driver needs to connect. Defaults to the in-memory event store. |
 | `snapshotStore` | The configuration of the snapshot store, which has the same shape as `eventStore`. Defaults to the in-memory snapshot store. |
+| `publishing` | `{ publisherTimeout, shutdownTimeout }`: how long, in milliseconds, one call of an event publisher may take (30 000 by default), and how long the application's shutdown waits for the running publishers and subscribers (10 000 by default). `0` disables a timeout. See [event pub/sub](/advanced/event-pubsub#when-idle). |
 
 The in-memory stores are handy for testing and prototyping, but they lose everything when the process stops. Each integration library exports its own drivers and configuration interfaces, see [installation](/start/install#advanced-setup).
 

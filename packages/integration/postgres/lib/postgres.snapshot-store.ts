@@ -8,6 +8,8 @@ import {
 	type ISnapshotCollectionFilter,
 	type ISnapshotFilter,
 	type ISnapshotPool,
+	type MigrationOptions,
+	type MigrationReport,
 	SnapshotCollection,
 	SnapshotEnvelope,
 	SnapshotNotFoundException,
@@ -19,23 +21,77 @@ import {
 	StreamReadingDirection,
 	getAggregateMetadata,
 } from '@ocoda/event-sourcing';
-import { Pool, escapeIdentifier } from 'pg';
+import { type Pool, type PoolClient, escapeIdentifier } from 'pg';
 import type { PostgresSnapshotEntity, PostgresSnapshotStoreConfig } from './interfaces/index.js';
-import { UNIQUE_VIOLATION, ensureTable, hasErrorCode, readInBatches, withTransaction } from './postgres.helpers.js';
+import { runMigration } from './migration/migrate.js';
+import { UNDEFINED_TABLE, UNIQUE_VIOLATION, hasErrorCode, readInBatches, withTransaction } from './postgres.helpers.js';
+import { createPool, migrationPoolConfigOf, poolConfigOf } from './postgres.pool.js';
+import {
+	CATALOG,
+	SCHEMA_VERSION,
+	assertTableName,
+	catalogStatement,
+	describeTable,
+	ensureCatalog,
+	registerSnapshotsStatement,
+	renderStatements,
+	snapshotTableState,
+	snapshotTableStatements,
+} from './postgres.schema.js';
 
 type PostgresSnapshotEnvelopeEntity<A extends AggregateRoot> = Pick<
 	PostgresSnapshotEntity<A>,
 	'payload' | 'aggregate_id' | 'registered_on' | 'snapshot_id' | 'version'
 >;
 
+const ENVELOPE_COLUMNS = 'payload, aggregate_id, registered_on, snapshot_id, version';
+
+/**
+ * A snapshot store on PostgreSQL (schema v2, ADR 0002 §2).
+ *
+ * Every pool has its own table (`snapshots`, `<pool>-snapshots`), registered in the `event_sourcing_collections`
+ * catalog of the schema. The last snapshot of a stream is the one with the highest version; it also carries the
+ * stream's `latest` flag, which a unique index keeps to one row per stream.
+ *
+ * A 3.x table keeps working (with a warning) until it is migrated with `PostgresSnapshotStore.migrate()`.
+ */
 export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreConfig> {
-	private pool: Pool;
+	private pool: Pool | undefined;
+
+	/**
+	 * The 3.x tables this store already warned about.
+	 */
+	private readonly warnedLegacyTables = new Set<ISnapshotCollection>();
+
+	/**
+	 * Migrates the snapshot tables of a 3.x store to schema v2, without a Nest application. Migrate the event tables
+	 * first. Stop every 3.x instance first; with `dryRun: true` it only reports.
+	 * See the [migration runbook](https://ocoda.github.io/event-sourcing/integrations/postgres#migrating-from-3x).
+	 */
+	static async migrate(
+		config: Omit<PostgresSnapshotStoreConfig, 'driver'>,
+		options?: MigrationOptions,
+	): Promise<MigrationReport> {
+		const pool = createPool(migrationPoolConfigOf(config), () => undefined);
+		try {
+			return await runMigration(pool, 'snapshots', options);
+		} finally {
+			await pool.end();
+		}
+	}
+
+	/**
+	 * Migrates the snapshot tables of a 3.x store to schema v2, on this connected store. See the static `migrate`.
+	 */
+	async migrate(options?: MigrationOptions): Promise<MigrationReport> {
+		return runMigration(this.connection, 'snapshots', options, this.logger);
+	}
 
 	public async connect(): Promise<void> {
 		this.logger.log('Starting store');
-		this.pool = new Pool(this.options);
-		// Idle connections that fail are discarded by the pool, without a listener the error would crash the process
-		this.pool.on('error', (error) => this.logger.error(`Idle database connection failed: ${error.message}`));
+		this.pool = createPool(poolConfigOf(this.options), (error) =>
+			this.logger.error(`Idle database connection failed: ${error.message}`),
+		);
 
 		// Fail fast when the database can't be reached
 		const client = await this.pool.connect();
@@ -43,28 +99,61 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 	}
 
 	public async disconnect(): Promise<void> {
+		const pool = this.pool;
+		if (!pool) {
+			return;
+		}
 		this.logger.log('Stopping store');
-		await this.pool.end();
+		this.pool = undefined;
+		await pool.end();
 	}
 
+	/**
+	 * Creates the table of a pool and registers it in the catalog, unless it exists. A 3.x table is registered with
+	 * schema version 1 and keeps working, with a warning to migrate it.
+	 */
 	public async ensureCollection(pool?: ISnapshotPool): Promise<ISnapshotCollection> {
 		const collection = SnapshotCollection.get(pool);
+		const ddl = this.options.ddl ?? 'auto';
 
 		try {
-			await ensureTable(this.pool, this.logger, {
-				table: collection,
-				definition: `
-                    stream_id VARCHAR(90) NOT NULL,
-                    version INT NOT NULL,
-                    payload JSONB NOT NULL,
-                    snapshot_id VARCHAR(40) NOT NULL,
-                    aggregate_id VARCHAR(40) NOT NULL,
-                    registered_on TIMESTAMP NOT NULL,
-                    aggregate_name VARCHAR(50) NOT NULL,
-                    latest VARCHAR(100),
-                    PRIMARY KEY (stream_id, version)
-                `,
-				index: { suffix: 'aggregate_name_latest', columns: ['aggregate_name', 'latest'] },
+			assertTableName(collection);
+			if (!(await ensureCatalog(this.connection, ddl === 'auto'))) {
+				throw new Error(
+					`The ${CATALOG} catalog doesn't exist, and ddl is 'none': create it with ${renderStatements([catalogStatement(), ...snapshotTableStatements(collection)])}`,
+				);
+			}
+
+			await withTransaction(this.connection, async (client) => {
+				await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [collection]);
+				const table = await describeTable(client, collection);
+				const state = snapshotTableState(table);
+
+				let schemaVersion = SCHEMA_VERSION;
+				if (state === 'absent') {
+					if (ddl === 'none') {
+						throw new Error(
+							`The ${collection} table doesn't exist, and ddl is 'none': create it with ${renderStatements(snapshotTableStatements(collection))}`,
+						);
+					}
+					for (const statement of snapshotTableStatements(collection)) {
+						await client.query(statement);
+					}
+				} else if (state !== 'v2') {
+					schemaVersion = 1;
+					if (!this.warnedLegacyTables.has(collection)) {
+						this.warnedLegacyTables.add(collection);
+						const schema =
+							state === 'v1'
+								? 'has the 3.x snapshot schema'
+								: 'lacks parts of snapshot schema v2 (such as the unique index on its latest flags)';
+						this.logger.warn(
+							`Collection ${collection} ${schema}, which doesn't keep a single latest snapshot per stream when appends race. It keeps working; migrate it with PostgresSnapshotStore.migrate(config, { dryRun: true }), then migrate().`,
+						);
+					}
+				}
+
+				await client.query(registerSnapshotsStatement(), [collection, schemaVersion]);
 			});
 
 			return collection;
@@ -73,68 +162,63 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 		}
 	}
 
+	/**
+	 * Lists the snapshot collections registered in the catalog, by name, in batches.
+	 */
 	public async *listCollections(filter?: ISnapshotCollectionFilter): AsyncGenerator<ISnapshotCollection[]> {
 		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
+		let after: string | null = null;
 
-		const query = `SELECT tablename FROM pg_catalog.pg_tables WHERE tablename LIKE '%snapshots'`;
+		while (true) {
+			let names: ISnapshotCollection[];
+			try {
+				const { rows } = await this.connection.query<{ name: ISnapshotCollection }>(
+					`SELECT name FROM ${CATALOG}
+					WHERE kind = 'snapshots' AND ($1::text IS NULL OR name > $1)
+					ORDER BY name LIMIT $2`,
+					[after, batch],
+				);
+				names = rows.map(({ name }) => name);
+			} catch (error) {
+				// No catalog, so no collections
+				if (hasErrorCode(error, UNDEFINED_TABLE)) {
+					return;
+				}
+				throw error;
+			}
 
-		for await (const rows of readInBatches<{ tablename: ISnapshotCollection }>(this.pool, query, [], batch)) {
-			yield rows.map(({ tablename }) => tablename);
+			if (names.length === 0) {
+				return;
+			}
+			yield names;
+			if (names.length < batch) {
+				return;
+			}
+			after = names[names.length - 1];
 		}
 	}
 
 	async *getSnapshots<A extends AggregateRoot>(
-		{ streamId }: SnapshotStream,
+		stream: SnapshotStream,
 		filter?: ISnapshotFilter,
 	): AsyncGenerator<ISnapshot<A>[]> {
-		const collection = SnapshotCollection.get(filter?.pool);
-
-		const fromVersion = filter?.fromVersion;
-		const direction = filter?.direction || StreamReadingDirection.FORWARD;
-		const limit = filter?.limit || Number.MAX_SAFE_INTEGER;
-		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
-
-		const query = `
-	        SELECT payload
-	        FROM ${escapeIdentifier(collection)}
-	        WHERE stream_id = $1
-	        ${fromVersion ? 'AND version >= $2' : ''}
-	        ORDER BY version ${direction === StreamReadingDirection.FORWARD ? 'ASC' : 'DESC'}
-	        LIMIT ${fromVersion ? '$3' : '$2'}
-	    `;
-
-		const params = fromVersion ? [streamId, fromVersion, limit] : [streamId, limit];
-
-		for await (const rows of readInBatches<Pick<PostgresSnapshotEntity<A>, 'payload'>>(
-			this.pool,
-			query,
-			params,
-			batch,
-		)) {
-			yield rows.map(({ payload }) => payload);
+		for await (const envelopes of this.getEnvelopes<A>(stream, filter)) {
+			yield envelopes.map(({ payload }) => payload);
 		}
 	}
 
 	async getSnapshot<A extends AggregateRoot>(
-		{ streamId }: SnapshotStream,
+		stream: SnapshotStream,
 		version: number,
 		pool?: ISnapshotPool,
 	): Promise<ISnapshot<A>> {
-		const collection = SnapshotCollection.get(pool);
-
-		const { rows: entities } = await this.pool.query<Pick<PostgresSnapshotEntity<A>, 'payload'>>(
-			`SELECT payload FROM ${escapeIdentifier(collection)} WHERE stream_id = $1 AND version = $2`,
-			[streamId, version],
-		);
-		const entity = entities[0];
-
-		if (!entity) {
-			throw new SnapshotNotFoundException({ streamId, version, pool });
-		}
-
-		return entity.payload;
+		return (await this.getEnvelope<A>(stream, version, pool)).payload;
 	}
 
+	/**
+	 * Appends a snapshot and moves the stream's `latest` flag to it. Appends to a stream serialize on an advisory lock,
+	 * and a snapshot must have a higher version than every snapshot of its stream.
+	 */
 	async appendSnapshot<A extends AggregateRoot>(
 		stream: SnapshotStream,
 		aggregateVersion: number,
@@ -146,7 +230,7 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 
 		try {
 			// The version check, flag update and insert run in one transaction, so they either all apply or none do
-			return await withTransaction(this.pool, async (client) => {
+			return await withTransaction(this.connection, async (client) => {
 				// Serialize appends to the same stream, so concurrent writers can't both claim the 'latest' flag
 				await client.query('SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))', [collection, stream.streamId]);
 
@@ -155,7 +239,7 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 					version: aggregateVersion,
 				});
 
-				const lastVersion = await this.getLatestVersion(client, table, stream);
+				const lastVersion = await this.getLastVersion(client, table, stream);
 
 				if (lastVersion !== undefined && aggregateVersion <= lastVersion) {
 					throw new SnapshotStoreVersionConflictException({
@@ -167,27 +251,26 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 				}
 
 				if (lastVersion !== undefined) {
-					// Unflags every snapshot of the stream, which also repairs streams that ended up with several
-					await client.query(`UPDATE ${table} SET latest = null WHERE stream_id = $1 AND latest = $2`, [
+					// Unflags every snapshot of the stream, which also repairs a 3.x stream with several flags
+					await client.query(`UPDATE ${table} SET latest = NULL WHERE stream_id = $1 AND latest IS NOT NULL`, [
 						stream.streamId,
-						`latest#${stream.streamId}`,
 					]);
 				}
 
 				await client.query(
-					`
-            INSERT INTO ${table} (stream_id, version, payload, snapshot_id, aggregate_id, registered_on, aggregate_name, latest)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		`,
+					`INSERT INTO ${table} (stream_id, version, payload, snapshot_id, aggregate_id, registered_on, aggregate_name, latest)
+					VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
 					[
 						stream.streamId,
 						envelope.metadata.version,
 						JSON.stringify(envelope.payload),
 						envelope.metadata.snapshotId,
 						envelope.metadata.aggregateId,
+						// A Date, which pg sends as local time with its offset: exact in a TIMESTAMPTZ column, and the wall
+						// time of the process in a 3.x TIMESTAMP column, as 3.x wrote it
 						envelope.metadata.registeredOn,
 						stream.aggregate,
-						`latest#${stream.streamId}`,
+						latestKey(stream.streamId),
 					],
 				);
 
@@ -198,9 +281,9 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 				throw error;
 			}
 
-			// A writer that doesn't take the stream lock appended the same version concurrently
+			// A writer that doesn't take the stream lock appended the same version, or flagged the stream, concurrently
 			if (hasErrorCode(error, UNIQUE_VIOLATION)) {
-				const latestVersion = await this.getLatestVersion(this.pool, table, stream).catch(() => undefined);
+				const latestVersion = await this.getLastVersion(this.connection, table, stream).catch(() => undefined);
 				throw new SnapshotStoreVersionConflictException(
 					{ stream, version: aggregateVersion, latestVersion, pool },
 					{ cause: error },
@@ -212,16 +295,16 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 	}
 
 	/**
-	 * Resolves the version of the snapshot flagged as the latest of a stream.
+	 * The highest version of the snapshots of a stream.
 	 */
-	private async getLatestVersion(
-		connection: Pick<Pool, 'query'>,
+	private async getLastVersion(
+		connection: Pick<PoolClient, 'query'>,
 		table: string,
 		{ streamId }: SnapshotStream,
 	): Promise<number | undefined> {
 		const { rows } = await connection.query<{ version: number | null }>(
-			`SELECT MAX(version) AS version FROM ${table} WHERE stream_id = $1 AND latest = $2`,
-			[streamId, `latest#${streamId}`],
+			`SELECT MAX(version) AS version FROM ${table} WHERE stream_id = $1`,
+			[streamId],
 		);
 
 		return rows[0]?.version ?? undefined;
@@ -231,55 +314,34 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 		stream: SnapshotStream,
 		pool?: ISnapshotPool,
 	): Promise<ISnapshot<A> | void> {
-		const collection = SnapshotCollection.get(pool);
-
-		const [entity] = await this.getLastStreamEntities<A, ['payload']>(collection, [stream], ['payload']);
-
-		if (entity) {
-			return entity.payload;
-		}
+		return (await this.getLastEnvelope<A>(stream, pool))?.payload;
 	}
 
 	async getLastSnapshots<A extends AggregateRoot>(
 		streams: SnapshotStream[],
 		pool?: ISnapshotPool,
 	): Promise<Map<SnapshotStream, ISnapshot<A>>> {
-		const collection = SnapshotCollection.get(pool);
-
-		const entities = await this.getLastStreamEntities<A, ['stream_id', 'payload']>(collection, streams, [
-			'stream_id',
-			'payload',
-		]);
-
-		return entities.reduce((acc, { stream_id, payload }) => {
-			const stream = streams.find(({ streamId: currentStreamId }) => currentStreamId === stream_id);
-
-			if (stream) {
-				acc.set(stream, payload);
-			}
-
-			return acc;
-		}, new Map<SnapshotStream, ISnapshot<A>>());
+		const envelopes = await this.getManyLastSnapshotEnvelopes<A>(streams, pool);
+		return new Map([...envelopes].map(([stream, { payload }]) => [stream, payload]));
 	}
 
+	/**
+	 * The snapshot with the highest version of the stream.
+	 */
 	async getLastEnvelope<A extends AggregateRoot>(
-		stream: SnapshotStream,
+		{ streamId }: SnapshotStream,
 		pool?: ISnapshotPool,
 	): Promise<SnapshotEnvelope<A> | void> {
 		const collection = SnapshotCollection.get(pool);
 
-		const [entity] = await this.getLastStreamEntities<
-			A,
-			['payload', 'snapshot_id', 'aggregate_id', 'registered_on', 'version']
-		>(collection, [stream], ['payload', 'snapshot_id', 'aggregate_id', 'registered_on', 'version']);
+		const { rows } = await this.connection.query<PostgresSnapshotEnvelopeEntity<A>>(
+			`SELECT ${ENVELOPE_COLUMNS} FROM ${escapeIdentifier(collection)}
+			WHERE stream_id = $1 ORDER BY version DESC LIMIT 1`,
+			[streamId],
+		);
 
-		if (entity) {
-			return SnapshotEnvelope.from<A>(entity.payload, {
-				snapshotId: entity.snapshot_id,
-				aggregateId: entity.aggregate_id,
-				registeredOn: entity.registered_on,
-				version: entity.version,
-			});
+		if (rows[0]) {
+			return toEnvelope(rows[0]);
 		}
 	}
 
@@ -295,7 +357,7 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
 		const query = `
-	        SELECT payload, aggregate_id, registered_on, snapshot_id, version
+	        SELECT ${ENVELOPE_COLUMNS}
 	        FROM ${escapeIdentifier(collection)}
 	        WHERE stream_id = $1
 	        ${fromVersion ? 'AND version >= $2' : ''}
@@ -305,8 +367,8 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 
 		const params = fromVersion ? [streamId, fromVersion, limit] : [streamId, limit];
 
-		for await (const rows of readInBatches<PostgresSnapshotEnvelopeEntity<A>>(this.pool, query, params, batch)) {
-			yield rows.map((row) => this.toEnvelope(row));
+		for await (const rows of readInBatches<PostgresSnapshotEnvelopeEntity<A>>(this.connection, query, params, batch)) {
+			yield rows.map((row) => toEnvelope(row));
 		}
 	}
 
@@ -317,9 +379,8 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 	): Promise<SnapshotEnvelope<A>> {
 		const collection = SnapshotCollection.get(pool);
 
-		const { rows: entities } = await this.pool.query<PostgresSnapshotEnvelopeEntity<A>>(
-			`SELECT payload, aggregate_id, registered_on, snapshot_id, version
-            FROM ${escapeIdentifier(collection)} WHERE stream_id = $1 AND version = $2`,
+		const { rows: entities } = await this.connection.query<PostgresSnapshotEnvelopeEntity<A>>(
+			`SELECT ${ENVELOPE_COLUMNS} FROM ${escapeIdentifier(collection)} WHERE stream_id = $1 AND version = $2`,
 			[streamId, version],
 		);
 		const entity = entities[0];
@@ -328,9 +389,14 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 			throw new SnapshotNotFoundException({ streamId, version, pool });
 		}
 
-		return this.toEnvelope(entity);
+		return toEnvelope(entity);
 	}
 
+	/**
+	 * The last snapshot of every stream of an aggregate, in descending binary order of the aggregate ids, from the
+	 * `latest` flags. `filter.aggregateId` is an exclusive cursor. Compares bytes (`COLLATE "C"`), also on a 3.x table
+	 * whose column has the database's collation.
+	 */
 	async *getLastEnvelopesForAggregate<A extends AggregateRoot>(
 		aggregate: Type<A>,
 		filter?: ILatestSnapshotFilter,
@@ -343,83 +409,78 @@ export class PostgresSnapshotStore extends SnapshotStore<PostgresSnapshotStoreCo
 		const batch = filter?.batch || DEFAULT_BATCH_SIZE;
 
 		const query = `
-            SELECT payload, aggregate_id, registered_on, snapshot_id, version
+            SELECT ${ENVELOPE_COLUMNS}
             FROM ${escapeIdentifier(collection)}
-            WHERE aggregate_name = $1
-            AND ${aggregateId ? 'latest >= $2' : "latest LIKE 'latest%'"}
-            ORDER BY latest DESC
-            LIMIT ${aggregateId ? '$3' : '$2'}
+            WHERE aggregate_name = $1 AND latest IS NOT NULL
+            ${aggregateId ? 'AND latest COLLATE "C" < $3' : ''}
+            ORDER BY latest COLLATE "C" DESC
+            LIMIT $2
         `;
 
-		const params = aggregateId ? [streamName, aggregateId, limit] : [streamName, limit];
+		const params = aggregateId ? [streamName, limit, latestKey(`${streamName}-${aggregateId}`)] : [streamName, limit];
 
-		for await (const rows of readInBatches<PostgresSnapshotEnvelopeEntity<A>>(this.pool, query, params, batch)) {
-			yield rows.map((row) => this.toEnvelope(row));
+		for await (const rows of readInBatches<PostgresSnapshotEnvelopeEntity<A>>(this.connection, query, params, batch)) {
+			yield rows.map((row) => toEnvelope(row));
 		}
 	}
 
-	async getManyLastSnapshotEnvelopes<A extends AggregateRoot>(
+	/**
+	 * The snapshot with the highest version of each stream, in one query.
+	 */
+	override async getManyLastSnapshotEnvelopes<A extends AggregateRoot>(
 		streams: SnapshotStream[],
 		pool?: ISnapshotPool,
 	): Promise<Map<SnapshotStream, SnapshotEnvelope<A>>> {
+		const envelopes = new Map<SnapshotStream, SnapshotEnvelope<A>>();
+		if (streams.length === 0) {
+			return envelopes;
+		}
 		const collection = SnapshotCollection.get(pool);
 
-		const entities = await this.getLastStreamEntities<
-			A,
-			['stream_id', 'payload', 'aggregate_id', 'registered_on', 'snapshot_id', 'version']
-		>(collection, streams, ['stream_id', 'payload', 'aggregate_id', 'registered_on', 'snapshot_id', 'version']);
-
-		return entities.reduce((acc, { stream_id, payload, aggregate_id, registered_on, snapshot_id, version }) => {
-			const stream = streams.find(({ streamId: currentStreamId }) => currentStreamId === stream_id);
-
-			if (stream) {
-				acc.set(
-					stream,
-					SnapshotEnvelope.from<A>(payload, {
-						aggregateId: aggregate_id,
-						registeredOn: new Date(registered_on),
-						snapshotId: snapshot_id,
-						version,
-					}),
-				);
-			}
-
-			return acc;
-		}, new Map<SnapshotStream, SnapshotEnvelope<A>>());
-	}
-
-	private async getLastStreamEntities<
-		A extends AggregateRoot,
-		Fields extends (keyof PostgresSnapshotEntity<A>)[] = (keyof PostgresSnapshotEntity<A>)[],
-	>(
-		collection: string,
-		streams: SnapshotStream[],
-		fields: Fields,
-	): Promise<Pick<PostgresSnapshotEntity<A>, Fields[number]>[]> {
-		const latestIds = streams.map(({ streamId }) => `latest#${streamId}`);
-		const { rows: entities } = await this.pool.query<Pick<PostgresSnapshotEntity<A>, Fields[number]>>(
-			`SELECT ${fields.join(', ')}
-                FROM ${escapeIdentifier(collection)}
-                WHERE latest = ANY ($1)
-             `,
-			[latestIds],
+		const { rows } = await this.connection.query<PostgresSnapshotEnvelopeEntity<A> & { stream_id: string }>(
+			`SELECT DISTINCT ON (stream_id) stream_id, ${ENVELOPE_COLUMNS}
+			FROM ${escapeIdentifier(collection)}
+			WHERE stream_id = ANY ($1)
+			ORDER BY stream_id, version DESC`,
+			[streams.map(({ streamId }) => streamId)],
 		);
 
-		return entities;
+		const byStreamId = new Map(rows.map((row) => [row.stream_id, row]));
+		for (const stream of streams) {
+			const row = byStreamId.get(stream.streamId);
+			if (row) {
+				envelopes.set(stream, toEnvelope(row));
+			}
+		}
+		return envelopes;
 	}
 
-	private toEnvelope<A extends AggregateRoot>({
-		payload,
-		aggregate_id,
-		registered_on,
-		snapshot_id,
-		version,
-	}: PostgresSnapshotEnvelopeEntity<A>): SnapshotEnvelope<A> {
-		return SnapshotEnvelope.from<A>(payload, {
-			aggregateId: aggregate_id,
-			registeredOn: registered_on,
-			snapshotId: snapshot_id,
-			version,
-		});
+	/**
+	 * The pool of the connected store.
+	 */
+	private get connection(): Pool {
+		if (!this.pool) {
+			throw new Error(`${this.constructor.name} is not connected: call connect() first`);
+		}
+		return this.pool;
 	}
 }
+
+/**
+ * The `latest` flag of a stream's last snapshot.
+ */
+const latestKey = (streamId: string): string => `latest#${streamId}`;
+
+const toEnvelope = <A extends AggregateRoot>({
+	payload,
+	aggregate_id,
+	registered_on,
+	snapshot_id,
+	version,
+}: PostgresSnapshotEnvelopeEntity<A>): SnapshotEnvelope<A> =>
+	SnapshotEnvelope.from<A>(payload, {
+		aggregateId: aggregate_id,
+		registeredOn: registered_on,
+		snapshotId: snapshot_id,
+		version,
+	});

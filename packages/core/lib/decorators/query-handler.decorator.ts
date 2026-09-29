@@ -1,19 +1,24 @@
 import { randomUUID } from 'node:crypto';
 import 'reflect-metadata';
-import type { IQuery } from '../interfaces/index.js';
+import type { Type } from '@nestjs/common';
+import type { IQuery, IQueryHandler, QueryMetadata } from '../interfaces/index.js';
 import { QUERY_HANDLER_METADATA, QUERY_METADATA } from './constants.js';
 
 /**
  * Decorator that marks a class as a query handler. A query handler handles queries executed by your application code.
- * @description The decorated class must implement the `IQueryHandler` interface. The handler automatically assigns an id to the query metadata.
- * @param {IQuery} query The query constructor for which the instances need to be handled by this handler.
- * @returns {ClassDecorator}
+ * @description The decorated class must implement `IQueryHandler`: its `execute` takes the query and resolves to the
+ * query's result type (see `Query<TResult>`). The `QueryBus` routes the instances of this query class to it, and
+ * those of its subclasses that have no handler of their own.
+ * @param query The query class handled by this handler.
  * @example `@QueryHandler(GetAccountByIdQuery)`
  */
-export const QueryHandler = (query: IQuery): ClassDecorator => {
-	return (target: object) => {
+export const QueryHandler = <TQuery extends IQuery>(
+	query: Type<TQuery>,
+): ((target: Type<IQueryHandler<TQuery>>) => void) => {
+	return (target) => {
+		// Kept for 3.x code that reads getQueryMetadata(); the QueryBus keys its handlers by class.
 		if (!Reflect.hasMetadata(QUERY_METADATA, query)) {
-			Reflect.defineMetadata(QUERY_METADATA, { id: randomUUID() }, query);
+			Reflect.defineMetadata(QUERY_METADATA, { id: randomUUID() } as QueryMetadata, query);
 		}
 		Reflect.defineMetadata(QUERY_HANDLER_METADATA, { query }, target);
 	};
