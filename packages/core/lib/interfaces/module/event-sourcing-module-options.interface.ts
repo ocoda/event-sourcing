@@ -15,6 +15,21 @@ export interface EventSourcingModuleOptions<
 	events?: Type<IEvent>[];
 	eventStore?: TEventStoreConfig;
 	snapshotStore?: TSnapshotStoreConfig;
+	/**
+	 * How the `EventBus` publishes the envelopes of an append. Both timeouts are in milliseconds, and `0` disables them.
+	 */
+	publishing?: {
+		/**
+		 * How long one call of an event publisher may take before the bus reports a timeout on `deliveryErrors$` and
+		 * moves on to the next envelope. Default: 30 000 (30 s).
+		 */
+		publisherTimeout?: number;
+		/**
+		 * How long the application's shutdown waits for the publishers and subscribers that are still running
+		 * (`EventBus.whenIdle()`) before the stores disconnect. Default: 10 000 (10 s).
+		 */
+		shutdownTimeout?: number;
+	};
 }
 
 export interface EventSourcingOptionsFactory<

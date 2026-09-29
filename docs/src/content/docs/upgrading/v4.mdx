@@ -240,7 +240,7 @@ The 3.x form still works, but is deprecated and will be removed in 5.0. It emits
 
 The database stores keep their 3.x appends until they move to schema v2. They check the arguments of both forms first, like the other stores: an empty pool name, or an aggregate version that is fractional or below the number of events, throws an `InvalidAppendOptionsException`. Otherwise the 3.x form keeps its 3.x behaviour there: an empty append reaches the store, a gap is accepted, and pre-built envelopes are stored as they are. They accept the options form with a numeric expected version, where pre-built envelopes must continue the stream, and reject `ExpectedVersion.Any` and metadata with an `UnsupportedOperationException`. In both forms, they reject pre-built envelopes with headers or an `eventVersion`, which they would drop, with an `UnsupportedOperationException`. Call the options form through the `EventStore` type: on a variable typed as `PostgresEventStore`, `MariaDBEventStore` or `MongoDBEventStore`, only the 3.x form type-checks until schema v2.
 
-**Publishing.** The module hands the store the `EventBus` when it creates it, and `eventStore.publish = …` is gone. Events appended before the application bootstrapped are no longer held back with a warning, but the publishers and subscribers are only registered at bootstrap, so they still don't receive them. The store calls `eventBus.publishAll(envelopes)`, so a test double that replaces the `EventBus` must implement it; spies on `eventBus.publish` keep working.
+**Publishing.** The module hands the store the `EventBus` when it creates it, and `eventStore.publish = …` is gone. Events appended before the application bootstrapped are no longer held back with a warning, but the publishers and subscribers are only registered at bootstrap, so they still don't receive them. The store calls `eventBus.publishAll(envelopes)`, so a test double that replaces the `EventBus` must implement it. The bus no longer passes the envelopes of an append through `eventBus.publish`, so a spy on it sees nothing: see [Publishing](#publishing).
 
 **Reads.** `getEvent()` and `getEnvelope()` always return a promise, also on the in-memory store. On the in-memory store now, and on the database stores with schema v2, every read of a pool whose collection doesn't exist throws an `EventCollectionNotFoundException`; the in-memory store's `getEvents()` and `getEnvelopes()` yielded nothing and its `getEvent()` threw an `EventNotFoundException`. An append to such a pool throws an `EventStorePersistenceException` with `outcome: 'not-persisted'`, whose `cause` is the `EventCollectionNotFoundException`.
 
@@ -312,6 +312,24 @@ For custom snapshot stores:
 
 *Planned.* A one-time, offline migration of the event and snapshot tables, run with the store's `migrate()` after a dry run, while no 3.x instance is running.
 
+## Publishing [#publishing]
+
+*In the next prerelease.* See [Event Publishers and Subscribers](/advanced/event-pubsub#delivery-semantics).
+
+- **Publishers are awaited.** The bus awaits the promise that a publisher's `publish` returns before it passes that publisher the next envelope of the append, and `appendEvents` resolves once every publisher is done. 3.x fired them and forgot. The publishers run concurrently, and each call may take at most `publishing.publisherTimeout` milliseconds (30 s by default, `0` disables it): after that the bus logs and reports a timeout and moves on. A slow publisher now slows down your commands, up to that timeout. A publisher may implement `publishAll(envelopes)` to get the envelopes of an append in one call.
+- **`eventBus.publish()` returns a promise**, which resolves once the publishers are done and never rejects. The envelopes of an append go through `eventBus.publishAll()`, not through `publish()`: to see what an append published in a test, register a publisher or subscribe to the bus instead of spying on `eventBus.publish`.
+- **`eventBus.whenIdle()`** resolves once no publisher or subscriber is running. In tests, `await eventBus.whenIdle()` replaces waiting for a fixed time for the subscribers.
+- **`eventBus.deliveryErrors$`** emits every publisher and subscriber failure, a timeout included. They are still logged.
+- **Shutdown.** `app.close()` waits for the running publishers and subscribers, for at most `publishing.shutdownTimeout` milliseconds (10 s by default), then unsubscribes the subscribers and disconnects the stores. 3.x unsubscribed and disconnected in `onModuleDestroy`, which dropped the deliveries in flight. NestJS still runs `onModuleDestroy` first, so if your subscribers use providers that clean up there, `await eventBus.whenIdle()` before `app.close()`.
+- **`IEventPublisher.publish`** returns `unknown` instead of `any` and no longer declares rest parameters, which the bus never passed.
+
+```ts
+EventSourcingModule.forRoot({
+	events: [AccountOpenedEvent],
+	publishing: { publisherTimeout: 5_000, shutdownTimeout: 30_000 },
+});
+```
+
 ## DynamoDB is not part of 4.0 [#dynamodb]
 
 The DynamoDB store (`@ocoda/event-sourcing-dynamodb`) is not released for 4.0. DynamoDB can't give the events a gap-free global order, which the read side planned for 4.0 relies on. You have two options:
@@ -327,7 +345,7 @@ Nothing in this section is released yet. The changes are planned in [ADR 0001: v
 
 - **Event store, snapshots and schema v2.** See [Event store, snapshots and schema v2](#store-and-schema).
 - **Saving aggregates.** `commit()` gives way to `getUncommittedEvents()` and `markCommitted()`, and saving an unchanged aggregate becomes a no-op. `commit()` stays as a deprecated shim until 5.0.
-- **Publishing.** `eventBus.publish()` returns a promise and async publishers are awaited. In tests, `await eventBus.whenIdle()` replaces waiting for a fixed time.
+- **Publishing.** See [Publishing](#publishing).
 - **Bootstrap checks.** Duplicate registrations, and request-scoped subscribers, publishers and serializers, fail the bootstrap. Request-scoped command and query handlers start to work.
 - **Serialization.** A JSON serializer replaces class-transformer as the default. Events that use class-transformer decorators opt back in with `defaultEventSerializer: ClassTransformerEventSerializer`.
 - **Ids.** `generate()` on an id class returns that class, so `AccountId.generate()` returns an `AccountId`, and ids of different classes are no longer equal.

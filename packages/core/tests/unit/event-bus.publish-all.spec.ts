@@ -40,48 +40,65 @@ describe('EventBus.publishAll', () => {
 
 	it('does nothing for an empty append', async () => {
 		const bus = new EventBus();
-		const publish = vi.spyOn(bus, 'publish');
+		const publisher = { publish: vi.fn(), publishAll: vi.fn(async () => undefined) } satisfies IEventPublisher;
+		bus.addPublisher(publisher);
 
 		await bus.publishAll([]);
 
-		expect(publish).not.toHaveBeenCalled();
+		expect(publisher.publish).not.toHaveBeenCalled();
+		expect(publisher.publishAll).not.toHaveBeenCalled();
 	});
 
-	it('keeps the fire-and-forget semantics of publish: asynchronous publishers are not awaited', async () => {
+	it('awaits asynchronous publishers, one envelope after the other', async () => {
 		const bus = new EventBus();
-		let release: () => void = () => undefined;
-		const publisher = {
-			publish: vi.fn(() => new Promise<void>((resolve) => (release = resolve))),
-		} satisfies IEventPublisher;
-		bus.addPublisher(publisher);
+		const calls: string[] = [];
+		const releases: (() => void)[] = [];
+		bus.addPublisher({
+			publish: (envelope: EventEnvelope) => {
+				calls.push(`start ${envelope.metadata.version}`);
+				return new Promise<void>((resolve) =>
+					releases.push(() => {
+						calls.push(`end ${envelope.metadata.version}`);
+						resolve();
+					}),
+				);
+			},
+		});
+		let resolved = false;
 
-		await bus.publishAll([envelopeFor(1), envelopeFor(2)]);
+		const publishing = bus.publishAll([envelopeFor(1), envelopeFor(2)]).then(() => (resolved = true));
+		await Promise.resolve();
+		expect(calls).toEqual(['start 1']);
+		releases.shift()?.();
+		await vi.waitFor(() => expect(calls).toEqual(['start 1', 'end 1', 'start 2']));
+		expect(resolved).toBe(false);
+		releases.shift()?.();
+		await publishing;
 
-		expect(publisher.publish).toHaveBeenCalledTimes(2);
-		release();
+		expect(calls).toEqual(['start 1', 'end 1', 'start 2', 'end 2']);
 	});
 
-	it('never rejects, and keeps publishing the other envelopes when one fails', async () => {
+	it('never rejects, and keeps publishing the later envelopes to a publisher that failed on one', async () => {
 		const bus = new EventBus();
 		const envelopes = [envelopeFor(1), envelopeFor(2, 'publish-all-poisoned'), envelopeFor(3)];
-		const published: EventEnvelope[] = [];
-		// A replaced publish function, which may throw unlike the bus' own
-		bus.publish = (envelope) => {
-			if (envelope.event === 'publish-all-poisoned') {
-				throw new Error('publish failure');
-			}
-			published.push(envelope);
+		const publisher = {
+			publish: vi.fn((envelope: EventEnvelope) => {
+				if (envelope.event === 'publish-all-poisoned') {
+					throw new Error('publish failure');
+				}
+			}),
 		};
+		bus.addPublisher(publisher);
 
 		await expect(bus.publishAll(envelopes)).resolves.toBeUndefined();
 
-		expect(published).toEqual([envelopes[0], envelopes[2]]);
+		expect(publisher.publish.mock.calls).toEqual(envelopes.map((envelope) => [envelope]));
 		expect(loggerError).toHaveBeenCalledTimes(1);
-		expect(loggerError.mock.calls[0][0]).toBe('Failed to publish event "publish-all-poisoned"');
+		expect(loggerError.mock.calls[0][0]).toBe('Event publisher Object failed to publish event "publish-all-poisoned"');
 		expect(loggerError.mock.calls[0][1]).toContain('publish failure');
 	});
 
-	it('logs publishers that throw or reject, like publish', async () => {
+	it('logs publishers that throw or reject', async () => {
 		const bus = new EventBus();
 		bus.addPublisher({
 			publish: () => {
@@ -91,7 +108,6 @@ describe('EventBus.publishAll', () => {
 		bus.addPublisher({ publish: async () => Promise.reject(new Error('async publisher failure')) });
 
 		await expect(bus.publishAll([envelopeFor(1)])).resolves.toBeUndefined();
-		await new Promise((resolve) => setTimeout(resolve, 0));
 
 		expect(loggerError.mock.calls.map(([, trace]) => trace)).toEqual([
 			expect.stringContaining('sync publisher failure'),
