@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # Release guard for the 3.x maintenance line. 3.x only ships 3.x patch releases. Once 4.x is npm's `latest`,
-# they go to the dist-tag `v3`, so a 3.x patch never moves `latest` back to 3.x.
+# they go to the dist-tag `latest-3`, so a 3.x patch never moves `latest` back to 3.x.
 #
 #   release-guard.sh plan           Before changesets/action: the pending changesets are patches that stay on 3.x.
 #   release-guard.sh needs-publish  The version job, when no changesets are pending: writes needsPublish=true to
 #                                   $GITHUB_OUTPUT when npm lacks the version of a publishable package, and fails
 #                                   when that version would move its dist-tag back.
 #   release-guard.sh dist-tag       The publish job: writes npmTag (`latest` while npm's `latest` is 3.x, else
-#                                   `v3`) and githubLatest (whether the GitHub releases may become Latest).
+#                                   `latest-3`) and githubLatest (whether the GitHub releases may become Latest).
 #   release-guard.sh publish        The publish script: every publishable package is at 3.x, RELEASE_NPM_TAG is
-#                                   `v3`, or `latest` while npm's `latest` is still 3.x, and no version moves that
+#                                   `latest-3`, or `latest` while npm's `latest` is still 3.x, and no version moves that
 #                                   dist-tag back; then it runs `changeset publish --tag "$RELEASE_NPM_TAG"`.
 #
 # Every registry lookup fails closed: a registry that stays unreachable fails the job instead of deciding what gets
@@ -18,7 +18,7 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 readonly CORE_PACKAGE='@ocoda/event-sourcing'
-readonly MAINTENANCE_TAG='v3'
+readonly MAINTENANCE_TAG='latest-3'
 readonly VERSION_PATTERN='^3[.][0-9]+[.][0-9]+$'
 readonly ATTEMPTS=3
 # jq: a sort key with semver precedence. Numeric prerelease identifiers compare as numbers and below alphanumeric
@@ -158,7 +158,7 @@ report_needs_publish() {
 	set_output "needsPublish=$needs"
 }
 
-# The npm dist-tag for 3.x releases: `latest` while npm's `latest` is 3.x, else `v3`.
+# The npm dist-tag for 3.x releases: `latest` while npm's `latest` is 3.x, else `latest-3`.
 npm_tag() {
 	local major
 	major=$(latest_major)
