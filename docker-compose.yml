@@ -56,10 +56,12 @@ services:
       retries: 6
 
   # MongoDB 9.0 has no Docker Official Image (mongo:9) yet, so mongodb-9 and mongodb-9-rs run MongoDB's own community
-  # server image, whose entrypoint takes the same arguments; move them to mongo:9 once it exists.
+  # server image, whose entrypoint takes the same arguments; move them to mongo:9 once it exists. That image starts as
+  # the mongodb user and, unlike mongo:N, never takes over the root-owned tmpfs, so these services run it as root.
   mongodb-9:
     container_name: es-mongodb-9
     image: mongodb/mongodb-community-server:9.0-ubuntu2204
+    user: root
     ports:
       - 27017:27017
     volumes:
@@ -151,6 +153,7 @@ services:
   mongodb-9-rs:
     container_name: es-mongodb-9-rs
     image: mongodb/mongodb-community-server:9.0-ubuntu2204
+    user: root
     command: ["--replSet", "rs0", "--bind_ip_all", "--port", "27018"]
     ports:
       - 27018:27018
