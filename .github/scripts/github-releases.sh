@@ -3,8 +3,10 @@
 # changesets/action (`create-github-releases: false`, `push-git-tags: false`). The action would hand its token to the
 # whole publish process tree as GITHUB_TOKEN; this way only this script gets a token that may write contents. The
 # releases match the action's: tag and title `<name>@<version>`, the version's CHANGELOG.md entry as notes, prerelease
-# for a prerelease version. A prerelease never becomes the repository's "Latest" release. A release that already
-# exists is skipped, so a re-run is safe.
+# for a prerelease version. The stable release of the core, `@ocoda/event-sourcing` (4.0.0, say), becomes the
+# repository's "Latest" release. The integrations, released in the same version, and every prerelease never do, so
+# the order of the packages can't decide which release is Latest. A release that already exists is skipped, so a
+# re-run is safe.
 #
 # Environment:
 #   PUBLISHED_PACKAGES  changesets/action's `published-packages` output: [{"name": ..., "version": ...}]
@@ -12,6 +14,8 @@
 #   GH_TOKEN, GH_REPO   for gh: a token that may write contents, and the repository
 set -euo pipefail
 shopt -s inherit_errexit
+
+readonly CORE_PACKAGE='@ocoda/event-sourcing'
 
 fail() {
 	echo "::error::$*" >&2
@@ -45,8 +49,10 @@ while read -r name version; do
 
 	if [[ "$version" == *-* ]]; then
 		flags=(--prerelease --latest=false)
-	else
+	elif [ "$name" = "$CORE_PACKAGE" ]; then
 		flags=(--latest=true)
+	else
+		flags=(--latest=false)
 	fi
 	# --target makes GitHub create the tag, on the published commit, together with the release.
 	gh release create "$tag" --target "$GITHUB_SHA" --title "$tag" --notes-file "$notes_file" "${flags[@]}"
