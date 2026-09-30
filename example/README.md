@@ -8,7 +8,7 @@ A small NestJS 12 application (ES modules) that runs `@ocoda/event-sourcing` 4.0
 | Events per feature module with `forFeature` | [`src/catalogue/catalogue.module.ts`](src/catalogue/catalogue.module.ts) |
 | Aggregates that check their rules and change their state through events | [`src/catalogue/domain/models/book/book.aggregate.ts`](src/catalogue/domain/models/book/book.aggregate.ts) |
 | Typed commands and queries (`Command<R>`, `Query<R>`) | [`src/catalogue/application/commands`](src/catalogue/application/commands), [`queries`](src/catalogue/application/queries) |
-| A repository: `getUncommittedEvents()`, `appendEvents(stream, events, { expectedVersion: committedVersion })`, `markCommitted()` | [`src/catalogue/application/repositories/book.repository.ts`](src/catalogue/application/repositories/book.repository.ts) |
+| A repository: `getUncommittedEvents()`, `appendEvents(stream, events, { expectedVersion: committedVersion })`, `markCommitted(events)` | [`src/catalogue/application/repositories/book.repository.ts`](src/catalogue/application/repositories/book.repository.ts) |
 | Snapshots every 5 versions | [`book.snapshot-repository.ts`](src/catalogue/application/repositories/book.snapshot-repository.ts) |
 | Subscribers that keep a read model | [`src/catalogue/application/projections`](src/catalogue/application/projections) |
 | A publisher that receives every event | [`src/event-log/logging.event-publisher.ts`](src/event-log/logging.event-publisher.ts) |

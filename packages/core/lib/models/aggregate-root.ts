@@ -7,6 +7,16 @@ import { recordCommittedVersions } from './aggregate-commit-tracker.js';
 // Symbol keys keep the bookkeeping out of JSON.stringify() and out of the aggregate's own string keys.
 const COMMITTED_VERSION = Symbol('committedVersion');
 const EVENTS = Symbol('uncommittedEvents');
+const APPLY = Symbol('apply');
+
+/** The event whose handler is running: whether it came from the history, and the events its handler applied. */
+interface RunningHandler {
+	fromHistory: boolean;
+	applied: [event: IEvent, fromHistory: boolean][];
+}
+
+// Kept outside the instance, like the commit tracker, so it never shows up on the aggregate or in its snapshots
+const runningHandlers = new WeakMap<AggregateRoot, RunningHandler>();
 
 /**
  * The base class of an event-sourced aggregate.
@@ -17,7 +27,7 @@ const EVENTS = Symbol('uncommittedEvents');
  * ```ts
  * const events = account.getUncommittedEvents();
  * await eventStore.appendEvents(stream, events, { expectedVersion: account.committedVersion, pool });
- * account.markCommitted();
+ * account.markCommitted(events);
  * ```
  *
  * `version` is `committedVersion` plus the number of uncommitted events.
@@ -52,20 +62,39 @@ export abstract class AggregateRoot {
 
 	/**
 	 * A copy of the events that were applied since the aggregate was loaded or last marked as committed, oldest first.
+	 * Once they are appended, pass them to `markCommitted()`.
 	 */
 	getUncommittedEvents(): readonly IEvent[] {
 		return [...this[EVENTS]];
 	}
 
 	/**
-	 * Marks the uncommitted events as committed, once they are appended: `committedVersion` moves up to `version` and
-	 * the events are cleared. The snapshot repository uses the range of versions this covers to decide whether a
+	 * Marks the uncommitted events as committed, once they are appended: `committedVersion` moves up by their number
+	 * and the events are cleared. The snapshot repository uses the range of versions this covers to decide whether a
 	 * snapshot is due.
+	 *
+	 * Pass the events that `getUncommittedEvents()` returned and that were appended: only those are marked as
+	 * committed, and events applied in the meantime, such as while the append ran, stay uncommitted for the next save.
+	 * Without `events`, every uncommitted event is marked as committed.
+	 *
+	 * @param events the events that were appended: the first uncommitted events, in order and the same objects
+	 * @throws UncommittedEventsException when `events` are not the first uncommitted events; the aggregate is left
+	 * unchanged
 	 */
-	markCommitted(): void {
+	markCommitted(events?: readonly IEvent[]): void {
+		const uncommitted = this[EVENTS];
+		const count = events == null ? uncommitted.length : events.length;
+		if (events != null && (count > uncommitted.length || events.some((event, index) => event !== uncommitted[index]))) {
+			throw new UncommittedEventsException({
+				aggregate: this.constructor,
+				operation: 'markCommitted',
+				uncommittedEvents: uncommitted.length,
+			});
+		}
+
 		const fromVersion = this[COMMITTED_VERSION];
-		this[COMMITTED_VERSION] = this.version;
-		this[EVENTS].length = 0;
+		this[COMMITTED_VERSION] += count;
+		uncommitted.splice(0, count);
 
 		// Remember which versions were committed, so a snapshot repository can tell whether an interval was crossed
 		recordCommittedVersions(this, fromVersion, this[COMMITTED_VERSION]);
@@ -90,21 +119,47 @@ export abstract class AggregateRoot {
 	 * the aggregate has no handler for the event, `applyEvent()` throws a `MissingEventHandlerException`, unless the
 	 * aggregate is decorated with `@Aggregate({ missingHandler: 'ignore' })`.
 	 *
+	 * An event handler may apply events too. They are applied once the handler returns, after its event and in the
+	 * order it applied them, each followed by the events that its own handler applied. When that handler throws, the
+	 * events it applied are dropped. While an event from the history is applied, the events its handler applies are
+	 * ignored, because the history already holds them.
+	 *
 	 * @throws UncommittedEventsException when an event from the history is applied to an aggregate that has
 	 * uncommitted events
 	 */
 	applyEvent<T extends IEvent = IEvent>(event: T, fromHistory = false): void {
+		const running = runningHandlers.get(this);
+		if (!running) {
+			this[APPLY](event, fromHistory);
+		} else if (!running.fromHistory) {
+			running.applied.push([event, fromHistory]);
+		}
+	}
+
+	private [APPLY](event: IEvent, fromHistory: boolean): void {
 		if (fromHistory) {
 			this.assertNoUncommittedEvents('applyEvent');
 		}
 
-		const handler = this.getEventHandler(event.constructor as Type<T>);
-		handler?.call(this, event);
+		const handler = this.getEventHandler(event.constructor as Type<IEvent>);
+		const running: RunningHandler = { fromHistory, applied: [] };
+		if (handler) {
+			runningHandlers.set(this, running);
+			try {
+				handler.call(this, event);
+			} finally {
+				runningHandlers.delete(this);
+			}
+		}
 
 		if (fromHistory) {
 			this[COMMITTED_VERSION]++;
 		} else {
 			this[EVENTS].push(event);
+		}
+
+		for (const [applied, appliedFromHistory] of running.applied) {
+			this[APPLY](applied, appliedFromHistory);
 		}
 	}
 

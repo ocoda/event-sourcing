@@ -136,7 +136,7 @@ export class AccountRepository {
 
     // Append the events to the event store
     await this.eventStore.appendEvents(stream, events, { expectedVersion: account.committedVersion });
-    account.markCommitted();
+    account.markCommitted(events);
     // Save a snapshot of the account, if one is due
     await this.accountSnapshotRepository.save(account.id, account);
   }
