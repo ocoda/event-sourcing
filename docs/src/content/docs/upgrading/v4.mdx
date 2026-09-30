@@ -49,7 +49,7 @@ From the next prerelease on, Vitest 4 or 5 is an optional peer dependency of the
 
 ## Upgrade steps [#upgrade-steps]
 
-1. Upgrade the application to [NestJS 12 and Node.js 22.12 or later](#nestjs-and-node).
+1. Upgrade the application to [NestJS 12 and Node.js 22.12 or later](#nestjs-and-node). If the database runs PostgreSQL 13 or MongoDB 6, upgrade the server first: see [Database server versions](#database-versions).
 2. Install `@ocoda/event-sourcing` and your integrations from the `next` tag, as shown in [Installing the prerelease](#installing-the-prerelease).
 3. Install the [driver](#drivers) of every integration you use.
 4. Replace [imports of paths inside the packages](#imports) with imports from the package name.
@@ -74,6 +74,12 @@ The next prerelease adds these steps. Make the code changes first, and migrate t
 The core peers on `@nestjs/common` and `@nestjs/core` `^12.0.0`, on `rxjs` `^7.8.0` and on `reflect-metadata` `^0.2.0`. All packages require Node.js 22.12 or later (`engines.node` is `>=22.12`).
 
 Upgrade the application itself first, following the [NestJS migration guide](https://docs.nestjs.com/migration-guide). NestJS 11 applications stay on 3.x.
+
+## Database server versions [#database-versions]
+
+4.0 is tested on PostgreSQL 14 and later and on MongoDB 7 and later; see [Tested versions](/upgrading/versioning#tested-versions) for the full list, MariaDB included. PostgreSQL 13 and MongoDB 6 are no longer tested: their vendors ended support for them in 2025 ([PostgreSQL](https://www.postgresql.org/support/versioning/), [MongoDB](https://www.mongodb.com/legal/support-policy/lifecycles)). 4.0 doesn't refuse them, but 4.x isn't tested on them, so a later 4.x release can stop working on them.
+
+If you run one of them, upgrade the database server while the application is still on 3.x, which is tested on PostgreSQL 14 to 17 and on MongoDB 7 and 8 too. The server upgrade and the move to 4.0 then stay separate steps, and the [data migration](#data-migration) runs on the upgraded server.
 
 ## ES modules only [#esm-only]
 
