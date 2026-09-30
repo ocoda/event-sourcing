@@ -6,6 +6,10 @@ import { Aside } from '@astrojs/starlight/components';
 
 `@ocoda/event-sourcing-mongodb` provides the `MongoDBEventStore` and the `MongoDBSnapshotStore`. It needs the `mongodb` driver (`^6.10` or `^7`), which is a peer dependency: see [Installation](/start/install) and [Database drivers are peer dependencies](/upgrading/v4#drivers). It is tested on MongoDB 6, 7, 8 and 9.0, each as a standalone server and as a replica set.
 
+<Aside title="MongoDB 9.0 needs driver 7.3 or later">
+Use `mongodb` 7.3 or later with MongoDB 9.0: it's the first driver release whose supported servers include 9.0. The last 6.x release, 6.21, and 7.0 to 7.2 support MongoDB up to 8.2. An older driver still connects to a 9.0 server, because a driver only refuses a server that requires a newer wire protocol than it speaks, but MongoDB doesn't support that combination, and the tests on 9.0 use a 7.x driver that does. The peer range stays `^6.10` or `^7`, for the servers up to 8.2.
+</Aside>
+
 <Aside type="note" title="4.0 prerelease">
 This page describes schema v2, which the MongoDB stores use from the next prerelease on. Collections that 3.x created must be migrated once, offline: see [Migrating from 3.x](#migrating-from-3x). The design is in [ADR 0002](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0002-schema-v2.md).
 </Aside>
