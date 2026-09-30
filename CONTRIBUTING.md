@@ -89,4 +89,15 @@ docker compose up -d postgres mariadb
 
 10. **Create a Pull Request**
     Go to the original repository, and click the “New Pull Request” button. Fill in details about the changes and submit.
-  
+
+## Releases (maintainers)
+
+The `Release` workflow (`.github/workflows/release.yml`) runs on every push to `3.x`:
+
+1. Its `Version` job turns the pending changesets, which must be patches, into the `[ci] release` version PR and keeps that PR up to date.
+2. Merging the version PR starts a run with nothing pending. When npm lacks one of the new versions, the run's `Publish` job asks for a deployment to the `npm` environment and waits.
+3. A maintainer approves it: open the run, choose **Review deployments**, tick `npm` and choose **Approve and deploy**. The job then builds and publishes through npm trusted publishing, with provenance, and creates the git tags and GitHub releases.
+
+While npm's `latest` is 3.x, 3.x releases go to `latest`. Once 4.x is `latest`, they go to the dist-tag `v3` (`npm install @ocoda/event-sourcing@v3`), and their GitHub releases are not marked Latest, so a 3.x patch never takes either back from 4.x.
+
+npm only accepts a publish from `release.yml` running in the `npm` environment. To skip a release, reject the deployment; the next push that still finds unpublished versions asks again. A rejected or failed publish is retried by re-running the `Publish` job.
