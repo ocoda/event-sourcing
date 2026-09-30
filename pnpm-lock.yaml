@@ -252,7 +252,7 @@ importers:
         specifier: 'catalog:'
         version: 22.20.4
       mariadb:
-        specifier: ^3.4.5
+        specifier: 3.5.4
         version: 3.5.4
       reflect-metadata:
         specifier: 'catalog:'

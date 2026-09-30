@@ -73,7 +73,7 @@
 		"@ocoda/event-sourcing-config": "workspace:*",
 		"@ocoda/event-sourcing-testing": "workspace:*",
 		"@types/node": "catalog:",
-		"mariadb": "^3.4.5",
+		"mariadb": "3.5.4",
 		"reflect-metadata": "catalog:",
 		"rxjs": "catalog:",
 		"typescript": "catalog:"
