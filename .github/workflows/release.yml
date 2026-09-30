@@ -1,25 +1,145 @@
 name: Release
 
+# Keep this filename: npm's trusted publisher for every @ocoda package is bound to `release.yml`.
 on:
   push:
     branches:
       - master
 
-concurrency: ${{ github.workflow }}-${{ github.ref }}
-
 permissions: {}
 
 jobs:
-  changelog:
-    name: Release
+  # Opens or updates the "[ci] release (next)" version PR, and decides whether this commit has versions to publish.
+  # It holds no npm credentials: publishing happens only in the `publish` job below.
+  version:
+    name: Version
     runs-on: ubuntu-latest
+    # One version run per branch at a time. The publish job has a group of its own, so a publish that waits for a
+    # maintainer's approval never holds up the version PR.
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-version
+      cancel-in-progress: false
     permissions:
       contents: read # check out the repository; the release App token does every write
+    outputs:
+      hasChangesets: ${{ steps.changesets.outputs.has-changesets }}
+      needsPublish: ${{ steps.unpublished.outputs.needsPublish }}
+    steps:
+      # changesets/action v2 creates the version commit and the changeset-release/master branch through the GitHub
+      # API with `github-token` and never pushes with git, so the checkout does not keep its credentials.
+      - name: Checkout the repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Until 4.0 GA, master only ships 4.0.0-next.N prereleases under the `next` dist-tag.
+      # The same script guards the publish job, right before `changeset publish`.
+      - name: Guard - master only ships 4.0.0-next prereleases
+        run: bash .github/scripts/release-guard.sh plan
+
+      # A GitHub App installation token, because GITHUB_TOKEN cannot open pull requests here and pull requests it
+      # opens get no CI. It is scoped to this repository, lasts an hour and is revoked when the job ends, so it is
+      # created right before the step that uses it.
+      - name: Create the release App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          # The App ID works here: the action signs its JWT with this value as the issuer, which GitHub accepts as
+          # either the App's client ID or its App ID (`app-id` is the deprecated alias of this input).
+          client-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write # version commit and branch
+          permission-pull-requests: write # open and update the version PR
+
+      # Pending changesets: version them onto the changeset-release/master branch and open or update the version PR.
+      # Without `publish-script` the action never publishes; with no pending changesets it only sets its outputs.
+      - name: Create or update the release pull request
+        id: changesets
+        uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
+        with:
+          # The action also passes this token to the version script as GITHUB_TOKEN, which
+          # @changesets/changelog-github needs to link PRs and authors in the changelog.
+          github-token: ${{ steps.app-token.outputs.token }}
+          version-script: pnpm exec changeset version
+          commit-message: "[ci] release"
+          pr-title: "[ci] release"
+
+      # No pending changesets: a merged version PR (or an earlier publish that failed) leaves versions that npm does
+      # not have yet. Runs the publish job's checks now, so a release that would fail never asks for an approval.
+      - name: Check for unpublished versions
+        id: unpublished
+        if: steps.changesets.outputs.has-changesets == 'false'
+        run: bash .github/scripts/release-guard.sh needs-publish
+
+  # publint and arethetypeswrong on the packed tarballs, the same check as CI, on the commit to publish. A job of its
+  # own, without secrets or OIDC, so this third-party code never runs next to a credential, and a failure shows before
+  # anyone is asked to approve the publish.
+  check:
+    name: Check packages
+    needs: version
+    if: needs.version.outputs.needsPublish == 'true'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-check
+      cancel-in-progress: false
+    permissions:
+      contents: read # check out the repository
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Builds the packages first.
+      - name: Check the packed packages
+        run: pnpm check:packages
+
+  # Publishes the unpublished versions through npm trusted publishing (OIDC). The job runs in the `npm` environment,
+  # which a maintainer must approve ("Review deployments" on the run), and the npm trusted publishers only accept
+  # this workflow in that environment. It waits for the package check, so it never asks to publish a failing build.
+  publish:
+    name: Publish
+    needs: [version, check]
+    if: needs.version.outputs.needsPublish == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/@ocoda/event-sourcing?activeTab=versions
+    # Never two publishes at once, and never cancel one: a cancelled publish can leave half the packages on npm.
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-publish
+      cancel-in-progress: false
+    permissions:
+      contents: read # check out the repository; the release App token creates the tags and GitHub releases
       id-token: write # npm trusted publishing (OIDC)
     steps:
-      # changesets/action v2 creates the version commit, the changeset-release/master branch, git tags and GitHub
-      # releases through the GitHub API with `github-token` and never pushes with git, so the checkout does not keep
-      # its credentials.
+      # Nothing here pushes with git, so the checkout does not keep its credentials.
       - name: Checkout the repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
@@ -39,39 +159,35 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Until 4.0 GA, master only ships 4.0.0-next.N prereleases under the `next` dist-tag.
-      # The same script guards the publish path below, right before `changeset publish`.
-      - name: Guard - master only ships 4.0.0-next prereleases
-        run: bash .github/scripts/release-guard.sh plan
-
-      - name: Build Packages
+      - name: Build packages
         run: pnpm build --filter="./packages/**"
 
-      # A GitHub App installation token, because GITHUB_TOKEN cannot open pull requests here and pull requests it
-      # opens get no CI. It is scoped to this repository, lasts an hour and is revoked when the job ends, so it is
-      # created right before the step that uses it.
-      - name: Create the release App token
-        id: app-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          # The App ID works here: the action signs its JWT with this value as the issuer, which GitHub accepts as
-          # either the App's client ID or its App ID (`app-id` is the deprecated alias of this input).
-          client-id: ${{ secrets.RELEASE_APP_ID }}
-          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
-          repositories: ${{ github.event.repository.name }}
-          permission-contents: write # version commit and branch, git tags and GitHub releases
-          permission-pull-requests: write # open and update the version PR
-
-      # Pending changesets: version them onto the changeset-release/master branch and open or update the version PR.
-      # No pending changesets: publish every unpublished version through npm trusted publishing (OIDC).
-      - name: Create Release Pull Request or Publish
+      # The guard checks pre mode, the versions and the dist-tags again, then runs `changeset publish`. The action
+      # keeps the read-only GITHUB_TOKEN, which it hands to the publish script as GITHUB_TOKEN: the App token is
+      # created only after the publish, so it never reaches npm or a package's scripts.
+      - name: Publish to npm
         id: changesets
         uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
         with:
-          # The action also passes this token to the version and publish scripts as GITHUB_TOKEN, which
-          # @changesets/changelog-github needs to link PRs and authors in the changelog.
-          github-token: ${{ steps.app-token.outputs.token }}
-          version-script: pnpm exec changeset version
           publish-script: bash .github/scripts/release-guard.sh publish
-          commit-message: "[ci] release"
-          pr-title: "[ci] release"
+          create-github-releases: false
+          push-git-tags: false
+
+      # Also after a publish that failed halfway, for the packages that did reach npm.
+      - name: Create the release App token
+        id: app-token
+        if: ${{ !cancelled() && steps.changesets.outputs.published == 'true' }}
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write # git tags and GitHub releases
+
+      - name: Create the git tags and GitHub releases
+        if: ${{ !cancelled() && steps.changesets.outputs.published == 'true' }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.published-packages }}
+        run: bash .github/scripts/github-releases.sh

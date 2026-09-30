@@ -62,8 +62,8 @@ Claude Code skills in `.claude/skills/`, each with a `SKILL.md`. Other agents ca
 ## Hard guardrails
 
 These need a maintainer's explicit OK:
-- Publishing: never run `npm publish`, `pnpm publish` or `changeset publish` locally. Only `.github/workflows/release.yml` publishes, through npm trusted publishing.
-- Renaming `release.yml`: the npm trusted publisher is bound to that exact filename, so renaming it breaks publishing.
+- Publishing: never run `npm publish`, `pnpm publish` or `changeset publish` locally. Only the `publish` job of `.github/workflows/release.yml` publishes, through npm trusted publishing. It runs in the `npm` GitHub environment and waits until a maintainer approves that deployment ("Review deployments" on the Release run). Approving it is publishing, so it is the maintainer's call.
+- Renaming `release.yml` or the `npm` environment: npm's trusted publishers are bound to that exact filename and environment, so renaming either breaks publishing.
 - Exiting pre mode on `master` (`changeset pre exit`) or loosening `release-guard.sh`. That is the 4.0 GA decision, and it moves `latest` to 4.x.
 - Force-pushing `master` or `3.x`.
 - Changing rulesets or repo settings.
