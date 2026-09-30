@@ -329,6 +329,7 @@ await eventStore.appendEvents(stream, events, {
 ```
 
 - The envelopes store and return them, together with the new `eventVersion` and `globalPosition` fields of the metadata.
+- **`JSON.stringify(envelope)` writes the event id as a string**, such as `"01JA50F56AM0CCDBNVQW3TTWNY"`, where 3.x wrote `{ "props": { "value": … } }`, and the `globalPosition` as a decimal string. If you send envelopes as JSON, read `metadata.eventId` instead of `metadata.eventId.props.value` in the consumers. What the stores write is unchanged: see [Envelopes](/under-the-hood/envelopes#json).
 - Header keys are not empty and don't start with `$`, which is reserved for the library; values are strings, finite numbers, booleans or `null`; the headers of an event are at most 8 KiB of JSON. The correlation and causation ids are at most 255 characters. Invalid metadata throws an `InvalidEventMetadataException` before any I/O.
 - A store without the `headers` capability rejects headers with an `UnsupportedOperationException` instead of dropping them.
 - Pre-built envelopes keep their own metadata, `$` headers included; the metadata of the append only fills the fields they lack.

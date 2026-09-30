@@ -56,11 +56,13 @@ await eventStore.appendEvents(stream, events, {
 
 ## JSON [#json]
 
-`JSON.stringify(envelope)` writes the envelope through `envelope.toJSON()`, which renders the `globalPosition` (a bigint) as a decimal string instead of throwing:
+`JSON.stringify(envelope)` writes the envelope through `envelope.toJSON()`. It renders the `eventId` as its value, a string, and the `globalPosition` (a bigint) as a decimal string instead of throwing. Dates, such as the `occurredOn`, become ISO 8601 strings:
 
 ```ts
 JSON.stringify(envelope);
-// {"event":"account-opened","payload":{...},"metadata":{..., "globalPosition":"42"}}
+// {"event":"account-opened","payload":{...},"metadata":{"eventId":"01JA50F56AM0CCDBNVQW3TTWNY","occurredOn":"2024-10-14T07:56:45.642Z", ..., "globalPosition":"42"}}
 ```
 
-Parse it back with `BigInt(json.metadata.globalPosition)`.
+Parse it back with `EventId.from(json.metadata.eventId)`, `new Date(json.metadata.occurredOn)` and `BigInt(json.metadata.globalPosition)`.
+
+The payload is rendered the way the SQL stores write it: a value object that the serializer left in it, such as an `Id`, stays `{ props: { value } }`. Value objects themselves have no `toJSON`, so `JSON.stringify(id)` and what the stores write for them are the same as in 3.x.

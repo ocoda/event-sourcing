@@ -309,7 +309,7 @@ export interface EventEnvelopeMetadata {
 - Validated before any I/O (`InvalidEventMetadataException`): keys non-empty, **`$` keys reserved** for 4.x ALS (`$traceparent`, `$tenant`), values primitive, JSON at most 8 KiB.
 - A store without `capabilities.headers` rejects headers with `UnsupportedOperationException` before writing. Headers are never dropped silently.
 - `correlationId` and `causationId` already have columns in every 3.x schema, so they ship in 4.0. 4.x ALS fills these same fields, and explicit options win.
-- `EventEnvelope.toJSON()` renders bigint as a string (M7).
+- `EventEnvelope.toJSON()` renders bigint as a string (M7). (*Amended by D28:* it also renders the `eventId` as its value, a string.)
 
 ### 9. Global position and `readAll`
 
@@ -453,6 +453,8 @@ account.markCommitted();
 26. **D26, `eventVersion`.** A nullable `INT` column (MongoDB: an optional field), written only from pre-built envelopes in 4.0 and reserved for 4.x upcasters.
 27. **D27, headers storage.** One `headers` column: PostgreSQL `JSONB`, MariaDB `JSON`, a MongoDB subdocument. Absent headers read back as `undefined`. Every built-in store claims `headers: true` once it runs schema v2.
 28. **D28, `toJSON`.** `EventEnvelope.toJSON()` ships with the groundwork PR, not with M7 as §8 says.
+    - *Extended 2026-09-30 by the envelope-JSON fix (#589), pending owner confirmation, non-blocking.* **The event id is a string.** `toJSON()` renders every `Id` at the top level of the metadata (today only the `eventId`, also one that a store rebuilt with `fromTrusted`) as its value, where 3.x's `JSON.stringify(envelope)` wrote `{ props: { value } }`. The key order, the ISO strings of the dates and the decimal strings of the bigints stay as they were.
+    - **`ValueObject` gets no `toJSON`.** The PostgreSQL and MariaDB stores write snapshots, and the payloads that a custom serializer leaves value objects in, with `JSON.stringify`, so a `toJSON` on the base class would change what they store. The default serializer, class-transformer 0.5.1 and BSON don't call `toJSON`, but user code (`JSON.stringify(id)`, Nest responses) would change too. For the same reason the payload in the JSON of an envelope stays as the stores write it.
 29. **D29, id validation on read.** Stores rebuild ids with a non-validating `EventId.fromTrusted()`, so the ids PR can tighten `from()` to Crockford base32 without breaking 3.x rows. The migration's dry run counts non-Crockford ids.
 30. **D30, online migration.** 4.0 guarantees an offline migration only. An online "prepare" phase can be added in a minor release.
 31. **D31, MongoDB read concern.** `readAll` uses majority read concern on replica sets and `mongos`, so a failover can't hand out a position that was already yielded. Appends write with `w: 'majority'`.
