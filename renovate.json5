@@ -17,10 +17,10 @@
 		'**/__fixtures__/**',
 		'fixtures/cross-version/v3/**',
 	],
-	// Every update waits for approval on the Dependency Dashboard while master moves to v4;
-	// switched off for the dependency-freshness pass before 4.0.0 GA.
+	// Updates open their pull requests on their own again since the dependency-freshness pass before 4.0.0 GA (M10).
+	// The dashboard stays: it lists the updates that still wait for approval (new database versions, below).
 	dependencyDashboard: true,
-	dependencyDashboardApproval: true,
+	dependencyDashboardApproval: false,
 	// Longer than pnpm's minimumReleaseAge (1 day, pnpm-workspace.yaml), so pnpm never rejects a proposed version.
 	minimumReleaseAge: '3 days',
 	osvVulnerabilityAlerts: true,
@@ -52,8 +52,24 @@
 			matchPackageNames: ['typescript'],
 			allowedVersions: '<7',
 		},
+		{
+			description: '@types/node follows the lowest supported Node.js (engines.node >=22.12), so the types never offer an API that Node 22 lacks. Raise allowedVersions together with engines.node.',
+			matchPackageNames: ['@types/node'],
+			allowedVersions: '<23',
+		},
 		{ groupName: 'github actions', matchManagers: ['github-actions'] },
-		{ groupName: 'database images', matchManagers: ['docker-compose'] },
+		{
+			description: 'The compose services test fixed versions, and their tags float to the newest patch release, so no digest pins',
+			groupName: 'database images',
+			matchManagers: ['docker-compose'],
+			pinDigests: false,
+		},
+		{
+			description: 'Each compose service is one supported database version (CONTRIBUTING.md). A new server version gets a service and a CI row of its own instead of replacing one, so its update waits on the Dependency Dashboard.',
+			matchManagers: ['docker-compose'],
+			matchUpdateTypes: ['major', 'minor'],
+			dependencyDashboardApproval: true,
+		},
 		{
 			description: 'Tooling updates merge on their own once ci-ok is green. The catalogs only hold devDependencies of the published packages.',
 			matchDepTypes: ['devDependencies', 'pnpm.catalog.default', 'pnpm.catalog.ts6'],

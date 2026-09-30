@@ -29,8 +29,6 @@ cd event-sourcing
 pnpm install
 ```
 
-`pnpm-workspace.yaml` sets the dependency policy: versions that several packages share come from its `catalog` (write `catalog:` in `package.json`), pnpm installs only versions that are at least a day old, and a dependency install script runs only when `allowBuilds` sets that package to `true` (an unlisted package with one fails the install).
-
 The repository is a pnpm + turbo monorepo:
 
 | Path                     | What it is                                                                   |
@@ -44,6 +42,21 @@ The repository is a pnpm + turbo monorepo:
 | `fixtures/consumers`     | the application `pnpm test:consumers` installs the packed packages into      |
 | `fixtures/cross-version` | the 3.0.2 writer of `pnpm test:cross-version` (npm, outside the workspace)   |
 | `scripts/`               | the package-shape checks (`check:packages`, `test:consumers`) and `test:cross-version` |
+
+## Dependencies
+
+`pnpm-workspace.yaml` sets the dependency policy: versions that several packages share come from its `catalog` (write `catalog:` in `package.json`), pnpm installs only versions that are at least a day old, and a dependency install script runs only when `allowBuilds` sets that package to `true` (an unlisted package with one fails the install).
+
+[Renovate](https://docs.renovatebot.com) (`renovate.json5`) proposes updates once a version is 3 days old. Patch and minor updates of the tooling merge on their own once `ci-ok` is green. The peer dependency ranges of the published packages don't follow the newest driver: Renovate widens them, and only their devDependency copies move.
+
+Every dependency stays on its newest version, so `pnpm outdated -r` lists only these intentional exceptions:
+
+| Dependency | Stays on | Why |
+| --- | --- | --- |
+| `@types/node` | 22.x | The types follow the lowest Node.js the packages support (`engines.node` `>=22.12`), so they never offer an API that Node 22 lacks. Raise it together with `engines.node`; Renovate's `allowedVersions` for `@types/node` enforces it. |
+| `typescript` in `docs/` | 6.x (the `ts6` catalog) | `astro check` (`@astrojs/check`) type-checks through the TypeScript JS API, which TypeScript 7 doesn't ship. Renovate keeps the `ts6` catalog below 7. |
+
+The 3.0.2 writer in `fixtures/cross-version/v3` pins the published 3.0.2 packages and their NestJS 11 peers on purpose. It is outside the workspace, so `pnpm outdated -r` doesn't list it, and Renovate ignores it.
 
 ## Databases for integration tests
 
