@@ -5,6 +5,8 @@ name: Claude
 # on top of that that the triggering actor has write access.
 # Claude answers in a comment and may push commits to a claude/* branch. It never opens, approves or merges a pull
 # request; a maintainer opens the PR from the link Claude leaves. See CONTRIBUTING.md "Maintenance automation".
+# Reviews and review comments on fork pull requests get no secrets, so they are skipped: on a fork PR, mention
+# @claude in a regular PR comment.
 on:
   issue_comment:
     types: [created]
@@ -22,13 +24,19 @@ jobs:
     name: Claude
     if: >-
       (
-        (github.event_name == 'issue_comment' || github.event_name == 'pull_request_review_comment')
+        github.event_name == 'issue_comment'
         && contains(github.event.comment.body, '@claude')
         && contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
+      ) || (
+        github.event_name == 'pull_request_review_comment'
+        && contains(github.event.comment.body, '@claude')
+        && contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
+        && github.event.pull_request.head.repo.full_name == github.repository
       ) || (
         github.event_name == 'pull_request_review'
         && contains(github.event.review.body, '@claude')
         && contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.review.author_association)
+        && github.event.pull_request.head.repo.full_name == github.repository
       ) || (
         github.event_name == 'issues'
         && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude'))
@@ -66,8 +74,10 @@ jobs:
           settings: |
             {"permissions": {"blockReadsOutsideWorkingDirectories": true}}
           # On top of the action's own tools (read files, edit the checkout, git add/commit/push to Claude's branch,
-          # update its comment, read CI): read-only GitHub and npm lookups the repo skills use.
+          # update its comment, read CI): read-only GitHub lookups the repo skills use.
+          # No npm, npx or pnpm, not even `npm view`: on a pull request the checkout is the PR's code, possibly from a
+          # fork, and its .npmrc could expand $GH_TOKEN (the App token) into a registry URL of its choosing.
           claude_args: |
             --max-turns 60
-            --allowedTools "Bash(gh issue view:*),Bash(gh issue list:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr list:*),Bash(gh search issues:*),Bash(gh search prs:*),Bash(gh label list:*),Bash(gh release list:*),Bash(gh release view:*),Bash(npm view:*)"
-            --disallowedTools "Bash(gh pr merge:*),Bash(gh pr review:*),Bash(gh api:*),Bash(gh workflow:*),Bash(gh release create:*),Bash(gh release edit:*),Bash(gh secret:*),Bash(npm * --reg*),Bash(gh * --hostname*),Read(//proc/**),Skill(release)"
+            --allowedTools "Bash(gh issue view:*),Bash(gh issue list:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr list:*),Bash(gh search issues:*),Bash(gh search prs:*),Bash(gh label list:*),Bash(gh release list:*),Bash(gh release view:*)"
+            --disallowedTools "Bash(gh pr merge:*),Bash(gh pr review:*),Bash(gh api:*),Bash(gh workflow:*),Bash(gh release create:*),Bash(gh release edit:*),Bash(gh secret:*),Bash(gh * --hostname*),Bash(npm:*),Bash(npx:*),Bash(pnpm:*),Read(//proc/**),Skill(release)"
