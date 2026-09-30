@@ -13,6 +13,7 @@ export class BookLoanSnapshotRepository extends SnapshotRepository<BookLoan> {
 			returnedOn: returnedOn?.toISOString(),
 		};
 	}
+
 	deserialize({ id, bookId, libraryMemberId, loanedOn, dueOn, returnedOn }: ISnapshot<BookLoan>): BookLoan {
 		const bookLoan = new BookLoan();
 		bookLoan.id = BookLoanId.from(id);
@@ -20,7 +21,7 @@ export class BookLoanSnapshotRepository extends SnapshotRepository<BookLoan> {
 		bookLoan.libraryMemberId = LibraryMemberId.from(libraryMemberId);
 		bookLoan.loanedOn = new Date(loanedOn);
 		bookLoan.dueOn = new Date(dueOn);
-		bookLoan.returnedOn = returnedOn && new Date(returnedOn);
+		bookLoan.returnedOn = returnedOn ? new Date(returnedOn) : undefined;
 
 		return bookLoan;
 	}

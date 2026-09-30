@@ -8,10 +8,10 @@
 		"paths": {
 			"@ocoda/event-sourcing": ["../../core/lib/index.ts"],
 			"@ocoda/event-sourcing/*": ["../../core/lib/*/index.ts", "../../core/lib/*.ts"],
-			"@ocoda/event-sourcing-mongodb": ["../../integration/mongodb/lib/index.ts"],
-			"@ocoda/event-sourcing-mongodb/*": [
-				"../../integration/mongodb/lib/*/index.ts",
-				"../../integration/mongodb/lib/*.ts"
+			"@ocoda/event-sourcing-postgres": ["../../integration/postgres/lib/index.ts"],
+			"@ocoda/event-sourcing-postgres/*": [
+				"../../integration/postgres/lib/*/index.ts",
+				"../../integration/postgres/lib/*.ts"
 			]
 		}
 	}

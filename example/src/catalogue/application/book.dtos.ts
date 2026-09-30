@@ -1,22 +1,12 @@
 import type { Book } from '../domain/models/index.js';
 
-export class AddBookDto {
+export interface AddBookDto {
+	/** Optional: an id of the client's choosing, e.g. to retry a request safely. */
+	id?: string;
 	title: string;
-	authorIds: string[];
+	authorIds?: string[];
 	publicationDate: string;
 	isbn: string;
-}
-
-export class AddBookAuthorDto {
-	authorId: string;
-}
-
-export class RemoveBookAuthorDto {
-	authorId: string;
-}
-
-export class RemoveBookDto {
-	reason: string;
 }
 
 export class BookDto {
@@ -26,6 +16,9 @@ export class BookDto {
 		public readonly authorIds: string[],
 		public readonly publicationDate: string,
 		public readonly isbn: string,
+		public readonly addedOn: string,
+		/** The version of the book: the number of events in its stream. */
+		public readonly version: number,
 	) {}
 
 	static from(book: Book): BookDto {
@@ -35,6 +28,14 @@ export class BookDto {
 			book.authorIds.map(({ value }) => value),
 			book.publicationDate.toISOString(),
 			book.isbn.value,
+			book.addedOn.toISOString(),
+			book.version,
 		);
 	}
+}
+
+/** An entry of the book list, the read model that BookListProjection keeps. */
+export interface BookListItemDto {
+	id: string;
+	title: string;
 }

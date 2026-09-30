@@ -3,11 +3,17 @@
 	"extends": ["//"],
 	"tasks": {
 		"dev": {
-			"dependsOn": ["^build"]
+			"dependsOn": ["^build"],
+			"passThroughEnv": ["DATABASE_URL", "PORT"]
 		},
 		"typecheck": {
-			"description": "The example also compiles against the mongodb integration's sources.",
-			"inputs": ["$TURBO_EXTENDS$", "$TURBO_ROOT$/packages/integration/mongodb/lib/**"]
+			"description": "The example also compiles against the postgres integration's sources.",
+			"inputs": ["$TURBO_EXTENDS$", "$TURBO_ROOT$/packages/integration/postgres/lib/**"]
+		},
+		"test": {
+			"description": "Boots the application against PostgreSQL (ES_TEST_PG_*) and drives it over HTTP. It runs against the built packages, like an application that installed them, and never replays a cached result.",
+			"dependsOn": ["^build"],
+			"cache": false
 		}
 	}
 }

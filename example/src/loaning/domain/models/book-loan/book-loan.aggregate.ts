@@ -1,5 +1,6 @@
 import { Aggregate, AggregateRoot, EventHandler } from '@ocoda/event-sourcing';
 import { BookLoanCreatedEvent, BookLoanExtendedEvent, BookLoanReturnedEvent } from '../../events/index.js';
+import { BookLoanAlreadyReturnedException } from '../../exceptions/book-loan-already-returned.exception.js';
 import { LibraryMemberId } from '../library-member-id.vo.js';
 import { BookId } from './book-id.vo.js';
 import { BookLoanId } from './book-loan-id.vo.js';
@@ -14,7 +15,7 @@ export class BookLoan extends AggregateRoot {
 	public returnedOn?: Date;
 
 	public static create(
-		bookLoanId: BookLoanId,
+		id: BookLoanId,
 		bookId: BookId,
 		libraryMemberId: LibraryMemberId,
 		loanedOn: Date,
@@ -23,18 +24,30 @@ export class BookLoan extends AggregateRoot {
 		const bookLoan = new BookLoan();
 
 		bookLoan.applyEvent(
-			new BookLoanCreatedEvent(bookLoanId.value, bookId.value, libraryMemberId.value, loanedOn, dueOn),
+			new BookLoanCreatedEvent(
+				id.value,
+				bookId.value,
+				libraryMemberId.value,
+				loanedOn.toISOString(),
+				dueOn.toISOString(),
+			),
 		);
 
 		return bookLoan;
 	}
 
-	public extend(dueOn: Date) {
-		this.applyEvent(new BookLoanExtendedEvent(dueOn));
+	public extend(dueOn: Date): void {
+		if (this.returnedOn) {
+			throw BookLoanAlreadyReturnedException.withId(this.id);
+		}
+		this.applyEvent(new BookLoanExtendedEvent(dueOn.toISOString()));
 	}
 
-	public return() {
-		this.applyEvent(new BookLoanReturnedEvent());
+	public return(): void {
+		if (this.returnedOn) {
+			return;
+		}
+		this.applyEvent(new BookLoanReturnedEvent(new Date().toISOString()));
 	}
 
 	@EventHandler(BookLoanCreatedEvent)
@@ -42,17 +55,17 @@ export class BookLoan extends AggregateRoot {
 		this.id = BookLoanId.from(event.bookLoanId);
 		this.bookId = BookId.from(event.bookId);
 		this.libraryMemberId = LibraryMemberId.from(event.libraryMemberId);
-		this.loanedOn = event.loanedOn;
-		this.dueOn = event.dueOn;
+		this.loanedOn = new Date(event.loanedOn);
+		this.dueOn = new Date(event.dueOn);
 	}
 
 	@EventHandler(BookLoanExtendedEvent)
 	onBookLoanExtendedEvent(event: BookLoanExtendedEvent) {
-		this.dueOn = event.dueOn;
+		this.dueOn = new Date(event.dueOn);
 	}
 
 	@EventHandler(BookLoanReturnedEvent)
-	onBookLoanReturnedEvent() {
-		this.returnedOn = new Date();
+	onBookLoanReturnedEvent(event: BookLoanReturnedEvent) {
+		this.returnedOn = new Date(event.returnedOn);
 	}
 }

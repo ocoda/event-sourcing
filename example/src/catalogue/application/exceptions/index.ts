@@ -1,2 +1,1 @@
-export * from './domain-http-exceptions.js';
-export * from './exception.filter.js';
+export * from './catalogue-exception.filter.js';

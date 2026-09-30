@@ -1,22 +1,24 @@
-import { CommandHandler, type ICommand, type ICommandHandler } from '@ocoda/event-sourcing';
+import { Command, CommandHandler, type ICommandHandler } from '@ocoda/event-sourcing';
 import { BookLoanNotFoundException } from '../../domain/exceptions/index.js';
 import { BookLoanId } from '../../domain/models/index.js';
 import { BookLoanRepository } from '../repositories/index.js';
 
-export class ExtendBookLoanCommand implements ICommand {
+export class ExtendBookLoanCommand extends Command {
 	constructor(
-		public readonly bookId: string,
+		public readonly bookLoanId: string,
 		public readonly dueOn: Date,
-	) {}
+	) {
+		super();
+	}
 }
 
 @CommandHandler(ExtendBookLoanCommand)
-export class ExtendBookLoanCommandHandler implements ICommandHandler {
-	constructor(private readonly bookRepository: BookLoanRepository) {}
+export class ExtendBookLoanCommandHandler implements ICommandHandler<ExtendBookLoanCommand> {
+	constructor(private readonly bookLoanRepository: BookLoanRepository) {}
 
-	async execute(command: ExtendBookLoanCommand): Promise<boolean> {
-		const bookLoanId = BookLoanId.from(command.bookId);
-		const bookLoan = await this.bookRepository.getById(bookLoanId);
+	async execute(command: ExtendBookLoanCommand): Promise<void> {
+		const bookLoanId = BookLoanId.from(command.bookLoanId);
+		const bookLoan = await this.bookLoanRepository.getById(bookLoanId);
 
 		if (!bookLoan) {
 			throw BookLoanNotFoundException.withId(bookLoanId);
@@ -24,8 +26,6 @@ export class ExtendBookLoanCommandHandler implements ICommandHandler {
 
 		bookLoan.extend(command.dueOn);
 
-		await this.bookRepository.save(bookLoan);
-
-		return true;
+		await this.bookLoanRepository.save(bookLoan);
 	}
 }

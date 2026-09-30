@@ -1,11 +1,5 @@
-import type { Type } from '@nestjs/common';
-import type {
-	ICommandHandler,
-	IEvent,
-	IEventSubscriber,
-	IQueryHandler,
-	SnapshotRepository,
-} from '@ocoda/event-sourcing';
+import type { Provider, Type } from '@nestjs/common';
+import type { IEvent } from '@ocoda/event-sourcing';
 import { BookController } from './application/book.controller.js';
 import {
 	AddBookAuthorCommandHandler,
@@ -13,35 +7,32 @@ import {
 	RemoveBookAuthorCommandHandler,
 	RemoveBookCommandHandler,
 } from './application/commands/index.js';
-import { CustomEventPublisher } from './application/publishers/index.js';
-import { GetBookByIdQueryHandler } from './application/queries/index.js';
+import { BookAddedSubscriber, BookListProjection, BookRemovedSubscriber } from './application/projections/index.js';
+import { GetBookByIdQueryHandler, ListBooksQueryHandler } from './application/queries/index.js';
 import { BookRepository, BookSnapshotRepository } from './application/repositories/index.js';
 import {
 	BookAddedEvent,
-	BookAddedEventSubscriber,
 	BookAuthorAddedEvent,
 	BookAuthorRemovedEvent,
 	BookRemovedEvent,
-	BookRemovedEventSubscriber,
 } from './domain/events/index.js';
 
-export const CommandHandlers: Type<ICommandHandler>[] = [
+/** The events of the catalogue, registered by CatalogueModule with EventSourcingModule.forFeature(). */
+export const Events: Type<IEvent>[] = [BookAddedEvent, BookAuthorAddedEvent, BookAuthorRemovedEvent, BookRemovedEvent];
+
+// Handlers and subscribers need no registration of their own: the library discovers them among the providers.
+export const Providers: Provider[] = [
+	BookRepository,
+	BookSnapshotRepository,
 	AddBookCommandHandler,
 	AddBookAuthorCommandHandler,
 	RemoveBookAuthorCommandHandler,
 	RemoveBookCommandHandler,
+	GetBookByIdQueryHandler,
+	ListBooksQueryHandler,
+	BookListProjection,
+	BookAddedSubscriber,
+	BookRemovedSubscriber,
 ];
 
-export const QueryHandlers: Type<IQueryHandler>[] = [GetBookByIdQueryHandler];
-
-export const SnapshotRepositories: Type<SnapshotRepository>[] = [BookSnapshotRepository];
-
-export const EventPublishers = [CustomEventPublisher];
-
-export const EventSubscribers: Type<IEventSubscriber>[] = [BookAddedEventSubscriber, BookRemovedEventSubscriber];
-
-export const Events: Type<IEvent>[] = [BookAddedEvent, BookAuthorAddedEvent, BookAuthorRemovedEvent, BookRemovedEvent];
-
-export const AggregateRepositories = [BookRepository];
-
-export const Controllers: Type<object>[] = [BookController];
+export const Controllers: Type[] = [BookController];

@@ -29,6 +29,7 @@ The `ci-ok` check is the only required check on `master` and `3.x`. Before openi
    - Then run `pnpm test:cov --filter=@ocoda/event-sourcing-<db>`.
    - Connection settings come from `packages/testing/unit/db.ts` (`ES_TEST_*` variables, defaults match the compose services). For MongoDB, CI also sets `ES_TEST_MONGODB_RS_URL=mongodb://localhost:27018/?replicaSet=rs0` (service `mongodb-N-rs`; required when `CI` is set): the unit, resilience and conformance specs run on both topologies, e2e on the standalone server.
    - Driver specs build stores only through `packages/integration/<db>/tests/support/stores.ts` (`createEventStore`, `createSnapshotStore`).
+7. When `example/` or anything under `packages/` changed: `docker compose up -d --wait postgres`, then `pnpm test --filter=@ocoda/event-sourcing-example` (the example's HTTP e2e spec; turbo builds the packages first).
 
 ## Invariants that no config enforces
 

@@ -1,48 +1,68 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
+import {
+	BadRequestException,
+	Body,
+	Controller,
+	Delete,
+	Get,
+	HttpCode,
+	HttpStatus,
+	Param,
+	Post,
+	Put,
+	UseFilters,
+} from '@nestjs/common';
 import { CommandBus, QueryBus } from '@ocoda/event-sourcing';
-import type { BookId } from '../domain/models/index.js';
-import type { AddBookAuthorDto, AddBookDto, RemoveBookAuthorDto, RemoveBookDto } from './book.dtos.js';
+import { parseDate } from '../../parse-date.js';
+import type { AddBookDto, BookDto, BookListItemDto } from './book.dtos.js';
 import { AddBookAuthorCommand, AddBookCommand, RemoveBookAuthorCommand, RemoveBookCommand } from './commands/index.js';
-import { GetBookByIdQuery } from './queries/index.js';
+import { CatalogueExceptionFilter } from './exceptions/index.js';
+import { GetBookByIdQuery, ListBooksQuery } from './queries/index.js';
 
-@Controller('book')
+@Controller('books')
+@UseFilters(CatalogueExceptionFilter)
 export class BookController {
 	constructor(
 		private readonly commandBus: CommandBus,
 		private readonly queryBus: QueryBus,
 	) {}
 
-	@Post('add')
-	async add(@Body() { title, authorIds, publicationDate, isbn }: AddBookDto): Promise<string> {
-		const command = new AddBookCommand(title, authorIds, new Date(publicationDate), isbn);
-		const bookId: BookId = await this.commandBus.execute<AddBookCommand>(command);
-
-		return bookId.value;
+	@Post()
+	async add(@Body() { id, title, authorIds, publicationDate, isbn }: AddBookDto): Promise<{ id: string }> {
+		if (authorIds !== undefined && !Array.isArray(authorIds)) {
+			throw new BadRequestException('authorIds must be an array of ids');
+		}
+		// AddBookCommand extends Command<string>, so the bus resolves to a string.
+		const bookId = await this.commandBus.execute(
+			new AddBookCommand(title, authorIds ?? [], parseDate(publicationDate, 'publicationDate'), isbn, id),
+		);
+		return { id: bookId };
 	}
 
-	@Patch(':id/add-author')
-	async addAuthor(@Param('id') id: string, @Body() { authorId }: AddBookAuthorDto): Promise<void> {
-		const command = new AddBookAuthorCommand(id, authorId);
-		await this.commandBus.execute(command);
-	}
-
-	@Patch(':id/remove-author')
-	async removeOwner(@Param('id') id: string, @Body() { authorId }: RemoveBookAuthorDto): Promise<void> {
-		const command = new RemoveBookAuthorCommand(id, authorId);
-		await this.commandBus.execute(command);
-	}
-
-	@Delete(':id')
-	async remove(@Param('id') id: string, @Body() { reason }: RemoveBookDto): Promise<void> {
-		const command = new RemoveBookCommand(id, reason);
-		await this.commandBus.execute(command);
+	@Get()
+	list(): Promise<BookListItemDto[]> {
+		return this.queryBus.execute(new ListBooksQuery());
 	}
 
 	@Get(':id')
-	async get(@Param('id') id: string) {
-		const query = new GetBookByIdQuery(id);
-		const book = await this.queryBus.execute(query);
+	get(@Param('id') id: string): Promise<BookDto> {
+		return this.queryBus.execute(new GetBookByIdQuery(id));
+	}
 
-		return book;
+	@Put(':id/authors/:authorId')
+	@HttpCode(HttpStatus.NO_CONTENT)
+	async addAuthor(@Param('id') id: string, @Param('authorId') authorId: string): Promise<void> {
+		await this.commandBus.execute(new AddBookAuthorCommand(id, authorId));
+	}
+
+	@Delete(':id/authors/:authorId')
+	@HttpCode(HttpStatus.NO_CONTENT)
+	async removeAuthor(@Param('id') id: string, @Param('authorId') authorId: string): Promise<void> {
+		await this.commandBus.execute(new RemoveBookAuthorCommand(id, authorId));
+	}
+
+	@Delete(':id')
+	@HttpCode(HttpStatus.NO_CONTENT)
+	async remove(@Param('id') id: string, @Body('reason') reason?: string): Promise<void> {
+		await this.commandBus.execute(new RemoveBookCommand(id, reason ?? ''));
 	}
 }

@@ -3,16 +3,11 @@
 	"private": true,
 	"license": "MIT",
 	"type": "module",
-	"exports": {
-		".": {
-			"types": "./dist/index.d.ts",
-			"default": "./dist/index.js"
-		}
-	},
 	"scripts": {
 		"build": "rm -rf dist && tsc -p tsconfig.build.json",
 		"start": "node --enable-source-maps dist/main.js",
 		"dev": "tsc -p tsconfig.build.json && node --enable-source-maps dist/main.js",
+		"test": "vitest run",
 		"ci": "oxlint --deny-warnings && oxfmt --check",
 		"format": "oxfmt",
 		"format:check": "oxfmt --check",
@@ -27,14 +22,19 @@
 		"@nestjs/core": "catalog:",
 		"@nestjs/platform-express": "catalog:",
 		"@ocoda/event-sourcing": "workspace:*",
-		"@ocoda/event-sourcing-mongodb": "workspace:*",
-		"mongodb": "catalog:",
+		"@ocoda/event-sourcing-postgres": "workspace:*",
+		"pg": "catalog:",
+		"pg-cursor": "catalog:",
 		"reflect-metadata": "catalog:",
 		"rxjs": "catalog:"
 	},
 	"devDependencies": {
 		"@ocoda/event-sourcing-config": "workspace:*",
+		"@ocoda/event-sourcing-testing": "workspace:*",
 		"@types/node": "catalog:",
-		"typescript": "catalog:"
+		"@types/pg": "catalog:",
+		"@types/pg-cursor": "catalog:",
+		"typescript": "catalog:",
+		"vitest": "catalog:"
 	}
 }

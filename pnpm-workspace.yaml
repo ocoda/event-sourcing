@@ -12,8 +12,11 @@ catalog:
   '@nestjs/platform-express': 12.1.1
   '@nestjs/testing': 12.1.1
   '@types/node': 22.20.4
+  '@types/pg': ^8.23.1
+  '@types/pg-cursor': ^2.7.2
   class-transformer: 0.5.1
-  mongodb: ^7.7.0
+  pg: ^8.23.0
+  pg-cursor: ^2.22.0
   reflect-metadata: 0.2.2
   rxjs: 7.8.2
   typescript: 7.0.2

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { EventStore, EventStream } from '@ocoda/event-sourcing';
-import { BookLoan, BookLoanId } from '../../domain/models/index.js';
+import { BookLoan, type BookLoanId } from '../../domain/models/index.js';
 import { BookLoanSnapshotRepository } from './book-loan.snapshot-repository.js';
 
 @Injectable()
@@ -10,56 +10,15 @@ export class BookLoanRepository {
 		private readonly bookLoanSnapshotRepository: BookLoanSnapshotRepository,
 	) {}
 
-	async getById(bookLoanId: BookLoanId): Promise<BookLoan | void> {
-		const eventStream = EventStream.for<BookLoan>(BookLoan, bookLoanId);
-
+	async getById(bookLoanId: BookLoanId): Promise<BookLoan | undefined> {
 		const bookLoan = await this.bookLoanSnapshotRepository.load(bookLoanId);
 
-		const eventCursor = this.eventStore.getEvents(eventStream, {
+		const events = this.eventStore.getEvents(EventStream.for<BookLoan>(BookLoan, bookLoanId), {
 			fromVersion: bookLoan.version + 1,
 		});
+		await bookLoan.loadFromHistory(events);
 
-		await bookLoan.loadFromHistory(eventCursor);
-
-		if (bookLoan.version < 1) {
-			return;
-		}
-
-		return bookLoan;
-	}
-
-	async getByIds(bookLoanIds: BookLoanId[]) {
-		const bookLoans = await this.bookLoanSnapshotRepository.loadMany(bookLoanIds, 'e2e');
-
-		for (const bookLoan of bookLoans) {
-			const eventStream = EventStream.for<BookLoan>(BookLoan, bookLoan.id);
-			const eventCursor = this.eventStore.getEvents(eventStream, { pool: 'e2e', fromVersion: bookLoan.version + 1 });
-			await bookLoan.loadFromHistory(eventCursor);
-		}
-
-		return bookLoans;
-	}
-
-	async getAll(bookLoanId?: BookLoanId, limit?: number): Promise<BookLoan[]> {
-		const bookLoans: BookLoan[] = [];
-		for await (const envelopes of this.bookLoanSnapshotRepository.loadAll({
-			aggregateId: bookLoanId,
-			limit,
-		})) {
-			for (const { metadata, payload } of envelopes) {
-				const id = BookLoanId.from(metadata.aggregateId);
-				const eventStream = EventStream.for<BookLoan>(BookLoan, id);
-				const bookLoan = this.bookLoanSnapshotRepository.deserialize(payload);
-				bookLoan.version = metadata.version;
-
-				const eventCursor = this.eventStore.getEvents(eventStream, { fromVersion: metadata.version + 1 });
-				await bookLoan.loadFromHistory(eventCursor);
-
-				bookLoans.push(bookLoan);
-			}
-		}
-
-		return bookLoans;
+		return bookLoan.version > 0 ? bookLoan : undefined;
 	}
 
 	async save(bookLoan: BookLoan): Promise<void> {
@@ -68,6 +27,7 @@ export class BookLoanRepository {
 
 		await this.eventStore.appendEvents(stream, events, { expectedVersion: bookLoan.committedVersion });
 		bookLoan.markCommitted();
+
 		await this.bookLoanSnapshotRepository.save(bookLoan.id, bookLoan);
 	}
 }

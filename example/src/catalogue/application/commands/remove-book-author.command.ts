@@ -1,33 +1,31 @@
-import { CommandHandler, type ICommand, type ICommandHandler } from '@ocoda/event-sourcing';
-
+import { Command, CommandHandler, type ICommandHandler } from '@ocoda/event-sourcing';
 import { BookNotFoundException } from '../../domain/exceptions/index.js';
 import { AuthorId, BookId } from '../../domain/models/index.js';
 import { BookRepository } from '../repositories/index.js';
 
-export class RemoveBookAuthorCommand implements ICommand {
+export class RemoveBookAuthorCommand extends Command {
 	constructor(
 		public readonly bookId: string,
 		public readonly authorId: string,
-	) {}
+	) {
+		super();
+	}
 }
 
 @CommandHandler(RemoveBookAuthorCommand)
-export class RemoveBookAuthorCommandHandler implements ICommandHandler {
+export class RemoveBookAuthorCommandHandler implements ICommandHandler<RemoveBookAuthorCommand> {
 	constructor(private readonly bookRepository: BookRepository) {}
 
-	async execute(command: RemoveBookAuthorCommand): Promise<boolean> {
+	async execute(command: RemoveBookAuthorCommand): Promise<void> {
 		const bookId = BookId.from(command.bookId);
 		const book = await this.bookRepository.getById(bookId);
 
-		if (!book) {
+		if (!book || book.removedOn) {
 			throw BookNotFoundException.withId(bookId);
 		}
 
-		const authorId = AuthorId.from(command.authorId);
-		book.removeAuthor(authorId);
+		book.removeAuthor(AuthorId.from(command.authorId));
 
 		await this.bookRepository.save(book);
-
-		return true;
 	}
 }
