@@ -4,12 +4,13 @@
 #
 #   release-guard.sh plan           Before changesets/action: the pending changesets are patches that stay on 3.x.
 #   release-guard.sh needs-publish  The version job, when no changesets are pending: writes needsPublish=true to
-#                                   $GITHUB_OUTPUT when npm lacks the version of a publishable package.
+#                                   $GITHUB_OUTPUT when npm lacks the version of a publishable package, and fails
+#                                   when that version would move its dist-tag back.
 #   release-guard.sh dist-tag       The publish job: writes npmTag (`latest` while npm's `latest` is 3.x, else
 #                                   `v3`) and githubLatest (whether the GitHub releases may become Latest).
-#   release-guard.sh publish        The publish script: every publishable package is at 3.x, and RELEASE_NPM_TAG
-#                                   is `v3`, or `latest` while npm's `latest` is still 3.x; then it runs
-#                                   `changeset publish --tag "$RELEASE_NPM_TAG"`.
+#   release-guard.sh publish        The publish script: every publishable package is at 3.x, RELEASE_NPM_TAG is
+#                                   `v3`, or `latest` while npm's `latest` is still 3.x, and no version moves that
+#                                   dist-tag back; then it runs `changeset publish --tag "$RELEASE_NPM_TAG"`.
 #
 # Every registry lookup fails closed: a registry that stays unreachable fails the job instead of deciding what gets
 # published or where.
@@ -18,8 +19,13 @@ shopt -s inherit_errexit
 
 readonly CORE_PACKAGE='@ocoda/event-sourcing'
 readonly MAINTENANCE_TAG='v3'
-readonly VERSION_PATTERN='^3\.[0-9]+\.[0-9]+$'
+readonly VERSION_PATTERN='^3[.][0-9]+[.][0-9]+$'
 readonly ATTEMPTS=3
+# jq: a sort key with semver precedence. Numeric prerelease identifiers compare as numbers and below alphanumeric
+# ones, and a release sorts above its prereleases. A version that is not semver yields nothing.
+readonly SEMVER_KEY='def semver_key: capture("^(?<core>[0-9]+[.][0-9]+[.][0-9]+)(-(?<pre>[0-9A-Za-z.-]+))?([+].*)?$")
+	| [(.core | split(".") | map(tonumber)),
+		(if .pre == null then [1] else [0, (.pre | split(".") | map(if test("^[0-9]+$") then [0, tonumber] else [1, .] end))] end)];'
 
 fail() {
 	echo "::error::$*" >&2
@@ -96,32 +102,81 @@ check_versions() {
 	[ -z "$bad" ] || fail "3.x only publishes 3.x releases, but these packages are at: $bad"
 }
 
-report_needs_publish() {
-	local packages name version versions count=0 needs=false
+# The publishable packages whose version npm doesn't have yet, as "name version" lines.
+unpublished_packages() {
+	local packages name version versions state
 	packages=$(publishable_packages)
 	while read -r name version; do
 		versions=$(npm_view "$name" versions)
 		# `npm view` prints a lone version as a string, and `null` stands for a package npm doesn't know.
-		if jq -e --arg version "$version" '(. // []) | if type == "array" then . else [.] end | index($version) == null' \
-			<<<"$versions" >/dev/null; then
-			echo "  unpublished: $name@$version"
-			count=$((count + 1))
+		state=$(jq -r --arg version "$version" \
+			'(. // []) | if type == "array" then . else [.] end | if index($version) == null then "unpublished" else "published" end' \
+			<<<"$versions")
+		if [ "$state" = unpublished ]; then
+			echo "$name $version"
 		fi
 	done <<<"$packages"
-	[ "$count" -eq 0 ] || needs=true
+}
+
+# Fails unless <version> is newer than the version that the dist-tag <tag> of <name> points at today, so re-running an
+# older Release run can never move a dist-tag back.
+check_not_behind() {
+	local name=$1 version=$2 tag=$3 current
+	current=$(npm_view "$name" "dist-tags.$tag")
+	current=$(jq -r '. // empty' <<<"$current")
+	if [ -z "$current" ]; then
+		echo "  $name: no '$tag' dist-tag yet"
+		return 0
+	fi
+	jq -en --arg new "$version" --arg current "$current" "$SEMVER_KEY"' ($new | semver_key) > ($current | semver_key)' \
+		>/dev/null || fail "$name@$version is not newer than $current, the version of its '$tag' dist-tag, and publishing it would move that tag back. Is this a re-run of an older Release run?"
+	echo "  $name: '$tag' moves from $current to $version"
+}
+
+# Runs check_not_behind for every unpublished package, under the dist-tag <tag>.
+check_unpublished_not_behind() {
+	local tag=$1 unpublished name version
+	unpublished=$(unpublished_packages)
+	while read -r name version; do
+		[ -n "$name" ] || continue
+		check_not_behind "$name" "$version" "$tag"
+	done <<<"$unpublished"
+}
+
+report_needs_publish() {
+	local unpublished tag count=0 needs=false
+	unpublished=$(unpublished_packages)
+	if [ -n "$unpublished" ]; then
+		awk '{ print "  unpublished: " $1 "@" $2 }' <<<"$unpublished"
+		count=$(grep -c . <<<"$unpublished")
+		needs=true
+		# Fails now rather than after the approval, with the dist-tag the publish job would choose.
+		tag=$(npm_tag)
+		check_unpublished_not_behind "$tag"
+	fi
 	echo "Versions to publish: $count"
 	set_output "needsPublish=$needs"
 }
 
-choose_dist_tag() {
+# The npm dist-tag for 3.x releases: `latest` while npm's `latest` is 3.x, else `v3`.
+npm_tag() {
 	local major
 	major=$(latest_major)
 	if [ "$major" -ge 4 ]; then
-		set_output "npmTag=$MAINTENANCE_TAG"
-		set_output "githubLatest=false"
+		echo "$MAINTENANCE_TAG"
 	else
-		set_output "npmTag=latest"
+		echo latest
+	fi
+}
+
+choose_dist_tag() {
+	local tag
+	tag=$(npm_tag)
+	set_output "npmTag=$tag"
+	if [ "$tag" = latest ]; then
 		set_output "githubLatest=true"
+	else
+		set_output "githubLatest=false"
 	fi
 }
 
@@ -154,6 +209,7 @@ dist-tag)
 publish)
 	check_versions
 	check_dist_tag
+	check_unpublished_not_behind "$RELEASE_NPM_TAG"
 	exec pnpm exec changeset publish --tag "$RELEASE_NPM_TAG"
 	;;
 *)
