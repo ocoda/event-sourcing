@@ -24,7 +24,7 @@
 `@ocoda/event-sourcing` is a powerful library designed to simplify the implementation of advanced architectural patterns in your NestJS application. It provides essential building blocks to help you implement Domain-Driven Design (DDD), CQRS and leverage Event Sourcing to tackle the complexities of modern systems.
 
 ## Documentation 📗
-Ready to dive right in? Visit [the documentation](https://ocoda.github.io/event-sourcing) to find out how to get started.
+Ready to dive right in? Visit [the 3.x documentation](https://ocoda.github.io/event-sourcing/v3/) to find out how to get started.
 
 ## Contact
 dries@drieshooghe.com
