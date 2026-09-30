@@ -77,7 +77,7 @@ Upgrade the application itself first, following the [NestJS migration guide](htt
 
 ## Database server versions [#database-versions]
 
-4.0 is tested on PostgreSQL 14 and later and on MongoDB 7 and later; see [Tested versions](/upgrading/versioning#tested-versions) for the full list, MariaDB included. PostgreSQL 13 and MongoDB 6 are no longer tested: their vendors ended support for them in 2025 ([PostgreSQL](https://www.postgresql.org/support/versioning/), [MongoDB](https://www.mongodb.com/legal/support-policy/lifecycles)). 4.0 doesn't refuse them, but a later 4.x release can stop working on them without notice.
+4.0 is tested on PostgreSQL 14 and later and on MongoDB 7 and later; see [Tested versions](/upgrading/versioning#tested-versions) for the full list, MariaDB included. PostgreSQL 13 and MongoDB 6 are no longer tested: their vendors ended support for them in 2025 ([PostgreSQL](https://www.postgresql.org/support/versioning/), [MongoDB](https://www.mongodb.com/legal/support-policy/lifecycles)). 4.0 doesn't refuse them, but 4.x isn't tested on them, so a later 4.x release can stop working on them.
 
 If you run one of them, upgrade the database server while the application is still on 3.x, which is tested on PostgreSQL 14 to 17 and on MongoDB 7 and 8 too. The server upgrade and the move to 4.0 then stay separate steps, and the [data migration](#data-migration) runs on the upgraded server.
 
