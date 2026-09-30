@@ -526,7 +526,11 @@ const examplesOf = ({ sample }: NonNullable<MigrationCollectionReport['canonical
 const eventTableMigration: TableMigration = {
 	kind: 'events',
 	async inspect(db, table, options) {
-		const [inspection, dependents] = await Promise.all([inspectEventTable(db, table), dependentsOf(db, table)]);
+		const [inspection, dependents, pendingSnapshots] = await Promise.all([
+			inspectEventTable(db, table),
+			dependentsOf(db, table),
+			options.keepBackup ? undefined : pendingSnapshotsOf(db, table),
+		]);
 		const plan = planEventMigration(
 			{
 				table,
@@ -535,6 +539,7 @@ const eventTableMigration: TableMigration = {
 				hasColumns: EVENT_COLUMNS.every((column) => inspection.columns.has(column)),
 				backup: inspection.backup,
 				dependents,
+				...(pendingSnapshots ? { pendingSnapshots } : {}),
 			},
 			options,
 		);
@@ -636,6 +641,32 @@ export const eventTableOf = (snapshotTable: string): string | undefined => {
 	}
 	return snapshotTable.endsWith(suffix) && snapshotTable.length > suffix.length
 		? EventCollection.get(snapshotTable.slice(0, -suffix.length))
+		: undefined;
+};
+
+/** The snapshot table of an event table's pool: `snapshots` for `events`, `<pool>-snapshots` for `<pool>-events`. */
+export const snapshotTableOf = (eventTable: string): string | undefined => {
+	const suffix = `-${EventCollection.get()}`;
+	if (eventTable === EventCollection.get()) {
+		return SnapshotCollection.get();
+	}
+	return eventTable.endsWith(suffix) && eventTable.length > suffix.length
+		? SnapshotCollection.get(eventTable.slice(0, -suffix.length))
+		: undefined;
+};
+
+/**
+ * The snapshot table of an event table's pool while its columns aren't converted: its migration still takes the
+ * snapshot stream ids from the pool's 3.x event rows.
+ */
+const pendingSnapshotsOf = async (db: Queryable, eventTable: string): Promise<string | undefined> => {
+	const snapshots = snapshotTableOf(eventTable);
+	if (!snapshots) {
+		return undefined;
+	}
+	const columns = await tableColumns(db, snapshots);
+	return SNAPSHOT_COLUMNS.every((column) => columns.has(column)) && !snapshotColumnsAreV2(columns)
+		? snapshots
 		: undefined;
 };
 

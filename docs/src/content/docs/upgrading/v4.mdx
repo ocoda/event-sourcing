@@ -472,9 +472,9 @@ await MariaDBEventStore.migrate(config, { keepBackup: false });
 - The snapshot tables are converted in place, and every stream gets exactly one latest snapshot, its highest version.
 - After the migration, a 3.x instance that still runs fails to append events (error 1136) instead of writing rows without positions. Its snapshot writes still succeed, so stop every 3.x instance before you migrate.
 - Plan for about 3 minutes per million events (a provisional estimate: a million events were not measured with the copy that ships), and free space of 1.5 times the event tables in the data directory and again in `tmpdir`. A failed migration can be run again: it continues where it stopped.
-- A 3.x stream whose rows have ids that differ in case only keeps being one stream: every row takes the stream id of the stream's lowest version, and its snapshots take the id of its events. Use those ids after the migration; the dry run lists them (`canonicalizedStreams`, see [Stream ids that differ in case only](/integrations/mariadb#case-variants)). Nothing needs changing by hand.
+- A 3.x stream whose rows have ids that differ in case only keeps being one stream: every row takes the stream id of the stream's lowest version, and its snapshots take the id of its events. Use those ids after the migration; the dry run lists them (`canonicalizedStreams`, see [Stream ids that differ in case only](/integrations/mariadb#case-variants)). The data needs no fixing by hand.
 - A stream with a gap in its versions conflicts on its next append; the dry run lists them (`gappedStreams`).
-- The migration needs no database settings changed: a user with `ALL PRIVILEGES` on the database runs it, a missing privilege fails it before the copy, and on Galera it sizes its replication fragments for `wsrep_max_ws_size`.
+- The migration needs no server settings changed, only room for the copy (disk and `tmpdir` space, and for a very large table a buffer pool that holds its row locks): a user with `ALL PRIVILEGES` on the database runs it, a missing privilege of the copy or the swap fails it before the copy, and on Galera it sizes its replication fragments for `wsrep_max_ws_size`.
 
 ## Publishing [#publishing]
 

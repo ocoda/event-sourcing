@@ -1,5 +1,11 @@
 import type { Queryable } from '../../lib/mariadb.schema.js';
-import { connectionConfigOf, eventTableOf, failureHint, maxWriteSetBytesOf } from '../../lib/migration/migrate.js';
+import {
+	connectionConfigOf,
+	eventTableOf,
+	failureHint,
+	maxWriteSetBytesOf,
+	snapshotTableOf,
+} from '../../lib/migration/migrate.js';
 import {
 	type EventPlanInput,
 	GALERA_WARNINGS,
@@ -180,11 +186,30 @@ describe('planEventMigration', () => {
 		expect(plan.blocking).toEqual(blocking.map((pattern) => expect.stringMatching(pattern)));
 	});
 
-	it('warns that the backup is kept, with the statement that drops it', () => {
+	it('warns that the backup is kept, with the ways to drop it', () => {
 		expect(planEventMigration(event(), OPTIONS).warnings).toEqual([
-			'The 3.x table is kept as tenant-events__es_v1; drop it when satisfied: DROP TABLE IF EXISTS `tenant-events__es_v1`',
+			'The 3.x table is kept as tenant-events__es_v1; drop it when satisfied, after the snapshots are migrated: run the migration again with keepBackup: false, or DROP TABLE IF EXISTS `tenant-events__es_v1`',
 		]);
 		expect(planEventMigration(event(), { ...OPTIONS, keepBackup: false }).warnings).toEqual([]);
+	});
+
+	it('warns when keepBackup: false drops the backup that the snapshot migration still reads', () => {
+		const warning = expect.stringMatching(
+			/^The snapshot table tenant-snapshots isn't migrated yet: .* read from tenant-events__es_v1, which keepBackup: false drops/,
+		);
+		const dropping = { ...OPTIONS, keepBackup: false };
+		const pending = { pendingSnapshots: 'tenant-snapshots' };
+
+		expect(planEventMigration(event(pending), dropping).warnings).toEqual([warning]);
+		expect(planEventMigration(event({ ...pending, state: 'v1-partial', backup: true }), dropping).warnings).toEqual([
+			warning,
+		]);
+		expect(
+			planEventMigration(event({ ...pending, state: 'v2', registered: true, backup: true }), dropping).warnings,
+		).toEqual([warning]);
+		// Nothing to warn about while the backup is kept, or once it is gone
+		expect(planEventMigration(event(pending), OPTIONS).warnings).not.toContainEqual(warning);
+		expect(planEventMigration(event({ ...pending, state: 'v2', registered: true }), dropping).warnings).toEqual([]);
 	});
 
 	it('warns about Galera for the tables it migrates or resumes', () => {
@@ -472,6 +497,16 @@ describe('failureHint', () => {
 		expect(text).toBe(
 			'A session still uses the table (a 3.x instance?): stop it. Sessions with an open transaction, oldest first: #12 app@10.0.0.5, #13 (KILL <id> ends one). Run the migration again: it continues where it stopped.',
 		);
+	});
+});
+
+describe('snapshotTableOf', () => {
+	it("names the snapshot table of an event table's pool", () => {
+		expect(snapshotTableOf('events')).toBe('snapshots');
+		expect(snapshotTableOf('tenant-events')).toBe('tenant-snapshots');
+		expect(snapshotTableOf('a-b-events')).toBe('a-b-snapshots');
+		expect(snapshotTableOf('-events')).toBeUndefined();
+		expect(snapshotTableOf('other')).toBeUndefined();
 	});
 });
 

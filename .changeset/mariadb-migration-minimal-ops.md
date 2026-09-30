@@ -10,5 +10,5 @@
 - **A missing privilege fails before the copy.** The event migration renames the empty copy and back (`probe-swap`), which needs the swap's privileges, so a user without `ALTER` fails there instead of at the swap after the whole copy. The dry run still can't check privileges.
 - **Lock waits name the sessions.** With the `PROCESS` privilege, a step that times out on a lock lists the sessions with an open transaction (`KILL <id>` ends one).
 - **Galera.** The migration replicates in fragments of 64 MiB, or of half the node's `wsrep_max_ws_size` when that is smaller, so it no longer fails on a smaller `wsrep_max_ws_size`.
-- **Dropping the backups** needs no SQL: run `MariaDBEventStore.migrate(config, { keepBackup: false })` again.
+- **Dropping the backups** needs no SQL: run `MariaDBEventStore.migrate(config, { keepBackup: false })` again, after the snapshots are migrated. When `keepBackup: false` would drop the backup of a pool whose snapshot table isn't migrated yet, the dry run and the report warn about it.
 - `migrations/4.0.sql` has the new statements, and suggests dropping the events' backup only after the snapshots.

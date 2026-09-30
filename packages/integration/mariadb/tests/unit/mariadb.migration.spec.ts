@@ -953,7 +953,18 @@ describe('MariaDB migration from 3.x to schema v2', () => {
 					rows: [event('account-Zed-1', 1), event('account-zed-1', 2)],
 				});
 				const droppedSnapshots = await seedSnapshots(dropped, { rows: [snapshot('account-zed-1', 2, true)] });
-				await migrateEvents({ pools: [dropped], keepBackup: false });
+				// The dry run and the report of the event migration say that the snapshots still need the backup
+				const dropping = new RegExp(
+					`The snapshot table ${droppedSnapshots} isn't migrated yet: .* read from ${droppedEvents}__es_v1, which keepBackup: false drops`,
+				);
+				expect(
+					only(await migrateEvents({ pools: [dropped], keepBackup: false, dryRun: true }), droppedEvents).warnings.join(
+						'\n',
+					),
+				).toMatch(dropping);
+				expect(
+					only(await migrateEvents({ pools: [dropped], keepBackup: false }), droppedEvents).warnings.join('\n'),
+				).toMatch(dropping);
 
 				const other = nextPool('coll');
 				const otherEvents = await seedEvents(other, {

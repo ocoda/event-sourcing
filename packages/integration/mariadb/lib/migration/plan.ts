@@ -87,6 +87,11 @@ export interface EventPlanInput {
 	backup: boolean;
 	/** Triggers on the table and foreign keys from or to it: a swap would leave them on the backup. */
 	dependents: readonly string[];
+	/**
+	 * The pool's snapshot table while its columns aren't converted: its migration takes the snapshot stream ids from the
+	 * 3.x event rows, in the table or its backup. Only looked up for `keepBackup: false`, which drops the backup.
+	 */
+	pendingSnapshots?: string;
 }
 
 /** What the planner needs to know about a snapshot table. */
@@ -177,13 +182,21 @@ const planEventSteps = (input: EventPlanInput, options: PlanOptions): MigrationP
 	const blocking: string[] = [];
 	const register = step<EventStepName>('register', registerEventsSql(table, options), LOCKS.catalogRow);
 	const dropBackup = step<EventStepName>('drop-backup', dropBackupSql(table), LOCKS.exclusiveMetadata);
+	const warnPendingSnapshots = () => {
+		if (input.pendingSnapshots) {
+			warnings.push(
+				`The snapshot table ${input.pendingSnapshots} isn't migrated yet: its migration gives every snapshot stream the stream id of its events, read from ${backupTableName(table)}, which keepBackup: false drops. Migrate the snapshots first, or keep the backup until they are`,
+			);
+		}
+	};
 	const withBackup = (steps: PlannedStep<EventStepName>[]) => {
 		if (options.keepBackup) {
 			warnings.push(
-				`The 3.x table is kept as ${backupTableName(table)}; drop it when satisfied: ${dropBackupSql(table)}`,
+				`The 3.x table is kept as ${backupTableName(table)}; drop it when satisfied, after the snapshots are migrated: run the migration again with keepBackup: false, or ${dropBackupSql(table)}`,
 			);
 			return steps;
 		}
+		warnPendingSnapshots();
 		return [...steps, dropBackup];
 	};
 
@@ -262,6 +275,7 @@ const planEventSteps = (input: EventPlanInput, options: PlanOptions): MigrationP
 		};
 	}
 	if (input.backup && !options.keepBackup) {
+		warnPendingSnapshots();
 		return {
 			action: 'resume',
 			steps: [...opening<EventStepName>(table, options), dropBackup, closing<EventStepName>(table, options)],
