@@ -1,0 +1,72 @@
+name: Claude review
+
+# An advisory review of pull requests from branches of this repository, calibrated by REVIEW.md. It comments and
+# never approves, requests changes or merges; `ci-ok` stays the only required check.
+# Fork pull requests are skipped: `pull_request` runs get no secrets for them, and this workflow deliberately does
+# not use `pull_request_target`, which would run with secrets next to untrusted code. @claude (claude.yml) refuses
+# them too, so a fork pull request gets a human review only.
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+
+permissions: {}
+
+jobs:
+  review:
+    name: Review
+    # Human-authored, non-draft pull requests from this repository. Renovate PRs get claude-deps.yml instead, and the
+    # release App's version PRs need no review.
+    if: >-
+      github.event.pull_request.draft == false
+      && github.event.pull_request.head.repo.full_name == github.repository
+      && github.event.pull_request.user.type == 'User'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: claude-review-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    permissions:
+      contents: read # check out the pull request
+      pull-requests: write # inline comments and the summary comment
+    env:
+      # Keep the Claude token and the Actions runtime tokens out of the commands Claude runs.
+      CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Review with Claude
+        uses: anthropics/claude-code-action@756cc22e19660d20e8cc9496b4f242475a7f7790 # v1.0.235
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # The job's GITHUB_TOKEN, limited to the permissions above, instead of the Claude App token.
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          # Not a permission grant: it names the owner, who has write access anyway. Any value switches the action to a
+          # git credential helper, so the token is never written into .git/config, where read-only commands such as
+          # `git remote -v` or `grep -r` would show it. It also runs the commands Claude starts in their own PID
+          # namespace.
+          allowed_non_write_users: drieshooghe
+          classify_inline_comments: "false"
+          settings: |
+            {"permissions": {"blockReadsOutsideWorkingDirectories": true}}
+          prompt: |
+            Review pull request #${{ github.event.pull_request.number }} of ${{ github.repository }}. This is an unattended CI run: nobody answers questions, so finish with what you can establish.
+
+            How to judge:
+            - REVIEW.md sets the bar. Rank every finding Blocker, Important or Nit as it defines them, and leave out what it lists under Skip. Report a Nit only when it would mislead a reader.
+            - Check the change against the invariants and branch rules in AGENTS.md. A pull request to 3.x takes patch changesets only.
+            - For changes under .github/ (workflows, scripts, actions), review as /security-review would: widened permissions, untrusted input reaching `run:`, actions not pinned by full SHA, secrets reachable from untrusted code, and any change to release.yml or .github/scripts/release-guard.sh.
+            - Report only what the diff and the code show. Label anything you could not confirm as a guess.
+
+            How to work:
+            - Read the change with `gh pr diff ${{ github.event.pull_request.number }}` and `gh pr view ${{ github.event.pull_request.number }}`. The checkout is the pull request merged into its base; read files there for context. Don't install, build or run anything.
+            - Post each finding that belongs to specific lines as one inline comment with mcp__github_inline_comment__create_inline_comment, starting with its severity in bold.
+            - Then post exactly one summary comment with `gh pr comment ${{ github.event.pull_request.number }} --body "..."`: a first line with the finding count per severity (or "No findings."), then the findings that don't map to a line.
+            - Never approve, request changes, merge, push or edit the pull request. The review is advisory.
+          claude_args: |
+            --max-turns 40
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
+            --disallowedTools "Bash(gh pr merge:*),Bash(gh pr review:*),Bash(gh api:*),Bash(gh * --hostname*),Bash(gh * --body-file*),Bash(gh * -F *),Bash(gh * --jq*),Bash(gh * -q*),Bash(gh * --template*),Bash(gh * -t*),Bash(jq:*),Bash(git remote:*),Bash(git config:*),Read(./.git/**),Read(//proc/**),Skill(release),Skill(changeset)"
