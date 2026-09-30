@@ -42,14 +42,14 @@ Work through the checklist top to bottom for the release line in $ARGUMENTS (def
    - **After 4.0.0 (master today):** expect no `pre.json`. Versions are stable 4.x and publish under `latest`.
    - **v4 prerelease (before 4.0.0):** expect `"mode": "pre"` with tag `next`. Versions look like `4.0.0-next.N` and publish under the `next` dist-tag.
    - **4.0.0 GA:** pre mode must already be exited (`changeset pre exit`, merged by PR) before the version PR.
-   - **No `pre.json` and a computed major on master:** this publishes 4.0.0 as `latest`. It is red unless the maintainer confirms GA.
+   - **A computed major on master after 4.0.0:** it would be 5.0.0, which the release guard refuses. It is red unless the maintainer has decided to start 5.0.
 
 5. **Version PR.**
    - After the push to `<line>`, release.yml's `Version` job runs changesets/action. Check it with `gh run list --workflow release.yml --branch <line> --limit 1`.
    - Expect a PR from `changeset-release/<line>` titled `[ci] release`, or `[ci] release (next)` in pre mode. Find it with `gh pr list --head changeset-release/<line> --json number,state,headRefOid`.
    - **The run log says Actions may not create pull requests, but `git ls-remote origin changeset-release/<line>` shows the branch.** Open the PR by hand, after the maintainer says yes: `gh pr create --base <line> --head changeset-release/<line> --title "[ci] release" --body "Version packages (opened manually: Actions cannot create PRs in this repo)."`
    - **A PR created with `GITHUB_TOKEN` doesn't trigger `ci.yml`.** If `ci-ok` never reports on it, ask the maintainer to close and reopen the PR, or push to its branch.
-   - **Review the diff (`gh pr diff <n>`).** All five `package.json` versions must be equal (fixed group). CHANGELOG entries must match the changesets. Consumed changeset files must be deleted. No unexpected major.
+   - **Review the diff (`gh pr diff <n>`).** The `package.json` versions of the published packages (four on master, five on `3.x`) must be equal (fixed group). CHANGELOG entries must match the changesets. Consumed changeset files must be deleted. No unexpected major.
 
 6. **Smoke and upgrade checks** on the version PR head. Work in the scratchpad or a temporary directory, never inside the repo.
    - **Build and pack.** Use a separate worktree of `origin/changeset-release/<line>`. Run `pnpm install --frozen-lockfile` and `pnpm build --filter="./packages/**"`. Then run `pnpm --dir <pkg-dir> pack --pack-destination <tmp>/tarballs` for `packages/core` and each `packages/integration/*`. pnpm 10's `pack` doesn't take `--filter`. Packing rewrites the `workspace:*` peer to the new exact version.
