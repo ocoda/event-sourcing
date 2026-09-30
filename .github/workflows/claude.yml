@@ -3,10 +3,13 @@ name: Claude
 # @claude in an issue, an issue or PR comment, a PR review or a PR review comment. Only the maintainers can summon
 # Claude: the author of the text that mentions @claude must be an owner, member or collaborator. The action checks
 # on top of that that the triggering actor has write access.
-# Claude answers in a comment and may push commits to a claude/* branch. It never opens, approves or merges a pull
-# request; a maintainer opens the PR from the link Claude leaves. See CONTRIBUTING.md "Maintenance automation".
-# Reviews and review comments on fork pull requests get no secrets, so they are skipped: on a fork PR, mention
-# @claude in a regular PR comment.
+# Claude answers in a comment. It commits through the GitHub API, never with the git CLI: from an issue to a new
+# claude/* branch, and on a pull request to that pull request's own branch. It never opens, approves or merges a pull
+# request; from an issue, a maintainer opens the PR from the link Claude leaves. See CONTRIBUTING.md "Maintenance
+# automation".
+# Pull requests from forks are refused. The action checks a fork's branch out under the fork's branch name, so
+# Claude's commit would land on the branch of that name in this repository (a release or Renovate branch, say), and
+# the fork's code would become a branch of this repository.
 on:
   issue_comment:
     types: [created]
@@ -50,11 +53,27 @@ jobs:
     permissions:
       contents: read # check out the repository; Claude's own writes use the Claude GitHub App token
       actions: read # CI status and job logs on pull requests (the action's github_ci tools)
+      pull-requests: read # the fork check below
       id-token: write # exchanged for the Claude GitHub App token
     env:
       # Keep the Claude token and the Actions runtime tokens out of the commands Claude runs.
       CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"
     steps:
+      # A comment event doesn't say where the pull request's branch lives, so ask. Review events are filtered in `if:`.
+      - name: Refuse pull requests from forks
+        if: github.event_name == 'issue_comment' && github.event.issue.pull_request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          cross=$(gh pr view "$PR_NUMBER" --json isCrossRepository --jq .isCrossRepository)
+          if [ "$cross" != "false" ]; then
+            echo "::error::@claude does not run on pull requests from forks: its commit would land on the branch of the same name in this repository."
+            exit 1
+          fi
+
       - name: Checkout the repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -71,13 +90,25 @@ jobs:
           # a workflow file that reads the repository secrets.
           additional_permissions: |
             actions: read
+          # Commits go through the GitHub API (the action's commit_files tool) instead of git add/commit/push, so
+          # Claude has no git command that writes. It can't read a file such as /proc/self/environ into a commit
+          # message (`git commit -F`), run a git hook, or push a branch other than its own. The App signs the commits.
+          use_commit_signing: "true"
+          # Not a permission grant: the owner has write access anyway, and with the Claude App token the action ignores
+          # this list in its write check. Any value switches the action to a git credential helper, so the App token is
+          # never written into .git/config, where read-only commands such as `git remote -v` or `grep -r` would show
+          # it. It also runs the commands Claude starts in their own PID namespace.
+          allowed_non_write_users: drieshooghe
           settings: |
             {"permissions": {"blockReadsOutsideWorkingDirectories": true}}
-          # On top of the action's own tools (read files, edit the checkout, git add/commit/push to Claude's branch,
-          # update its comment, read CI): read-only GitHub lookups the repo skills use.
-          # No npm, npx or pnpm, not even `npm view`: on a pull request the checkout is the PR's code, possibly from a
-          # fork, and its .npmrc could expand $GH_TOKEN (the App token) into a registry URL of its choosing.
+          # Claude gets the action's own tools (read the checkout, commit_files, its tracking comment, CI status) and
+          # the read-only commands Claude Code allows by itself (git log/diff/show, gh issue/pr view, gh search, ...),
+          # each with a fixed set of flags. No extra Bash rules: `Bash(gh issue view:*)` would allow any flag and host.
+          # The App token is in the environment of Claude's commands, because gh needs it. The deny rules back up the
+          # built-in limits: nothing may print the environment (`gh --jq '$ENV'`, jq), read the git config, or talk
+          # to a host of Claude's choosing.
+          # No npm, npx or pnpm: on a pull request the checkout is the PR's code, and its .npmrc could expand $GH_TOKEN
+          # into a registry URL.
           claude_args: |
             --max-turns 60
-            --allowedTools "Bash(gh issue view:*),Bash(gh issue list:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr list:*),Bash(gh search issues:*),Bash(gh search prs:*),Bash(gh label list:*),Bash(gh release list:*),Bash(gh release view:*)"
-            --disallowedTools "Bash(gh pr merge:*),Bash(gh pr review:*),Bash(gh api:*),Bash(gh workflow:*),Bash(gh release create:*),Bash(gh release edit:*),Bash(gh secret:*),Bash(gh * --hostname*),Bash(npm:*),Bash(npx:*),Bash(pnpm:*),Read(//proc/**),Skill(release)"
+            --disallowedTools "Bash(gh pr merge:*),Bash(gh pr review:*),Bash(gh api:*),Bash(gh workflow:*),Bash(gh release create:*),Bash(gh release edit:*),Bash(gh secret:*),Bash(gh * --hostname*),Bash(gh * --jq*),Bash(gh * -q*),Bash(gh * --template*),Bash(gh * -t*),Bash(gh * *://*),Bash(gh * -R*/*/*),Bash(gh * --repo*/*/*),Bash(jq:*),Bash(git remote:*),Bash(git config:*),Bash(npm:*),Bash(npx:*),Bash(pnpm:*),Read(./.git/**),Read(//proc/**),Skill(release)"

@@ -75,7 +75,7 @@ jobs:
             --max-turns 50
             --json-schema '{"type": "object", "additionalProperties": false, "required": ["verdict", "changeset_needed", "report"], "properties": {"verdict": {"type": "string", "enum": ["LOW", "MEDIUM", "HIGH"]}, "changeset_needed": {"type": "boolean"}, "report": {"type": "string"}}}'
             --allowedTools "Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh release list:*),Bash(gh release view:*),Bash(gh api:*),Bash(npm view:*)"
-            --disallowedTools "Bash(gh api * -X *),Bash(gh api * --method*),Bash(gh * --hostname*),Bash(gh * --input*),Bash(npm * --reg*),Bash(npm * --*config*),Read(//proc/**),Skill(changeset),Skill(release)"
+            --disallowedTools "Bash(gh api -X*),Bash(gh api * -X*),Bash(gh api --method*),Bash(gh api * --method*),Bash(gh api -f*),Bash(gh api * -f*),Bash(gh api -F*),Bash(gh api * -F*),Bash(gh api --field*),Bash(gh api * --field*),Bash(gh api --raw-field*),Bash(gh api * --raw-field*),Bash(gh * --hostname*),Bash(gh * --input*),Bash(gh * *://*),Bash(gh * -R*/*/*),Bash(gh * --repo*/*/*),Bash(npm * --reg*),Bash(npm * --*config*),Bash(npm * --@*),Bash(npm *://*),Read(//proc/**),Skill(changeset),Skill(release)"
 
       # Reads Claude's result from the execution file, and hands the report on base64-encoded, so no text from the run
       # is written to $GITHUB_OUTPUT where a crafted line could set another output.
@@ -115,7 +115,9 @@ jobs:
           case "$VERDICT" in LOW | MEDIUM | HIGH) ;; *) echo "::error::Unexpected verdict"; exit 1 ;; esac
           body="$RUNNER_TEMP/verdict.md"
           {
-            base64 -d <<<"$REPORT"
+            # The report quotes third-party release notes. A zero-width space after every @ keeps their @-mentions
+            # from notifying anyone from this repository.
+            base64 -d <<<"$REPORT" | sed -E 's/@([[:alnum:]])/@\xe2\x80\x8b\1/g'
             echo
             echo "---"
             echo "<sub>Dependency risk: $VERDICT · changeset needed: $CHANGESET. Assessed by Claude with the \`dependency-risk\` skill ([run]($RUN_URL)). Advisory: it is not a required check, and it was written from third-party release notes.</sub>"

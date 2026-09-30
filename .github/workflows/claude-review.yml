@@ -3,8 +3,8 @@ name: Claude review
 # An advisory review of pull requests from branches of this repository, calibrated by REVIEW.md. It comments and
 # never approves, requests changes or merges; `ci-ok` stays the only required check.
 # Fork pull requests are skipped: `pull_request` runs get no secrets for them, and this workflow deliberately does
-# not use `pull_request_target`, which would run with secrets next to untrusted code. A maintainer can still ask for
-# a review of one with @claude (claude.yml).
+# not use `pull_request_target`, which would run with secrets next to untrusted code. @claude (claude.yml) refuses
+# them too, so a fork pull request gets a human review only.
 on:
   pull_request:
     types: [opened, reopened, ready_for_review]
@@ -44,6 +44,11 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # The job's GITHUB_TOKEN, limited to the permissions above, instead of the Claude App token.
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          # Not a permission grant: it names the owner, who has write access anyway. Any value switches the action to a
+          # git credential helper, so the token is never written into .git/config, where read-only commands such as
+          # `git remote -v` or `grep -r` would show it. It also runs the commands Claude starts in their own PID
+          # namespace.
+          allowed_non_write_users: drieshooghe
           classify_inline_comments: "false"
           settings: |
             {"permissions": {"blockReadsOutsideWorkingDirectories": true}}
@@ -64,4 +69,4 @@ jobs:
           claude_args: |
             --max-turns 40
             --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
-            --disallowedTools "Bash(gh pr merge:*),Bash(gh pr review:*),Bash(gh api:*),Bash(gh * --hostname*),Bash(gh * --body-file*),Bash(gh * -F *),Read(//proc/**),Skill(release),Skill(changeset)"
+            --disallowedTools "Bash(gh pr merge:*),Bash(gh pr review:*),Bash(gh api:*),Bash(gh * --hostname*),Bash(gh * --body-file*),Bash(gh * -F *),Bash(gh * --jq*),Bash(gh * -q*),Bash(gh * --template*),Bash(gh * -t*),Bash(jq:*),Bash(git remote:*),Bash(git config:*),Read(./.git/**),Read(//proc/**),Skill(release),Skill(changeset)"

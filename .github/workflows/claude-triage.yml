@@ -27,10 +27,12 @@ env:
 jobs:
   triage:
     name: Triage
-    # Bots are refused by the action anyway, and the maintainers' own issues need no triage.
+    # Bots are refused by the action anyway, and the maintainers' own issues need no triage. A reopen counts only when
+    # someone other than the author reopens the issue, so an author can't buy a Claude run per close and reopen.
     if: >-
       github.event.issue.user.type != 'Bot'
       && !contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.issue.author_association)
+      && (github.event.action == 'opened' || github.event.sender.login != github.event.issue.user.login)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -60,6 +62,10 @@ jobs:
       - name: Triage with Claude
         id: claude
         uses: anthropics/claude-code-action@756cc22e19660d20e8cc9496b4f242475a7f7790 # v1.0.235
+        env:
+          # A re-run with debug logging would otherwise print Claude's full output, the report included, in the public
+          # log.
+          ACTIONS_STEP_DEBUG: "false"
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # Issue authors don't have write access. The action allows them only with a GITHUB_TOKEN (read-only here),
@@ -87,7 +93,7 @@ jobs:
             --max-turns 40
             --json-schema '{"type": "object", "additionalProperties": false, "required": ["type", "labels", "report"], "properties": {"type": {"type": "string", "enum": ["bug", "feature", "question", "docs", "security"]}, "labels": {"type": "array", "maxItems": 3, "items": {"type": "string"}}, "report": {"type": "string"}}}'
             --allowedTools "Bash(gh issue view:*),Bash(gh issue list:*),Bash(gh search issues:*),Bash(gh search prs:*),Bash(gh pr list:*),Bash(gh label list:*),Bash(npm view:*)"
-            --disallowedTools "Bash(npm * --reg*),Bash(npm * --*config*),Bash(gh * --hostname*),Read(//proc/**),Skill(changeset),Skill(release)"
+            --disallowedTools "Bash(npm * --reg*),Bash(npm * --*config*),Bash(npm * --@*),Bash(npm *://*),Bash(gh * --hostname*),Bash(gh * *://*),Bash(gh * -R*/*/*),Bash(gh * --repo*/*/*),Read(//proc/**),Skill(changeset),Skill(release)"
 
       # Reads Claude's result from the execution file instead of the step output: a step output would have to pass
       # through `env`, which the log prints.

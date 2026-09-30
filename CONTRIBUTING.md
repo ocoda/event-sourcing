@@ -166,12 +166,12 @@ Four workflows run Claude ([claude-code-action](https://github.com/anthropics/cl
 
 | Workflow | Runs on | What it does |
 | --- | --- | --- |
-| `claude.yml` | `@claude` in an issue, a comment or a review by an owner, member or collaborator | Answers in a comment. It may push commits to a `claude/*` branch and link a pull request for a maintainer to open. |
-| `claude-review.yml` | pull requests from branches of this repository, when opened, reopened or marked ready | Reviews the change against [REVIEW.md](REVIEW.md) and [AGENTS.md](AGENTS.md) in inline comments plus one summary comment. Drafts, bots and forks are skipped; ask `@claude` for a review of a fork pull request. |
+| `claude.yml` | `@claude` in an issue, a comment or a review by an owner, member or collaborator | Answers in a comment. It may commit through the GitHub API: from an issue to a new `claude/*` branch, with a link for a maintainer to open the pull request, and on a pull request to that pull request's branch. Pull requests from forks are refused, because Claude's commit would land, with the fork's commits, on the branch of the same name in this repository. |
+| `claude-review.yml` | pull requests from branches of this repository, when opened, reopened or marked ready | Reviews the change against [REVIEW.md](REVIEW.md) and [AGENTS.md](AGENTS.md) in inline comments plus one summary comment. Drafts, bots and forks are skipped. |
 | `claude-deps.yml` | Renovate pull requests to `master`, when opened or retitled | Runs the `dependency-risk` skill and posts its verdict (low, medium or high, and whether a changeset is needed) as one comment, updated on each run. |
 | `claude-triage.yml` | issues opened or reopened by anyone outside the maintainer team | Runs the `triage-issue` skill. It applies at most the suggested type and `area:*` labels that exist, and files the report with its draft reply as an issue in the private `ocoda/ocoda-event-sourcing-inbox` repository. Nothing is posted on the public issue. |
 
-The workflows that read text from outside the maintainer team (issues, and the upstream release notes in Renovate pull requests) run Claude with a read-only `GITHUB_TOKEN`, and a separate job writes the result. The triage report crosses to that job encrypted, because the logs of this public repository show every step's environment.
+The workflows that read text from outside the maintainer team (issues, and the upstream release notes in Renovate pull requests) run Claude with a read-only `GITHUB_TOKEN`, and a separate job writes the result. The triage report crosses to that job encrypted, because the logs of this public repository show every step's environment. For the same reason, never re-run `claude-triage.yml` with debug logging.
 
 They need these repository settings:
 

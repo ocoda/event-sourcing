@@ -66,6 +66,8 @@ Claude Code skills in `.claude/skills/`, each with a `SKILL.md`. Other agents ca
 - **Split by trust.** A job that runs Claude on text from outside the maintainer team (issues, Renovate PR bodies) holds a read-only `GITHUB_TOKEN` and no secret besides the Claude token. A later job on a fresh runner does the writes, from Claude's structured output checked against an allowlist.
 - Logs are public and print each step's `env`, so private output (the triage report) crosses jobs sealed to `TRIAGE_INBOX_PUBLIC_KEY`.
 - The tools they allow beyond the action's own are read-only lookups. Each addition needs a reason, and none may write files, run repository code or choose the host it talks to.
+- Every Claude step sets `allowed_non_write_users`. It switches the action to a git credential helper, so the token never lands in `.git/config`.
+- `claude.yml` commits only through the GitHub API (`use_commit_signing`) and refuses pull requests from forks: the action checks a fork's branch out under the fork's branch name, so Claude's commit would land on this repository's branch of that name.
 
 ## Hard guardrails
 
