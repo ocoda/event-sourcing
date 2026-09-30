@@ -5,7 +5,7 @@
 | Version       | npm dist-tag | Status                              | Fixes                                                                                 |
 | ------------- | ------------ | ----------------------------------- | ------------------------------------------------------------------------------------- |
 | 4.x           | `latest`     | Supported                           | Security and bug fixes, released as 4.x versions from `master`.                       |
-| 3.x           | `v3`         | Supported until at least 2027-03-31 | Security and critical bug fixes, released as 3.x patch versions from the `3.x` branch. |
+| 3.x           | `latest-3`         | Supported until at least 2027-03-31 | Security and critical bug fixes, released as 3.x patch versions from the `3.x` branch. |
 | 2.x and older | none         | Not supported                       | None. Upgrade to 4.x.                                                                 |
 
 This covers `@ocoda/event-sourcing`, `@ocoda/event-sourcing-postgres`, `@ocoda/event-sourcing-mariadb`, `@ocoda/event-sourcing-mongodb` and, on 3.x only, `@ocoda/event-sourcing-dynamodb`. The end of 3.x support will be announced here and in the [versioning and support](https://ocoda.github.io/event-sourcing/upgrading/versioning) docs before it happens.

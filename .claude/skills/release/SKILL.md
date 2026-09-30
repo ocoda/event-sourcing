@@ -21,7 +21,7 @@ Work through the checklist top to bottom for the release line in $ARGUMENTS (def
 1. **Line and workflow.**
    - Run `git fetch -q origin`, then `git show origin/<line>:.github/workflows/release.yml`. Its `on.push.branches` must include `<line>`.
    - Check that `git show origin/<line>:.changeset/config.json` has `baseBranch` equal to `<line>`.
-   - For `3.x` once 4.x is `latest`: the publish command must pass a non-latest dist-tag such as `--tag v3`. Without it, a 3.x patch moves `latest` back. That is red.
+   - For `3.x` once 4.x is `latest`: the publish command must pass a non-latest dist-tag such as `--tag latest-3`. Without it, a 3.x patch moves `latest` back. That is red.
 
 2. **CI is green on the release head.**
    - Run `gh run list --workflow ci.yml --branch <line> --limit 1 --json headSha,status,conclusion`.

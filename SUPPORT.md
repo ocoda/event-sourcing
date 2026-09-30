@@ -12,7 +12,7 @@ One volunteer maintains this project, so answers are best-effort.
 
 ## Which versions get fixes
 
-4.x is the current release, on the npm `latest` tag. 3.x receives security and critical bug fixes as patch releases until at least 2027-03-31, under the `v3` tag. 2.x and older are not supported. See the [supported versions](SECURITY.md#supported-versions) table for details.
+4.x is the current release, on the npm `latest` tag. 3.x receives security and critical bug fixes as patch releases until at least 2027-03-31, under the `latest-3` tag. 2.x and older are not supported. See the [supported versions](SECURITY.md#supported-versions) table for details.
 
 ## Helping out
 
