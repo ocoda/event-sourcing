@@ -4,8 +4,8 @@ title: Event Store
 
 import { Aside } from '@astrojs/starlight/components';
 
-<Aside type="note" title="4.0 prerelease">
-This page describes the event store contract, which ships in the next 4.0 prerelease. The in-memory store and the PostgreSQL, MariaDB and MongoDB stores implement all of it; the database stores need their 3.x data [migrated](/upgrading/v4#data-migration) first.
+<Aside type="note" title="Coming from 3.x?">
+The in-memory store and the PostgreSQL, MariaDB and MongoDB stores implement all of this contract. The database stores refuse the tables that 3.x created until they are [migrated](/upgrading/v4#data-migration), once.
 </Aside>
 
 The event store keeps the events of every aggregate in a **stream**, `EventStream.for(Account, id)`, whose events are numbered 1, 2, 3, … by their `version`. Streams live in a **pool**: the default pool, or a named one (`ensureCollection('tenant-1')`), for instance per tenant. Each pool is a collection (table) of its own.

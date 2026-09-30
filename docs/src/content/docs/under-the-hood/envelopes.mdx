@@ -29,7 +29,7 @@ envelope.metadata.globalPosition; // 42n
 | `eventVersion` | `number`, optional | The version of the event's schema. Only set when a pre-built envelope carried it; reserved for upcasting. |
 | `globalPosition` | `bigint`, optional | The position of the event in its pool, across streams. Set once the event is stored. See [Reading all events](/under-the-hood/event-store#reading-all-events). |
 
-Events stored by 3.x have no headers, event version or (until the schema v2 migration) global position.
+Events stored by 3.x have no headers or event version; the [data migration](/upgrading/v4#data-migration) gives them their global positions.
 
 ## Correlation, causation and headers [#headers]
 
@@ -37,7 +37,7 @@ An append sets the metadata of all its events:
 
 ```ts
 await eventStore.appendEvents(stream, events, {
-	expectedVersion: account.version - events.length,
+	expectedVersion: account.committedVersion,
 	metadata: {
 		correlationId: request.id,
 		causationId: command.id,
@@ -49,7 +49,7 @@ await eventStore.appendEvents(stream, events, {
 - `correlationId` and `causationId` are strings of at most 255 characters.
 - `headers` is an object of at most 8 KiB of JSON. Its keys are not empty and don't start with `$`, which is reserved for the library (such as a future `$traceparent`). Its values are strings, finite numbers, booleans or `null`.
 - Invalid metadata is rejected with an `InvalidEventMetadataException` before anything is written.
-- A store without the `headers` capability rejects headers with an `UnsupportedOperationException`, rather than dropping them. The in-memory store supports headers; the database stores support them with schema v2.
+- A store without the `headers` capability rejects headers with an `UnsupportedOperationException`, rather than dropping them. Every built-in store supports headers.
 - Events appended without headers read back without the `headers` field, and empty headers (`{}`) are not stored.
 
 [Pre-built envelopes](/under-the-hood/event-store#pre-built-envelopes) keep the metadata they carry, including `$` headers. The metadata of the append only fills the fields they lack; `headers` counts as one field, so the headers of the append are not merged into those of an envelope.

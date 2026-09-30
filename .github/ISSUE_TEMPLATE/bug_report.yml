@@ -106,5 +106,5 @@ body:
       options:
         - label: I searched [existing issues](https://github.com/ocoda/event-sourcing/issues?q=is%3Aissue) and this is not a duplicate.
           required: true
-        - label: I use 3.x or a 4.0.0-next prerelease. 2.x and older are [not supported](https://github.com/ocoda/event-sourcing/blob/master/SECURITY.md#supported-versions).
+        - label: I use 3.x or 4.x (a `4.0.0-next` prerelease included). 2.x and older are [not supported](https://github.com/ocoda/event-sourcing/blob/master/SECURITY.md#supported-versions).
           required: true

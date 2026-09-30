@@ -2,7 +2,8 @@
 
 ## Getting help
 
-- **Documentation:** start at [ocoda.github.io/event-sourcing](https://ocoda.github.io/event-sourcing), for example [module configuration](https://ocoda.github.io/event-sourcing/start/module-configuration).
+- **Documentation:** start at [ocoda.github.io/event-sourcing](https://ocoda.github.io/event-sourcing), for example [module configuration](https://ocoda.github.io/event-sourcing/start/module-configuration). The 3.x documentation is at [ocoda.github.io/event-sourcing/v3](https://ocoda.github.io/event-sourcing/v3/).
+- **Upgrading from 3.x:** follow [Migrating from 3.x to 4.0](https://ocoda.github.io/event-sourcing/upgrading/v4).
 - **Questions:** search [Discussions](https://github.com/ocoda/event-sourcing/discussions), then ask in [Q&A](https://github.com/ocoda/event-sourcing/discussions/categories/q-a). Include your package, NestJS and Node.js versions and the code involved.
 - **Bugs, feature requests and documentation problems:** open an [issue](https://github.com/ocoda/event-sourcing/issues/new/choose). A bug report needs a minimal reproduction. Issues are not for usage questions.
 - **Security vulnerabilities:** never in public. Follow [SECURITY.md](SECURITY.md).
@@ -11,7 +12,7 @@ One volunteer maintains this project, so answers are best-effort.
 
 ## Which versions get fixes
 
-3.x receives security and critical bug fixes as patch releases. 4.x is in prerelease on the npm `next` tag. 2.x and older are not supported. See the [supported versions](SECURITY.md#supported-versions) table for details.
+3.x receives security and critical bug fixes as patch releases until at least 2027-03-31. 4.x is in prerelease on the npm `next` tag. 2.x and older are not supported. See the [supported versions](SECURITY.md#supported-versions) table for details.
 
 ## Helping out
 

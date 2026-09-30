@@ -5,7 +5,7 @@ title: Welcome to Ocoda Event Sourcing
 import { Aside } from '@astrojs/starlight/components';
 
 <Aside title="4.0 prerelease">
-These pages describe 4.0, which is in prerelease under the npm `next` tag. 3.x is the current stable release. To upgrade an application from 3.x, follow [Migrating from 3.x to 4.0](/upgrading/v4). For the release lines and what each one supports, see [Versioning and support](/upgrading/versioning).
+These pages describe 4.0, which is in prerelease under the npm `next` tag until 4.0.0 is released. 3.x is the current stable release; its documentation is at [ocoda.github.io/event-sourcing/v3](https://ocoda.github.io/event-sourcing/v3/). To upgrade an application from 3.x, follow [Migrating from 3.x to 4.0](/upgrading/v4). For the release lines and what each one supports, see [Versioning and support](/upgrading/versioning).
 </Aside>
 
 **Ocoda Event Sourcing** is a powerful library designed to simplify the implementation of advanced architectural patterns in your **NestJS** application. It provides essential building blocks to help you implement **Domain-Driven Design (DDD)**, leveraging **Event Sourcing** and **CQRS** to tackle the complexities of modern systems.
@@ -18,8 +18,9 @@ While NestJS provides the [`@nestjs/cqrs`](https://docs.nestjs.com/recipes/cqrs)
 
 ### Key Features:
 - **Domain-Driven Design (DDD)**: Implement core DDD principles with ease, including aggregates, value objects, and repositories.
-- **CQRS (Command Query Responsibility Segregation)**: Cleanly separate the responsibility of handling commands and queries for better scalability and maintainability.
-- **Event Sourcing**: Capture every change in your system as an immutable event, allowing you to rebuild the entire state and maintain a full audit trail.
+- **CQRS (Command Query Responsibility Segregation)**: Cleanly separate the responsibility of handling commands and queries, with typed command and query buses.
+- **Event Sourcing**: Capture every change in your system as an immutable event, allowing you to rebuild the entire state and maintain a full audit trail. Every event gets a global position, so projections and other consumers can read all events in order and resume from a checkpoint.
+- **Stores for PostgreSQL, MariaDB and MongoDB**, in-memory stores for tests, and the conformance suites that every store runs, for your own stores.
 
 ## What You'll Find Here
 

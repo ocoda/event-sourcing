@@ -21,20 +21,25 @@
 
 ## About this library
 
-This is a complementing module for `@ocoda/event-sourcing`, a powerful library designed to simplify the implementation of advanced architectural patterns in your [**NestJS**](https://nestjs.com/) application. It provides essential building blocks to help you implement Domain-Driven Design (DDD), CQRS and leverage Event Sourcing to tackle the complexities of modern systems.
+This is a store integration for `@ocoda/event-sourcing`, a library for [**NestJS**](https://nestjs.com/) with the building blocks for Domain-Driven Design (DDD), CQRS and Event Sourcing.
 
-This store-driver library uses [MariaDB](https://mariadb.com/) as an underlying driver for event- and snapshot-stores, and needs to be installed together with the core module `@ocoda/event-sourcing` in order to get started.
+It provides the `MariaDBEventStore` and `MariaDBSnapshotStore`, on InnoDB: they keep events and snapshots in [MariaDB](https://mariadb.com/), with a global position per pool for `readAll()`. It is tested on MariaDB 10.11, 11.4, 11.8 and 12.3, and the newest rolling release.
 
 ## Installation
-The `mariadb` driver is a peer dependency, so install it next to the core module:
+The `mariadb` driver (`^3.5.3`) is a peer dependency, so install it next to the core module:
 ```bash
 npm install @ocoda/event-sourcing @ocoda/event-sourcing-mariadb mariadb
 ```
 
-Requires Node.js 22.12 or later and NestJS 12. The package is ESM-only; CommonJS applications load it through `require()`, which Node.js supports for ES modules since 22.12.
+Requires Node.js 22.12 or later and NestJS 12. The package is ESM-only; CommonJS applications load it through `require()`, which Node.js supports for ES modules since 22.12. Keep it on the same version as `@ocoda/event-sourcing`.
+
+## Upgrading from 3.x
+4.0 stores events and snapshots in a new schema (schema v2), and refuses a 3.x event table until it is migrated. Migrate it once, offline, with `migrate()`, after a dry run: see the [runbook](https://ocoda.github.io/event-sourcing/integrations/mariadb#runbook) and [Migrating from 3.x to 4.0](https://ocoda.github.io/event-sourcing/upgrading/v4).
 
 ## Documentation 📗
-Ready to dive right in? Visit [the documentation](https://ocoda.github.io/event-sourcing) to find out how to get started.
+- [MariaDB](https://ocoda.github.io/event-sourcing/integrations/mariadb): the configuration, the schema, the privileges and the migration from 3.x.
+- [The documentation](https://ocoda.github.io/event-sourcing) starts with the [installation](https://ocoda.github.io/event-sourcing/start/install). The 3.x documentation is at [ocoda.github.io/event-sourcing/v3](https://ocoda.github.io/event-sourcing/v3/).
+- [Versioning and support](https://ocoda.github.io/event-sourcing/upgrading/versioning) and the [changelog](https://github.com/ocoda/event-sourcing/blob/master/packages/integration/mariadb/CHANGELOG.md).
 
 ## Contact
 dries@drieshooghe.com

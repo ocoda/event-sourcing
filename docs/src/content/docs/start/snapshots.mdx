@@ -2,8 +2,6 @@
 title: Snapshots
 ---
 
-import { Aside } from '@astrojs/starlight/components';
-
 Snapshots are an optimization that is completely optional. However, they become useful when event streams grow large, and reading them becomes slow. Snapshots allow you to store the state of an aggregate at a particular point in time, so you don't need to replay all events from the beginning of the stream each time the aggregate is loaded.
 
 To start using snapshots using this library you will need to create a `SnapshotRepository`.
@@ -77,10 +75,6 @@ The `interval` defaults to `10` when you don't provide one. The snapshot contain
 | version 5 → 6 | no | no multiple of 5 crossed |
 | version 4 → 6 | yes | crosses 5, the snapshot is taken at version 6 |
 | version 6 → 12 | yes | crosses 10, the snapshot is taken at version 12 |
-
-<Aside>
-Since 3.0.1 a save that jumps over a multiple of the interval takes a snapshot. In earlier versions a snapshot was only taken when a save landed exactly on a multiple of the interval (or at version 1), so a command that applies several events at once, e.g. going from version 4 to 6 with an interval of 5, skipped the snapshot until the next exact multiple.
-</Aside>
 
 To know which versions a save covers, the snapshot repository looks at the events that the aggregate's last `markCommitted()` marked as committed. Append the events, call `markCommitted()`, then pass that same instance to `save()`, as the aggregate repository below does. A save that committed nothing, such as the save of an unchanged aggregate, takes no snapshot (since 4.0). While the aggregate has uncommitted events, `save()` logs a warning and takes no snapshot (since 4.0): a snapshot ahead of the stored events would make every later save of the stream conflict. When the committed versions aren't known, because the aggregate was never marked as committed, the repository falls back to taking a snapshot at version 1 and at exact multiples of the interval.
 
