@@ -312,6 +312,38 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           flags: integrations
 
+  # The example application's HTTP end-to-end spec, against PostgreSQL (the compose service), on every change to the
+  # packages it builds on or to the example itself.
+  test-example:
+    name: Test example (e2e on PostgreSQL)
+    needs: [changes]
+    if: ${{ needs.changes.outputs.libraries == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Start database
+        run: docker compose up --detach --wait --wait-timeout 180 postgres
+
+      - name: Setup job environment
+        uses: ./.github/actions/setup-job-env
+        with:
+          node-version: 24.x
+
+      # turbo builds the packages that the example imports first: the spec runs the app on them, as installed.
+      - name: Test
+        run: pnpm test --filter=@ocoda/event-sourcing-example
+
+      - name: Database logs
+        if: ${{ failure() }}
+        run: docker compose logs postgres
+
   docs:
     name: Build docs
     needs: [changes]
@@ -456,7 +488,18 @@ jobs:
     name: ci-ok
     if: ${{ always() }}
     needs:
-      [changes, lint, build, test-core, test-integration, docs, codeql, dependency-review, osv-scanner, workflows, changesets]
+      - changes
+      - lint
+      - build
+      - test-core
+      - test-integration
+      - test-example
+      - docs
+      - codeql
+      - dependency-review
+      - osv-scanner
+      - workflows
+      - changesets
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
