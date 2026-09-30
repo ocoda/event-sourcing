@@ -212,12 +212,28 @@ describe('example application (e2e)', () => {
 
 	// Runs last: it reads the events that the tests above stored.
 	it('reads the event log in pages, in the order the events were stored', async () => {
-		type Entry = { position: string; event: string; aggregateId: string; version: number };
+		// The JSON of an envelope (EventEnvelope.toJSON): the event id, the dates and the global position are strings.
+		type Entry = {
+			event: string;
+			payload: Record<string, unknown>;
+			metadata: { eventId: string; aggregateId: string; version: number; occurredOn: string; globalPosition: string };
+		};
+		const position = ({ metadata }: Entry): string => metadata.globalPosition;
 
 		const first = await http('GET', '/events?limit=3');
 		expect(first.status).toBe(200);
-		expect(first.body.events.map(({ position }: Entry) => position)).toEqual(['1', '2', '3']);
-		expect(first.body.events[0]).toMatchObject({ position: '1', event: 'book-added', version: 1 });
+		expect(first.body.events.map(position)).toEqual(['1', '2', '3']);
+		expect(first.body.events[0]).toMatchObject({
+			event: 'book-added',
+			payload: { isbn: isbn.replaceAll('-', '') },
+			metadata: {
+				eventId: expect.stringMatching(/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/),
+				aggregateId: expect.any(String),
+				version: 1,
+				occurredOn: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/),
+				globalPosition: '1',
+			},
+		});
 		expect(first.body.next).toBe('4');
 
 		const all: Entry[] = [...first.body.events];
@@ -233,7 +249,8 @@ describe('example application (e2e)', () => {
 		}
 
 		// Every event of the spec, across all streams, at consecutive positions.
-		expect(all.map(({ position }) => position)).toEqual(all.map((_, index) => String(index + 1)));
+		expect(all.map(position)).toEqual(all.map((_, index) => String(index + 1)));
+		expect(new Set(all.map(({ metadata }) => metadata.eventId)).size).toBe(all.length);
 		expect(new Set(all.map(({ event }) => event))).toEqual(
 			new Set([
 				'book-added',
