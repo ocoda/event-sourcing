@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { EventBus, EventSourcingErrorCode, isEventSourcingError } from '@ocoda/event-sourcing';
+import { postgresTestConfig } from '@ocoda/event-sourcing-testing/unit/db';
 import { Client, escapeIdentifier } from 'pg';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { AppModule } from '../src/app.module.js';
@@ -9,17 +10,11 @@ import { BookRepository, BookSnapshotRepository } from '../src/catalogue/applica
 import { AuthorId, BookId } from '../src/catalogue/domain/models/index.js';
 
 /**
- * The PostgreSQL server of the database-backed specs (packages/testing/unit/db.ts): the `postgres` service of the
- * root docker-compose.yml unless ES_TEST_PG_* say otherwise. The application gets a schema of its own in that database,
- * which the spec recreates, so the global positions start at 1 and other specs' tables are left alone.
+ * The PostgreSQL server of the database-backed specs: the `postgres` service of the root docker-compose.yml unless
+ * ES_TEST_PG_* say otherwise. The application gets a schema of its own in that database, which the spec recreates, so
+ * the global positions start at 1 and other specs' tables are left alone.
  */
-const server = {
-	host: process.env.ES_TEST_PG_HOST || '127.0.0.1',
-	port: Number(process.env.ES_TEST_PG_PORT) || 5432,
-	user: process.env.ES_TEST_PG_USER || 'postgres',
-	password: process.env.ES_TEST_PG_PASSWORD || 'postgres',
-	database: process.env.ES_TEST_PG_DATABASE || 'postgres',
-};
+const server = postgresTestConfig();
 const schema = 'example_e2e';
 
 const databaseUrl = (): string => {

@@ -30,6 +30,7 @@
 	},
 	"devDependencies": {
 		"@ocoda/event-sourcing-config": "workspace:*",
+		"@ocoda/event-sourcing-testing": "workspace:*",
 		"@types/node": "catalog:",
 		"@types/pg": "catalog:",
 		"@types/pg-cursor": "catalog:",

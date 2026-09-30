@@ -9,7 +9,8 @@
 		"./e2e": "./e2e/index.ts",
 		"./e2e/application": "./e2e/application/index.ts",
 		"./e2e/domain": "./e2e/domain/index.ts",
-		"./unit": "./unit/index.ts"
+		"./unit": "./unit/index.ts",
+		"./unit/db": "./unit/db.ts"
 	},
 	"scripts": {
 		"ci": "oxlint --deny-warnings && oxfmt --check",

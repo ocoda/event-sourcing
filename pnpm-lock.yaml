@@ -161,6 +161,9 @@ importers:
       '@ocoda/event-sourcing-config':
         specifier: workspace:*
         version: link:../packages/config
+      '@ocoda/event-sourcing-testing':
+        specifier: workspace:*
+        version: link:../packages/testing
       '@types/node':
         specifier: 'catalog:'
         version: 22.20.4
