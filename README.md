@@ -31,18 +31,18 @@
 - **Stores** for PostgreSQL, MariaDB and MongoDB, and in-memory stores for tests, with pools to keep the data of tenants apart. The conformance suites that every store runs are published for your own stores.
 
 > [!NOTE]
-> **4.0 is in prerelease** under the npm `next` tag: NestJS 12, ES modules only, Node.js 22.12 or later. Until 4.0.0 is released, install `@next` with `--save-exact` instead of `@4` in the commands below, and read the 4.0 documentation in [`docs/`](docs/src/content/docs): the site still documents 3.x.
+> **4.0 is released**: NestJS 12, ES modules only, Node.js 22.12 or later, global positions and `readAll()`, typed buses and awaited publishers.
 >
-> Upgrading from 3.x? Follow the [migration guide](docs/src/content/docs/upgrading/v4.mdx). 3.x stays on the `latest` tag until then, and receives security and critical fixes until at least 2027-03-31.
+> Upgrading from 3.x? Follow the [migration guide](https://ocoda.github.io/event-sourcing/upgrading/v4). 3.x is on the `v3` tag and receives security and critical fixes until at least 2027-03-31.
 
 ## Requirements
 
 | Line | npm tag  | NestJS | Node.js        | Module format                                                | Support                                               |
 | ---- | -------- | ------ | -------------- | ------------------------------------------------------------ | ----------------------------------------------------- |
-| 4.x  | `next`   | 12     | 22.12 or later | ES modules only; CommonJS apps load them through `require()` | Prerelease                                            |
-| 3.x  | `latest` | 11     | 20 or later    | CommonJS                                                     | Security and critical fixes until at least 2027-03-31 |
+| 4.x  | `latest` | 12     | 22.12 or later | ES modules only; CommonJS apps load them through `require()` | Supported                                             |
+| 3.x  | `v3`     | 11     | 20 or later    | CommonJS                                                     | Security and critical fixes until at least 2027-03-31 |
 
-See [versioning and support](docs/src/content/docs/upgrading/versioning.mdx) for the tested database versions and the support policy.
+See [versioning and support](https://ocoda.github.io/event-sourcing/upgrading/versioning) for the tested database versions and the support policy.
 
 ## Installation
 
@@ -72,10 +72,10 @@ On 3.x, install the integration with `@3` and leave out the driver, which the in
 
 ## Documentation 📗
 
-- [The documentation](https://ocoda.github.io/event-sourcing) starts with the [installation](https://ocoda.github.io/event-sourcing/start/install) and the [module configuration](https://ocoda.github.io/event-sourcing/start/module-configuration).
-- [Migrating from 3.x to 4.0](docs/src/content/docs/upgrading/v4.mdx) lists every breaking change in the order in which you apply them, including the one-time migration of the stored data.
+- [The documentation](https://ocoda.github.io/event-sourcing) starts with the [installation](https://ocoda.github.io/event-sourcing/start/install) and the [module configuration](https://ocoda.github.io/event-sourcing/start/module-configuration). The 3.x documentation is at [ocoda.github.io/event-sourcing/v3](https://ocoda.github.io/event-sourcing/v3/).
+- [Migrating from 3.x to 4.0](https://ocoda.github.io/event-sourcing/upgrading/v4) lists every breaking change in the order in which you apply them, including the one-time migration of the stored data.
 - The [example application](example) is a small NestJS 12 application on PostgreSQL that starts with `docker compose`.
-- [Versioning and support](docs/src/content/docs/upgrading/versioning.mdx) lists the release lines, and [SUPPORT.md](SUPPORT.md) where to ask for help.
+- [Versioning and support](https://ocoda.github.io/event-sourcing/upgrading/versioning) lists the release lines, and [SUPPORT.md](SUPPORT.md) where to ask for help.
 
 ## Contact
 dries@drieshooghe.com

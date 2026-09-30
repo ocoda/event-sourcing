@@ -39,7 +39,8 @@ Work through the checklist top to bottom for the release line in $ARGUMENTS (def
      ```
 
 4. **Pre mode.** Check for `.changeset/pre.json` on `origin/<line>`:
-   - **v4 prerelease:** expect `"mode": "pre"` with tag `next`. Versions look like `4.0.0-next.N` and publish under the `next` dist-tag.
+   - **After 4.0.0 (master today):** expect no `pre.json`. Versions are stable 4.x and publish under `latest`.
+   - **v4 prerelease (before 4.0.0):** expect `"mode": "pre"` with tag `next`. Versions look like `4.0.0-next.N` and publish under the `next` dist-tag.
    - **4.0.0 GA:** pre mode must already be exited (`changeset pre exit`, merged by PR) before the version PR.
    - **No `pre.json` and a computed major on master:** this publishes 4.0.0 as `latest`. It is red unless the maintainer confirms GA.
 
