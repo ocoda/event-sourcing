@@ -1,6 +1,6 @@
 {
 	"name": "@ocoda/event-sourcing-mongodb",
-	"version": "4.0.0-next.2",
+	"version": "4.0.0",
 	"description": "NestJS Event Sourcing Library (@mongodb)",
 	"keywords": [
 		"nestjs",
