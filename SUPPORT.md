@@ -2,8 +2,8 @@
 
 ## Getting help
 
-- **Documentation:** start at [ocoda.github.io/event-sourcing](https://ocoda.github.io/event-sourcing), for example [module configuration](https://ocoda.github.io/event-sourcing/start/module-configuration). The 3.x documentation is at [ocoda.github.io/event-sourcing/v3](https://ocoda.github.io/event-sourcing/v3/).
-- **Upgrading from 3.x:** follow [Migrating from 3.x to 4.0](https://ocoda.github.io/event-sourcing/upgrading/v4).
+- **Documentation:** start at [ocoda.github.io/event-sourcing](https://ocoda.github.io/event-sourcing), for example [module configuration](https://ocoda.github.io/event-sourcing/start/module-configuration). Until 4.0.0 is released, the site documents 3.x, and the 4.0 documentation is in [`docs/`](docs/src/content/docs) on `master`.
+- **Upgrading from 3.x:** follow [Migrating from 3.x to 4.0](docs/src/content/docs/upgrading/v4.mdx).
 - **Questions:** search [Discussions](https://github.com/ocoda/event-sourcing/discussions), then ask in [Q&A](https://github.com/ocoda/event-sourcing/discussions/categories/q-a). Include your package, NestJS and Node.js versions and the code involved.
 - **Bugs, feature requests and documentation problems:** open an [issue](https://github.com/ocoda/event-sourcing/issues/new/choose). A bug report needs a minimal reproduction. Issues are not for usage questions.
 - **Security vulnerabilities:** never in public. Follow [SECURITY.md](SECURITY.md).
