@@ -2,7 +2,7 @@
 '@ocoda/event-sourcing': major
 ---
 
-**The snapshot store API is Promise-only, and the in-memory snapshot store pages `loadAll` in binary order.** This is the 4.0 snapshot store contract of ADR 0001. The PostgreSQL, MariaDB and MongoDB snapshot stores already return promises; their cursor, order and highest-version reads follow with their schema v2 in a later prerelease. PostgreSQL already keeps a single latest snapshot when appends to a stream race; MariaDB and MongoDB get that with their schema v2 too.
+**The snapshot store API is Promise-only, and the in-memory snapshot store pages `loadAll` in binary order.** This is the 4.0 snapshot store contract of ADR 0001. The PostgreSQL, MariaDB and MongoDB snapshot stores already return promises; their cursor, order and highest-version reads come with their schema v2, and so does a single latest snapshot per stream when appends to it race.
 
 - **Every method of `SnapshotStore` returns a promise** (or an async generator), and a failure is a rejection. The in-memory store's `getSnapshot`, `getEnvelope`, `getLastSnapshot`, `getLastSnapshots`, `getLastEnvelope` and `getManyLastSnapshotEnvelopes` returned their result directly and threw synchronously, for example a `SnapshotNotFoundException`. They now have to be awaited. `SnapshotRepository` already awaited them.
 - **`getEnvelope` and `getEnvelopes` are required** (they were optional). `getManyLastSnapshotEnvelopes` and `getLastEnvelopesForAggregate` have defaults in the base class: the first reads the streams one by one with `getLastEnvelope`, so `SnapshotRepository.loadMany()` works with every store; the second rejects with an `UnsupportedOperationException` when it's read, which `loadAll()` passes on.
