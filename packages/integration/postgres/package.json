@@ -75,10 +75,10 @@
 		"@ocoda/event-sourcing-config": "workspace:*",
 		"@ocoda/event-sourcing-testing": "workspace:*",
 		"@types/node": "catalog:",
-		"@types/pg": "^8.15.5",
+		"@types/pg": "^8.23.1",
 		"@types/pg-cursor": "^2.7.2",
-		"pg": "^8.16.3",
-		"pg-cursor": "^2.15.3",
+		"pg": "^8.23.0",
+		"pg-cursor": "^2.22.0",
 		"reflect-metadata": "catalog:",
 		"rxjs": "catalog:",
 		"typescript": "catalog:"
