@@ -20,6 +20,12 @@ export const BACKUP_SUFFIX = '__es_v1';
 /** The suffix of the copy a migration fills before it swaps it in (`<t>__es_v2`). */
 export const COPY_SUFFIX = '__es_v2';
 
+/**
+ * The suffix of the name that the migration renames the empty copy to and back in one statement, to check the
+ * privileges of the swap before the copy (`<t>__es_vp`). No table has it after the statement.
+ */
+export const PROBE_SUFFIX = '__es_vp';
+
 /** The unique index on the global position of an event table. */
 export const GLOBAL_POSITION_INDEX = 'ux_global_position';
 
@@ -87,10 +93,11 @@ export const derivedTableName = (table: string, suffix: string): string => {
 
 export const backupTableName = (table: string): string => derivedTableName(table, BACKUP_SUFFIX);
 export const copyTableName = (table: string): string => derivedTableName(table, COPY_SUFFIX);
+export const probeTableName = (table: string): string => derivedTableName(table, PROBE_SUFFIX);
 
-/** Whether a table name is a backup or a copy of the migration. */
+/** Whether a table name is a backup, a copy or a probe name of the migration. */
 export const isMigrationTable = (table: string): boolean =>
-	table.endsWith(BACKUP_SUFFIX) || table.endsWith(COPY_SUFFIX);
+	table.endsWith(BACKUP_SUFFIX) || table.endsWith(COPY_SUFFIX) || table.endsWith(PROBE_SUFFIX);
 
 /** The DDL of the catalog. */
 export const catalogDdl = (): string =>

@@ -417,7 +417,7 @@ The PostgreSQL stores implement the new contract natively: global positions, `re
 
 - **The event store implements the whole [event store API](#event-store-api)**: the options form of `appendEvents` with `ExpectedVersion.Any`, [metadata and headers](#metadata-headers), global positions and [`readAll`](#read-all). Its capabilities are `{ atomicAppend: true, headers: true, globalOrder: 'gap-safe' }`, and `'best-effort'` on a Galera cluster. `getAllEnvelopes` is gone from it.
 - **The event tables** gain `global_position`, `headers` and `event_version` columns and lose `event_date`. `occurred_on` keeps milliseconds (3.x truncated it to the second) as the UTC wall time, whatever the time zone of the application or the connector's `timezone` option.
-- **Stream ids are case-sensitive.** The tables compare text in binary (`utf8mb4_bin`), like the other stores; the 3.x tables used the database's default collation, which usually ignores case. Stream ids, aggregate ids and event names can be up to 255 characters.
+- **Stream ids are case-sensitive.** The tables compare text in binary (`utf8mb4_bin`), like the other stores; the 3.x tables used the database's default collation, which usually ignores case. The migration gives a 3.x stream whose rows have ids that differ in case only (`account-Acc-1` version 1, `account-acc-1` version 2) one stream id, the id of its lowest version, and its snapshots the id of its events; **from then on the application must use those ids**. The dry run lists them (`canonicalizedStreams`). Stream ids, aggregate ids and event names can be up to 255 characters.
 - **`event_sourcing_collections`**, a catalog table in the database, registers every event and snapshot table and holds each event pool's position counter. `listCollections()` reads it, so it lists 3.x tables only once they are migrated.
 - **`ensureCollection()` refuses a 3.x event table** with an `EventStoreSchemaException` (`found: 'v1'`): an application whose default pool has one fails its bootstrap until the table is migrated (see [Data migration](#data-migration)). Reads of a pool without a table throw an `EventCollectionNotFoundException`, and appends to it an `EventStorePersistenceException` with `outcome: 'not-persisted'`.
 - **A new `ddl` option**: `'auto'` (the default) creates the tables, `'none'` only checks and registers them, for users without `CREATE` privileges, and reports the statements to run.
@@ -459,18 +459,22 @@ Each table is migrated in one transaction under an exclusive lock, keeps its OID
 ```ts
 import { MariaDBEventStore, MariaDBSnapshotStore } from '@ocoda/event-sourcing-mariadb';
 
-await MariaDBEventStore.migrate(config, { dryRun: true }); // writes nothing: review blocking, gappedStreams, caseVariantStreams
+await MariaDBEventStore.migrate(config, { dryRun: true }); // writes nothing: review blocking, gappedStreams, canonicalizedStreams
 await MariaDBSnapshotStore.migrate(config, { dryRun: true });
 // stop every 3.x instance, then:
 await MariaDBEventStore.migrate(config);
 await MariaDBSnapshotStore.migrate(config);
+// deploy 4.0; once satisfied, drop the 3.x backups:
+await MariaDBEventStore.migrate(config, { keepBackup: false });
 ```
 
-- The event tables are copied into schema v2 and swapped in, numbered in 3.x's order with every stream in version order; the 3.x tables are kept as `<table>__es_v1` backups until you drop them. `occurred_on` is restored to the millisecond from the event ids, which also corrects the hours 3.x was off when the application ran in another time zone than the database server.
+- The event tables are copied into schema v2 and swapped in, numbered in 3.x's order with every stream in version order; the 3.x tables are kept as `<table>__es_v1` backups until a run with `keepBackup: false` drops them (keep them until the snapshots are migrated). `occurred_on` is restored to the millisecond from the event ids, which also corrects the hours 3.x was off when the application ran in another time zone than the database server.
 - The snapshot tables are converted in place, and every stream gets exactly one latest snapshot, its highest version.
 - After the migration, a 3.x instance that still runs fails to append events (error 1136) instead of writing rows without positions. Its snapshot writes still succeed, so stop every 3.x instance before you migrate.
 - Plan for about 3 minutes per million events (a provisional estimate: a million events were not measured with the copy that ships), and free space of 1.5 times the event tables in the data directory and again in `tmpdir`. A failed migration can be run again: it continues where it stopped.
-- Stream ids that differ in case only become separate streams, and a stream with a gap in its versions conflicts on its next append; the dry run lists both.
+- A 3.x stream whose rows have ids that differ in case only keeps being one stream: every row takes the stream id of the stream's lowest version, and its snapshots take the id of its events. Use those ids after the migration; the dry run lists them (`canonicalizedStreams`, see [Stream ids that differ in case only](/integrations/mariadb#case-variants)). The data needs no fixing by hand.
+- A stream with a gap in its versions conflicts on its next append; the dry run lists them (`gappedStreams`).
+- The migration needs no server settings changed, only room for the copy (disk and `tmpdir` space, and for a very large table a buffer pool that holds its row locks): a user with `ALL PRIVILEGES` on the database runs it, a missing privilege of the copy or the swap fails it before the copy, and on Galera it sizes its replication fragments for `wsrep_max_ws_size`.
 
 ## Publishing [#publishing]
 

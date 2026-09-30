@@ -17,7 +17,7 @@
 -- table holds its lock, which stops the client there.
 
 
--- Events: copied into a schema v2 table, numbered in 3.x order (event_date, event_id, stream_id, version) with every stream in version order, and swapped in. 3.x inserts fail from the swap on (1136).
+-- Events: copied into a schema v2 table, numbered in 3.x order (event_date, event_id, stream_id, version) with every stream in version order, and swapped in. The rows of a 3.x stream whose ids differ in case only take the stream id of its lowest version. 3.x inserts fail from the swap on (1136).
 
 -- session (lock: none)
 SET SESSION time_zone = '+00:00', lock_wait_timeout = 10, innodb_lock_wait_timeout = 10, max_statement_time = 0, tx_isolation = 'REPEATABLE-READ';
@@ -54,15 +54,20 @@ CREATE TABLE `events__es_v2` (
   UNIQUE KEY ux_global_position (global_position)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
+-- probe-swap (lock: exclusive metadata lock on the empty copy, for the rename only)
+RENAME TABLE `events__es_v2` TO `events__es_vp`, `events__es_vp` TO `events__es_v2`;
+
 -- bulk-load-on (lock: none)
 SET SESSION unique_checks = 0, foreign_key_checks = 0;
 
 -- copy (lock: shared locks on every row of the 3.x table: 3.x writes wait, then fail (1205))
 INSERT INTO `events__es_v2` (stream_id, version, event, payload, event_id, aggregate_id, occurred_on, correlation_id, causation_id, global_position)
-SELECT k.stream_id, k.version, k.event, k.payload, k.event_id, k.aggregate_id, CASE WHEN k.ulid_valid = 1 AND ABS((k.occurred_ts - k.ulid_ms DIV 1000)) <= 50400 AND MOD((k.occurred_ts - k.ulid_ms DIV 1000), 900) = 0 THEN FROM_UNIXTIME(k.ulid_ms DIV 1000) + INTERVAL (k.ulid_ms MOD 1000) * 1000 MICROSECOND ELSE k.occurred_on END,
+SELECT k.first_stream_id, k.version, k.event, k.payload, k.event_id, CASE WHEN CAST(k.stream_id AS BINARY) <> CAST(k.first_stream_id AS BINARY) AND k.aggregate_id = k.first_aggregate_id THEN k.first_aggregate_id ELSE k.aggregate_id END, CASE WHEN k.ulid_valid = 1 AND ABS((k.occurred_ts - k.ulid_ms DIV 1000)) <= 50400 AND MOD((k.occurred_ts - k.ulid_ms DIV 1000), 900) = 0 THEN FROM_UNIXTIME(k.ulid_ms DIV 1000) + INTERVAL (k.ulid_ms MOD 1000) * 1000 MICROSECOND ELSE k.occurred_on END,
   k.correlation_id, k.causation_id, ROW_NUMBER() OVER (ORDER BY k.ord_key, k.version) AS global_position
 FROM (
-  SELECT r.*, MAX(r.ord_rank) OVER (PARTITION BY r.stream_id ORDER BY r.version ROWS UNBOUNDED PRECEDING) AS ord_key
+  SELECT r.*, MAX(r.ord_rank) OVER (PARTITION BY r.stream_id ORDER BY r.version ROWS UNBOUNDED PRECEDING) AS ord_key,
+    FIRST_VALUE(r.stream_id) OVER (PARTITION BY r.stream_id ORDER BY r.version ROWS UNBOUNDED PRECEDING) AS first_stream_id,
+    FIRST_VALUE(r.aggregate_id) OVER (PARTITION BY r.stream_id ORDER BY r.version ROWS UNBOUNDED PRECEDING) AS first_aggregate_id
   FROM (
     SELECT o.stream_id, o.version, o.event, o.payload, o.event_id, o.aggregate_id, o.occurred_on, o.correlation_id, o.causation_id,
       CAST(UNIX_TIMESTAMP(o.occurred_on) AS SIGNED) AS occurred_ts,
@@ -81,19 +86,27 @@ RENAME TABLE `events` TO `events__es_v1`, `events__es_v2` TO `events`;
 
 -- catch-up (lock: shared locks on the rows of the backup)
 INSERT INTO `events` (stream_id, version, event, payload, event_id, aggregate_id, occurred_on, correlation_id, causation_id, global_position)
-SELECT k.stream_id, k.version, k.event, k.payload, k.event_id, k.aggregate_id, CASE WHEN k.ulid_valid = 1 AND ABS((k.occurred_ts - k.ulid_ms DIV 1000)) <= 50400 AND MOD((k.occurred_ts - k.ulid_ms DIV 1000), 900) = 0 THEN FROM_UNIXTIME(k.ulid_ms DIV 1000) + INTERVAL (k.ulid_ms MOD 1000) * 1000 MICROSECOND ELSE k.occurred_on END,
+SELECT k.first_stream_id, k.version, k.event, k.payload, k.event_id, CASE WHEN CAST(k.stream_id AS BINARY) <> CAST(k.first_stream_id AS BINARY) AND k.aggregate_id = k.first_aggregate_id THEN k.first_aggregate_id ELSE k.aggregate_id END, CASE WHEN k.ulid_valid = 1 AND ABS((k.occurred_ts - k.ulid_ms DIV 1000)) <= 50400 AND MOD((k.occurred_ts - k.ulid_ms DIV 1000), 900) = 0 THEN FROM_UNIXTIME(k.ulid_ms DIV 1000) + INTERVAL (k.ulid_ms MOD 1000) * 1000 MICROSECOND ELSE k.occurred_on END,
   k.correlation_id, k.causation_id, b.base + ROW_NUMBER() OVER (ORDER BY k.ord_key, k.version) AS global_position
 FROM (
   SELECT r.*, MAX(r.ord_rank) OVER (PARTITION BY r.stream_id ORDER BY r.version ROWS UNBOUNDED PRECEDING) AS ord_key
   FROM (
-    SELECT o.stream_id, o.version, o.event, o.payload, o.event_id, o.aggregate_id, o.occurred_on, o.correlation_id, o.causation_id,
+    SELECT o.stream_id, o.version, o.event, o.payload, o.event_id, o.aggregate_id, o.occurred_on, o.correlation_id, o.causation_id, o.first_stream_id, o.first_aggregate_id,
       CAST(UNIX_TIMESTAMP(o.occurred_on) AS SIGNED) AS occurred_ts,
       o.event_id REGEXP '^[0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{10}[0-9A-Za-z]{16}$' AS ulid_valid,
       ((LOCATE(UPPER(SUBSTRING(o.event_id, 1, 1)), '0123456789ABCDEFGHJKMNPQRSTVWXYZ') - 1) * 35184372088832 + (LOCATE(UPPER(SUBSTRING(o.event_id, 2, 1)), '0123456789ABCDEFGHJKMNPQRSTVWXYZ') - 1) * 1099511627776 + (LOCATE(UPPER(SUBSTRING(o.event_id, 3, 1)), '0123456789ABCDEFGHJKMNPQRSTVWXYZ') - 1) * 34359738368 + (LOCATE(UPPER(SUBSTRING(o.event_id, 4, 1)), '0123456789ABCDEFGHJKMNPQRSTVWXYZ') - 1) * 1073741824 + (LOCATE(UPPER(SUBSTRING(o.event_id, 5, 1)), '0123456789ABCDEFGHJKMNPQRSTVWXYZ') - 1) * 33554432 + (LOCATE(UPPER(SUBSTRING(o.event_id, 6, 1)), '0123456789ABCDEFGHJKMNPQRSTVWXYZ') - 1) * 1048576 + (LOCATE(UPPER(SUBSTRING(o.event_id, 7, 1)), '0123456789ABCDEFGHJKMNPQRSTVWXYZ') - 1) * 32768 + (LOCATE(UPPER(SUBSTRING(o.event_id, 8, 1)), '0123456789ABCDEFGHJKMNPQRSTVWXYZ') - 1) * 1024 + (LOCATE(UPPER(SUBSTRING(o.event_id, 9, 1)), '0123456789ABCDEFGHJKMNPQRSTVWXYZ') - 1) * 32 + (LOCATE(UPPER(SUBSTRING(o.event_id, 10, 1)), '0123456789ABCDEFGHJKMNPQRSTVWXYZ') - 1) * 1) AS ulid_ms,
       ROW_NUMBER() OVER (ORDER BY o.event_date, o.event_id, o.stream_id, o.version) AS ord_rank
-    FROM `events__es_v1` o LEFT JOIN `events` n
-      ON n.stream_id = CONVERT(o.stream_id USING utf8mb4) COLLATE utf8mb4_bin AND n.version = o.version
-    WHERE n.stream_id IS NULL
+    FROM (
+      SELECT m.* FROM (
+        SELECT o.*, (SELECT f.stream_id FROM `events__es_v1` f WHERE f.stream_id = o.stream_id ORDER BY f.version LIMIT 1) AS first_stream_id,
+          (SELECT f.aggregate_id FROM `events__es_v1` f WHERE f.stream_id = o.stream_id ORDER BY f.version LIMIT 1) AS first_aggregate_id
+        FROM `events__es_v1` o LEFT JOIN `events` n
+          ON n.stream_id = CONVERT(o.stream_id USING utf8mb4) COLLATE utf8mb4_bin AND n.version = o.version
+        WHERE n.stream_id IS NULL
+      ) m LEFT JOIN `events` c
+        ON c.stream_id = CONVERT(m.first_stream_id USING utf8mb4) COLLATE utf8mb4_bin AND c.version = m.version
+      WHERE c.stream_id IS NULL
+    ) o
   ) r
 ) k
 CROSS JOIN (SELECT COALESCE(MAX(global_position), 0) AS base FROM `events`) b;
@@ -106,11 +119,7 @@ INSERT INTO `event_sourcing_collections` (name, kind, schema_version, last_posit
 -- release-lock (lock: none)
 SELECT RELEASE_LOCK(CONCAT('ocoda:migrate:', SHA1(CONCAT(DATABASE(), '.', 'events')))) AS released;
 
-
--- Once satisfied with the migrated events, drop the 3.x table that the swap kept:
--- DROP TABLE IF EXISTS `events__es_v1`;
-
--- Snapshots: converted in place (binary collation, DATETIME(3) in UTC), one latest flag per stream, on its highest version.
+-- Snapshots: every stream takes the stream id of its events (of its lowest snapshot, without events), then the table is converted in place (binary collation, DATETIME(3) in UTC), with one latest flag per stream, on its highest version. The events' backup must still exist.
 
 -- session (lock: none)
 SET SESSION time_zone = '+00:00', lock_wait_timeout = 10, innodb_lock_wait_timeout = 10, max_statement_time = 0, tx_isolation = 'REPEATABLE-READ';
@@ -125,6 +134,25 @@ CREATE TABLE IF NOT EXISTS `event_sourcing_collections` (
 
 -- acquire-lock (lock: named lock (GET_LOCK), one migration per table)
 SELECT IF(GET_LOCK(CONCAT('ocoda:migrate:', SHA1(CONCAT(DATABASE(), '.', 'snapshots'))), 0) = 1, 1, (SELECT 1 UNION SELECT 2)) AS acquired;
+
+-- canonicalize (lock: row locks on the snapshots it changes, shared locks on the 3.x event rows it reads)
+UPDATE `snapshots` s JOIN (
+  SELECT a.stream_key, COALESCE(a.event_stream_id, a.first_stream_id) AS stream_id,
+    COALESCE(a.event_aggregate_id, a.first_aggregate_id) AS aggregate_id,
+    CASE WHEN LEFT(a.event_stream_id, CHAR_LENGTH(a.first_aggregate_name)) = a.first_aggregate_name THEN LEFT(a.event_stream_id, CHAR_LENGTH(a.first_aggregate_name)) ELSE a.first_aggregate_name END AS aggregate_name
+  FROM (
+    SELECT g.stream_id AS stream_key, f.stream_id AS first_stream_id, f.aggregate_id AS first_aggregate_id,
+      f.aggregate_name AS first_aggregate_name,
+      (SELECT e.stream_id FROM `events__es_v1` e WHERE e.stream_id = g.stream_id ORDER BY e.version LIMIT 1) AS event_stream_id,
+      (SELECT e.aggregate_id FROM `events__es_v1` e WHERE e.stream_id = g.stream_id ORDER BY e.version LIMIT 1) AS event_aggregate_id
+    FROM (SELECT stream_id, MIN(version) AS version FROM `snapshots` GROUP BY stream_id) g
+    JOIN `snapshots` f ON f.stream_id = g.stream_id AND f.version = g.version
+  ) a
+) c ON s.stream_id = c.stream_key
+SET s.aggregate_id = CASE WHEN s.aggregate_id = c.aggregate_id THEN c.aggregate_id ELSE s.aggregate_id END,
+  s.aggregate_name = CASE WHEN s.aggregate_name = c.aggregate_name THEN c.aggregate_name ELSE s.aggregate_name END,
+  s.stream_id = c.stream_id, s.registered_on = s.registered_on
+WHERE CAST(s.stream_id AS BINARY) <> CAST(c.stream_id AS BINARY);
 
 -- convert (lock: shared table lock (LOCK=SHARED): reads continue, writes wait)
 ALTER TABLE `snapshots` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
@@ -156,3 +184,7 @@ INSERT INTO `event_sourcing_collections` (name, kind, schema_version, last_posit
 
 -- release-lock (lock: none)
 SELECT RELEASE_LOCK(CONCAT('ocoda:migrate:', SHA1(CONCAT(DATABASE(), '.', 'snapshots')))) AS released;
+
+
+-- Once satisfied with the migrated events and snapshots, drop the 3.x table that the swap kept:
+-- DROP TABLE IF EXISTS `events__es_v1`;

@@ -23,5 +23,5 @@
 
 2. Stop every 3.x instance: the migration is offline. 3.x event appends fail afterwards (error 1136), but 3.x snapshot writes would still succeed.
 3. Run `MariaDBEventStore.migrate(config)`, then `MariaDBSnapshotStore.migrate(config)`, then deploy 4.0. Plan for about 3 minutes per million events, and free space of 1.5 times the event tables in the data directory and again in `tmpdir`.
-4. Drop the `<table>__es_v1` backups when you are satisfied.
-5. Stream ids that differed in case only are separate streams now, and a stream with a gap in its versions conflicts on its next append; append after the conflict's `actualVersion`.
+4. Drop the `<table>__es_v1` backups when you are satisfied: run `MariaDBEventStore.migrate(config, { keepBackup: false })` once more.
+5. A 3.x stream whose rows have ids that differ in case only is one stream under the id of its lowest version, which the dry run lists (`canonicalizedStreams`): use those ids from now on. A stream with a gap in its versions conflicts on its next append; append after the conflict's `actualVersion`.

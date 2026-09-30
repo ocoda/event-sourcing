@@ -11,6 +11,7 @@ import {
 	type EncodedValue,
 	type ManifestEventPool,
 	type ManifestEventStream,
+	type ManifestSnapshotPool,
 	NoteAdded,
 	collect,
 	createCrossVersionEventMap,
@@ -86,21 +87,91 @@ const compareBinary = (a: string, b: string) => Buffer.compare(Buffer.from(a), B
  */
 const asStoredWallTime = (instant: number) => instant - new Date(instant).getTimezoneOffset() * 60_000;
 
-/** The written rows of a stream, by its exact (binary) stream id: schema v2 splits ids that differ in case only. */
+/** The written rows of a stream, by its exact (binary) stream id. */
 const writtenOf = (pool: ManifestEventPool, streamId: string) =>
 	pool.written.filter((row) => row.streamId === streamId);
 
-/** The envelopes 3.x read for a stream that are the stream's under schema v2 (a case-variant twin has the others). */
-const expectedEnvelopesOf = (pool: ManifestEventPool, stream: ManifestEventStream) => {
-	const versions = new Set(writtenOf(pool, stream.streamId).map(({ version }) => version));
-	return stream.envelopes.filter(({ metadata }) => versions.has(Number(fieldOf(metadata, 'version'))));
+/**
+ * What the migration makes of the ids of a pool's rows (ADR 0002, amendment of 2026-09-30): the rows of a 3.x stream,
+ * whose ids the 3.x table compares case-insensitively, take the stream id of the stream's lowest version, and a row
+ * whose stream id changes also takes that version's aggregate id. Keyed by the ids 3.x wrote, `<aggregateId> <version>`.
+ */
+const canonicalIdsOf = (pool: ManifestEventPool) => {
+	const lowest = new Map<string, ManifestEventPool['written'][number]>();
+	for (const row of pool.written) {
+		const current = lowest.get(row.streamId.toLowerCase());
+		if (!current || row.version < current.version) {
+			lowest.set(row.streamId.toLowerCase(), row);
+		}
+	}
+	const streamIdOf = (streamId: string) => lowest.get(streamId.toLowerCase())?.streamId ?? streamId;
+	const byRow = new Map(
+		pool.written.map((row) => {
+			const first = lowest.get(row.streamId.toLowerCase()) as ManifestEventPool['written'][number];
+			const renamed = first.streamId !== row.streamId;
+			const aggregateId =
+				renamed && first.aggregateId.toLowerCase() === row.aggregateId.toLowerCase()
+					? first.aggregateId
+					: row.aggregateId;
+			return [`${row.aggregateId} ${row.version}`, { streamId: first.streamId, aggregateId }];
+		}),
+	);
+	return {
+		/** The stream id that the migration gives a stream id's rows. */
+		streamIdOf,
+		/** The aggregate id that the migration gives the row 3.x wrote with this aggregate id and version. */
+		aggregateIdOf: (aggregateId: string, version: number) =>
+			byRow.get(`${aggregateId} ${version}`)?.aggregateId ?? aggregateId,
+	};
 };
 
-/** Streams, by exact stream id, whose versions don't run from 1 without gaps. */
+/** The row key of a 3.x row under schema v2, with the aggregate id the migration gave it. */
+const canonicalRowKey = (
+	pool: ManifestEventPool,
+	row: { eventId: string; aggregateId: string; version: number },
+): string => rowKey({ ...row, aggregateId: canonicalIdsOf(pool).aggregateIdOf(row.aggregateId, row.version) });
+
+/**
+ * The envelopes that a stream reads under schema v2: what 3.x read for it (its 3.x stream, case-insensitively), with
+ * the aggregate ids the migration gave the rows, when the stream id is the one the migration gave the 3.x stream; none
+ * for an id that the migration replaced.
+ */
+const expectedEnvelopesOf = (pool: ManifestEventPool, stream: ManifestEventStream) => {
+	const ids = canonicalIdsOf(pool);
+	if (ids.streamIdOf(stream.streamId) !== stream.streamId) {
+		return [];
+	}
+	return stream.envelopes.map((envelope) => {
+		const { metadata } = envelope;
+		if (metadata === null || typeof metadata !== 'object' || !('fields' in metadata)) {
+			return envelope;
+		}
+		const aggregateId = ids.aggregateIdOf(
+			String(fieldOf(metadata, 'aggregateId')),
+			Number(fieldOf(metadata, 'version')),
+		);
+		return { ...envelope, metadata: { ...metadata, fields: { ...metadata.fields, aggregateId } } };
+	});
+};
+
+/**
+ * The stream id that the migration gives a snapshot stream: the id of its events, where the pool's events have the
+ * stream (case-insensitively), which is the id of their lowest version.
+ */
+const snapshotStreamIdOf = (pool: ManifestSnapshotPool, streamId: string): string => {
+	const events = manifest.eventPools.find((candidate) => candidate.pool === pool.pool);
+	return events ? canonicalIdsOf(events).streamIdOf(streamId) : streamId;
+};
+
+/**
+ * Streams, by the stream id the migration gives them, whose versions don't run from 1 without gaps. A 3.x stream whose
+ * ids differ in case only is one stream.
+ */
 const gappedStreamsOf = (pool: ManifestEventPool): string[] => {
+	const { streamIdOf } = canonicalIdsOf(pool);
 	const versions = new Map<string, number[]>();
 	for (const { streamId, version } of pool.written) {
-		versions.set(streamId, [...(versions.get(streamId) ?? []), version]);
+		versions.set(streamIdOf(streamId), [...(versions.get(streamIdOf(streamId)) ?? []), version]);
 	}
 	return [...versions]
 		.filter(([, list]) => Math.min(...list) !== 1 || Math.max(...list) !== list.length)
@@ -146,7 +217,7 @@ const expectedOrder = (pool: ManifestEventPool): string[] => {
 		let key = -1;
 		for (const { entry, rank } of rows.sort((a, b) => a.entry.version - b.entry.version)) {
 			key = Math.max(key, rank);
-			keyed.push({ key, version: entry.version, row: rowKey(entry) });
+			keyed.push({ key, version: entry.version, row: canonicalRowKey(pool, entry) });
 		}
 	}
 	return keyed.sort((a, b) => a.key - b.key || a.version - b.version).map(({ row }) => row);
@@ -225,11 +296,27 @@ describe('MariaDB migrates the 3.0.2 corpus to schema v2 and reads it as 3.0.2 d
 				blocking: [],
 				rows: pool.written.length,
 				duplicateEventIds: pool.duplicateEventIds.length,
-				// 3.x's case-insensitive twins become separate streams
+				// 3.x's case-insensitive twins are one stream, which the migration gives the id of its lowest version
 				caseVariantStreams: pool.caseVariantStreams.length > 0 ? 1 : 0,
 				droppedIndexes: ['idx_event_date_id'],
 				// Every event id holds the time 3.x set occurredOn from
 				occurredOnRepair: expect.objectContaining({ kept: 0 }),
+			});
+			const { streamIdOf } = canonicalIdsOf(pool);
+			const replaced = pool.written.filter(({ streamId }) => streamIdOf(streamId) !== streamId);
+			expect(collection.canonicalizedStreams, `${pool.collection}`).toEqual({
+				total: new Set(replaced.map(({ streamId }) => streamIdOf(streamId))).size,
+				rows: replaced.length,
+				sample: [...new Set(replaced.map(({ streamId }) => streamIdOf(streamId)))]
+					.sort(compareBinary)
+					.map((streamId) => {
+						const rows = replaced.filter((row) => streamIdOf(row.streamId) === streamId);
+						return {
+							streamId,
+							variants: [...new Set(rows.map((row) => row.streamId))].sort(compareBinary),
+							rows: rows.length,
+						};
+					}),
 			});
 			expect(collection.gappedStreams.total, `${pool.collection}`).toBe(gapped.length);
 			expect(collection.gappedStreams.sample.map(({ streamId }) => streamId)).toEqual(gapped);
@@ -257,7 +344,18 @@ describe('MariaDB migrates the 3.0.2 corpus to schema v2 and reads it as 3.0.2 d
 			});
 			expect(collection.snapshotFlags?.duplicateLatest).toBe(pool.duplicateLatest.length);
 			expect(collection.snapshotFlags?.missingLatest).toBe(pool.missingLatest.length);
+			// The snapshot streams written under another casing than their events take the id of their events
+			const renamed = pool.written.filter(({ streamId }) => snapshotStreamIdOf(pool, streamId) !== streamId);
+			expect(collection.canonicalizedStreams, `${pool.collection}`).toMatchObject({
+				total: new Set(renamed.map(({ streamId }) => snapshotStreamIdOf(pool, streamId))).size,
+				rows: renamed.length,
+			});
 		}
+		expect(
+			snapshots.collections.flatMap(({ canonicalizedStreams }) =>
+				(canonicalizedStreams?.sample ?? []).map(({ streamId, variants }) => `${variants.join(', ')} -> ${streamId}`),
+			),
+		).toEqual(['account-acc-1 -> account-Acc-1']);
 
 		expect(await dumpNamespace()).toEqual(before);
 	});
@@ -320,7 +418,13 @@ describe('MariaDB migrates the 3.0.2 corpus to schema v2 and reads it as 3.0.2 d
 			);
 
 			// D33: the streams that 3.x listed out of version order are in version order now
-			const streamIdOf = new Map(pool.written.map((row) => [`${row.aggregateId} ${row.version}`, row.streamId]));
+			const ids = canonicalIdsOf(pool);
+			const streamIdOf = new Map(
+				pool.written.map((row) => [
+					`${ids.aggregateIdOf(row.aggregateId, row.version)} ${row.version}`,
+					ids.streamIdOf(row.streamId),
+				]),
+			);
 			const versions = new Map<string, number[]>();
 			for (const { metadata } of read) {
 				const streamId = streamIdOf.get(`${metadata.aggregateId} ${metadata.version}`) as string;
@@ -334,14 +438,20 @@ describe('MariaDB migrates the 3.0.2 corpus to schema v2 and reads it as 3.0.2 d
 			}
 
 			// The non-canonical ids are read back as they were written
-			const ids = new Set(read.map(({ metadata }) => metadata.eventId.value));
+			const eventIds = new Set(read.map(({ metadata }) => metadata.eventId.value));
 			for (const eventId of pool.nonCanonicalEventIds) {
-				expect(ids.has(eventId), `${eventId}`).toBe(true);
+				expect(eventIds.has(eventId), `${eventId}`).toBe(true);
 			}
 		});
 
 		it('restores occurredOn to the millisecond 3.x appended, also for the rows a New York process shifted', () => {
-			const written = new Map(pool.written.map((row) => [`${row.aggregateId} ${row.version}`, row.occurredOn]));
+			const ids = canonicalIdsOf(pool);
+			const written = new Map(
+				pool.written.map((row) => [
+					`${ids.aggregateIdOf(row.aggregateId, row.version)} ${row.version}`,
+					row.occurredOn,
+				]),
+			);
 			for (const { metadata } of read) {
 				expect
 					.soft(metadata.occurredOn.toISOString(), `${metadata.aggregateId}@${metadata.version}`)
@@ -371,10 +481,12 @@ describe('MariaDB migrates the 3.0.2 corpus to schema v2 and reads it as 3.0.2 d
 						.toBe(positionOf.get(rowKey({ ...metadata, eventId: metadata.eventId.value })));
 				}
 
-				if (!pool.caseVariantStreams.includes(stream.streamId)) {
-					const events = await collect(eventStore.getEvents(eventStream, { pool: poolOf(pool.pool) }));
-					expect.soft(events.map(encodeValue), `getEvents(${stream.streamId})`).toEqual(stream.events);
-				}
+				// A case-variant twin reads as 3.x read it under the id that the migration gave the stream, and not at all
+				// under the id the migration replaced
+				const events = await collect(eventStore.getEvents(eventStream, { pool: poolOf(pool.pool) }));
+				expect
+					.soft(events.map(encodeValue), `getEvents(${stream.streamId})`)
+					.toEqual(expected.length > 0 ? stream.events : []);
 			}
 		});
 
@@ -423,9 +535,24 @@ describe('MariaDB migrates the 3.0.2 corpus to schema v2 and reads it as 3.0.2 d
 	describe.each(manifest.snapshotPools)('$collection', (pool) => {
 		it('reads the highest version as the last snapshot, and registeredOn as the wall time 3.x stored', async () => {
 			for (const stream of pool.streams) {
-				const snapshotStream = crossVersionSnapshotStream(stream);
+				// A stream written under another casing than its events' reads under the id of its events
+				const streamId = snapshotStreamIdOf(pool, stream.streamId);
+				if (streamId !== stream.streamId) {
+					expect(
+						await collect(snapshotStore.getEnvelopes(crossVersionSnapshotStream(stream), { pool: poolOf(pool.pool) })),
+						`${stream.streamId} is read as ${streamId}`,
+					).toEqual([]);
+				}
+				const snapshotStream = crossVersionSnapshotStream({
+					aggregate: stream.aggregate,
+					aggregateId: streamId.slice(stream.aggregate.length + 1),
+				});
 				const envelopes = await collect(snapshotStore.getEnvelopes(snapshotStream, { pool: poolOf(pool.pool) }));
-				const written = pool.written.filter(({ streamId }) => streamId === stream.streamId);
+				expect(
+					envelopes.map(({ metadata }) => metadata.aggregateId),
+					`${streamId}: the aggregate id of the events`,
+				).toEqual(envelopes.map(() => snapshotStream.aggregateId));
+				const written = pool.written.filter((row) => snapshotStreamIdOf(pool, row.streamId) === streamId);
 				expect(
 					envelopes.map(({ metadata }) => metadata.version),
 					`${stream.streamId}`,
@@ -464,7 +591,7 @@ describe('MariaDB migrates the 3.0.2 corpus to schema v2 and reads it as 3.0.2 d
 					SUM(s.latest IS NOT NULL AND s.version = (SELECT MAX(version) FROM ${table} m WHERE m.stream_id = s.stream_id)) AS highest
 				 FROM ${table} s GROUP BY s.stream_id`,
 			);
-			expect(rows.length).toBe(pool.streams.length);
+			expect(rows.length).toBe(new Set(pool.streams.map(({ streamId }) => snapshotStreamIdOf(pool, streamId))).size);
 			for (const row of rows) {
 				expect({ flagged: Number(row.flagged), highest: Number(row.highest) }, `${row.stream_id}`).toEqual({
 					flagged: 1,

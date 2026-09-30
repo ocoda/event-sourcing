@@ -6,6 +6,7 @@ import {
 	addUniqueLatestSql,
 	bulkLoadOffSql,
 	bulkLoadOnSql,
+	canonicalizeSnapshotsSql,
 	catchUpSql,
 	convertSnapshotsSql,
 	copySql,
@@ -14,6 +15,7 @@ import {
 	dropBackupSql,
 	dropCopySql,
 	flagLatestSql,
+	probeSwapSql,
 	registerEventsSql,
 	registerSnapshotsSql,
 	releaseLockSql,
@@ -34,6 +36,7 @@ export type EventStepName =
 	| 'acquire-lock'
 	| 'drop-copy'
 	| 'create-copy'
+	| 'probe-swap'
 	| 'bulk-load-on'
 	| 'copy'
 	| 'bulk-load-off'
@@ -47,6 +50,7 @@ export type SnapshotStepName =
 	| 'session'
 	| 'create-catalog'
 	| 'acquire-lock'
+	| 'canonicalize'
 	| 'convert'
 	| 'unflag-superseded'
 	| 'flag-latest'
@@ -83,6 +87,11 @@ export interface EventPlanInput {
 	backup: boolean;
 	/** Triggers on the table and foreign keys from or to it: a swap would leave them on the backup. */
 	dependents: readonly string[];
+	/**
+	 * The pool's snapshot table while its columns aren't converted: its migration takes the snapshot stream ids from the
+	 * 3.x event rows, in the table or its backup. Only looked up for `keepBackup: false`, which drops the backup.
+	 */
+	pendingSnapshots?: string;
 }
 
 /** What the planner needs to know about a snapshot table. */
@@ -101,6 +110,12 @@ export interface SnapshotPlanInput {
 	uniqueLatest: boolean;
 	/** Triggers on the table and foreign keys from or to it. */
 	dependents: readonly string[];
+	/**
+	 * The pool's 3.x event rows (its 3.x event table, or that table's `__es_v1` backup) whose stream ids compare like the
+	 * snapshots': the canonicalization gives each snapshot stream the stream id of its events. Absent: the stream id of
+	 * its lowest snapshot.
+	 */
+	events?: string;
 }
 
 const LOCKS = {
@@ -109,11 +124,13 @@ const LOCKS = {
 	catalog: 'metadata lock on the catalog',
 	copy: 'shared locks on every row of the 3.x table: 3.x writes wait, then fail (1205)',
 	swap: 'exclusive metadata locks on both tables, for the rename only',
+	probe: 'exclusive metadata lock on the empty copy, for the rename only',
 	backup: 'shared locks on the rows of the backup',
 	catalogRow: 'the catalog row of the table',
 	exclusiveMetadata: 'exclusive metadata lock on the dropped table',
 	shared: 'shared table lock (LOCK=SHARED): reads continue, writes wait',
 	rows: 'row locks on the snapshots it changes',
+	canonicalize: 'row locks on the snapshots it changes, shared locks on the 3.x event rows it reads',
 } as const;
 
 const step = <TName extends string>(name: TName, statement: string, lock: string): PlannedStep<TName> => ({
@@ -165,13 +182,21 @@ const planEventSteps = (input: EventPlanInput, options: PlanOptions): MigrationP
 	const blocking: string[] = [];
 	const register = step<EventStepName>('register', registerEventsSql(table, options), LOCKS.catalogRow);
 	const dropBackup = step<EventStepName>('drop-backup', dropBackupSql(table), LOCKS.exclusiveMetadata);
+	const warnPendingSnapshots = () => {
+		if (input.pendingSnapshots) {
+			warnings.push(
+				`The snapshot table ${input.pendingSnapshots} isn't migrated yet: its migration gives every snapshot stream the stream id of its events, read from ${backupTableName(table)}, which keepBackup: false drops. Migrate the snapshots first, or keep the backup until they are`,
+			);
+		}
+	};
 	const withBackup = (steps: PlannedStep<EventStepName>[]) => {
 		if (options.keepBackup) {
 			warnings.push(
-				`The 3.x table is kept as ${backupTableName(table)}; drop it when satisfied: ${dropBackupSql(table)}`,
+				`The 3.x table is kept as ${backupTableName(table)}; drop it when satisfied, after the snapshots are migrated: run the migration again with keepBackup: false, or ${dropBackupSql(table)}`,
 			);
 			return steps;
 		}
+		warnPendingSnapshots();
 		return [...steps, dropBackup];
 	};
 
@@ -204,6 +229,7 @@ const planEventSteps = (input: EventPlanInput, options: PlanOptions): MigrationP
 				...opening<EventStepName>(table, options),
 				step('drop-copy', dropCopySql(table), LOCKS.exclusiveMetadata),
 				step('create-copy', createCopySql(table), LOCKS.none),
+				step('probe-swap', probeSwapSql(table), LOCKS.probe),
 				step('bulk-load-on', bulkLoadOnSql(), LOCKS.none),
 				step('copy', copySql(table, options), LOCKS.copy),
 				step('bulk-load-off', bulkLoadOffSql(), LOCKS.none),
@@ -249,6 +275,7 @@ const planEventSteps = (input: EventPlanInput, options: PlanOptions): MigrationP
 		};
 	}
 	if (input.backup && !options.keepBackup) {
+		warnPendingSnapshots();
 		return {
 			action: 'resume',
 			steps: [...opening<EventStepName>(table, options), dropBackup, closing<EventStepName>(table, options)],
@@ -260,8 +287,9 @@ const planEventSteps = (input: EventPlanInput, options: PlanOptions): MigrationP
 };
 
 /**
- * Plans the migration of a snapshot table, in place: convert the columns, repair the latest flags, add the unique
- * index, register. Each step is planned only while its result doesn't hold yet.
+ * Plans the migration of a snapshot table, in place: give every 3.x stream one stream id, convert the columns, repair
+ * the latest flags, add the unique index, register. Each step is planned only while its result doesn't hold yet; the
+ * canonicalization runs while the table still compares stream ids in its 3.x collation, before the conversion.
  */
 export const planSnapshotMigration = (
 	input: SnapshotPlanInput,
@@ -293,6 +321,9 @@ const planSnapshotSteps = (input: SnapshotPlanInput, options: PlanOptions): Migr
 
 	const steps: PlannedStep<SnapshotStepName>[] = opening<SnapshotStepName>(table, options);
 	if (state !== 'v2') {
+		if (!input.columnsConverted) {
+			steps.push(step('canonicalize', canonicalizeSnapshotsSql(table, input.events), LOCKS.canonicalize));
+		}
 		if (!input.columnsConverted || input.latestIndexes.length > 0) {
 			steps.push(step('convert', convertSnapshotsSql(table, input.latestIndexes), LOCKS.shared));
 		}
