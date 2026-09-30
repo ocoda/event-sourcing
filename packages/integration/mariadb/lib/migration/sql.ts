@@ -7,6 +7,7 @@ import {
 	escapeString,
 	eventTableDdl,
 	LATEST_INDEX,
+	probeTableName,
 	registerEventTableSql,
 	registerSnapshotTableSql,
 } from '../mariadb.schema.js';
@@ -200,6 +201,16 @@ const MIGRATED_COLUMNS =
 export const dropCopySql = (table: string): string => `DROP TABLE IF EXISTS ${escapeId(copyTableName(table))}`;
 
 export const createCopySql = (table: string): string => eventTableDdl(copyTableName(table), { ifNotExists: false });
+
+/**
+ * Renames the empty copy to the probe name and back, in one atomic statement: it needs the privileges of the swap
+ * (`ALTER` and `DROP` on the renamed table, `CREATE` and `INSERT` on the new name), so a user that lacks one fails
+ * here, before the copy, instead of at the swap, after it. A dry run writes nothing, so it can't check them.
+ */
+export const probeSwapSql = (table: string): string => {
+	const [copy, probe] = [escapeId(copyTableName(table)), escapeId(probeTableName(table))];
+	return `RENAME TABLE ${copy} TO ${probe}, ${probe} TO ${copy}`;
+};
 
 /** A bulk load into the empty copy: no unique or foreign key checks (MDEV-24621). The copy's rows are unique anyway. */
 export const bulkLoadOnSql = (): string => 'SET SESSION unique_checks = 0, foreign_key_checks = 0';
@@ -448,6 +459,15 @@ FROM (
   SELECT COUNT(latest) AS flags, MAX(version) AS last_version, MAX(CASE WHEN latest IS NOT NULL THEN version END) AS last_flagged
   FROM ${escapeId(table)} GROUP BY stream_id
 ) f`;
+
+/**
+ * The other sessions with an open InnoDB transaction, oldest first: the sessions that can hold a lock a step waits
+ * for. `INNODB_TRX` needs the `PROCESS` privilege.
+ */
+export const otherTransactionsSql = (limit = 10): string =>
+	`SELECT t.trx_mysql_thread_id AS id, p.USER AS account_user, p.HOST AS account_host
+FROM information_schema.INNODB_TRX t LEFT JOIN information_schema.PROCESSLIST p ON p.ID = t.trx_mysql_thread_id
+WHERE t.trx_mysql_thread_id <> CONNECTION_ID() ORDER BY t.trx_started LIMIT ${limit}`;
 
 /** The catalog's name, quoted, for the statements that name it. */
 export const catalogId = (): string => escapeId(CATALOG_TABLE);

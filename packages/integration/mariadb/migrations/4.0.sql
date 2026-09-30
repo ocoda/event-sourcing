@@ -54,6 +54,9 @@ CREATE TABLE `events__es_v2` (
   UNIQUE KEY ux_global_position (global_position)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
+-- probe-swap (lock: exclusive metadata lock on the empty copy, for the rename only)
+RENAME TABLE `events__es_v2` TO `events__es_vp`, `events__es_vp` TO `events__es_v2`;
+
 -- bulk-load-on (lock: none)
 SET SESSION unique_checks = 0, foreign_key_checks = 0;
 

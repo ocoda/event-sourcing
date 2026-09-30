@@ -15,6 +15,7 @@ import {
 	dropBackupSql,
 	dropCopySql,
 	flagLatestSql,
+	probeSwapSql,
 	registerEventsSql,
 	registerSnapshotsSql,
 	releaseLockSql,
@@ -35,6 +36,7 @@ export type EventStepName =
 	| 'acquire-lock'
 	| 'drop-copy'
 	| 'create-copy'
+	| 'probe-swap'
 	| 'bulk-load-on'
 	| 'copy'
 	| 'bulk-load-off'
@@ -117,6 +119,7 @@ const LOCKS = {
 	catalog: 'metadata lock on the catalog',
 	copy: 'shared locks on every row of the 3.x table: 3.x writes wait, then fail (1205)',
 	swap: 'exclusive metadata locks on both tables, for the rename only',
+	probe: 'exclusive metadata lock on the empty copy, for the rename only',
 	backup: 'shared locks on the rows of the backup',
 	catalogRow: 'the catalog row of the table',
 	exclusiveMetadata: 'exclusive metadata lock on the dropped table',
@@ -213,6 +216,7 @@ const planEventSteps = (input: EventPlanInput, options: PlanOptions): MigrationP
 				...opening<EventStepName>(table, options),
 				step('drop-copy', dropCopySql(table), LOCKS.exclusiveMetadata),
 				step('create-copy', createCopySql(table), LOCKS.none),
+				step('probe-swap', probeSwapSql(table), LOCKS.probe),
 				step('bulk-load-on', bulkLoadOnSql(), LOCKS.none),
 				step('copy', copySql(table, options), LOCKS.copy),
 				step('bulk-load-off', bulkLoadOffSql(), LOCKS.none),

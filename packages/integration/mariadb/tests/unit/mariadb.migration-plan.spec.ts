@@ -58,6 +58,7 @@ describe('planEventMigration', () => {
 				...OPENING,
 				'drop-copy',
 				'create-copy',
+				'probe-swap',
 				'bulk-load-on',
 				'copy',
 				'bulk-load-off',
@@ -76,6 +77,7 @@ describe('planEventMigration', () => {
 				...OPENING,
 				'drop-copy',
 				'create-copy',
+				'probe-swap',
 				'bulk-load-on',
 				'copy',
 				'bulk-load-off',
@@ -463,6 +465,13 @@ describe('failureHint', () => {
 		const text = failureHint(step, error, 'events');
 		expect(text).toMatch(hint);
 		expect(text).toMatch(rerun);
+	});
+
+	it('names the sessions with an open transaction after a lock wait timeout', () => {
+		const text = failureHint('swap', { errno: 1205 }, 'events', ['#12 app@10.0.0.5', '#13']);
+		expect(text).toBe(
+			'A session still uses the table (a 3.x instance?): stop it. Sessions with an open transaction, oldest first: #12 app@10.0.0.5, #13 (KILL <id> ends one). Run the migration again: it continues where it stopped.',
+		);
 	});
 });
 

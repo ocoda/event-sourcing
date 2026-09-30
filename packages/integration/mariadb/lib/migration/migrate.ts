@@ -48,6 +48,7 @@ import {
 	lockWaitSecondsOf,
 	nonCrockfordEventIdsSql,
 	occurredOnRepairSql,
+	otherTransactionsSql,
 	releaseLockSql,
 	lockNameSql,
 	sessionSql,
@@ -370,8 +371,11 @@ const runStep = async (
 	try {
 		result = await connection.query(planned.statement);
 	} catch (error) {
+		// A lock wait timeout leaves the connection usable: name the sessions that may hold the lock
+		const sessions =
+			errorNumberOf(error) === MariaDBErrorNumber.LockWaitTimeout ? await otherTransactionsOf(connection) : [];
 		throw new Error(
-			`The migration of ${table} failed at step ${planned.name}: ${(error as Error)?.message ?? String(error)}. ${failureHint(planned.name, error, table)}`,
+			`The migration of ${table} failed at step ${planned.name}: ${(error as Error)?.message ?? String(error)}. ${failureHint(planned.name, error, table, sessions)}`,
 			{ cause: error },
 		);
 	}
@@ -382,11 +386,30 @@ const runStep = async (
 };
 
 /**
+ * @internal The other sessions with an open InnoDB transaction, oldest first, as `#<id> <user>@<host>`. Reading them
+ * needs the `PROCESS` privilege: without it, none.
+ */
+export const otherTransactionsOf = async (db: Queryable): Promise<string[]> => {
+	try {
+		const rows =
+			await db.query<{ id: bigint | number; account_user: string | null; account_host: string | null }[]>(
+				otherTransactionsSql(),
+			);
+		return rows.map(({ id, account_user, account_host }) =>
+			account_user ? `#${id} ${account_user}@${account_host ?? '?'}` : `#${id}`,
+		);
+	} catch {
+		return [];
+	}
+};
+
+/**
  * What to do about a failed step. Every step can run again. The copy locks every row of the 3.x table (REPEATABLE
  * READ), which can outgrow the lock memory of a small buffer pool: then the copy can run in READ COMMITTED instead,
- * by hand, and the catch-up after the swap copies the rows 3.x wrote meanwhile.
+ * by hand, and the catch-up after the swap copies the rows 3.x wrote meanwhile. `sessions` are the other sessions with
+ * an open transaction, for a lock wait timeout.
  */
-export const failureHint = (step: string, error: unknown, table?: string): string => {
+export const failureHint = (step: string, error: unknown, table?: string, sessions: readonly string[] = []): string => {
 	const rerun = 'Run the migration again: it continues where it stopped.';
 	const errno = errorNumberOf(error);
 	const message = String((error as { message?: unknown } | null | undefined)?.message ?? '');
@@ -394,7 +417,11 @@ export const failureHint = (step: string, error: unknown, table?: string): strin
 		return `The copy locks every row of the 3.x table and ran out of lock memory: increase innodb_buffer_pool_size and ${rerun.charAt(0).toLowerCase()}${rerun.slice(1)} Or run the statements of a dry run by hand, with SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED before the copy, while no 3.x instance runs: the catch-up step copies what 3.x wrote during the copy.`;
 	}
 	if (errno === MariaDBErrorNumber.LockWaitTimeout) {
-		return `A session still uses the table (a 3.x instance?): stop it. ${rerun}`;
+		const holders =
+			sessions.length > 0
+				? ` Sessions with an open transaction, oldest first: ${sessions.join(', ')} (KILL <id> ends one).`
+				: '';
+		return `A session still uses the table (a 3.x instance?): stop it.${holders} ${rerun}`;
 	}
 	if (
 		errno === MariaDBErrorNumber.DiskFull ||

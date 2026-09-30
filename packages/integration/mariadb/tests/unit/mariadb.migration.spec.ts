@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import {
 	EventCollection,
 	type EventEnvelope,
@@ -12,7 +13,7 @@ import {
 	SnapshotStream,
 } from '@ocoda/event-sourcing';
 import { MariaDBEventStore, MariaDBSnapshotStore } from '@ocoda/event-sourcing-mariadb';
-import { Account, AccountId, getEventMap, getEvents } from '@ocoda/event-sourcing-testing/unit';
+import { Account, AccountId, getEventMap, getEvents, mariadbRootConfig } from '@ocoda/event-sourcing-testing/unit';
 import type { Connection } from 'mariadb';
 import { type MigrationHooks, failureHint, runMigration } from '../../lib/migration/migrate.js';
 import {
@@ -220,6 +221,7 @@ describe('MariaDB migration from 3.x to schema v2', () => {
 				'acquire-lock',
 				'drop-copy',
 				'create-copy',
+				'probe-swap',
 				'bulk-load-on',
 				'copy',
 				'bulk-load-off',
@@ -542,6 +544,19 @@ describe('MariaDB migration from 3.x to schema v2', () => {
 				await expect(migrateEvents({ pools: [pool], lockTimeoutMs: 1000 })).rejects.toThrow(
 					/failed at step copy.*Lock wait timeout.*a 3\.x instance\?\): stop it/s,
 				);
+				// A user with the PROCESS privilege sees the session that holds the rows
+				const [{ id }] = await writer.query<{ id: bigint | number }[]>('SELECT CONNECTION_ID() AS id');
+				await expect(
+					runMigration({ ...mariadbRootConfig(), database: database.name }, 'events', {
+						pools: [pool],
+						lockTimeoutMs: 1000,
+					}),
+				).rejects.toThrow(
+					new RegExp(
+						`failed at step copy.*Sessions with an open transaction, oldest first: .*#${id} root@.*\\(KILL <id> ends one\\)`,
+						's',
+					),
+				);
 				expect(only(await migrateEvents({ pools: [pool], dryRun: true }), table).from).toBe('v1');
 			} finally {
 				await writer.rollback();
@@ -549,6 +564,41 @@ describe('MariaDB migration from 3.x to schema v2', () => {
 			}
 
 			expect(only(await migrateEvents({ pools: [pool] }), table)).toMatchObject({ action: 'migrate' });
+		});
+
+		it('fails before the copy when the user may not swap the tables, and continues once it may', async () => {
+			const pool = nextPool('priv');
+			const table = await seedEvents(pool);
+			const user = `es_mig_${randomBytes(4).toString('hex')}`;
+			const password = randomBytes(12).toString('hex');
+			await root.query('CREATE USER ?@? IDENTIFIED BY ?', [user, '%', password]);
+			try {
+				// Without ALTER, which only the swap needs (a missing DROP fails the first step, drop-copy)
+				await root.query(`GRANT SELECT, INSERT, UPDATE, CREATE, DROP ON ${escapeId(database.name)}.* TO ?@?`, [
+					user,
+					'%',
+				]);
+				const limited = { ...config(), user, password };
+
+				await expect(runMigration(limited, 'events', { pools: [pool] })).rejects.toThrow(
+					/failed at step probe-swap: .*denied.*lacks a privilege: it needs SELECT, INSERT, UPDATE, CREATE, ALTER and DROP/s,
+				);
+				// Nothing was copied: the 3.x table is as it was, next to the empty copy
+				expect(only(await migrateEvents({ pools: [pool], dryRun: true }), table).from).toBe('v1');
+				const [{ copied }] = await root.query<{ copied: bigint }[]>(
+					`SELECT COUNT(*) AS copied FROM ${escapeId(`${table}__es_v2`)}`,
+				);
+				expect(Number(copied)).toBe(0);
+				expect(await tableExists(`${table}__es_vp`)).toBe(false);
+
+				await root.query(`GRANT ALTER ON ${escapeId(database.name)}.* TO ?@?`, [user, '%']);
+				expect(only(await runMigration(limited, 'events', { pools: [pool] }), table)).toMatchObject({
+					action: 'migrate',
+					blocking: [],
+				});
+			} finally {
+				await root.query('DROP USER IF EXISTS ?@?', [user, '%']);
+			}
 		});
 
 		it('discovers the event tables by their name and columns', async () => {
