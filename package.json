@@ -24,8 +24,8 @@
 	},
 	"devDependencies": {
 		"@arethetypeswrong/cli": "0.18.5",
-		"@changesets/changelog-github": "^1.0.1",
-		"@changesets/cli": "^3.0.3",
+		"@changesets/changelog-github": "1.0.1",
+		"@changesets/cli": "3.0.3",
 		"@nestjs/common": "catalog:",
 		"@types/node": "catalog:",
 		"@vitest/coverage-v8": "5.0.2",
