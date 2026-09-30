@@ -55,6 +55,22 @@ services:
       timeout: 5s
       retries: 6
 
+  # MongoDB 9.0 has no Docker Official Image (mongo:9) yet, so mongodb-9 and mongodb-9-rs run MongoDB's own community
+  # server image, whose entrypoint takes the same arguments; move them to mongo:9 once it exists.
+  mongodb-9:
+    container_name: es-mongodb-9
+    image: mongodb/mongodb-community-server:9.0-ubuntu2204
+    ports:
+      - 27017:27017
+    volumes:
+      - type: tmpfs
+        target: /data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.runCommand({ ping: 1 })"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
   # Single-member replica sets on 27018, next to the standalone servers on 27017: the MongoDB unit, resilience and
   # conformance specs also run on the replica set when ES_TEST_MONGODB_RS_URL=mongodb://localhost:27018/?replicaSet=rs0
   # is set (e2e stays on the standalone server). The member advertises localhost:27018, so clients on the host reach
@@ -111,6 +127,30 @@ services:
   mongodb-8-rs:
     container_name: es-mongodb-8-rs
     image: mongo:8
+    command: ["--replSet", "rs0", "--bind_ip_all", "--port", "27018"]
+    ports:
+      - 27018:27018
+    volumes:
+      - type: tmpfs
+        target: /data/db
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mongosh",
+          "--port",
+          "27018",
+          "--quiet",
+          "--eval",
+          "try { rs.status() } catch (e) { rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'localhost:27018' }] }) } quit(db.runCommand({ hello: 1 }).isWritablePrimary ? 0 : 1)",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  mongodb-9-rs:
+    container_name: es-mongodb-9-rs
+    image: mongodb/mongodb-community-server:9.0-ubuntu2204
     command: ["--replSet", "rs0", "--bind_ip_all", "--port", "27018"]
     ports:
       - 27018:27018
@@ -329,6 +369,46 @@ services:
   mariadb-11-8:
     container_name: es-mariadb-11-8
     image: mariadb:11.8
+    ports:
+      - 3306:3306
+    environment:
+      MYSQL_ROOT_PASSWORD: mariadb
+      MYSQL_DATABASE: mariadb
+      MYSQL_USER: mariadb
+      MYSQL_PASSWORD: mariadb
+    volumes:
+      - type: tmpfs
+        target: /var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  mariadb-12:
+    container_name: es-mariadb-12
+    image: mariadb:12.3
+    ports:
+      - 3306:3306
+    environment:
+      MYSQL_ROOT_PASSWORD: mariadb
+      MYSQL_DATABASE: mariadb
+      MYSQL_USER: mariadb
+      MYSQL_PASSWORD: mariadb
+    volumes:
+      - type: tmpfs
+        target: /var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  # The newest MariaDB rolling release, which MariaDB maintains only until the next one (13.0: Q4 2026, see
+  # https://mariadb.org/about/#maintenance-policy). Move it to the next rolling release once that one is stable.
+  mariadb-rolling:
+    container_name: es-mariadb-rolling
+    image: mariadb:13.0
     ports:
       - 3306:3306
     environment:

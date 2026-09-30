@@ -60,14 +60,16 @@ The 3.0.2 writer in `fixtures/cross-version/v3` pins the published 3.0.2 package
 
 ## Databases for integration tests
 
-Core tests need no database. Integration tests run against the services in `docker-compose.yml`, whose images are pinned:
+Core tests need no database. Integration tests run against the services in `docker-compose.yml`, one per database version:
 
 | Service              | Versions                                        |
 | -------------------- | ----------------------------------------------- |
 | `postgres`           | `postgres-13` … `postgres-18` (`postgres` is 14) |
-| `mongodb`            | `mongodb-6`, `mongodb-7`, `mongodb-8` (`mongodb` is 8) |
-| MongoDB replica sets | `mongodb-6-rs`, `mongodb-7-rs`, `mongodb-8-rs` (port 27018) |
-| `mariadb`            | `mariadb-10` (10.11), `mariadb-11` (11.4), `mariadb-11-8` (11.8) |
+| `mongodb`            | `mongodb-6`, `mongodb-7`, `mongodb-8` (the newest 8.x, 8.3), `mongodb-9` (9.0) (`mongodb` is 8) |
+| MongoDB replica sets | `mongodb-6-rs` … `mongodb-9-rs` (port 27018) |
+| `mariadb`            | `mariadb-10` (10.11), `mariadb-11` (11.4), `mariadb-11-8` (11.8), `mariadb-12` (12.3), `mariadb-rolling` (13.0) (`mariadb` is 10.11) |
+
+The services cover every release its vendor still supports: the PostgreSQL and MongoDB major versions and the MariaDB long-term releases, plus the newest MariaDB rolling release, which MariaDB supports only until the next one. PostgreSQL 13 and MongoDB 6 are past their end of life and stay until a maintainer drops them. MongoDB 9.0 runs MongoDB's own image (`mongodb/mongodb-community-server`) until a `mongo:9` Docker Official Image exists. A new server version gets a service and a CI row of its own. The image tags float to the newest patch release, and Renovate lists a new version on its Dependency Dashboard instead of opening a pull request.
 
 Start one and wait until it is healthy:
 
@@ -86,7 +88,7 @@ docker compose up -d --wait mongodb mongodb-8-rs
 ES_TEST_MONGODB_RS_URL='mongodb://localhost:27018/?replicaSet=rs0' pnpm test:cov --filter=@ocoda/event-sourcing-mongodb
 ```
 
-The cross-version test checks that a driver reads what the published 3.0.2 packages wrote: the 3.0.2 writer in `fixtures/cross-version/v3` fills a schema or database of its own, then the driver's `tests/cross-version` specs read it back. CI runs it on the oldest and newest version of each database, and on PostgreSQL 17 and MariaDB 11.4. It needs npm and the same `ES_TEST_*` settings (for MariaDB also the root password, to create the database):
+The cross-version test checks that a driver reads what the published 3.0.2 packages wrote: the 3.0.2 writer in `fixtures/cross-version/v3` fills a schema or database of its own, then the driver's `tests/cross-version` specs read it back. CI runs it on the oldest and the newest PostgreSQL, on the newest MongoDB, on every MariaDB long-term release, and on PostgreSQL 17 and MongoDB 8, the newest versions 3.x is tested on. It needs npm and the same `ES_TEST_*` settings (for MariaDB also the root password, to create the database):
 
 ```bash
 pnpm test:cross-version --database postgres   # or mariadb, mongodb (both topologies with ES_TEST_MONGODB_RS_URL)

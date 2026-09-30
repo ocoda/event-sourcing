@@ -4,7 +4,7 @@ title: MariaDB
 
 import { Aside } from '@astrojs/starlight/components';
 
-`@ocoda/event-sourcing-mariadb` provides the `MariaDBEventStore` and the `MariaDBSnapshotStore`, on InnoDB. It needs the `mariadb` driver, which is a peer dependency: see [Installation](/start/install) and [Database drivers are peer dependencies](/upgrading/v4#drivers). It is tested on MariaDB 10.11, 11.4 and 11.8.
+`@ocoda/event-sourcing-mariadb` provides the `MariaDBEventStore` and the `MariaDBSnapshotStore`, on InnoDB. It needs the `mariadb` driver, which is a peer dependency: see [Installation](/start/install) and [Database drivers are peer dependencies](/upgrading/v4#drivers). It is tested on MariaDB 10.11, 11.4, 11.8 and 12.3, and on the newest rolling release (13.0).
 
 <Aside type="note" title="4.0 prerelease">
 This page describes schema v2, which the MariaDB stores use from the next prerelease on. Tables that 3.x created must be migrated once with `migrate()`: see [Migrating 3.x tables](#migration). The design is in [ADR 0002](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0002-schema-v2.md).
