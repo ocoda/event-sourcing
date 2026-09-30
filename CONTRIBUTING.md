@@ -64,12 +64,12 @@ Core tests need no database. Integration tests run against the services in `dock
 
 | Service              | Versions                                        |
 | -------------------- | ----------------------------------------------- |
-| `postgres`           | `postgres-13` … `postgres-18` (`postgres` is 14) |
-| `mongodb`            | `mongodb-6`, `mongodb-7`, `mongodb-8` (the newest 8.x, 8.3), `mongodb-9` (9.0) (`mongodb` is 8) |
-| MongoDB replica sets | `mongodb-6-rs` … `mongodb-9-rs` (port 27018) |
+| `postgres`           | `postgres-14` … `postgres-18` (`postgres` is 14) |
+| `mongodb`            | `mongodb-7`, `mongodb-8` (the newest 8.x, 8.3), `mongodb-9` (9.0) (`mongodb` is 8) |
+| MongoDB replica sets | `mongodb-7-rs` … `mongodb-9-rs` (port 27018) |
 | `mariadb`            | `mariadb-10` (10.11), `mariadb-11` (11.4), `mariadb-11-8` (11.8), `mariadb-12` (12.3), `mariadb-rolling` (13.0) (`mariadb` is 10.11) |
 
-The services cover the PostgreSQL and MongoDB major versions and the MariaDB long-term releases that their vendors still support, plus the newest MariaDB rolling release, which MariaDB supports only until the next one. PostgreSQL 13 and MongoDB 6 are past their end of life and stay until a maintainer drops them. `mongo:8` is the newest 8.x release, so MongoDB 8.0 has no service of its own. MongoDB 9.0 runs MongoDB's own image (`mongodb/mongodb-community-server`) until a `mongo:9` Docker Official Image exists. A new server version gets a service and a CI row of its own. The image tags float within their release line (`postgres:18` to the newest 18.x, `mongo:8` to the newest 8.x). Renovate lists a new server version on its Dependency Dashboard instead of opening a pull request. Don't approve it there: Renovate groups these updates, so the approval would move every older service to the newest version too.
+The services cover the PostgreSQL and MongoDB major versions and the MariaDB long-term releases that their vendors still support, plus the newest MariaDB rolling release, which MariaDB supports only until the next one. PostgreSQL 13 and MongoDB 6 reached their end of life in 2025 and were dropped before 4.0; the `3.x` branch still tests them. `mongo:8` is the newest 8.x release, so MongoDB 8.0 has no service of its own. MongoDB 9.0 runs MongoDB's own image (`mongodb/mongodb-community-server`) until a `mongo:9` Docker Official Image exists. A new server version gets a service and a CI row of its own. The image tags float within their release line (`postgres:18` to the newest 18.x, `mongo:8` to the newest 8.x). Renovate lists a new server version on its Dependency Dashboard instead of opening a pull request. Don't approve it there: Renovate groups these updates, so the approval would move every older service to the newest version too.
 
 Start one and wait until it is healthy:
 
