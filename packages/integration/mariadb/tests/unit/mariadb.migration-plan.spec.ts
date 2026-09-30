@@ -1,4 +1,11 @@
-import { connectionConfigOf, failureHint } from '../../lib/migration/migrate.js';
+import type { Queryable } from '../../lib/mariadb.schema.js';
+import {
+	connectionConfigOf,
+	eventTableOf,
+	failureHint,
+	maxWriteSetBytesOf,
+	snapshotTableOf,
+} from '../../lib/migration/migrate.js';
 import {
 	type EventPlanInput,
 	GALERA_WARNINGS,
@@ -7,7 +14,13 @@ import {
 	planEventMigration,
 	planSnapshotMigration,
 } from '../../lib/migration/plan.js';
-import { DEFAULT_STATEMENT_OPTIONS, GALERA_FRAGMENT_BYTES, sessionSql } from '../../lib/migration/sql.js';
+import {
+	DEFAULT_STATEMENT_OPTIONS,
+	GALERA_FRAGMENT_BYTES,
+	GALERA_MIN_FRAGMENT_BYTES,
+	galeraFragmentBytesOf,
+	sessionSql,
+} from '../../lib/migration/sql.js';
 
 /**
  * The migration planner is a pure function of what the migration found in a table (plan.ts): these tables pin every
@@ -51,6 +64,7 @@ describe('planEventMigration', () => {
 				...OPENING,
 				'drop-copy',
 				'create-copy',
+				'probe-swap',
 				'bulk-load-on',
 				'copy',
 				'bulk-load-off',
@@ -69,6 +83,7 @@ describe('planEventMigration', () => {
 				...OPENING,
 				'drop-copy',
 				'create-copy',
+				'probe-swap',
 				'bulk-load-on',
 				'copy',
 				'bulk-load-off',
@@ -171,11 +186,30 @@ describe('planEventMigration', () => {
 		expect(plan.blocking).toEqual(blocking.map((pattern) => expect.stringMatching(pattern)));
 	});
 
-	it('warns that the backup is kept, with the statement that drops it', () => {
+	it('warns that the backup is kept, with the ways to drop it', () => {
 		expect(planEventMigration(event(), OPTIONS).warnings).toEqual([
-			'The 3.x table is kept as tenant-events__es_v1; drop it when satisfied: DROP TABLE IF EXISTS `tenant-events__es_v1`',
+			'The 3.x table is kept as tenant-events__es_v1; drop it when satisfied, after the snapshots are migrated: run the migration again with keepBackup: false, or DROP TABLE IF EXISTS `tenant-events__es_v1`',
 		]);
 		expect(planEventMigration(event(), { ...OPTIONS, keepBackup: false }).warnings).toEqual([]);
+	});
+
+	it('warns when keepBackup: false drops the backup that the snapshot migration still reads', () => {
+		const warning = expect.stringMatching(
+			/^The snapshot table tenant-snapshots isn't migrated yet: .* read from tenant-events__es_v1, which keepBackup: false drops/,
+		);
+		const dropping = { ...OPTIONS, keepBackup: false };
+		const pending = { pendingSnapshots: 'tenant-snapshots' };
+
+		expect(planEventMigration(event(pending), dropping).warnings).toEqual([warning]);
+		expect(planEventMigration(event({ ...pending, state: 'v1-partial', backup: true }), dropping).warnings).toEqual([
+			warning,
+		]);
+		expect(
+			planEventMigration(event({ ...pending, state: 'v2', registered: true, backup: true }), dropping).warnings,
+		).toEqual([warning]);
+		// Nothing to warn about while the backup is kept, or once it is gone
+		expect(planEventMigration(event(pending), OPTIONS).warnings).not.toContainEqual(warning);
+		expect(planEventMigration(event({ ...pending, state: 'v2', registered: true }), dropping).warnings).toEqual([]);
 	});
 
 	it('warns about Galera for the tables it migrates or resumes', () => {
@@ -205,7 +239,15 @@ describe('planEventMigration', () => {
 		const custom = statements({ ...OPTIONS, lockWaitSeconds: 3, noBackslashEscapes: true, repairOccurredOn: false });
 		expect(custom.session).toMatch(/lock_wait_timeout = 3, innodb_lock_wait_timeout = 3/);
 		expect(custom['acquire-lock']).toContain("'o''neil\\-events'");
-		expect(custom.copy).not.toMatch(/CASE WHEN/);
+		expect(custom.copy).not.toMatch(/FROM_UNIXTIME/);
+		expect(custom.copy).toMatch(/k\.causation_id/);
+		// Either way, the copy gives every 3.x stream the stream id of its lowest version
+		for (const copy of [defaults.copy, custom.copy]) {
+			expect(copy).toMatch(/^SELECT k\.first_stream_id, /m);
+			expect(copy).toContain(
+				'FIRST_VALUE(r.stream_id) OVER (PARTITION BY r.stream_id ORDER BY r.version ROWS UNBOUNDED PRECEDING) AS first_stream_id',
+			);
+		}
 	});
 });
 
@@ -219,6 +261,7 @@ describe('planSnapshotMigration', () => {
 			action: 'migrate',
 			steps: [
 				...OPENING,
+				'canonicalize',
 				'convert',
 				'unflag-superseded',
 				'flag-latest',
@@ -233,6 +276,7 @@ describe('planSnapshotMigration', () => {
 			action: 'migrate',
 			steps: [
 				...OPENING,
+				'canonicalize',
 				'convert',
 				'unflag-superseded',
 				'flag-latest',
@@ -293,6 +337,25 @@ describe('planSnapshotMigration', () => {
 		expect(plan.blocking).toEqual([]);
 	});
 
+	it('canonicalizes the stream ids before the conversion, from the events when the pool has 3.x events', () => {
+		const statementOf = (input: SnapshotPlanInput) =>
+			planSnapshotMigration(input, OPTIONS).steps.find(({ name }) => name === 'canonicalize')?.statement;
+
+		const own = statementOf(snapshot());
+		expect(own).toMatch(/^UPDATE `tenant-snapshots` s JOIN \(/);
+		expect(own).toMatch(/s\.registered_on = s\.registered_on/);
+		expect(own).not.toMatch(/event_stream_id/);
+
+		const fromEvents = statementOf(snapshot({ events: 'tenant-events__es_v1' }));
+		expect(fromEvents).toContain(
+			'(SELECT e.stream_id FROM `tenant-events__es_v1` e WHERE e.stream_id = g.stream_id ORDER BY e.version LIMIT 1) AS event_stream_id',
+		);
+		expect(fromEvents).toMatch(/COALESCE\(a\.event_stream_id, a\.first_stream_id\) AS stream_id/);
+
+		// A converted table compares in binary: its canonicalization ran before the conversion
+		expect(statementOf(snapshot({ state: 'v1-partial', columnsConverted: true }))).toBeUndefined();
+	});
+
 	it('drops the non-unique indexes on the flag in the conversion', () => {
 		const [convert] = planSnapshotMigration(snapshot({ latestIndexes: ['a', 'b'] }), OPTIONS).steps.filter(
 			({ name }) => name === 'convert',
@@ -340,6 +403,35 @@ describe('the session of a migration', () => {
 		expect(sessionSql({ ...DEFAULT_STATEMENT_OPTIONS, galera: true })).toMatch(
 			new RegExp(`, wsrep_trx_fragment_unit = 'bytes', wsrep_trx_fragment_size = ${GALERA_FRAGMENT_BYTES}$`),
 		);
+		expect(sessionSql({ ...DEFAULT_STATEMENT_OPTIONS, galera: true, galeraFragmentBytes: 5_000_000 })).toMatch(
+			/, wsrep_trx_fragment_size = 5000000$/,
+		);
+	});
+
+	it("sizes the fragments for the node's largest write set, so that nobody has to", () => {
+		const MiB = 1024 * 1024;
+		expect(galeraFragmentBytesOf(undefined)).toBe(GALERA_FRAGMENT_BYTES);
+		expect(galeraFragmentBytesOf(Number.NaN)).toBe(GALERA_FRAGMENT_BYTES);
+		expect(galeraFragmentBytesOf(0)).toBe(GALERA_FRAGMENT_BYTES);
+		// The default wsrep_max_ws_size is 2 GiB
+		expect(galeraFragmentBytesOf(2 * 1024 * MiB - 1)).toBe(64 * MiB);
+		expect(galeraFragmentBytesOf(128 * MiB)).toBe(64 * MiB);
+		expect(galeraFragmentBytesOf(100 * MiB)).toBe(50 * MiB);
+		expect(galeraFragmentBytesOf(1 * MiB)).toBe(GALERA_MIN_FRAGMENT_BYTES);
+	});
+
+	it("reads a Galera node's largest write set, and does without it", async () => {
+		const answering = (rows: unknown) => ({ query: async () => rows }) as Queryable;
+		expect(await maxWriteSetBytesOf(answering([{ bytes: 2147483647n }]))).toBe(2147483647);
+		expect(await maxWriteSetBytesOf(answering([{ bytes: null }]))).toBeUndefined();
+		expect(await maxWriteSetBytesOf(answering([]))).toBeUndefined();
+		expect(
+			await maxWriteSetBytesOf({
+				query: async () => {
+					throw Object.assign(new Error('Unknown system variable'), { errno: 1193 });
+				},
+			}),
+		).toBeUndefined();
 	});
 });
 
@@ -379,7 +471,7 @@ describe('failureHint', () => {
 			case: "Galera's largest write set",
 			step: 'copy',
 			error: { errno: 1105, message: 'Maximum writeset size exceeded' },
-			hint: /in fragments of 67108864 bytes, so wsrep_max_ws_size must be larger than that/,
+			hint: /in fragments of half of wsrep_max_ws_size read when it started \(67108864 bytes at most, 1048576 at least\)/,
 		},
 		{
 			case: 'a missing privilege',
@@ -398,6 +490,33 @@ describe('failureHint', () => {
 		const text = failureHint(step, error, 'events');
 		expect(text).toMatch(hint);
 		expect(text).toMatch(rerun);
+	});
+
+	it('names the sessions with an open transaction after a lock wait timeout', () => {
+		const text = failureHint('swap', { errno: 1205 }, 'events', ['#12 app@10.0.0.5', '#13']);
+		expect(text).toBe(
+			'A session still uses the table (a 3.x instance?): stop it. Sessions with an open transaction, oldest first: #12 app@10.0.0.5, #13 (KILL <id> ends one). Run the migration again: it continues where it stopped.',
+		);
+	});
+});
+
+describe('snapshotTableOf', () => {
+	it("names the snapshot table of an event table's pool", () => {
+		expect(snapshotTableOf('events')).toBe('snapshots');
+		expect(snapshotTableOf('tenant-events')).toBe('tenant-snapshots');
+		expect(snapshotTableOf('a-b-events')).toBe('a-b-snapshots');
+		expect(snapshotTableOf('-events')).toBeUndefined();
+		expect(snapshotTableOf('other')).toBeUndefined();
+	});
+});
+
+describe('eventTableOf', () => {
+	it("names the event table of a snapshot table's pool", () => {
+		expect(eventTableOf('snapshots')).toBe('events');
+		expect(eventTableOf('tenant-snapshots')).toBe('tenant-events');
+		expect(eventTableOf('a-b-snapshots')).toBe('a-b-events');
+		expect(eventTableOf('-snapshots')).toBeUndefined();
+		expect(eventTableOf('other')).toBeUndefined();
 	});
 });
 
