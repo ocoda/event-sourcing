@@ -132,6 +132,8 @@ pnpm docs:build --filter=@ocoda/event-sourcing-docs  # the static site in docs/d
 - Give a heading a stable anchor with `## Heading [#anchor]`.
 - The build fails on a broken internal link or anchor.
 
+The site is deployed by hand: a maintainer runs the [CD Docs](.github/workflows/cd-docs.yml) workflow on `master`. It publishes these docs at the root of the site and the 3.x docs, built from `docs/` on the `3.x` branch, under `/event-sourcing/v3/`, and checks that every link and asset of both resolves. A version select in the header links the two. To check the site without deploying it, run the workflow with `deploy` off, or on another branch; pull requests that change the workflow or `.github/scripts/docs-site.sh` build and check it too.
+
 ## Changesets
 
 Every change to a published package needs a changeset, which becomes the CHANGELOG entry:

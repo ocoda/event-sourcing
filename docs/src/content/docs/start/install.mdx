@@ -4,6 +4,10 @@ title: Installation
 
 import { Aside, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
 
+<Aside type="caution" title="4.0 is in prerelease">
+Until 4.0.0 is released, `npm install @ocoda/event-sourcing` installs 3.x. Install 4.0 from the `next` tag and pin the exact version: `npm install --save-exact @ocoda/event-sourcing@next`, and the same for the integration. See [Versioning and support](/upgrading/versioning#dist-tags).
+</Aside>
+
 This library consists of a core module `@ocoda/event-sourcing` that provides the building blocks and can be complemented with an integration library for setting up a persistence layer for your events using a specific database provider.
 
 By default the core library will use an in-memory event- and snapshot-store, which is useful for testing and prototyping, but not recommended for production use.

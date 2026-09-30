@@ -1,0 +1,42 @@
+---
+// Replaces Starlight's language select, which renders nothing on this single-language site, with a select of the
+// docs versions, in the header and in the mobile menu. Starlight's own select still renders after it.
+import Default from '@astrojs/starlight/components/LanguageSelect.astro';
+import Select from '@astrojs/starlight/components/Select.astro';
+import { DOCS_VERSIONS } from '../consts';
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+---
+
+<ocoda-version-select>
+	<Select
+		icon="code-branch"
+		label="Documentation version"
+		options={DOCS_VERSIONS.map(({ label, path, current }) => ({
+			label,
+			value: `${base}${path}`,
+			selected: current,
+		}))}
+		width="5em"
+	/>
+</ocoda-version-select>
+<Default {...Astro.props} />
+
+<script>
+	class OcodaVersionSelect extends HTMLElement {
+		constructor() {
+			super();
+			const select = this.querySelector('select');
+			if (!select) return;
+			select.addEventListener('change', () => {
+				window.location.href = select.value;
+			});
+			// A page restored from the back-forward cache keeps the option that was picked before leaving it.
+			window.addEventListener('pageshow', (event) => {
+				if (!event.persisted) return;
+				select.selectedIndex = select.querySelector<HTMLOptionElement>('option[selected]')?.index ?? 0;
+			});
+		}
+	}
+	customElements.define('ocoda-version-select', OcodaVersionSelect);
+</script>
