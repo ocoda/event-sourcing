@@ -6,6 +6,7 @@ import {
 	addUniqueLatestSql,
 	bulkLoadOffSql,
 	bulkLoadOnSql,
+	canonicalizeSnapshotsSql,
 	catchUpSql,
 	convertSnapshotsSql,
 	copySql,
@@ -47,6 +48,7 @@ export type SnapshotStepName =
 	| 'session'
 	| 'create-catalog'
 	| 'acquire-lock'
+	| 'canonicalize'
 	| 'convert'
 	| 'unflag-superseded'
 	| 'flag-latest'
@@ -101,6 +103,12 @@ export interface SnapshotPlanInput {
 	uniqueLatest: boolean;
 	/** Triggers on the table and foreign keys from or to it. */
 	dependents: readonly string[];
+	/**
+	 * The pool's 3.x event rows (its 3.x event table, or that table's `__es_v1` backup) whose stream ids compare like the
+	 * snapshots': the canonicalization gives each snapshot stream the stream id of its events. Absent: the stream id of
+	 * its lowest snapshot.
+	 */
+	events?: string;
 }
 
 const LOCKS = {
@@ -114,6 +122,7 @@ const LOCKS = {
 	exclusiveMetadata: 'exclusive metadata lock on the dropped table',
 	shared: 'shared table lock (LOCK=SHARED): reads continue, writes wait',
 	rows: 'row locks on the snapshots it changes',
+	canonicalize: 'row locks on the snapshots it changes, shared locks on the 3.x event rows it reads',
 } as const;
 
 const step = <TName extends string>(name: TName, statement: string, lock: string): PlannedStep<TName> => ({
@@ -260,8 +269,9 @@ const planEventSteps = (input: EventPlanInput, options: PlanOptions): MigrationP
 };
 
 /**
- * Plans the migration of a snapshot table, in place: convert the columns, repair the latest flags, add the unique
- * index, register. Each step is planned only while its result doesn't hold yet.
+ * Plans the migration of a snapshot table, in place: give every 3.x stream one stream id, convert the columns, repair
+ * the latest flags, add the unique index, register. Each step is planned only while its result doesn't hold yet; the
+ * canonicalization runs while the table still compares stream ids in its 3.x collation, before the conversion.
  */
 export const planSnapshotMigration = (
 	input: SnapshotPlanInput,
@@ -293,6 +303,9 @@ const planSnapshotSteps = (input: SnapshotPlanInput, options: PlanOptions): Migr
 
 	const steps: PlannedStep<SnapshotStepName>[] = opening<SnapshotStepName>(table, options);
 	if (state !== 'v2') {
+		if (!input.columnsConverted) {
+			steps.push(step('canonicalize', canonicalizeSnapshotsSql(table, input.events), LOCKS.canonicalize));
+		}
 		if (!input.columnsConverted || input.latestIndexes.length > 0) {
 			steps.push(step('convert', convertSnapshotsSql(table, input.latestIndexes), LOCKS.shared));
 		}

@@ -62,9 +62,10 @@ export const v1Events = (): V1EventRow[] => [
 	// Starts at 2
 	row('account-start2', 2, ulidAt(t0 + 2 * HOUR, 'S2'), t0 + 2 * HOUR),
 	row('account-start2', 3, ulidAt(t0 + 2 * HOUR + 10, 'S3'), t0 + 2 * HOUR + 10),
-	// Ids that differ in case only: one stream in 3.x, two in schema v2
+	// Ids that differ in case only: one stream in 3.x, which the migration gives the id of its lowest version
 	row('account-Acc-1', 1, ulidAt(t0 + 3 * HOUR, 'C1'), t0 + 3 * HOUR),
 	row('account-acc-1', 2, ulidAt(t0 + 3 * HOUR + 1, 'C2'), t0 + 3 * HOUR + 1),
+	row('account-ACC-1', 3, ulidAt(t0 + 3 * HOUR + 2, 'C3'), t0 + 3 * HOUR + 2),
 	// Version 2's id sorts before version 1's in the same millisecond
 	row('account-inv', 1, invertedHigh, t0 + 5 * HOUR),
 	row('account-inv', 2, invertedLow, t0 + 5 * HOUR),
@@ -126,6 +127,60 @@ const compareCi = (a: string, b: string): number => {
 };
 
 /**
+ * What the migration makes of the stream ids (ADR 0002, amendment of 2026-09-30): the rows of a 3.x stream, whose ids
+ * a case-insensitive collation compares as equal, take the stream id of the stream's lowest version, and a row whose
+ * stream id changes also takes that version's aggregate id (they differ in case only). For ASCII ids.
+ */
+export const canonicalOf = <T extends { streamId: string; version: number; aggregateId: string }>(
+	rows: readonly T[],
+): Map<T, { streamId: string; aggregateId: string }> => {
+	const first = new Map<string, T>();
+	for (const row of rows) {
+		const key = row.streamId.toUpperCase();
+		const current = first.get(key);
+		if (!current || row.version < current.version) {
+			first.set(key, row);
+		}
+	}
+	return new Map(
+		rows.map((row) => {
+			const lowest = first.get(row.streamId.toUpperCase()) as T;
+			const renamed = row.streamId !== lowest.streamId;
+			const aggregateId =
+				renamed && row.aggregateId.toUpperCase() === lowest.aggregateId.toUpperCase()
+					? lowest.aggregateId
+					: row.aggregateId;
+			return [row, { streamId: lowest.streamId, aggregateId }];
+		}),
+	);
+};
+
+/** The stream ids that the migration replaces, as `canonicalizedStreams` reports them. */
+export const canonicalizedReportOf = <T extends { streamId: string; version: number; aggregateId: string }>(
+	rows: readonly T[],
+) => {
+	const canonical = canonicalOf(rows);
+	const streams = new Map<string, { streamId: string; variants: string[]; rows: number }>();
+	for (const row of rows) {
+		const { streamId } = canonical.get(row) as { streamId: string };
+		if (streamId === row.streamId) {
+			continue;
+		}
+		const stream = streams.get(streamId) ?? { streamId, variants: [], rows: 0 };
+		if (!stream.variants.includes(row.streamId)) {
+			stream.variants.push(row.streamId);
+		}
+		stream.rows++;
+		streams.set(streamId, stream);
+	}
+	const binary = (a: string, b: string) => Buffer.compare(Buffer.from(a), Buffer.from(b));
+	const sample = [...streams.values()]
+		.map((stream) => ({ ...stream, variants: stream.variants.sort(binary) }))
+		.sort((a, b) => binary(a.streamId, b.streamId));
+	return { total: sample.length, rows: sample.reduce((sum, { rows: count }) => sum + count, 0), sample };
+};
+
+/**
  * The order in which the migration numbers the rows (ADR 0001 D33): rank them in 3.x's order,
  * `(event_date, event_id, stream_id, version)` in the table's (case-insensitive) collation; the key of a row is the
  * highest rank of its stream up to its version; number by `(key, version)`.
@@ -164,7 +219,7 @@ export const v1Snapshots = (): V1SnapshotRow[] => {
 		snapshotId: `snap-${streamId}-${version}`,
 		aggregateId: streamId.slice('account-'.length),
 		registeredOn: `2021-05-0${1 + (second % 8)} 12:00:${String(second).padStart(2, '0')}`,
-		aggregateName: 'account',
+		aggregateName: streamId.slice(0, 'account'.length),
 		latest,
 	});
 	return [
@@ -181,8 +236,37 @@ export const v1Snapshots = (): V1SnapshotRow[] => {
 		// The flag on a lower version
 		snapshot('account-s4', 1, true, 8),
 		snapshot('account-s4', 3, false, 9),
-		// Ids that differ in case only, each flagged (one stream in 3.x, whose primary key compares them ignoring case)
+		// Ids that differ in case only, each flagged (one stream in 3.x, whose primary key compares them ignoring case),
+		// the second also in its aggregate name: the migration gives both the ids and the name of the lowest version
 		snapshot('account-S5', 1, true, 10),
-		snapshot('account-s5', 2, true, 11),
+		snapshot('Account-s5', 2, true, 11),
 	];
+};
+
+/**
+ * What the migration makes of the snapshots' stream ids without events to take them from: the lowest snapshot
+ * version's ids and aggregate name, for the snapshots whose stream id changes.
+ */
+export const canonicalSnapshotOf = (
+	rows: readonly V1SnapshotRow[],
+): Map<V1SnapshotRow, { streamId: string; aggregateId: string; aggregateName: string }> => {
+	const canonical = canonicalOf(rows);
+	const byStream = new Map<string, V1SnapshotRow>();
+	for (const row of rows) {
+		const current = byStream.get(row.streamId.toUpperCase());
+		if (!current || row.version < current.version) {
+			byStream.set(row.streamId.toUpperCase(), row);
+		}
+	}
+	return new Map(
+		rows.map((row) => {
+			const lowest = byStream.get(row.streamId.toUpperCase()) as V1SnapshotRow;
+			const { streamId, aggregateId } = canonical.get(row) as { streamId: string; aggregateId: string };
+			const aggregateName =
+				streamId !== row.streamId && row.aggregateName.toUpperCase() === lowest.aggregateName.toUpperCase()
+					? lowest.aggregateName
+					: row.aggregateName;
+			return [row, { streamId, aggregateId, aggregateName }];
+		}),
+	);
 };

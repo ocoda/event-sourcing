@@ -450,6 +450,12 @@ export const buildCorpus = (database) => {
 			missingLatest: [],
 		},
 	];
+	if (database === 'mariadb') {
+		// A snapshot of the stream whose ids differ in case only, under the id of its lower-case twin: the migration gives
+		// it the id of the stream's events, the id of their lowest version (`Acc-1`).
+		const twin = { aggregate: 'account', aggregateId: 'acc-1' };
+		snapshotPools[0].streams.push({ ...twin, snapshots: [{ version: 2, payload: snapshotPayload(twin, 2) }] });
+	}
 	if (eventPool(LEGACY_POOL)) {
 		// The flag repair of the migration UPDATEs these rows, where `ON UPDATE` clobbers `registered_on` unless the
 		// statement assigns it (see LEGACY_REGISTERED_ON_SHIFT_DAYS).

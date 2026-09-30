@@ -1,5 +1,6 @@
 import {
 	EventCollection,
+	type MigrationCanonicalizedStream,
 	type MigrationCollectionReport,
 	type MigrationGappedStream,
 	type MigrationOptions,
@@ -10,16 +11,19 @@ import {
 import { type Connection, type ConnectionConfig, createConnection } from 'mariadb';
 import {
 	CATALOG_TABLE,
+	type ColumnInfo,
 	EVENT_COLUMNS,
 	type Queryable,
 	SNAPSHOT_COLUMNS,
 	assertTableName,
+	backupTableName,
 	escapeId,
 	inspectEventTable,
 	inspectSnapshotTable,
 	isMigrationTable,
 	latestIndexes,
 	snapshotColumnsAreV2,
+	tableColumns,
 	tableIndexes,
 } from '../mariadb.schema.js';
 import { MariaDBErrorNumber, errorNumberOf, isFatalConnectionError, isGaleraNode } from '../mariadb.utils.js';
@@ -32,9 +36,13 @@ import {
 } from './plan.js';
 import {
 	GALERA_FRAGMENT_BYTES,
+	GALERA_MIN_FRAGMENT_BYTES,
 	acquireLockSql,
+	canonicalizedEventStreamsSql,
+	canonicalizedSnapshotStreamsSql,
 	caseVariantStreamsSql,
 	duplicateEventIdsSql,
+	galeraFragmentBytesOf,
 	gappedStreamsSampleSql,
 	gappedStreamsTotalSql,
 	lockWaitSecondsOf,
@@ -105,6 +113,8 @@ interface Environment {
 	report: MigrationReport['environment'];
 	noBackslashEscapes: boolean;
 	galera: boolean;
+	/** On Galera, the size of the fragments the copy replicates in, for the node's `wsrep_max_ws_size`. */
+	galeraFragmentBytes?: number;
 }
 
 const environmentOf = async (db: Queryable): Promise<Environment> => {
@@ -127,7 +137,20 @@ const environmentOf = async (db: Queryable): Promise<Environment> => {
 		},
 		noBackslashEscapes: /NO_BACKSLASH_ESCAPES/i.test(row.sql_mode ?? ''),
 		galera,
+		...(galera ? { galeraFragmentBytes: galeraFragmentBytesOf(await maxWriteSetBytesOf(db)) } : {}),
 	};
+};
+
+/** @internal A Galera node's largest write set (`wsrep_max_ws_size`), when the server reports it. */
+export const maxWriteSetBytesOf = async (db: Queryable): Promise<number | undefined> => {
+	try {
+		const [row] = await db.query<{ bytes: bigint | number | string | null }[]>(
+			'SELECT @@global.wsrep_max_ws_size AS bytes',
+		);
+		return row?.bytes === null || row?.bytes === undefined ? undefined : Number(row.bytes);
+	} catch {
+		return undefined;
+	}
 };
 
 const migrate = async (
@@ -142,6 +165,7 @@ const migrate = async (
 		lockWaitSeconds: lockWaitSecondsOf(options.lockTimeoutMs),
 		noBackslashEscapes: environment.noBackslashEscapes,
 		galera: environment.galera,
+		...(environment.galeraFragmentBytes === undefined ? {} : { galeraFragmentBytes: environment.galeraFragmentBytes }),
 		keepBackup: options.keepBackup ?? true,
 		repairOccurredOn: options.repairOccurredOn ?? true,
 	};
@@ -380,7 +404,7 @@ export const failureHint = (step: string, error: unknown, table?: string): strin
 		return `The server ran out of disk space: the copy sorts in tmpdir (@@tmpdir), which needs about 1.5 times the event table, and writes a copy of the table to the data directory. Make room, or point tmpdir at a larger volume, then ${rerun.charAt(0).toLowerCase()}${rerun.slice(1)}`;
 	}
 	if (/writeset size/i.test(message)) {
-		return `A write set exceeds Galera's largest one (wsrep_max_ws_size): the migration replicates in fragments of ${GALERA_FRAGMENT_BYTES} bytes, so wsrep_max_ws_size must be larger than that. Raise it, or run the statements of a dry run by hand with a smaller wsrep_trx_fragment_size, then ${rerun.charAt(0).toLowerCase()}${rerun.slice(1)}`;
+		return `A write set exceeds Galera's largest one (wsrep_max_ws_size): the migration replicates in fragments of half of wsrep_max_ws_size read when it started (${GALERA_FRAGMENT_BYTES} bytes at most, ${GALERA_MIN_FRAGMENT_BYTES} at least), so it was lowered since, or is below ${2 * GALERA_MIN_FRAGMENT_BYTES} bytes. Raise it, then ${rerun.charAt(0).toLowerCase()}${rerun.slice(1)}`;
 	}
 	if (
 		errno === MariaDBErrorNumber.TableAccessDenied ||
@@ -434,6 +458,44 @@ const gappedStreamsOf = async (db: Queryable, table: string): Promise<MigrationC
 	};
 };
 
+/** The largest sample of a report's list. */
+const SAMPLE_LIMIT = 1000;
+
+const compareBinary = (a: string, b: string): number => Buffer.compare(Buffer.from(a), Buffer.from(b));
+
+/**
+ * The streams whose rows the migration gives one stream id, from `canonicalizedEventStreamsSql` or
+ * `canonicalizedSnapshotStreamsSql` (a row per replaced stream id), in binary order.
+ */
+export const canonicalizedStreamsOf = async (
+	db: Queryable,
+	sql: string,
+): Promise<NonNullable<MigrationCollectionReport['canonicalizedStreams']>> => {
+	const rows = await db.query<{ stream_id: string; variant: string; changed: bigint | number }[]>(sql);
+	const streams = new Map<string, MigrationCanonicalizedStream>();
+	let changed = 0;
+	for (const row of rows) {
+		const stream = streams.get(row.stream_id) ?? { streamId: row.stream_id, variants: [], rows: 0 };
+		stream.variants.push(row.variant);
+		stream.rows += Number(row.changed);
+		changed += Number(row.changed);
+		streams.set(row.stream_id, stream);
+	}
+	const sorted = [...streams.values()].sort((a, b) => compareBinary(a.streamId, b.streamId));
+	for (const stream of sorted) {
+		stream.variants.sort(compareBinary);
+	}
+	return { total: sorted.length, rows: changed, sample: sorted.slice(0, SAMPLE_LIMIT) };
+};
+
+/** A few of the replaced stream ids, for a warning: `old -> new`. */
+const examplesOf = ({ sample }: NonNullable<MigrationCollectionReport['canonicalizedStreams']>, count = 3): string => {
+	const examples = sample
+		.flatMap(({ streamId, variants }) => variants.map((variant) => `${variant} -> ${streamId}`))
+		.slice(0, count);
+	return examples.join(', ');
+};
+
 const eventTableMigration: TableMigration = {
 	kind: 'events',
 	async inspect(db, table, options) {
@@ -457,19 +519,25 @@ const eventTableMigration: TableMigration = {
 				if (inspection.state !== 'v1') {
 					return { ...size, dependents };
 				}
-				const [gappedStreams, caseVariantStreams, duplicateEventIds, nonCrockfordEventIds, indexes] = await Promise.all(
-					[
-						gappedStreamsOf(db, table),
-						countOf(db, caseVariantStreamsSql(table)),
-						countOf(db, duplicateEventIdsSql(table)),
-						countOf(db, nonCrockfordEventIdsSql(table)),
-						tableIndexes(db, table),
-					],
-				);
+				const [
+					gappedStreams,
+					caseVariantStreams,
+					canonicalizedStreams,
+					duplicateEventIds,
+					nonCrockfordEventIds,
+					indexes,
+				] = await Promise.all([
+					gappedStreamsOf(db, table),
+					countOf(db, caseVariantStreamsSql(table)),
+					canonicalizedStreamsOf(db, canonicalizedEventStreamsSql(table)),
+					countOf(db, duplicateEventIdsSql(table)),
+					countOf(db, nonCrockfordEventIdsSql(table)),
+					tableIndexes(db, table),
+				]);
 				const warnings: string[] = [];
-				if (caseVariantStreams > 0) {
+				if (canonicalizedStreams.total > 0) {
 					warnings.push(
-						`${caseVariantStreams} stream(s) have ids that differ in case only: schema v2 compares stream ids in binary, so they become separate streams (listed as gapped)`,
+						`${canonicalizedStreams.total} stream(s) have rows whose ids differ in case only, one stream in 3.x: schema v2 compares stream ids in binary, so ${canonicalizedStreams.rows} row(s) take the stream id of their stream's lowest version (${examplesOf(canonicalizedStreams)}). Use those stream ids from then on`,
 					);
 				}
 				if (gappedStreams.total > 0) {
@@ -489,6 +557,7 @@ const eventTableMigration: TableMigration = {
 					...size,
 					gappedStreams,
 					caseVariantStreams,
+					canonicalizedStreams,
 					duplicateEventIds,
 					nonCrockfordEventIds,
 					dependents,
@@ -532,21 +601,92 @@ const occurredOnRepairOf = async (
 			};
 };
 
+/** The event table of a snapshot table's pool: `events` for `snapshots`, `<pool>-events` for `<pool>-snapshots`. */
+export const eventTableOf = (snapshotTable: string): string | undefined => {
+	const suffix = `-${SnapshotCollection.get()}`;
+	if (snapshotTable === SnapshotCollection.get()) {
+		return EventCollection.get();
+	}
+	return snapshotTable.endsWith(suffix) && snapshotTable.length > suffix.length
+		? EventCollection.get(snapshotTable.slice(0, -suffix.length))
+		: undefined;
+};
+
+/** The pool's 3.x event rows that a snapshot table's canonicalization takes stream ids from, or why there are none. */
+interface EventSource {
+	events?: string;
+	warning?: string;
+}
+
+/**
+ * The 3.x event rows of a snapshot table's pool: its event table while that has the 3.x schema, otherwise that table's
+ * `__es_v1` backup. Their stream ids and aggregate ids must compare like the snapshots' (the same collation, as when
+ * 3.x created both tables with the database's default), so that the lookups use their primary key and a snapshot
+ * stream matches the event stream that the event migration gives the same id.
+ */
+const eventSourceOf = async (
+	db: Queryable,
+	snapshotTable: string,
+	snapshotColumns: ReadonlyMap<string, ColumnInfo>,
+): Promise<EventSource> => {
+	const eventTable = eventTableOf(snapshotTable);
+	if (!eventTable) {
+		return {};
+	}
+	const backup = backupTableName(eventTable);
+	const [eventColumns, backupColumns] = await Promise.all([tableColumns(db, eventTable), tableColumns(db, backup)]);
+	const isV1 = (columns: ReadonlyMap<string, ColumnInfo>) =>
+		columns.has('event_date') &&
+		!columns.has('global_position') &&
+		['stream_id', 'version', 'aggregate_id'].every((column) => columns.has(column));
+	const [events, columns] = isV1(eventColumns)
+		? [eventTable, eventColumns]
+		: isV1(backupColumns)
+			? [backup, backupColumns]
+			: [undefined, undefined];
+	if (!events || !columns) {
+		return eventColumns.size > 0
+			? {
+					warning: `The 3.x events of ${eventTable} are gone (no ${backup}): the snapshot streams take the stream id of their lowest snapshot, which can differ in case from the id of their events. Migrate the snapshots before you drop the events' backup`,
+				}
+			: {};
+	}
+	const collation = snapshotColumns.get('stream_id')?.collation;
+	const collations = [
+		columns.get('stream_id'),
+		columns.get('aggregate_id'),
+		snapshotColumns.get('aggregate_id'),
+		snapshotColumns.get('aggregate_name'),
+	].map((column) => column?.collation);
+	if (collations.some((other) => other !== collation)) {
+		return {
+			warning: `The snapshot streams don't take the stream ids of the events in ${events}: its ids compare in ${collations[0]}, the snapshots' in ${collation}. They take the stream id of their lowest snapshot, which can differ in case from the id of their events`,
+		};
+	}
+	return { events };
+};
+
 const snapshotTableMigration: TableMigration = {
 	kind: 'snapshots',
 	async inspect(db, table, options) {
 		const [inspection, dependents] = await Promise.all([inspectSnapshotTable(db, table), dependentsOf(db, table)]);
 		const nonUnique = latestIndexes(inspection.indexes).filter(({ unique }) => !unique);
+		const columnsConverted = snapshotColumnsAreV2(inspection.columns);
+		const hasColumns = SNAPSHOT_COLUMNS.every((column) => inspection.columns.has(column));
+		// The canonicalization runs while the stream ids still compare in the 3.x collation, before the conversion
+		const canonicalize = inspection.state !== 'v2' && hasColumns && !columnsConverted;
+		const source = canonicalize ? await eventSourceOf(db, table, inspection.columns) : {};
 		const plan = planSnapshotMigration(
 			{
 				table,
 				state: inspection.state,
 				registered: inspection.catalog?.kind === 'snapshots' && inspection.catalog.schemaVersion === 2,
-				hasColumns: SNAPSHOT_COLUMNS.every((column) => inspection.columns.has(column)),
-				columnsConverted: snapshotColumnsAreV2(inspection.columns),
+				hasColumns,
+				columnsConverted,
 				latestIndexes: nonUnique.map(({ name }) => name),
 				uniqueLatest: latestIndexes(inspection.indexes).some(({ unique }) => unique),
 				dependents,
+				...(source.events ? { events: source.events } : {}),
 			},
 			options,
 		);
@@ -555,14 +695,23 @@ const snapshotTableMigration: TableMigration = {
 			plan,
 			async analyze() {
 				const size = await sizeOf(db, table);
-				if (!SNAPSHOT_COLUMNS.every((column) => inspection.columns.has(column))) {
+				if (!hasColumns) {
 					return size;
 				}
-				const [row] = await db.query<
-					{ duplicate_latest: unknown; missing_latest: unknown; misplaced_latest: unknown }[]
-				>(snapshotFlagsSql(table));
+				const [[row], caseVariantStreams, canonicalizedStreams] = await Promise.all([
+					db.query<{ duplicate_latest: unknown; missing_latest: unknown; misplaced_latest: unknown }[]>(
+						snapshotFlagsSql(table),
+					),
+					canonicalize ? countOf(db, caseVariantStreamsSql(table)) : undefined,
+					canonicalize ? canonicalizedStreamsOf(db, canonicalizedSnapshotStreamsSql(table, source.events)) : undefined,
+				]);
 				const misplaced = Number(row?.misplaced_latest ?? 0);
-				const warnings: string[] = [];
+				const warnings: string[] = source.warning ? [source.warning] : [];
+				if (canonicalizedStreams && canonicalizedStreams.total > 0) {
+					warnings.push(
+						`${canonicalizedStreams.total} snapshot stream(s) take ${source.events ? `the stream id of their events in ${source.events}, or without events the id of their lowest snapshot` : 'the stream id of their lowest snapshot'}: ${canonicalizedStreams.rows} snapshot(s) get another stream id (${examplesOf(canonicalizedStreams)})`,
+					);
+				}
 				if (misplaced > 0) {
 					warnings.push(
 						`${misplaced} stream(s) flag a snapshot other than their highest version: the flag moves to it`,
@@ -580,6 +729,8 @@ const snapshotTableMigration: TableMigration = {
 				}
 				return {
 					...size,
+					...(caseVariantStreams === undefined ? {} : { caseVariantStreams }),
+					...(canonicalizedStreams ? { canonicalizedStreams } : {}),
 					snapshotFlags: {
 						duplicateLatest: Number(row?.duplicate_latest ?? 0),
 						missingLatest: Number(row?.missing_latest ?? 0),
