@@ -1,0 +1,73 @@
+name: Claude
+
+# @claude in an issue, an issue or PR comment, a PR review or a PR review comment. Only the maintainers can summon
+# Claude: the author of the text that mentions @claude must be an owner, member or collaborator. The action checks
+# on top of that that the triggering actor has write access.
+# Claude answers in a comment and may push commits to a claude/* branch. It never opens, approves or merges a pull
+# request; a maintainer opens the PR from the link Claude leaves. See CONTRIBUTING.md "Maintenance automation".
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  pull_request_review:
+    types: [submitted]
+  issues:
+    types: [opened]
+
+permissions: {}
+
+jobs:
+  claude:
+    name: Claude
+    if: >-
+      (
+        (github.event_name == 'issue_comment' || github.event_name == 'pull_request_review_comment')
+        && contains(github.event.comment.body, '@claude')
+        && contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
+      ) || (
+        github.event_name == 'pull_request_review'
+        && contains(github.event.review.body, '@claude')
+        && contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.review.author_association)
+      ) || (
+        github.event_name == 'issues'
+        && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude'))
+        && contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.issue.author_association)
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: claude-${{ github.event.issue.number || github.event.pull_request.number }}
+      cancel-in-progress: false
+    permissions:
+      contents: read # check out the repository; Claude's own writes use the Claude GitHub App token
+      actions: read # CI status and job logs on pull requests (the action's github_ci tools)
+      id-token: write # exchanged for the Claude GitHub App token
+    env:
+      # Keep the Claude token and the Actions runtime tokens out of the commands Claude runs.
+      CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Run Claude
+        uses: anthropics/claude-code-action@756cc22e19660d20e8cc9496b4f242475a7f7790 # v1.0.235
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Setting this makes the action request an explicit permission set for the Claude App token: its defaults
+          # (contents, pull_requests and issues: write) plus actions: read. Without it the token would carry every
+          # permission the App holds, including workflows and repository_hooks, so a prompt-injected run could push
+          # a workflow file that reads the repository secrets.
+          additional_permissions: |
+            actions: read
+          settings: |
+            {"permissions": {"blockReadsOutsideWorkingDirectories": true}}
+          # On top of the action's own tools (read files, edit the checkout, git add/commit/push to Claude's branch,
+          # update its comment, read CI): read-only GitHub and npm lookups the repo skills use.
+          claude_args: |
+            --max-turns 60
+            --allowedTools "Bash(gh issue view:*),Bash(gh issue list:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr list:*),Bash(gh search issues:*),Bash(gh search prs:*),Bash(gh label list:*),Bash(gh release list:*),Bash(gh release view:*),Bash(npm view:*)"
+            --disallowedTools "Bash(gh pr merge:*),Bash(gh pr review:*),Bash(gh api:*),Bash(gh workflow:*),Bash(gh release create:*),Bash(gh release edit:*),Bash(gh secret:*),Bash(npm * --reg*),Bash(gh * --hostname*),Read(//proc/**),Skill(release)"
