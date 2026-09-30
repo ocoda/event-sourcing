@@ -193,7 +193,7 @@ describe('example application (e2e)', () => {
 		expect((await http('POST', `/loans/${loan}/extend`, { dueOn: '2030-03-15T00:00:00.000Z' })).status).toBe(409);
 	});
 
-	it('answers 404 for an unknown id and 400 for an invalid one', async () => {
+	it('answers 404 for an unknown id and 400 for invalid input', async () => {
 		expect((await http('GET', `/books/${randomUUID()}`)).status).toBe(404);
 		expect((await http('GET', '/books/not-a-uuid')).status).toBe(400);
 		expect((await http('GET', `/loans/${randomUUID()}`)).status).toBe(404);
@@ -201,6 +201,13 @@ describe('example application (e2e)', () => {
 			(await http('POST', '/books', { title: 'Bad', authorIds: [], publicationDate: '2020-01-01', isbn: '123' }))
 				.status,
 		).toBe(400);
+
+		// Dates and the author list are checked before they reach an aggregate: a 400, not a 500, and nothing is stored.
+		expect((await http('POST', '/books', { title: 'Bad', publicationDate: 'someday', isbn })).status).toBe(400);
+		expect(
+			(await http('POST', '/books', { title: 'Bad', authorIds: 'nobody', publicationDate: '2020-01-01', isbn })).status,
+		).toBe(400);
+		expect((await http('POST', '/loans', { bookId: randomUUID(), libraryMemberId: randomUUID() })).status).toBe(400);
 	});
 
 	// Runs last: it reads the events that the tests above stored.

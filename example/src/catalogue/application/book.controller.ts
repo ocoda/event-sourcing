@@ -1,5 +1,18 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, Put, UseFilters } from '@nestjs/common';
+import {
+	BadRequestException,
+	Body,
+	Controller,
+	Delete,
+	Get,
+	HttpCode,
+	HttpStatus,
+	Param,
+	Post,
+	Put,
+	UseFilters,
+} from '@nestjs/common';
 import { CommandBus, QueryBus } from '@ocoda/event-sourcing';
+import { parseDate } from '../../parse-date.js';
 import type { AddBookDto, BookDto, BookListItemDto } from './book.dtos.js';
 import { AddBookAuthorCommand, AddBookCommand, RemoveBookAuthorCommand, RemoveBookCommand } from './commands/index.js';
 import { CatalogueExceptionFilter } from './exceptions/index.js';
@@ -15,9 +28,12 @@ export class BookController {
 
 	@Post()
 	async add(@Body() { id, title, authorIds, publicationDate, isbn }: AddBookDto): Promise<{ id: string }> {
+		if (authorIds !== undefined && !Array.isArray(authorIds)) {
+			throw new BadRequestException('authorIds must be an array of ids');
+		}
 		// AddBookCommand extends Command<string>, so the bus resolves to a string.
 		const bookId = await this.commandBus.execute(
-			new AddBookCommand(title, authorIds ?? [], new Date(publicationDate), isbn, id),
+			new AddBookCommand(title, authorIds ?? [], parseDate(publicationDate, 'publicationDate'), isbn, id),
 		);
 		return { id: bookId };
 	}

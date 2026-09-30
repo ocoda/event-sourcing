@@ -4,7 +4,7 @@ export interface AddBookDto {
 	/** Optional: an id of the client's choosing, e.g. to retry a request safely. */
 	id?: string;
 	title: string;
-	authorIds: string[];
+	authorIds?: string[];
 	publicationDate: string;
 	isbn: string;
 }

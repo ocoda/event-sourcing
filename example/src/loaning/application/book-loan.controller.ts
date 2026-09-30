@@ -1,5 +1,6 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, UseFilters } from '@nestjs/common';
 import { CommandBus, QueryBus } from '@ocoda/event-sourcing';
+import { parseDate } from '../../parse-date.js';
 import type { BookLoanDto, CreateBookLoanDto } from './book-loan.dtos.js';
 import { CreateBookLoanCommand, ExtendBookLoanCommand, ReturnBookLoanCommand } from './commands/index.js';
 import { LoaningExceptionFilter } from './exceptions/index.js';
@@ -18,8 +19,8 @@ export class BookLoanController {
 		const command = new CreateBookLoanCommand(
 			bookId,
 			libraryMemberId,
-			loanedOn ? new Date(loanedOn) : new Date(),
-			new Date(dueOn),
+			loanedOn === undefined ? new Date() : parseDate(loanedOn, 'loanedOn'),
+			parseDate(dueOn, 'dueOn'),
 		);
 		return { id: await this.commandBus.execute(command) };
 	}
@@ -32,7 +33,7 @@ export class BookLoanController {
 	@Post(':id/extend')
 	@HttpCode(HttpStatus.NO_CONTENT)
 	async extend(@Param('id') id: string, @Body('dueOn') dueOn: string): Promise<void> {
-		await this.commandBus.execute(new ExtendBookLoanCommand(id, new Date(dueOn)));
+		await this.commandBus.execute(new ExtendBookLoanCommand(id, parseDate(dueOn, 'dueOn')));
 	}
 
 	@Post(':id/return')
