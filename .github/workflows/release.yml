@@ -85,12 +85,47 @@ jobs:
         if: steps.changesets.outputs.has-changesets == 'false'
         run: bash .github/scripts/release-guard.sh needs-publish
 
+  # publint and arethetypeswrong on the packed tarballs, the same check as CI, on the commit to publish. A job of its
+  # own, without secrets or OIDC, so this third-party code never runs next to a credential, and a failure shows before
+  # anyone is asked to approve the publish.
+  check:
+    name: Check packages
+    needs: version
+    if: needs.version.outputs.needsPublish == 'true'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-check
+      cancel-in-progress: false
+    permissions:
+      contents: read # check out the repository
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Builds the packages first.
+      - name: Check the packed packages
+        run: pnpm check:packages
+
   # Publishes the unpublished versions through npm trusted publishing (OIDC). The job runs in the `npm` environment,
   # which a maintainer must approve ("Review deployments" on the run), and the npm trusted publishers only accept
-  # this workflow in that environment.
+  # this workflow in that environment. It waits for the package check, so it never asks to publish a failing build.
   publish:
     name: Publish
-    needs: version
+    needs: [version, check]
     if: needs.version.outputs.needsPublish == 'true'
     runs-on: ubuntu-latest
     environment:
@@ -104,8 +139,7 @@ jobs:
       contents: read # check out the repository; the release App token creates the tags and GitHub releases
       id-token: write # npm trusted publishing (OIDC)
     steps:
-      # changesets/action v2 creates git tags and GitHub releases through the GitHub API, so the checkout does not
-      # keep its credentials.
+      # Nothing here pushes with git, so the checkout does not keep its credentials.
       - name: Checkout the repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
@@ -128,13 +162,21 @@ jobs:
       - name: Build packages
         run: pnpm build --filter="./packages/**"
 
-      # publint and arethetypeswrong on the packed tarballs, the same check as CI, on the exact commit we publish.
-      - name: Check the packed packages
-        run: pnpm check:packages
+      # The guard checks pre mode, the versions and the dist-tags again, then runs `changeset publish`. The action
+      # keeps the read-only GITHUB_TOKEN, which it hands to the publish script as GITHUB_TOKEN: the App token is
+      # created only after the publish, so it never reaches npm or a package's scripts.
+      - name: Publish to npm
+        id: changesets
+        uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
+        with:
+          publish-script: bash .github/scripts/release-guard.sh publish
+          create-github-releases: false
+          push-git-tags: false
 
-      # Created after the build and the checks, right before the step that uses it: only tags and GitHub releases.
+      # Also after a publish that failed halfway, for the packages that did reach npm.
       - name: Create the release App token
         id: app-token
+        if: ${{ !cancelled() && steps.changesets.outputs.published == 'true' }}
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           client-id: ${{ secrets.RELEASE_APP_ID }}
@@ -142,10 +184,10 @@ jobs:
           repositories: ${{ github.event.repository.name }}
           permission-contents: write # git tags and GitHub releases
 
-      # The guard checks pre mode, the versions and the dist-tags again, then runs `changeset publish`. The action
-      # creates a git tag and a GitHub release for every package it published.
-      - name: Publish to npm
-        uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
-        with:
-          github-token: ${{ steps.app-token.outputs.token }}
-          publish-script: bash .github/scripts/release-guard.sh publish
+      - name: Create the git tags and GitHub releases
+        if: ${{ !cancelled() && steps.changesets.outputs.published == 'true' }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.published-packages }}
+        run: bash .github/scripts/github-releases.sh

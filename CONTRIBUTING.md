@@ -156,10 +156,14 @@ On `master`, the `Changesets` CI check requires a changeset when a pull request 
 The `Release` workflow (`.github/workflows/release.yml`) runs on every push to `master` and `3.x`:
 
 1. Its `Version` job turns the pending changesets into a version PR, `[ci] release (next)` on `master` (`[ci] release` on `3.x`), and keeps that PR up to date.
-2. Merging the version PR starts a run with nothing pending. When npm lacks one of the new versions, the run's `Publish` job asks for a deployment to the `npm` environment and waits.
-3. A maintainer approves it: open the run, choose **Review deployments**, tick `npm` and choose **Approve and deploy**. The job then builds, checks the packed packages (publint and arethetypeswrong), and publishes through npm trusted publishing, with provenance. It creates the git tags and GitHub releases too.
+2. Merging the version PR starts a run with nothing pending. When npm lacks one of the new versions, the run's `Publish` job asks for a deployment to the `npm` environment and waits. On `master`, a `Check packages` job first checks the packed packages (publint and arethetypeswrong), so a broken package fails before anyone is asked.
+3. A maintainer approves it: open the run, choose **Review deployments**, tick `npm` and choose **Approve and deploy**. The job then builds and publishes through npm trusted publishing, with provenance, and creates the git tags and GitHub releases.
 
-npm only accepts a publish from `release.yml` running in the `npm` environment. To skip a release, reject the deployment; the next push that still finds unpublished versions asks again. A rejected or failed publish is retried by re-running the `Publish` job.
+Every package's npm trusted publisher names `release.yml` and the `npm` environment, so npm takes a publish only from that approved job, provided nothing else can publish. A trusted publisher without an environment would accept any workflow file called `release.yml`, from any branch and without an approval, and a token skips the workflow altogether. So on npmjs.com each package keeps exactly one trusted publisher (`ocoda/event-sourcing`, `release.yml`, environment `npm`), and its publishing access stays at **Require two-factor authentication and disallow tokens**.
+
+To skip a release, reject the deployment; the next push that still finds unpublished versions asks again. A rejected or failed publish is retried by re-running the `Publish` job. The release guard refuses a version that is not newer than the one its dist-tag points at, so approving a re-run of an older run can't move `next` or `latest` back; it fails instead.
+
+Approve one publish at a time: never a `master` and a `3.x` publish together. Wait until one `Publish` job has finished before approving the other, so that a 3.x patch can never race a 4.x release for `latest`.
 
 ## Conventions
 

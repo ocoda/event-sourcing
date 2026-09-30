@@ -9,13 +9,22 @@
 #                                   `publish` (without publishing), then writes needsPublish=true to
 #                                   $GITHUB_OUTPUT when npm lacks a version that changesets would publish.
 #   release-guard.sh publish        The publish job's publish script: pre mode is on, every publishable package
-#                                   is at 4.0.0-next.N, changesets plans to publish them under `next`; then
-#                                   it runs `changeset publish`.
+#                                   is at 4.0.0-next.N, changesets plans to publish them under `next`, and no
+#                                   dist-tag moves back to an older version; then it runs `changeset publish`.
+#
+# Every registry lookup fails closed: a registry that stays unreachable fails the job instead of deciding what gets
+# published.
 set -euo pipefail
+shopt -s inherit_errexit
 
 readonly PRE_TAG='next'
 readonly VERSION_PATTERN='^4\.0\.0-next\.[0-9]+$'
-readonly PLAN_ATTEMPTS=3
+readonly ATTEMPTS=3
+# jq: a sort key with semver precedence. Numeric prerelease identifiers compare as numbers and below alphanumeric
+# ones, and a release sorts above its prereleases. A version that is not semver yields nothing.
+readonly SEMVER_KEY='def semver_key: capture("^(?<core>[0-9]+[.][0-9]+[.][0-9]+)(-(?<pre>[0-9A-Za-z.-]+))?([+].*)?$")
+	| [(.core | split(".") | map(tonumber)),
+		(if .pre == null then [1] else [0, (.pre | split(".") | map(if test("^[0-9]+$") then [0, tonumber] else [1, .] end))] end)];'
 
 fail() {
 	echo "::error::$*" >&2
@@ -57,13 +66,47 @@ write_publish_plan() {
 		if pnpm exec changeset publish-plan --output="$plan_file"; then
 			break
 		fi
-		[ "$attempt" -lt "$PLAN_ATTEMPTS" ] ||
-			fail "'changeset publish-plan' failed $PLAN_ATTEMPTS times. Is the npm registry reachable? Re-run the job."
-		echo "::warning::'changeset publish-plan' failed (attempt $attempt of $PLAN_ATTEMPTS); retrying."
+		[ "$attempt" -lt "$ATTEMPTS" ] ||
+			fail "'changeset publish-plan' failed $ATTEMPTS times. Is the npm registry reachable? Re-run the job."
+		echo "::warning::'changeset publish-plan' failed (attempt $attempt of $ATTEMPTS); retrying."
 		sleep $((attempt * 15))
 	done
 	jq -e '.version == 1 and (.plan | type == "array")' "$plan_file" >/dev/null ||
 		fail "Unknown 'changeset publish-plan' format; update .github/scripts/release-guard.sh."
+}
+
+# Prints the JSON of `npm view --json <args>`, or `null` when npm doesn't know the package. Any other registry error
+# is retried.
+npm_view() {
+	local out attempt
+	for ((attempt = 1; ; attempt++)); do
+		if out=$(npm view --json --prefer-online "$@"); then
+			echo "${out:-null}"
+			return 0
+		fi
+		if jq -e '.error.code == "E404"' <<<"$out" >/dev/null 2>&1; then
+			echo null
+			return 0
+		fi
+		[ "$attempt" -lt "$ATTEMPTS" ] || fail "'npm view $*' failed $ATTEMPTS times. Is the npm registry reachable? Re-run the job."
+		echo "::warning::'npm view $*' failed (attempt $attempt of $ATTEMPTS); retrying." >&2
+		sleep $((attempt * 15))
+	done
+}
+
+# Fails unless <version> is newer than the version that the dist-tag <tag> of <name> points at today, so re-running an
+# older Release run can never move a dist-tag back.
+check_not_behind() {
+	local name=$1 version=$2 tag=$3 current
+	current=$(npm_view "$name" "dist-tags.$tag")
+	current=$(jq -r '. // empty' <<<"$current")
+	if [ -z "$current" ]; then
+		echo "  $name: no '$tag' dist-tag yet"
+		return 0
+	fi
+	jq -en --arg new "$version" --arg current "$current" "$SEMVER_KEY"' ($new | semver_key) > ($current | semver_key)' \
+		>/dev/null || fail "$name@$version is not newer than $current, the version of its '$tag' dist-tag, and publishing it would move that tag back. Is this a re-run of an older Release run?"
+	echo "  $name: '$tag' moves from $current to $version"
 }
 
 # Checks what `changeset publish` would do, and leaves the plan in $PLAN_FILE.
@@ -82,6 +125,12 @@ check_publish() {
 		"$PLAN_FILE")
 	[ -z "$bad" ] || fail "master only publishes under the '$PRE_TAG' dist-tag, but changesets would publish: $bad"
 	jq -r '.plan[][] | select(.kind == "publish") | "  publish \(.name)@\(.version) --tag \(.tag)"' "$PLAN_FILE"
+
+	local name version tag
+	while read -r name version tag; do
+		[ -n "$name" ] || continue
+		check_not_behind "$name" "$version" "$tag"
+	done < <(jq -r '.plan[][] | select(.kind == "publish") | "\(.name) \(.version) \(.tag)"' "$PLAN_FILE")
 }
 
 report_needs_publish() {
