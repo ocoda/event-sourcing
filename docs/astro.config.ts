@@ -96,9 +96,11 @@ export default defineConfig({
 				'Ocoda Event Sourcing is a NestJS library with the building blocks for Domain-Driven Design, Event Sourcing and CQRS.',
 			favicon: LOGO_URL,
 			// SiteTitle shows the logo from the Ocoda CDN: Starlight's `logo` option only takes local images.
+			// LanguageSelect adds the select of the docs versions (4.x here, 3.x under /v3/).
 			components: {
 				SiteTitle: './src/components/SiteTitle.astro',
 				Footer: './src/components/Footer.astro',
+				LanguageSelect: './src/components/LanguageSelect.astro',
 			},
 			social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/ocoda/event-sourcing' }],
 			editLink: { baseUrl: 'https://github.com/ocoda/event-sourcing/edit/master/docs/' },
