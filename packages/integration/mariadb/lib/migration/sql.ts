@@ -7,6 +7,7 @@ import {
 	escapeString,
 	eventTableDdl,
 	LATEST_INDEX,
+	probeTableName,
 	registerEventTableSql,
 	registerSnapshotTableSql,
 } from '../mariadb.schema.js';
@@ -42,6 +43,8 @@ export interface StatementOptions {
 	noBackslashEscapes: boolean;
 	/** Whether the server is a Galera node (`@@wsrep_on`): a copy then replicates in fragments. */
 	galera: boolean;
+	/** On Galera, the size of those fragments (`galeraFragmentBytesOf`); `GALERA_FRAGMENT_BYTES` when omitted. */
+	galeraFragmentBytes?: number;
 }
 
 export const DEFAULT_STATEMENT_OPTIONS: StatementOptions = {
@@ -51,10 +54,22 @@ export const DEFAULT_STATEMENT_OPTIONS: StatementOptions = {
 };
 
 /**
- * The fragment size of Galera's streaming replication for the migration's statements: a copy is one write set, and
- * `wsrep_max_ws_size` (2 GiB at most) refuses a bigger one.
+ * The largest fragment size of Galera's streaming replication for the migration's statements: a copy is one write
+ * set, and `wsrep_max_ws_size` (2 GiB at most) refuses a bigger one.
  */
 export const GALERA_FRAGMENT_BYTES = 64 * 1024 * 1024;
+
+/** The smallest fragment size the migration picks: below it, the replication overhead outweighs the fragments. */
+export const GALERA_MIN_FRAGMENT_BYTES = 1024 * 1024;
+
+/**
+ * The fragment size for a node's `wsrep_max_ws_size`: 64 MiB, or half the largest write set when that is smaller, so
+ * that no fragment exceeds it and nobody has to raise it or pick a fragment size by hand.
+ */
+export const galeraFragmentBytesOf = (maxWriteSetBytes: number | undefined): number =>
+	maxWriteSetBytes === undefined || !Number.isFinite(maxWriteSetBytes) || maxWriteSetBytes <= 0
+		? GALERA_FRAGMENT_BYTES
+		: Math.max(GALERA_MIN_FRAGMENT_BYTES, Math.min(GALERA_FRAGMENT_BYTES, Math.floor(maxWriteSetBytes / 2)));
 
 /** The lock wait of the statements for a `lockTimeoutMs`: whole seconds, at least 1. */
 export const lockWaitSecondsOf = (lockTimeoutMs = 10_000): number => Math.max(1, Math.ceil(lockTimeoutMs / 1000));
@@ -68,11 +83,13 @@ export const lockWaitSecondsOf = (lockTimeoutMs = 10_000): number => Math.max(1,
  *   writes, and a binary log in `STATEMENT` format accepts it;
  * - on Galera, streaming replication in fragments, so that the copy doesn't exceed the largest write set.
  */
-export const sessionSql = ({ lockWaitSeconds, galera }: StatementOptions): string =>
+export const sessionSql = ({ lockWaitSeconds, galera, galeraFragmentBytes }: StatementOptions): string =>
 	[
 		`SET SESSION time_zone = '+00:00', lock_wait_timeout = ${lockWaitSeconds}, innodb_lock_wait_timeout = ${lockWaitSeconds}`,
 		"max_statement_time = 0, tx_isolation = 'REPEATABLE-READ'",
-		...(galera ? [`wsrep_trx_fragment_unit = 'bytes', wsrep_trx_fragment_size = ${GALERA_FRAGMENT_BYTES}`] : []),
+		...(galera
+			? [`wsrep_trx_fragment_unit = 'bytes', wsrep_trx_fragment_size = ${galeraFragmentBytes ?? GALERA_FRAGMENT_BYTES}`]
+			: []),
 	].join(', ');
 
 /**
@@ -116,14 +133,19 @@ export const ulidMilliseconds = (id: string): number =>
  * - `ord_rank`: the rank in 3.x's order, `(event_date, event_id, stream_id, version)` in the table's collation;
  * - `occurred_ts`: `occurred_on` in seconds since the epoch;
  * - `ulid_valid`, `ulid_ms`: whether the event id has a ULID time, and that time in milliseconds.
+ *
+ * `extra` passes more columns of `o` through, such as the catch-up's `first_stream_id` and `first_aggregate_id`.
  */
-const rankedRowsSql = (from: string, where = ''): string =>
-	`SELECT o.stream_id, o.version, o.event, o.payload, o.event_id, o.aggregate_id, o.occurred_on, o.correlation_id, o.causation_id,
+const rankedRowsSql = (from: string, extra = ''): string =>
+	`SELECT o.stream_id, o.version, o.event, o.payload, o.event_id, o.aggregate_id, o.occurred_on, o.correlation_id, o.causation_id,${extra}
       CAST(UNIX_TIMESTAMP(o.occurred_on) AS SIGNED) AS occurred_ts,
       o.event_id REGEXP '${ULID_TIME_PATTERN}' AS ulid_valid,
       ${ulidMillisecondsSql('o.event_id')} AS ulid_ms,
       ROW_NUMBER() OVER (ORDER BY o.event_date, o.event_id, o.stream_id, o.version) AS ord_rank
-    FROM ${from}${where}`;
+    FROM ${from}`;
+
+/** A row's 3.x stream, by version: the partition compares stream ids in the 3.x table's collation. */
+const STREAM_WINDOW = 'PARTITION BY r.stream_id ORDER BY r.version ROWS UNBOUNDED PRECEDING';
 
 /**
  * The rows with their numbering key (ADR 0001 D33): the running maximum of `ord_rank` over the row's stream, by
@@ -131,14 +153,30 @@ const rankedRowsSql = (from: string, where = ''): string =>
  * order.
  *
  * The stream is the 3.x stream: the partition compares stream ids in the 3.x table's collation, which usually ignores
- * case. Stream ids that differ in case only are one stream there and two in schema v2; each of the two keeps its
- * version order, since the key never decreases along the 3.x stream's versions.
+ * case, so ids that differ in case only are one stream. With `firstValues`, each row also gets the stream id and the
+ * aggregate id of its stream's lowest version (`first_stream_id`, `first_aggregate_id`), which the copy gives the
+ * whole stream (ADR 0002, amendment of 2026-09-30). The window functions share one sort.
  */
-const keyedRowsSql = (ranked: string): string =>
-	`SELECT r.*, MAX(r.ord_rank) OVER (PARTITION BY r.stream_id ORDER BY r.version ROWS UNBOUNDED PRECEDING) AS ord_key
+const keyedRowsSql = (ranked: string, { firstValues }: { firstValues: boolean }): string =>
+	`SELECT r.*, MAX(r.ord_rank) OVER (${STREAM_WINDOW}) AS ord_key${
+		firstValues
+			? `,
+    FIRST_VALUE(r.stream_id) OVER (${STREAM_WINDOW}) AS first_stream_id,
+    FIRST_VALUE(r.aggregate_id) OVER (${STREAM_WINDOW}) AS first_aggregate_id`
+			: ''
+	}
   FROM (
     ${ranked}
   ) r`;
+
+/**
+ * The stream id and the aggregate id of a keyed row (alias `k`) in schema v2: every row of a 3.x stream takes the
+ * stream id of the stream's lowest version, and a row whose stream id changes also takes that version's aggregate id
+ * when the two differ in case only (they compare equal in the 3.x collation).
+ */
+const CANONICAL_STREAM_ID = 'k.first_stream_id';
+const CANONICAL_AGGREGATE_ID =
+	'CASE WHEN CAST(k.stream_id AS BINARY) <> CAST(k.first_stream_id AS BINARY) AND k.aggregate_id = k.first_aggregate_id THEN k.first_aggregate_id ELSE k.aggregate_id END';
 
 /** Whether the `occurred_on` of a ranked row differs from its ULID time by a time zone offset only. */
 const repairableSql = (): string => {
@@ -164,17 +202,30 @@ export const dropCopySql = (table: string): string => `DROP TABLE IF EXISTS ${es
 
 export const createCopySql = (table: string): string => eventTableDdl(copyTableName(table), { ifNotExists: false });
 
+/**
+ * Renames the empty copy to the probe name and back, in one atomic statement: it needs the privileges of the swap
+ * (`ALTER` and `DROP` on the renamed table, `CREATE` and `INSERT` on the new name), so a user that lacks one fails
+ * here, before the copy, instead of at the swap, after it. A dry run writes nothing, so it can't check them.
+ */
+export const probeSwapSql = (table: string): string => {
+	const [copy, probe] = [escapeId(copyTableName(table)), escapeId(probeTableName(table))];
+	return `RENAME TABLE ${copy} TO ${probe}, ${probe} TO ${copy}`;
+};
+
 /** A bulk load into the empty copy: no unique or foreign key checks (MDEV-24621). The copy's rows are unique anyway. */
 export const bulkLoadOnSql = (): string => 'SET SESSION unique_checks = 0, foreign_key_checks = 0';
 export const bulkLoadOffSql = (): string => 'SET SESSION unique_checks = 1, foreign_key_checks = 1';
 
-/** Copies every row of the 3.x table into the copy, numbered and with the repaired `occurred_on`. */
+/**
+ * Copies every row of the 3.x table into the copy: numbered, with the repaired `occurred_on`, and with one stream id
+ * per 3.x stream.
+ */
 export const copySql = (table: string, { repairOccurredOn }: { repairOccurredOn: boolean }): string =>
 	`INSERT INTO ${escapeId(copyTableName(table))} (${MIGRATED_COLUMNS})
-SELECT k.stream_id, k.version, k.event, k.payload, k.event_id, k.aggregate_id, ${occurredOnSql(repairOccurredOn)},
+SELECT ${CANONICAL_STREAM_ID}, k.version, k.event, k.payload, k.event_id, ${CANONICAL_AGGREGATE_ID}, ${occurredOnSql(repairOccurredOn)},
   k.correlation_id, k.causation_id, ROW_NUMBER() OVER (ORDER BY k.ord_key, k.version) AS global_position
 FROM (
-  ${keyedRowsSql(rankedRowsSql(`${escapeId(table)} o`))}
+  ${keyedRowsSql(rankedRowsSql(`${escapeId(table)} o`), { firstValues: true })}
 ) k`;
 
 /** Swaps the copy in, atomically: from here on, a 3.x insert fails (1136: the column count doesn't match). */
@@ -182,24 +233,42 @@ export const swapSql = (table: string): string =>
 	`RENAME TABLE ${escapeId(table)} TO ${escapeId(backupTableName(table))}, ${escapeId(copyTableName(table))} TO ${escapeId(table)}`;
 
 /**
- * Copies the rows that 3.x wrote to the old table after the copy read it and before the swap (normally none), numbered
- * after the last position with the same rule. The join converts the old stream ids, whose table may be latin1 or
- * utf8mb3, before it compares them in binary.
+ * The stream id or aggregate id of the lowest version of a backup row's 3.x stream (alias `o`): one lookup in the
+ * backup's primary key, which compares stream ids in the 3.x collation.
  */
-export const catchUpSql = (table: string, { repairOccurredOn }: { repairOccurredOn: boolean }): string =>
-	`INSERT INTO ${escapeId(table)} (${MIGRATED_COLUMNS})
-SELECT k.stream_id, k.version, k.event, k.payload, k.event_id, k.aggregate_id, ${occurredOnSql(repairOccurredOn)},
+const firstOfStreamSql = (backup: string, column: 'stream_id' | 'aggregate_id'): string =>
+	`(SELECT f.${column} FROM ${backup} f WHERE f.stream_id = o.stream_id ORDER BY f.version LIMIT 1)`;
+
+/**
+ * Copies the rows that 3.x wrote to the old table after the copy read it and before the swap (normally none): numbered
+ * after the last position with the same rule, and with the stream id the copy gives their stream.
+ *
+ * A backup row is in the new table already when the new table has its version under its own stream id or under the id
+ * of its stream's lowest version (the copy replaced its id). Only the rows that the first lookup misses look up their
+ * stream's lowest version. The joins convert the old stream ids, whose table may be latin1 or utf8mb3, before they
+ * compare them in binary.
+ */
+export const catchUpSql = (table: string, { repairOccurredOn }: { repairOccurredOn: boolean }): string => {
+	const backup = escapeId(backupTableName(table));
+	const missing = `(
+      SELECT m.* FROM (
+        SELECT o.*, ${firstOfStreamSql(backup, 'stream_id')} AS first_stream_id,
+          ${firstOfStreamSql(backup, 'aggregate_id')} AS first_aggregate_id
+        FROM ${backup} o LEFT JOIN ${escapeId(table)} n
+          ON n.stream_id = CONVERT(o.stream_id USING utf8mb4) COLLATE utf8mb4_bin AND n.version = o.version
+        WHERE n.stream_id IS NULL
+      ) m LEFT JOIN ${escapeId(table)} c
+        ON c.stream_id = CONVERT(m.first_stream_id USING utf8mb4) COLLATE utf8mb4_bin AND c.version = m.version
+      WHERE c.stream_id IS NULL
+    ) o`;
+	return `INSERT INTO ${escapeId(table)} (${MIGRATED_COLUMNS})
+SELECT ${CANONICAL_STREAM_ID}, k.version, k.event, k.payload, k.event_id, ${CANONICAL_AGGREGATE_ID}, ${occurredOnSql(repairOccurredOn)},
   k.correlation_id, k.causation_id, b.base + ROW_NUMBER() OVER (ORDER BY k.ord_key, k.version) AS global_position
 FROM (
-  ${keyedRowsSql(
-		rankedRowsSql(
-			`${escapeId(backupTableName(table))} o LEFT JOIN ${escapeId(table)} n
-      ON n.stream_id = CONVERT(o.stream_id USING utf8mb4) COLLATE utf8mb4_bin AND n.version = o.version`,
-			'\n    WHERE n.stream_id IS NULL',
-		),
-	)}
+  ${keyedRowsSql(rankedRowsSql(missing, ' o.first_stream_id, o.first_aggregate_id,'), { firstValues: false })}
 ) k
 CROSS JOIN (SELECT COALESCE(MAX(global_position), 0) AS base FROM ${escapeId(table)}) b`;
+};
 
 export const dropBackupSql = (table: string): string => `DROP TABLE IF EXISTS ${escapeId(backupTableName(table))}`;
 
@@ -209,6 +278,58 @@ export const registerEventsSql = (table: string, { noBackslashEscapes }: Stateme
 	registerEventTableSql(table, noBackslashEscapes);
 
 // Snapshots
+
+/**
+ * One row per 3.x snapshot stream (the table's collation groups the ids that differ in case only): `stream_key`, the
+ * stream as the table compares it, and the `stream_id`, `aggregate_id` and `aggregate_name` that its snapshots take.
+ *
+ * - With `events`, the pool's 3.x event rows (its 3.x event table, or that table's `__es_v1` backup, whose stream ids
+ *   compare like the snapshots'), a stream that has events takes the stream id and the aggregate id of its lowest event
+ *   version, which the event migration gives the stream too, and the aggregate name at the start of that stream id.
+ *   Two lookups per stream in the events' primary key.
+ * - Otherwise, and for a stream without events, it takes the ids and the name of its lowest snapshot version.
+ */
+export const canonicalSnapshotStreamsSql = (table: string, events?: string): string => {
+	const first = `SELECT g.stream_id AS stream_key, f.stream_id AS first_stream_id, f.aggregate_id AS first_aggregate_id,
+      f.aggregate_name AS first_aggregate_name${
+				events
+					? `,
+      (SELECT e.stream_id FROM ${escapeId(events)} e WHERE e.stream_id = g.stream_id ORDER BY e.version LIMIT 1) AS event_stream_id,
+      (SELECT e.aggregate_id FROM ${escapeId(events)} e WHERE e.stream_id = g.stream_id ORDER BY e.version LIMIT 1) AS event_aggregate_id`
+					: ''
+			}
+    FROM (SELECT stream_id, MIN(version) AS version FROM ${escapeId(table)} GROUP BY stream_id) g
+    JOIN ${escapeId(table)} f ON f.stream_id = g.stream_id AND f.version = g.version`;
+	if (!events) {
+		return `SELECT a.stream_key, a.first_stream_id AS stream_id, a.first_aggregate_id AS aggregate_id, a.first_aggregate_name AS aggregate_name
+  FROM (
+    ${first}
+  ) a`;
+	}
+	const eventName = 'LEFT(a.event_stream_id, CHAR_LENGTH(a.first_aggregate_name))';
+	return `SELECT a.stream_key, COALESCE(a.event_stream_id, a.first_stream_id) AS stream_id,
+    COALESCE(a.event_aggregate_id, a.first_aggregate_id) AS aggregate_id,
+    CASE WHEN ${eventName} = a.first_aggregate_name THEN ${eventName} ELSE a.first_aggregate_name END AS aggregate_name
+  FROM (
+    ${first}
+  ) a`;
+};
+
+/**
+ * Gives every snapshot of a 3.x stream one stream id (`canonicalSnapshotStreamsSql`), before the conversion makes the
+ * table compare stream ids in binary. A snapshot whose stream id changes also takes the stream's aggregate id and
+ * aggregate name, each when the two differ in case only. The primary key compares the old and the new id as equal, so
+ * no two snapshots can collide. Assigning `registered_on` to itself keeps the legacy `ON UPDATE` attribute from firing;
+ * the flags are repaired after the conversion.
+ */
+export const canonicalizeSnapshotsSql = (table: string, events?: string): string =>
+	`UPDATE ${escapeId(table)} s JOIN (
+  ${canonicalSnapshotStreamsSql(table, events)}
+) c ON s.stream_id = c.stream_key
+SET s.aggregate_id = CASE WHEN s.aggregate_id = c.aggregate_id THEN c.aggregate_id ELSE s.aggregate_id END,
+  s.aggregate_name = CASE WHEN s.aggregate_name = c.aggregate_name THEN c.aggregate_name ELSE s.aggregate_name END,
+  s.stream_id = c.stream_id, s.registered_on = s.registered_on
+WHERE CAST(s.stream_id AS BINARY) <> CAST(c.stream_id AS BINARY)`;
 
 /**
  * Converts a 3.x snapshot table in place: binary collation, the v2 column sizes, `DATETIME(3)` for `registered_on` (as
@@ -254,20 +375,53 @@ export const registerSnapshotsSql = (table: string, { noBackslashEscapes }: Stat
 
 // Dry-run analysis
 
-/** Streams (compared in binary, as schema v2 compares them) whose versions don't run from 1 without gaps. */
+/**
+ * 3.x streams whose versions don't run from 1 without gaps. The table's collation groups the ids that differ in case
+ * only, like the copy, which gives them one stream id.
+ */
 const gappedGroupsSql = (table: string): string =>
-	`SELECT MIN(CONVERT(stream_id USING utf8mb4)) AS stream_id, COUNT(*) AS events, MIN(version) AS min_version, MAX(version) AS max_version
-  FROM ${escapeId(table)} GROUP BY CAST(stream_id AS BINARY) HAVING MIN(version) <> 1 OR MAX(version) <> COUNT(*)`;
+	`SELECT stream_id, COUNT(*) AS events, MIN(version) AS min_version, MAX(version) AS max_version
+  FROM ${escapeId(table)} GROUP BY stream_id HAVING MIN(version) <> 1 OR MAX(version) <> COUNT(*)`;
 
+/** The gapped streams, by the stream id that the migration gives them (their lowest version's), in binary order. */
 export const gappedStreamsSampleSql = (table: string, limit = 1000): string =>
-	`${gappedGroupsSql(table)} ORDER BY MIN(CAST(stream_id AS BINARY)) LIMIT ${limit}`;
+	`SELECT CONVERT(f.stream_id USING utf8mb4) AS stream_id, g.events, g.min_version, g.max_version
+FROM (${gappedGroupsSql(table)}) g JOIN ${escapeId(table)} f ON f.stream_id = g.stream_id AND f.version = g.min_version
+ORDER BY CAST(CONVERT(f.stream_id USING utf8mb4) AS BINARY) LIMIT ${limit}`;
 
 export const gappedStreamsTotalSql = (table: string): string =>
 	`SELECT COUNT(*) AS total FROM (${gappedGroupsSql(table)}) g`;
 
-/** Streams whose id matches others that differ in case only: schema v2 splits them. */
+/** 3.x streams whose rows have ids that differ in case only: the migration gives each one stream id. */
 export const caseVariantStreamsSql = (table: string): string =>
 	`SELECT COUNT(*) AS total FROM (SELECT 1 FROM ${escapeId(table)} GROUP BY stream_id HAVING COUNT(DISTINCT CAST(stream_id AS BINARY)) > 1) g`;
+
+/**
+ * The stream ids that the migration replaces, one row per stream id: the id it takes (`stream_id`), the replaced id
+ * (`variant`) and its rows (`changed`). `canonical` has a row per 3.x stream, `stream_key` and the `stream_id` it takes.
+ */
+const replacedStreamIdsSql = (table: string, canonical: string): string =>
+	`SELECT MIN(CONVERT(c.stream_id USING utf8mb4)) AS stream_id, MIN(CONVERT(o.stream_id USING utf8mb4)) AS variant, COUNT(*) AS changed
+FROM ${escapeId(table)} o JOIN (
+  ${canonical}
+) c ON o.stream_id = c.stream_key
+WHERE CAST(o.stream_id AS BINARY) <> CAST(c.stream_id AS BINARY)
+GROUP BY CAST(c.stream_id AS BINARY), CAST(o.stream_id AS BINARY)`;
+
+/** The event stream ids that the copy replaces with the id of their stream's lowest version. */
+export const canonicalizedEventStreamsSql = (table: string): string =>
+	replacedStreamIdsSql(
+		table,
+		`SELECT g.stream_id AS stream_key, f.stream_id
+  FROM (
+    SELECT stream_id, MIN(version) AS version FROM ${escapeId(table)}
+    GROUP BY stream_id HAVING COUNT(DISTINCT CAST(stream_id AS BINARY)) > 1
+  ) g JOIN ${escapeId(table)} f ON f.stream_id = g.stream_id AND f.version = g.version`,
+	);
+
+/** The snapshot stream ids that the canonicalization replaces (`canonicalizeSnapshotsSql`). */
+export const canonicalizedSnapshotStreamsSql = (table: string, events?: string): string =>
+	replacedStreamIdsSql(table, canonicalSnapshotStreamsSql(table, events));
 
 export const duplicateEventIdsSql = (table: string): string =>
 	`SELECT COUNT(*) AS total FROM (SELECT 1 FROM ${escapeId(table)} GROUP BY CAST(event_id AS BINARY) HAVING COUNT(*) > 1) d`;
@@ -292,7 +446,10 @@ FROM (
   ) k
 ) x`;
 
-/** Flags per snapshot stream (in binary comparison): more than one, none, or not on the highest version. */
+/**
+ * Flags per snapshot stream: more than one, none, or not on the highest version. The table's collation groups the ids
+ * that differ in case only, which the migration gives one stream id (a converted table compares them in binary).
+ */
 export const snapshotFlagsSql = (table: string): string =>
 	`SELECT
   COALESCE(SUM(flags > 1), 0) AS duplicate_latest,
@@ -300,8 +457,17 @@ export const snapshotFlagsSql = (table: string): string =>
   COALESCE(SUM(flags > 0 AND last_flagged < last_version), 0) AS misplaced_latest
 FROM (
   SELECT COUNT(latest) AS flags, MAX(version) AS last_version, MAX(CASE WHEN latest IS NOT NULL THEN version END) AS last_flagged
-  FROM ${escapeId(table)} GROUP BY CAST(stream_id AS BINARY)
+  FROM ${escapeId(table)} GROUP BY stream_id
 ) f`;
+
+/**
+ * The other sessions with an open InnoDB transaction, oldest first: the sessions that can hold a lock a step waits
+ * for. `INNODB_TRX` needs the `PROCESS` privilege.
+ */
+export const otherTransactionsSql = (limit = 10): string =>
+	`SELECT t.trx_mysql_thread_id AS id, p.USER AS account_user, p.HOST AS account_host
+FROM information_schema.INNODB_TRX t LEFT JOIN information_schema.PROCESSLIST p ON p.ID = t.trx_mysql_thread_id
+WHERE t.trx_mysql_thread_id <> CONNECTION_ID() ORDER BY t.trx_started LIMIT ${limit}`;
 
 /** The catalog's name, quoted, for the statements that name it. */
 export const catalogId = (): string => escapeId(CATALOG_TABLE);

@@ -1,4 +1,5 @@
 import { EventCollection, SnapshotCollection } from '@ocoda/event-sourcing';
+import { backupTableName } from '../mariadb.schema.js';
 import { type MigrationPlan, type PlanOptions, planEventMigration, planSnapshotMigration } from './plan.js';
 import { DEFAULT_STATEMENT_OPTIONS, dropBackupSql } from './sql.js';
 
@@ -52,19 +53,21 @@ export const renderMigrationSql = (): string => {
 			latestIndexes: ['idx_aggregate_name_latest'],
 			uniqueLatest: false,
 			dependents: [],
+			// The event migration above keeps the 3.x events as its backup: the snapshot streams take their events' ids
+			events: backupTableName(events),
 		},
 		RENDER_OPTIONS,
 	);
 	return `${[
 		HEADER,
 		renderPlan(
-			'Events: copied into a schema v2 table, numbered in 3.x order (event_date, event_id, stream_id, version) with every stream in version order, and swapped in. 3.x inserts fail from the swap on (1136).',
+			'Events: copied into a schema v2 table, numbered in 3.x order (event_date, event_id, stream_id, version) with every stream in version order, and swapped in. The rows of a 3.x stream whose ids differ in case only take the stream id of its lowest version. 3.x inserts fail from the swap on (1136).',
 			eventPlan,
 		),
-		`\n-- Once satisfied with the migrated events, drop the 3.x table that the swap kept:\n-- ${dropBackupSql(events)};`,
 		renderPlan(
-			'Snapshots: converted in place (binary collation, DATETIME(3) in UTC), one latest flag per stream, on its highest version.',
+			"Snapshots: every stream takes the stream id of its events (of its lowest snapshot, without events), then the table is converted in place (binary collation, DATETIME(3) in UTC), with one latest flag per stream, on its highest version. The events' backup must still exist.",
 			snapshotPlan,
 		),
+		`\n-- Once satisfied with the migrated events and snapshots, drop the 3.x table that the swap kept:\n-- ${dropBackupSql(events)};`,
 	].join('\n\n')}\n`;
 };

@@ -28,6 +28,26 @@ export interface MigrationGappedStream {
 }
 
 /**
+ * MariaDB: a stream whose rows the migration gives one stream id. The 3.x tables compared stream ids in their
+ * collation, which usually ignores case, so one 3.x stream could hold rows whose ids differ in case only.
+ */
+export interface MigrationCanonicalizedStream {
+	/**
+	 * The stream id of every row of the stream after the migration: the id of its lowest version. A snapshot stream
+	 * takes the id of its events instead, where the pool's 3.x events have the stream.
+	 */
+	streamId: string;
+	/**
+	 * The other stream ids that its rows had, which the migration replaces.
+	 */
+	variants: string[];
+	/**
+	 * The rows whose stream id the migration replaces.
+	 */
+	rows: number;
+}
+
+/**
  * What the migration found in, and did to, one collection.
  */
 export interface MigrationCollectionReport {
@@ -53,9 +73,16 @@ export interface MigrationCollectionReport {
 	 */
 	nonCrockfordEventIds?: number;
 	/**
-	 * MariaDB: streams whose ids only differ in case, which the case-sensitive 4.0 schema splits.
+	 * MariaDB: 3.x streams whose rows have ids that differ in case only (or otherwise compare equal in the 3.x table's
+	 * collation). The case-sensitive 4.0 schema would split them, so the migration gives each one stream id: see
+	 * `canonicalizedStreams`.
 	 */
 	caseVariantStreams?: number;
+	/**
+	 * MariaDB: the streams whose rows the migration gives one stream id, with a sample of at most 1000. After the
+	 * migration, the application must use those ids: the 4.0 schema compares stream ids in binary.
+	 */
+	canonicalizedStreams?: { total: number; rows: number; sample: MigrationCanonicalizedStream[] };
 	/**
 	 * MariaDB: how the `occurred_on` values were restored from the event ids.
 	 */
