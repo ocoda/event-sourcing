@@ -49,10 +49,12 @@ CI runs the tests of the core on Node.js 22 and 24, and the tests of each store 
 | Node.js | 22.12 or later (tested on 22 and 24) | 20 or later (tested on 22 and 24) |
 | Module format | ES modules only; CommonJS applications load them through `require()` | CommonJS |
 | PostgreSQL | 13, 14, 15, 16, 17, 18 | 13, 14, 15, 16, 17 |
-| MariaDB | 10.11, 11.4, 11.8 | 10.11, 11.4 |
-| MongoDB | 6, 7, 8 | 6, 7, 8 |
+| MariaDB | 10.11, 11.4, 11.8, 12.3 (long-term releases), 13.0 (rolling release) | 10.11, 11.4 |
+| MongoDB | 6, 7, 8 (the newest 8.x, 8.3), 9.0 | 6, 7, 8 |
 | DynamoDB | Not available | DynamoDB Local 3.3.1 |
 | Database drivers | Peer dependencies, installed by you | Installed by the integration |
+
+MariaDB supports a rolling release only until the next one, so the 4.x tests move on to each new rolling release. PostgreSQL 13 and MongoDB 6 are past their end of life at their vendors, and are still tested.
 
 On 4.x the drivers are peer dependencies with these ranges: `pg` `^8.15.0` with `pg-cursor` `^2.14.0`, `mongodb` `^6.10.0 || ^7.0.0`, and `mariadb` `^3.0.0`. See [Database drivers are peer dependencies](/upgrading/v4#drivers).
 

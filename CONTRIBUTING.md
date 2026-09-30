@@ -29,8 +29,6 @@ cd event-sourcing
 pnpm install
 ```
 
-`pnpm-workspace.yaml` sets the dependency policy: versions that several packages share come from its `catalog` (write `catalog:` in `package.json`), pnpm installs only versions that are at least a day old, and a dependency install script runs only when `allowBuilds` sets that package to `true` (an unlisted package with one fails the install).
-
 The repository is a pnpm + turbo monorepo:
 
 | Path                     | What it is                                                                   |
@@ -45,16 +43,33 @@ The repository is a pnpm + turbo monorepo:
 | `fixtures/cross-version` | the 3.0.2 writer of `pnpm test:cross-version` (npm, outside the workspace)   |
 | `scripts/`               | the package-shape checks (`check:packages`, `test:consumers`) and `test:cross-version` |
 
+## Dependencies
+
+`pnpm-workspace.yaml` sets the dependency policy: versions that several packages share come from its `catalog` (write `catalog:` in `package.json`), pnpm installs only versions that are at least a day old, and a dependency install script runs only when `allowBuilds` sets that package to `true` (an unlisted package with one fails the install).
+
+[Renovate](https://docs.renovatebot.com) (`renovate.json5`) proposes updates once a version is 3 days old. Patch and minor updates of the tooling merge on their own once `ci-ok` is green. The peer dependency ranges of the published packages don't follow the newest driver: Renovate widens them, and only their devDependency copies move.
+
+Every dependency stays on its newest version, so `pnpm outdated -r` lists only these intentional exceptions:
+
+| Dependency | Stays on | Why |
+| --- | --- | --- |
+| `@types/node` | 22.x | The types follow the lowest Node.js the packages support (`engines.node` `>=22.12`), so they never offer an API that Node 22 lacks. Raise it together with `engines.node`; Renovate's `allowedVersions` for `@types/node` enforces it. |
+| `typescript` in `docs/` | 6.x (the `ts6` catalog) | `astro check` (`@astrojs/check`) type-checks through the TypeScript JS API, which TypeScript 7 doesn't ship. Renovate keeps the `ts6` catalog below 7. |
+
+The 3.0.2 writer in `fixtures/cross-version/v3` pins the published 3.0.2 packages and their NestJS 11 peers on purpose. It is outside the workspace, so `pnpm outdated -r` doesn't list it, and Renovate ignores it.
+
 ## Databases for integration tests
 
-Core tests need no database. Integration tests run against the services in `docker-compose.yml`, whose images are pinned:
+Core tests need no database. Integration tests run against the services in `docker-compose.yml`, one per database version:
 
 | Service              | Versions                                        |
 | -------------------- | ----------------------------------------------- |
 | `postgres`           | `postgres-13` … `postgres-18` (`postgres` is 14) |
-| `mongodb`            | `mongodb-6`, `mongodb-7`, `mongodb-8` (`mongodb` is 8) |
-| MongoDB replica sets | `mongodb-6-rs`, `mongodb-7-rs`, `mongodb-8-rs` (port 27018) |
-| `mariadb`            | `mariadb-10` (10.11), `mariadb-11` (11.4), `mariadb-11-8` (11.8) |
+| `mongodb`            | `mongodb-6`, `mongodb-7`, `mongodb-8` (the newest 8.x, 8.3), `mongodb-9` (9.0) (`mongodb` is 8) |
+| MongoDB replica sets | `mongodb-6-rs` … `mongodb-9-rs` (port 27018) |
+| `mariadb`            | `mariadb-10` (10.11), `mariadb-11` (11.4), `mariadb-11-8` (11.8), `mariadb-12` (12.3), `mariadb-rolling` (13.0) (`mariadb` is 10.11) |
+
+The services cover the PostgreSQL and MongoDB major versions and the MariaDB long-term releases that their vendors still support, plus the newest MariaDB rolling release, which MariaDB supports only until the next one. PostgreSQL 13 and MongoDB 6 are past their end of life and stay until a maintainer drops them. `mongo:8` is the newest 8.x release, so MongoDB 8.0 has no service of its own. MongoDB 9.0 runs MongoDB's own image (`mongodb/mongodb-community-server`) until a `mongo:9` Docker Official Image exists. A new server version gets a service and a CI row of its own. The image tags float within their release line (`postgres:18` to the newest 18.x, `mongo:8` to the newest 8.x). Renovate lists a new server version on its Dependency Dashboard instead of opening a pull request. Don't approve it there: Renovate groups these updates, so the approval would move every older service to the newest version too.
 
 Start one and wait until it is healthy:
 
@@ -73,7 +88,7 @@ docker compose up -d --wait mongodb mongodb-8-rs
 ES_TEST_MONGODB_RS_URL='mongodb://localhost:27018/?replicaSet=rs0' pnpm test:cov --filter=@ocoda/event-sourcing-mongodb
 ```
 
-The cross-version test checks that a driver reads what the published 3.0.2 packages wrote: the 3.0.2 writer in `fixtures/cross-version/v3` fills a schema or database of its own, then the driver's `tests/cross-version` specs read it back. CI runs it on the oldest and newest version of each database, and on PostgreSQL 17 and MariaDB 11.4. It needs npm and the same `ES_TEST_*` settings (for MariaDB also the root password, to create the database):
+The cross-version test checks that a driver reads what the published 3.0.2 packages wrote: the 3.0.2 writer in `fixtures/cross-version/v3` fills a schema or database of its own, then the driver's `tests/cross-version` specs read it back. CI runs it on the oldest and the newest PostgreSQL, on the newest MongoDB, on every MariaDB long-term release, and on PostgreSQL 17 and MongoDB 8, the newest versions 3.x is tested on. It needs npm and the same `ES_TEST_*` settings (for MariaDB also the root password, to create the database):
 
 ```bash
 pnpm test:cross-version --database postgres   # or mariadb, mongodb (both topologies with ES_TEST_MONGODB_RS_URL)
