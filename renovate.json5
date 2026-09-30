@@ -59,13 +59,13 @@
 		},
 		{ groupName: 'github actions', matchManagers: ['github-actions'] },
 		{
-			description: 'The compose services test fixed versions, and their tags float to the newest patch release, so no digest pins',
+			description: 'The compose services test fixed release lines, and their tags float to the newest release of the line, so no digest pins',
 			groupName: 'database images',
 			matchManagers: ['docker-compose'],
 			pinDigests: false,
 		},
 		{
-			description: 'Each compose service is one supported database version (CONTRIBUTING.md). A new server version gets a service and a CI row of its own instead of replacing one, so its update waits on the Dependency Dashboard.',
+			description: 'Each compose service is one supported database version (CONTRIBUTING.md). A new server version gets a service and a CI row of its own instead of replacing one, so its update waits on the Dependency Dashboard. The updates are grouped: approving them would move every older service to the newest version, so add new versions by hand.',
 			matchManagers: ['docker-compose'],
 			matchUpdateTypes: ['major', 'minor'],
 			dependencyDashboardApproval: true,
