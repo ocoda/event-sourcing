@@ -127,7 +127,7 @@ jobs:
       - name: Build packages
         run: pnpm build --filter="./packages/**"
 
-      # 3.x releases go to `latest` only while npm's `latest` is still 3.x. Once 4.x is `latest`, they go to `v3`,
+      # 3.x releases go to `latest` only while npm's `latest` is still 3.x. Once 4.x is `latest`, they go to `latest-3`,
       # and their GitHub releases are not marked Latest either, so a 3.x patch never moves either back.
       - name: Choose the npm dist-tag
         id: dist-tag
