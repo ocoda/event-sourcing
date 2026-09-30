@@ -1,42 +1,43 @@
-import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, UseFilters } from '@nestjs/common';
 import { CommandBus, QueryBus } from '@ocoda/event-sourcing';
-import type { BookLoanId } from '../domain/models/index.js';
-import type { CreateBookLoanDto, ExtendBookLoanDto } from './book-loan.dtos.js';
+import type { BookLoanDto, CreateBookLoanDto } from './book-loan.dtos.js';
 import { CreateBookLoanCommand, ExtendBookLoanCommand, ReturnBookLoanCommand } from './commands/index.js';
+import { LoaningExceptionFilter } from './exceptions/index.js';
 import { GetBookLoanByIdQuery } from './queries/index.js';
 
-@Controller('book-loan')
+@Controller('loans')
+@UseFilters(LoaningExceptionFilter)
 export class BookLoanController {
 	constructor(
 		private readonly commandBus: CommandBus,
 		private readonly queryBus: QueryBus,
 	) {}
 
-	@Post('create')
-	async create(@Body() { bookId, libraryMemberId, loanedOn, dueOn }: CreateBookLoanDto): Promise<string> {
-		const command = new CreateBookLoanCommand(bookId, libraryMemberId, new Date(loanedOn), new Date(dueOn));
-		const bookLoanId: BookLoanId = await this.commandBus.execute<CreateBookLoanCommand>(command);
-
-		return bookLoanId.value;
-	}
-
-	@Patch(':id/extend')
-	async extend(@Param('id') id: string, @Body() { dueOn }: ExtendBookLoanDto): Promise<void> {
-		const command = new ExtendBookLoanCommand(id, new Date(dueOn));
-		await this.commandBus.execute(command);
-	}
-
-	@Patch(':id/return')
-	async return(@Param('id') id: string): Promise<void> {
-		const command = new ReturnBookLoanCommand(id);
-		await this.commandBus.execute(command);
+	@Post()
+	async create(@Body() { bookId, libraryMemberId, loanedOn, dueOn }: CreateBookLoanDto): Promise<{ id: string }> {
+		const command = new CreateBookLoanCommand(
+			bookId,
+			libraryMemberId,
+			loanedOn ? new Date(loanedOn) : new Date(),
+			new Date(dueOn),
+		);
+		return { id: await this.commandBus.execute(command) };
 	}
 
 	@Get(':id')
-	async get(@Param('id') id: string) {
-		const query = new GetBookLoanByIdQuery(id);
-		const book = await this.queryBus.execute(query);
+	get(@Param('id') id: string): Promise<BookLoanDto> {
+		return this.queryBus.execute(new GetBookLoanByIdQuery(id));
+	}
 
-		return book;
+	@Post(':id/extend')
+	@HttpCode(HttpStatus.NO_CONTENT)
+	async extend(@Param('id') id: string, @Body('dueOn') dueOn: string): Promise<void> {
+		await this.commandBus.execute(new ExtendBookLoanCommand(id, new Date(dueOn)));
+	}
+
+	@Post(':id/return')
+	@HttpCode(HttpStatus.NO_CONTENT)
+	async return(@Param('id') id: string): Promise<void> {
+		await this.commandBus.execute(new ReturnBookLoanCommand(id));
 	}
 }

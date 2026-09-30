@@ -1,23 +1,22 @@
 import type { BookLoan } from '../domain/models/index.js';
 
-export class CreateBookLoanDto {
+export interface CreateBookLoanDto {
 	bookId: string;
 	libraryMemberId: string;
-	loanedOn: string;
-	dueOn: string;
-}
-
-export class ExtendBookLoanDto {
+	/** Defaults to now. */
+	loanedOn?: string;
 	dueOn: string;
 }
 
 export class BookLoanDto {
 	constructor(
-		public readonly bookLoanId: string,
+		public readonly id: string,
 		public readonly bookId: string,
 		public readonly libraryMemberId: string,
 		public readonly loanedOn: string,
 		public readonly dueOn: string,
+		public readonly returnedOn: string | undefined,
+		public readonly version: number,
 	) {}
 
 	static from(bookLoan: BookLoan): BookLoanDto {
@@ -27,6 +26,8 @@ export class BookLoanDto {
 			bookLoan.libraryMemberId.value,
 			bookLoan.loanedOn.toISOString(),
 			bookLoan.dueOn.toISOString(),
+			bookLoan.returnedOn?.toISOString(),
+			bookLoan.version,
 		);
 	}
 }

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { EventStore, EventStream } from '@ocoda/event-sourcing';
-import { Book, BookId } from '../../domain/models/index.js';
+import { Book, type BookId } from '../../domain/models/index.js';
 import { BookSnapshotRepository } from './book.snapshot-repository.js';
 
 @Injectable()
@@ -10,64 +10,31 @@ export class BookRepository {
 		private readonly bookSnapshotRepository: BookSnapshotRepository,
 	) {}
 
-	async getById(bookId: BookId): Promise<Book | void> {
-		const eventStream = EventStream.for<Book>(Book, bookId);
-
+	/** Loads the book from its latest snapshot and the events after it, or returns `undefined` for an unknown id. */
+	async getById(bookId: BookId): Promise<Book | undefined> {
 		const book = await this.bookSnapshotRepository.load(bookId);
 
-		const eventCursor = this.eventStore.getEvents(eventStream, {
+		const events = this.eventStore.getEvents(EventStream.for<Book>(Book, bookId), {
 			fromVersion: book.version + 1,
 		});
+		await book.loadFromHistory(events);
 
-		await book.loadFromHistory(eventCursor);
-
-		if (book.version < 1) {
-			return;
-		}
-
-		return book;
+		return book.version > 0 ? book : undefined;
 	}
 
-	async getByIds(bookIds: BookId[]) {
-		const books = await this.bookSnapshotRepository.loadMany(bookIds, 'e2e');
-
-		for (const book of books) {
-			const eventStream = EventStream.for<Book>(Book, book.id);
-			const eventCursor = this.eventStore.getEvents(eventStream, { pool: 'e2e', fromVersion: book.version + 1 });
-			await book.loadFromHistory(eventCursor);
-		}
-
-		return books;
-	}
-
-	async getAll(bookId?: BookId, limit?: number): Promise<Book[]> {
-		const books: Book[] = [];
-		for await (const envelopes of this.bookSnapshotRepository.loadAll({
-			aggregateId: bookId,
-			limit,
-		})) {
-			for (const { metadata, payload } of envelopes) {
-				const id = BookId.from(metadata.aggregateId);
-				const eventStream = EventStream.for<Book>(Book, id);
-				const book = this.bookSnapshotRepository.deserialize(payload);
-				book.version = metadata.version;
-
-				const eventCursor = this.eventStore.getEvents(eventStream, { fromVersion: metadata.version + 1 });
-				await book.loadFromHistory(eventCursor);
-
-				books.push(book);
-			}
-		}
-
-		return books;
-	}
-
+	/**
+	 * Appends the events the book raised since it was loaded. `committedVersion` is the version the stream had then: when
+	 * another writer appended in the meantime, the append rejects with an `EventStoreVersionConflictException` and stores
+	 * nothing.
+	 */
 	async save(book: Book): Promise<void> {
 		const events = book.getUncommittedEvents();
 		const stream = EventStream.for<Book>(Book, book.id);
 
 		await this.eventStore.appendEvents(stream, events, { expectedVersion: book.committedVersion });
 		book.markCommitted();
+
+		// Takes a snapshot when one is due (every 5 versions, see BookSnapshotRepository). Never rejects.
 		await this.bookSnapshotRepository.save(book.id, book);
 	}
 }

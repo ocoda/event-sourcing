@@ -1,5 +1,5 @@
-import type { Type } from '@nestjs/common';
-import type { ICommandHandler, IEvent, IQueryHandler, SnapshotRepository } from '@ocoda/event-sourcing';
+import type { Provider, Type } from '@nestjs/common';
+import type { IEvent } from '@ocoda/event-sourcing';
 import { BookLoanController } from './application/book-loan.controller.js';
 import {
 	CreateBookLoanCommandHandler,
@@ -10,18 +10,16 @@ import { GetBookLoanByIdQueryHandler } from './application/queries/index.js';
 import { BookLoanRepository, BookLoanSnapshotRepository } from './application/repositories/index.js';
 import { BookLoanCreatedEvent, BookLoanExtendedEvent, BookLoanReturnedEvent } from './domain/events/index.js';
 
-export const CommandHandlers: Type<ICommandHandler>[] = [
+/** The events of loaning, registered by LoaningModule with EventSourcingModule.forFeature(). */
+export const Events: Type<IEvent>[] = [BookLoanCreatedEvent, BookLoanExtendedEvent, BookLoanReturnedEvent];
+
+export const Providers: Provider[] = [
+	BookLoanRepository,
+	BookLoanSnapshotRepository,
 	CreateBookLoanCommandHandler,
 	ExtendBookLoanCommandHandler,
 	ReturnBookLoanCommandHandler,
+	GetBookLoanByIdQueryHandler,
 ];
 
-export const QueryHandlers: Type<IQueryHandler>[] = [GetBookLoanByIdQueryHandler];
-
-export const SnapshotRepositories: Type<SnapshotRepository>[] = [BookLoanSnapshotRepository];
-
-export const Events: Type<IEvent>[] = [BookLoanCreatedEvent, BookLoanExtendedEvent, BookLoanReturnedEvent];
-
-export const AggregateRepositories = [BookLoanRepository];
-
-export const Controllers: Type<object>[] = [BookLoanController];
+export const Controllers: Type[] = [BookLoanController];
