@@ -51,12 +51,31 @@ The `AggregateRoot` counts the events of the aggregate, and keeps the ones that 
 | `version` | The version of the aggregate: `committedVersion` plus the number of uncommitted events. |
 | `committedVersion` | The version of the last event that was loaded from the event store or marked as committed: the version the stream is expected to have when the aggregate is saved. |
 | `getUncommittedEvents()` | A copy of the events that were applied since the aggregate was loaded or last saved. |
-| `markCommitted()` | Marks the uncommitted events as committed, once the repository appended them. |
+| `markCommitted(events)` | Marks the events that `getUncommittedEvents()` returned as committed, once the repository appended them. Events applied in the meantime stay uncommitted. Without `events`, it marks every uncommitted event as committed. |
 | `loadFromHistory(events)` | Applies stored events, as committed events: the batches of `eventStore.getEvents()` or an array of events. |
 
-`applyEvent()` runs the event handler first and only then counts the event, so a handler that throws leaves the version and the uncommitted events as they were. An event handler must not call `applyEvent()` itself: the nested event would be recorded before the event whose handler raised it, and applied a second time when the aggregate is loaded from its events. Raise follow-up events from the method that applied the first one instead. `loadFromHistory()` and the `version` setter throw an `UncommittedEventsException` while the aggregate has uncommitted events: the history would otherwise be applied after events that were raised on an older state.
+`applyEvent()` runs the event handler first and only then counts the event, so a handler that throws leaves the version and the uncommitted events as they were. `loadFromHistory()` and the `version` setter throw an `UncommittedEventsException` while the aggregate has uncommitted events: the history would otherwise be applied after events that were raised on an older state. So does `markCommitted(events)` when `events` aren't the first uncommitted events, in order: pass it the array that `getUncommittedEvents()` returned.
 
 `commit()`, which returned the uncommitted events and cleared them before they were appended, is deprecated and will be removed in 5.0.
+
+### Event handlers that apply events [#event-handlers-that-apply-events]
+
+Apply follow-up events from the method that applies the first one where you can: the decision then lives in one place, and the event handlers only change state. An event handler may still call `applyEvent()` itself (since 4.0, with these rules):
+
+- The event is applied once the handler returns, after the handler's own event. When a handler applies several events, they follow in that order, each followed by the events that its own handler applied.
+- While the aggregate is loaded from its events, the calls are ignored: the stored events already include the events the handler applied, right where they were recorded.
+- When a handler throws, the events it applied are dropped. The events whose handlers returned stay applied.
+
+```typescript
+@EventHandler(AccountOpenedEvent)
+onAccountOpened(event: AccountOpenedEvent) {
+    this.openedOn = event.openedOn;
+    // Applied after AccountOpenedEvent; ignored when the account is loaded from its events
+    this.applyEvent(new AccountCreditedEvent(event.welcomeBonus));
+}
+```
+
+A handler that reads state after its `applyEvent()` call doesn't see the changes of the event it applied yet: that event's handler runs later, as it does when the aggregate is loaded.
 
 ## Adding logic to the Aggregate [#adding-logic-to-the-aggregate]
 

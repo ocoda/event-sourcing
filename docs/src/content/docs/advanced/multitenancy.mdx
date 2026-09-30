@@ -154,7 +154,7 @@ By default the event- and snapshot-store create a shared collection of streams f
        expectedVersion: account.committedVersion,
        pool: tenantId,
      });
-     account.markCommitted();
+     account.markCommitted(events);
      await this.accountSnapshotRepository.save(account.id, account, tenantId);
    }
    ```

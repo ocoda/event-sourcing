@@ -26,7 +26,7 @@ export class BookLoanRepository {
 		const stream = EventStream.for<BookLoan>(BookLoan, bookLoan.id);
 
 		await this.eventStore.appendEvents(stream, events, { expectedVersion: bookLoan.committedVersion });
-		bookLoan.markCommitted();
+		bookLoan.markCommitted(events);
 
 		await this.bookLoanSnapshotRepository.save(bookLoan.id, bookLoan);
 	}

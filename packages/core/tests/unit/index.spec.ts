@@ -65,4 +65,11 @@ describe('public entrypoint', () => {
 			),
 		).toEqual([]);
 	});
+
+	it('keeps the deprecated no-op ulidFactory until 5.0', () => {
+		// 3.x exported it without deprecating it, and an ES module that imports a missing export fails to load
+		// (ADR 0001, D42)
+		expect(EventSourcing.ulidFactory).toEqual(expect.any(Function));
+		expect(EventSourcing.ulidFactory()).toBeUndefined();
+	});
 });

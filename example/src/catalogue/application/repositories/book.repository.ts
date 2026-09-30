@@ -32,7 +32,7 @@ export class BookRepository {
 		const stream = EventStream.for<Book>(Book, book.id);
 
 		await this.eventStore.appendEvents(stream, events, { expectedVersion: book.committedVersion });
-		book.markCommitted();
+		book.markCommitted(events);
 
 		// Takes a snapshot when one is due (every 5 versions, see BookSnapshotRepository). Never rejects.
 		await this.bookSnapshotRepository.save(book.id, book);

@@ -40,7 +40,7 @@ export class AccountRepository {
 		const stream = EventStream.for<Account>(Account, account.id);
 
 		await this.eventStore.appendEvents(stream, events, { expectedVersion: account.committedVersion });
-		account.markCommitted();
+		account.markCommitted(events);
 	}
 }
 ```
@@ -54,7 +54,7 @@ export class AccountRepository {
 - **save(account: Account):**
     - `account.getUncommittedEvents()` returns the events the aggregate applied since it was loaded or last saved.
     - `this.eventStore.appendEvents(stream, events, { expectedVersion: account.committedVersion })` appends them. `committedVersion` is the version the stream had when the aggregate was loaded, so the append fails with a version conflict when another writer appended in the meantime.
-    - `account.markCommitted()` runs only once the append succeeded: it marks the events as committed, so `committedVersion` catches up with `version`. When the append fails, the events stay uncommitted and `save()` can be called again.
+    - `account.markCommitted(events)` runs only once the append succeeded: it marks the appended events as committed, so `committedVersion` catches up. When the append fails, the events stay uncommitted and `save()` can be called again. Passing `events` keeps an event that was applied to the aggregate while the append ran uncommitted, for the next save; `markCommitted()` without arguments would count it as committed without storing it.
     - saving an aggregate without uncommitted events appends nothing.
 
 ## Registering the Repository
@@ -107,6 +107,6 @@ export class AccountModule {}
    When aggregates start containing a lot of events and this becomes a performance bottleneck, you can consider using [snapshots](/start/snapshots) to optimize the loading process.
 
 5. ### Mark Events as Committed After the Append
-   Save the aggregate after all business logic has been executed, so the events represent the result of valid domain operations, and call `markCommitted()` only once the append succeeded. The deprecated `commit()` returned the events and cleared them in one call, before the append: when the append failed, they were lost.
+   Save the aggregate after all business logic has been executed, so the events represent the result of valid domain operations, and call `markCommitted(events)` only once the append succeeded. The deprecated `commit()` returned the events and cleared them in one call, before the append: when the append failed, they were lost.
 
 </Steps>
