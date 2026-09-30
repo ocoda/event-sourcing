@@ -30,7 +30,7 @@ This core module needs to be implemented in conjunction with a store-driver such
 - `@ocoda/event-sourcing-postgres`
 
 ## Documentation 📗
-Ready to dive right in? Visit [the documentation](https://ocoda.github.io/event-sourcing) to find out how to get started.
+Ready to dive right in? Visit [the 3.x documentation](https://ocoda.github.io/event-sourcing/v3/) to find out how to get started.
 
 ## Contact
 dries@drieshooghe.com

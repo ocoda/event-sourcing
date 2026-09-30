@@ -26,7 +26,7 @@ This is a complementing module for `@ocoda/event-sourcing`, a powerful library d
 This store-driver library uses [DynamoDB](https://aws.amazon.com/dynamodb/) as an underlying driver for event- and snapshot-stores, and needs to be installed together with the core module `@ocoda/event-sourcing` in order to get started.
 
 ## Documentation 📗
-Ready to dive right in? Visit [the documentation](https://ocoda.github.io/event-sourcing) to find out how to get started.
+Ready to dive right in? Visit [the 3.x documentation](https://ocoda.github.io/event-sourcing/v3/) to find out how to get started.
 
 ## DynamoDB specifics
 - The events of a single `appendEvents` call are written in one `TransactWriteItems` transaction, so they are stored all-or-nothing and never overwrite an existing version. DynamoDB limits a transaction to **100 items and 4 MB** (and every item to 400 KB), so at most 100 events can be appended per call; larger appends are rejected before anything is written. Snapshots are appended transactionally as well. Transactional writes consume twice the write capacity of regular writes.
