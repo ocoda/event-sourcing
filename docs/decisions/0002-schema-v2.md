@@ -5,7 +5,7 @@
 - **Scope:** plan milestone M7: the 4.0 event and snapshot schemas of the PostgreSQL, MariaDB and MongoDB stores, the global position technique behind [ADR 0001](./0001-v4-core-api.md) §9, and the one-time `migrate()` from 3.x
 - **Depends on:** ADR 0001 §1, §8 and §9, and its [store contract amendments](./0001-v4-core-api.md#amendments-store-contract) (D1–D35)
 - **Baseline:** `origin/master` `0c345dd` (`4.0.0-next.1`); the 3.x schemas that 3.0.0 to 3.0.2 create
-- **Amendments:** 2026-09-29: §1 to §4 and §6 now describe the PostgreSQL (#570), MariaDB (#571) and MongoDB (#572) drivers as merged, where they follow the Wave 0 spikes and the reviews. The PostgreSQL append is one statement, and its migration rewrites the table. MariaDB reads with a hybrid reader, appends in `READ COMMITTED`, and its dry run doesn't check privileges. MongoDB numbers on the server. Each driver's [evidence](#evidence) gives the reasons. The [owner decisions](#owner-decisions) have defaults applied.
+- **Amendments:** 2026-09-29: §1 to §4 and §6 now describe the PostgreSQL (#570), MariaDB (#571) and MongoDB (#572) drivers as merged, where they follow the Wave 0 spikes and the reviews. The PostgreSQL append is one statement, and its migration rewrites the table. MariaDB reads with a hybrid reader, appends in `READ COMMITTED`, and its dry run doesn't check privileges. MongoDB numbers on the server. Each driver's [evidence](#evidence) gives the reasons. The [owner decisions](#owner-decisions) have defaults applied. 2026-09-30: after the module PR (#579), the event store's provider ensures the default pool while Nest instantiates the providers ([ADR 0001](./0001-v4-core-api.md) D38).
 
 ## Context
 
@@ -83,7 +83,7 @@ A driver claims `'gap-safe'` only when the `read-all-gap-safe` conformance case 
 | `v2`, unregistered and empty (creation crashed; on MariaDB, no `<t>__es_v1` backup) | finish the creation, register | register |
 | `v1` / `v1-partial` | `EventStoreSchemaException { found, remedy: 'run XEventStore.migrate(config, { dryRun: true }), then migrate()' }`. **Never migrates.** | same |
 
-The core module's `onModuleInit` calls `ensureCollection()` for the default pool, so a v1 default pool fails bootstrap with that message. Tenant pools fail on their first `ensureCollection`.
+The event store's provider calls `ensureCollection()` for the default pool while Nest instantiates the providers (ADR 0001 D22, D38), so a v1 default pool fails bootstrap with that message. Tenant pools fail on their first `ensureCollection`.
 
 **`ensureCollection(pool)` for snapshots**
 

@@ -2,7 +2,7 @@
 '@ocoda/event-sourcing': minor
 ---
 
-**Groundwork for the 4.0 event store contract.** Everything here is additive: existing stores and appends behave as before, and nothing throws the new exceptions yet. The store contract that uses them lands in a later prerelease.
+**Groundwork for the 4.0 event store contract.** The additions that the store contract, in its own entry of this release, builds on.
 
 - **`EventEnvelope.create` keeps the generated event id when `eventId` is `undefined`.** Passing `eventId: undefined` explicitly used to replace the generated id with `undefined`. `create` also takes an optional `occurredOn`, which still defaults to the time of the event id.
 - **`EventEnvelope.toJSON()`.** `JSON.stringify(envelope)` writes the same JSON as before, except that a bigint, such as the upcoming global position, becomes a decimal string instead of making it throw.
@@ -15,4 +15,4 @@
   - `EVENT_STORE_LIMITS`: at most 255 characters for stream ids, aggregate ids, event names, correlation ids and causation ids, and 8 KiB for the headers of an event.
   - `EventId.fromTrusted()` wraps an event id read from a store without validating it, so that stored events stay readable if id validation gets stricter.
   - `ANY_MAX_ATTEMPTS`, how often an append with `ExpectedVersion.Any` will be tried.
-- **`EventBus.publishAll(envelopes)`** publishes the envelopes of an append in order and never rejects. Like `publish`, it doesn't wait for asynchronous publishers.
+- **`EventBus.publishAll(envelopes)`** publishes the envelopes of an append in order. The publishing entry of this release describes how it awaits the publishers.
