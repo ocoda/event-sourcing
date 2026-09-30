@@ -12,7 +12,7 @@ Commands live in the root and package `package.json` scripts. Run the ones below
 ## Branches
 
 - `master` is the **v4 line**: NestJS 12, ESM-only, Node ≥ 22.12, released as stable 4.x on the npm dist-tag `latest`. A breaking change needs a `major` changeset, a migration note and a maintainer's decision to start 5.0.
-- `3.x` is the **maintenance line**: NestJS 11, CommonJS, security and critical fixes until at least 2027-03-31, released under the npm dist-tag `v3`. It takes patch changesets only. CI rejects anything else, because with the fixed version group and `workspace:*` peers, a `minor` there would publish an accidental major.
+- `3.x` is the **maintenance line**: NestJS 11, CommonJS, security and critical fixes until at least 2027-03-31, released under the npm dist-tag `latest-3`. It takes patch changesets only. CI rejects anything else, because with the fixed version group and `workspace:*` peers, a `minor` there would publish an accidental major.
 - The DynamoDB store (`@ocoda/event-sourcing-dynamodb`) exists on `3.x` only. It was dropped from v4 because DynamoDB can't give the events a gap-free global order, which the v4 read side relies on. The 4.0 migration guide and the docs install page say so.
 
 ## Done means `ci-ok` would pass

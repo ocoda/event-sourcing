@@ -33,14 +33,14 @@
 > [!NOTE]
 > **4.0 is released**: NestJS 12, ES modules only, Node.js 22.12 or later, global positions and `readAll()`, typed buses and awaited publishers.
 >
-> Upgrading from 3.x? Follow the [migration guide](https://ocoda.github.io/event-sourcing/upgrading/v4). 3.x is on the `v3` tag and receives security and critical fixes until at least 2027-03-31.
+> Upgrading from 3.x? Follow the [migration guide](https://ocoda.github.io/event-sourcing/upgrading/v4). 3.x is on the `latest-3` tag and receives security and critical fixes until at least 2027-03-31.
 
 ## Requirements
 
 | Line | npm tag  | NestJS | Node.js        | Module format                                                | Support                                               |
 | ---- | -------- | ------ | -------------- | ------------------------------------------------------------ | ----------------------------------------------------- |
 | 4.x  | `latest` | 12     | 22.12 or later | ES modules only; CommonJS apps load them through `require()` | Supported                                             |
-| 3.x  | `v3`     | 11     | 20 or later    | CommonJS                                                     | Security and critical fixes until at least 2027-03-31 |
+| 3.x  | `latest-3`     | 11     | 20 or later    | CommonJS                                                     | Security and critical fixes until at least 2027-03-31 |
 
 See [versioning and support](https://ocoda.github.io/event-sourcing/upgrading/versioning) for the tested database versions and the support policy.
 

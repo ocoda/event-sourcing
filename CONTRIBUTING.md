@@ -151,7 +151,7 @@ Docs, examples, CI and test-only changes don't need a changeset.
 
 On `master`, the `Changesets` CI check requires a changeset when a pull request changes `lib/` or the dependencies, peer dependencies or entry points in `package.json` of `packages/core` or `packages/integration/*`. If such a change does not affect users, a maintainer can add the `no-changeset` label. Then re-run the failed jobs.
 
-`master` releases stable 4.x versions under the npm dist-tag `latest`, and `3.x` releases its patches under `v3`. The release guard (`.github/scripts/release-guard.sh`) fails a `master` release for anything else, a prerelease included: entering pre mode again, for 5.0 say, is a maintainer's decision and needs a change to the guard.
+`master` releases stable 4.x versions under the npm dist-tag `latest`, and `3.x` releases its patches under `latest-3`. The release guard (`.github/scripts/release-guard.sh`) fails a `master` release for anything else, a prerelease included: entering pre mode again, for 5.0 say, is a maintainer's decision and needs a change to the guard.
 
 ## Releases
 
