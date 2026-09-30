@@ -1,6 +1,6 @@
 # ADR 0001: v4 core API
 
-- **Status:** Proposed
+- **Status:** Accepted (4.0.0)
 - **Date:** 2026-09-29
 - **Scope:** plan milestone M6 (b–f), plus the store contract that M7 (schema v2, `global_position`) implements
 - **Baseline:** `origin/v4/platform-esm` (#543), which already includes the 3.0.1 fixes
