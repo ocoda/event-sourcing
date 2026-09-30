@@ -4,10 +4,6 @@ title: Event Serialization
 
 import { Aside } from '@astrojs/starlight/components';
 
-<Aside type="caution" title="Under construction">
-This page is under construction.
-</Aside>
-
 By default events are serialized to a plain payload, and deserialized again, by `JsonEventSerializer`. It needs no decorators:
 
 - **Serializing** copies the event's own fields into plain objects, recursively. A nested class instance, such as a value object, becomes a plain object: an `Id` is stored as `{ props: { value } }`. A `Date` stays a `Date`, which the SQL stores write as an ISO string and MongoDB as a date. A `Set` becomes an array and a `Map` an object with a key per entry. Getters and `toJSON` are ignored. An event that refers back to itself (a circular reference) fails the append with an `EventSerializationException` before anything is written.

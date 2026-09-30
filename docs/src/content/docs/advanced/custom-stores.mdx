@@ -244,7 +244,7 @@ export interface FooSnapshotStoreConfig extends SnapshotStoreConfig {
 ```
 
 #### Create a Snapshot Store
-The module creates your snapshot store with `new driver(config)`, where `config` is the configuration you registered without the `driver`. It's available in your class as `this.options`.
+The module creates your snapshot store with `new driver(config)`, where `config` is the configuration you registered without `driver` and `useDefaultPool` (the module handles those). It's available in your class as `this.options`.
 
 ```typescript
 import {

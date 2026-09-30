@@ -2,8 +2,130 @@
 title: Queries & Query Handlers
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+import { Aside, Steps } from '@astrojs/starlight/components';
 
-<Aside type="caution" title="Under construction">
-This page is under construction.
+A **Query** asks the system for data, without changing its state. Queries are the read side of the **CQRS** pattern: where a [command](/start/commands) expresses an intent to change something, a query describes what you want to know, and a **QueryHandler** answers it, for example from a read model or from an aggregate.
+
+Name a query after the question it asks, such as `GetAccountByIdQuery` or `ListAccountsQuery`.
+
+## Creating a Query [#creating-a-query]
+
+Queries are simple objects that carry the parameters of the question. They extend the `Query` class from the library, with the type of the answer as its type argument:
+
+```typescript
+import { Query } from '@ocoda/event-sourcing';
+
+export class GetAccountByIdQuery extends Query<AccountDto> {
+	constructor(public readonly accountId: string) {
+		super();
+	}
+}
+
+export class ListAccountsQuery extends Query<AccountListItemDto[]> {}
+```
+
+The result type exists for the compiler only: `Query` adds no property to the query. Unlike `Command`, `Query` always takes a type argument. Extending it is optional: any class works as a query, such as a class that implements the `IQuery` interface, but the result of executing it is then typed `any`.
+
+## Creating a Query Handler [#creating-a-query-handler]
+
+A query handler answers one query class. Decorate it with `@QueryHandler()` and implement `IQueryHandler`, which takes the result type from the query. Its `execute()` returns a promise of that result, and `@QueryHandler()` only accepts a handler whose `execute()` resolves to it:
+
+```typescript {3,4,7}
+import { QueryHandler, type IQueryHandler } from '@ocoda/event-sourcing';
+
+@QueryHandler(GetAccountByIdQuery)
+export class GetAccountByIdQueryHandler implements IQueryHandler<GetAccountByIdQuery> {
+	constructor(private readonly accountRepository: AccountRepository) {}
+
+	async execute({ accountId }: GetAccountByIdQuery): Promise<AccountDto> {
+		const account = await this.accountRepository.getById(AccountId.from(accountId));
+
+		return AccountDto.from(account);
+	}
+}
+```
+
+A handler that answers from a read model, which [event subscribers](/advanced/event-pubsub#event-subscribers) keep up to date, doesn't need the event store at all:
+
+```typescript
+@QueryHandler(ListAccountsQuery)
+export class ListAccountsQueryHandler implements IQueryHandler<ListAccountsQuery> {
+	constructor(private readonly accountProjection: AccountProjection) {}
+
+	async execute(): Promise<AccountListItemDto[]> {
+		return this.accountProjection.list();
+	}
+}
+```
+
+For a query class that doesn't extend `Query`, the second type parameter of `IQueryHandler` describes the result: `IQueryHandler<GetAccountByIdQuery, AccountDto>`.
+
+## Registering the Query Handler [#registering-a-query-handler]
+
+Register the handler as a provider in one of your modules:
+
+```typescript
+import { Module } from '@nestjs/common';
+
+@Module({
+	providers: [GetAccountByIdQueryHandler, ListAccountsQueryHandler, AccountRepository, AccountProjection],
+})
+export class AccountModule {}
+```
+
+The handlers are discovered when the application bootstraps, no matter in which module they are provided, see [Module configuration](/start/module-configuration#discovery). Two handlers for one query class fail the bootstrap. A handler may be request-scoped: the bus then resolves it for every call, in the context of the request you pass as `queryBus.execute(query, { request })`, see [request-scoped handlers](/start/module-configuration#request-scoped-handlers).
+
+## Executing a Query [#executing-a-query]
+
+Queries are executed through the `QueryBus`, which you can inject in any provider of your application, see [Module configuration](/start/module-configuration#global-module). The bus looks up the handler that is registered for the class of the query and resolves to its result:
+
+```typescript {2,6,10,16}
+import { Controller, Get, Param } from '@nestjs/common';
+import { QueryBus } from '@ocoda/event-sourcing';
+
+@Controller('accounts')
+export class AccountController {
+	constructor(private readonly queryBus: QueryBus) {}
+
+	@Get()
+	list(): Promise<AccountListItemDto[]> {
+		return this.queryBus.execute(new ListAccountsQuery());
+	}
+
+	@Get(':accountId')
+	get(@Param('accountId') accountId: string): Promise<AccountDto> {
+		// GetAccountByIdQuery extends Query<AccountDto>, so this resolves to an AccountDto
+		return this.queryBus.execute(new GetAccountByIdQuery(accountId));
+	}
+}
+```
+
+For a query class that doesn't extend `Query`, `execute()` resolves to `any`. Pass the query and the result type as type arguments to type it: `this.queryBus.execute<GetAccountByIdQuery, AccountDto>(query)`.
+
+The handlers are registered by class. A subclass of a query reaches the handler of its parent, unless it has a handler of its own. If there's no handler registered for the class of a query or any of its parent classes, the promise that `execute()` returns rejects with a `QueryHandlerNotFoundException`, and so does a query executed from a provider factory or a constructor, before the handlers are registered, with an `EventSourcingNotReadyException`.
+
+<Aside type="caution">
+In a file that also imports the `@Query()` decorator of `@nestjs/common`, which reads the query string of a request, import one of the two under another name, such as `import { Query as QueryParam } from '@nestjs/common'`.
 </Aside>
+
+## Guidelines for adding Queries & Query Handlers
+
+<Steps>
+
+1. ### Queries don't change state
+
+   A query handler reads and returns data: it doesn't apply events to aggregates or append them. Keep changes in [commands](/start/commands), so that executing a query any number of times has no effect on the system.
+
+2. ### Answer from a read model when you can
+
+   Loading an aggregate replays its events (or its latest [snapshot](/start/snapshots) and the events after it), which is fine for one aggregate but slow for lists and searches. Keep read models that fit your queries, updated by [event subscribers](/advanced/event-pubsub#event-subscribers), or rebuilt and caught up by reading all events with [`readAll`](/under-the-hood/event-store#reading-all-events).
+
+3. ### Expect read models to lag behind
+
+   Subscribers update a read model after the events are stored, so a query that runs right after a command can miss its effect. Where a caller needs its own change, return what it needs from the command, such as the id of what it created, or read the aggregate itself.
+
+4. ### Return data, not domain objects
+
+   Return plain objects or DTOs shaped for the caller, rather than aggregates, so the domain model can change without breaking the readers.
+
+</Steps>

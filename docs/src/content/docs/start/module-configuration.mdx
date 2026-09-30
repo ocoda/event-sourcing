@@ -147,7 +147,7 @@ export class AppModule {}
 ```
 
 <Aside>
-Since 3.0.1 the module creates the class itself, resolving its dependencies from `imports` and from global modules. In 3.0.0 the class had to be provided by one of the imported modules. That still works: an instance that is already provided is reused.
+The module creates the class itself, resolving its dependencies from `imports` and from global modules. An instance that one of the imported modules already provides is reused.
 </Aside>
 
 </TabItem>
@@ -170,10 +170,6 @@ The class has to implement `EventSourcingOptionsFactory`, just like with `useCla
 `forRootAsync` also accepts the options object directly with `useValue`, which comes down to calling `forRoot`. It is deprecated in 4.0 and removed in 5.0: use `forRoot(options)` instead. Without `useFactory`, `useClass` or `useExisting`, `forRootAsync` throws an [`EventSourcingConfigurationException`](#configuration-checks).
 
 ## Registering events per feature module with `forFeature` [#for-feature]
-
-<Aside type="caution">
-`EventSourcingModule.forFeature()` and the optional `events` in `forRoot` are available since **3.0.0**. In earlier versions every event has to be listed in the `events` of `forRoot`/`forRootAsync`.
-</Aside>
 
 Every event that ends up in the event store has to be registered, otherwise the library can't serialize or deserialize it and an `UnregisteredEventException` is thrown. Instead of collecting all events of your application in the root module, each feature module can register its own events. This keeps a bounded context self-contained: the module that owns the events, aggregates and handlers is also the one that registers them.
 

@@ -2,13 +2,13 @@
 
 ## Supported versions
 
-| Version       | npm dist-tag | Status        | Fixes                                                                                                                  |
-| ------------- | ------------ | ------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| 4.x           | `next`       | Prerelease    | Fixes land on `master` and ship in the next `4.0.0-next.N`. No stability or support guarantee until 4.0.0 is released. |
-| 3.x           | `latest`     | Supported     | Security and critical bug fixes, released as 3.x patch versions from the `3.x` branch.                                 |
-| 2.x and older | none         | Not supported | None. Upgrade to 3.x.                                                                                                  |
+| Version       | npm dist-tag | Status                              | Fixes                                                                                                                  |
+| ------------- | ------------ | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| 4.x           | `next`       | Prerelease                          | Fixes land on `master` and ship in the next `4.0.0-next.N`. No stability or support guarantee until 4.0.0 is released. |
+| 3.x           | `latest`     | Supported until at least 2027-03-31 | Security and critical bug fixes, released as 3.x patch versions from the `3.x` branch.                                 |
+| 2.x and older | none         | Not supported                       | None. Upgrade to 3.x or 4.x.                                                                                           |
 
-This covers `@ocoda/event-sourcing`, `@ocoda/event-sourcing-postgres`, `@ocoda/event-sourcing-mariadb`, `@ocoda/event-sourcing-mongodb` and, on 3.x only, `@ocoda/event-sourcing-dynamodb`.
+This covers `@ocoda/event-sourcing`, `@ocoda/event-sourcing-postgres`, `@ocoda/event-sourcing-mariadb`, `@ocoda/event-sourcing-mongodb` and, on 3.x only, `@ocoda/event-sourcing-dynamodb`. The end of 3.x support will be announced here and in the [versioning and support](docs/src/content/docs/upgrading/versioning.mdx) docs before it happens.
 
 ## Reporting a vulnerability
 
@@ -33,7 +33,7 @@ One volunteer maintains this project, so handling is best-effort and there is no
 
 1. The report is acknowledged once it has been read.
 2. It is assessed: whether it affects these packages, which versions, and how severe it is. Follow-up questions go through the advisory.
-3. A fix is prepared privately and released on each affected line: as a 3.x patch release, and for v4 in the next `4.0.0-next.N` prerelease.
+3. A fix is prepared privately and released on each supported line that it affects: as a 3.x patch release, and on 4.x in the next 4.x release.
 
 ## Disclosure
 

@@ -4,23 +4,67 @@ title: Migrating from 3.x to 4.0
 
 import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
 
-4.0 is the next major release. It is published as prereleases (`4.0.0-next.N`) under the npm `next` tag, while 3.x stays on `latest` and keeps receiving fixes. See [Versioning and support](/upgrading/versioning) for what each release line gets.
-
-This guide covers the changes released so far, up to `4.0.0-next.1`, and the changes that ship in the next prerelease: the new event and snapshot store contract, schema v2 for PostgreSQL, MariaDB and MongoDB with its data migration, the publishing pipeline, the typed command and query buses, the module configuration, the aggregate and id API, the JSON event serializer and the conformance suites for custom stores. Sections that describe unreleased changes say so. The next prerelease completes the changes that [ADR 0001](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0001-v4-core-api.md) plans for 4.0: see [Before 4.0.0](#coming-next).
-
-<Aside type="caution" title="Prerelease">
-There is no stability or support guarantee until 4.0.0 is released, and a later prerelease can break things again. Pin the exact version, and read the [changelog](https://github.com/ocoda/event-sourcing/blob/master/packages/core/CHANGELOG.md) before you move to the next prerelease.
+<Aside type="caution" title="4.0 is in prerelease">
+Until 4.0.0 is released, 4.0 is published as prereleases (`4.0.0-next.N`) under the npm `next` tag, and `latest` stays on 3.x. In the commands of this guide, install `@next` instead of `@4`, with `--save-exact`, and read the [changelog](https://github.com/ocoda/event-sourcing/blob/master/packages/core/CHANGELOG.md) before you move to a later prerelease: it can still change what this guide describes.
 </Aside>
 
-## Installing the prerelease [#installing-the-prerelease]
+4.0 is a major release. It moves to NestJS 12, ES modules and Node.js 22.12 or later, and gives the event and snapshot stores a new contract: global positions and `readAll` for the read side, metadata and headers, and a stored schema (schema v2) that 3.x data is migrated to once. Publishers are awaited, the command and query buses are typed, and a JSON serializer is the default. This guide lists every breaking change, in the order in which you apply them.
 
-Install the core and the integration you use from the `next` tag, together with the integration's database driver. For example, for PostgreSQL:
+3.x keeps receiving security and critical fixes until at least 2027-03-31, so you can plan the move: see [Versioning and support](/upgrading/versioning). The 3.x documentation is at [ocoda.github.io/event-sourcing/v3](https://ocoda.github.io/event-sourcing/v3/).
+
+## Before you start [#before-you-start]
+
+The move has two parts: code changes, which you make and test on a branch while 3.x keeps running, and a one-time, offline migration of the stored events and snapshots, which runs when you deploy 4.0. 3.x and 4.0 can't run against the same database at once: plan a maintenance window for the cutover.
+
+| If your application | Read |
+| --- | --- |
+| uses the PostgreSQL, MariaDB or MongoDB store | every step, including the [data migration](#data-migration) |
+| only uses the in-memory stores | every step except the data migration |
+| has its own event or snapshot store | also [Custom stores](#custom-stores) |
+| uses class-transformer decorators on events, or on the values they hold | [Serialization](#serialization) before you deploy |
+| uses DynamoDB | [DynamoDB is not part of 4.0](#dynamodb) first |
+
+Most 3.x APIs that 4.0 replaces keep working until 5.0, with a deprecation warning where it helps: the positional `appendEvents`, `commit()`, `forRootAsync({ useValue })`, the static exception factories and the command and query metadata helpers. So the code can move step by step, but the data migration has to be done before 4.0 runs against a 3.x database.
+
+## Upgrade steps [#upgrade-steps]
+
+1. If the database runs PostgreSQL 13 or MongoDB 6, [upgrade the server](#database-versions) while the application is still on 3.x.
+2. Upgrade the application to [NestJS 12, Node.js 22.12 and TypeScript 5.4](#nestjs-and-node) or later.
+3. [Install the 4.0 packages](#installing) and the [driver](#drivers) of every integration you use, and replace [imports of paths inside the packages](#imports).
+4. Adapt to the [module configuration](#module-configuration): move code that appends or reads events, executes commands or queries, or publishes from a provider factory or a constructor to `onModuleInit` or later, and fix every problem that the bootstrap reports.
+5. Match library errors on their [code and fields](#errors) instead of their message or constructor.
+6. Adapt to the [typed buses](#typed-buses): `execute()` rejects instead of throwing, and the `execute()` of every decorated handler returns a promise.
+7. Save aggregates in [three steps](#aggregates-and-ids), with the options form of [`appendEvents`](#event-store-api), and adapt to the aggregate, snapshot repository and id changes.
+8. Adapt to the [publishing](#publishing) changes: publishers are awaited, and tests wait with `eventBus.whenIdle()`.
+9. Choose the event [serializer](#serialization): `JsonEventSerializer` is the default, and `ClassTransformerEventSerializer` serializes as 3.x did.
+10. Replace `getAllEnvelopes()` with [`readAll()`](#read-all), and read the [envelope metadata](#metadata-headers) the 4.0 way, also in the consumers of envelopes sent as JSON.
+11. Adapt code that calls a [snapshot store](#snapshot-store) directly and, on MariaDB, code that depends on the [order of `loadAll`](#mariadb-snapshot-order).
+12. Port [custom stores](#custom-stores) to the driver methods, and check them with the [conformance suites](#custom-store-conformance).
+13. Rehearse the [data migration](#data-migration) on a copy of the production data: run the dry runs and review their reports.
+14. Cut over: take a backup, stop every 3.x instance, [migrate](#data-migration) the events and then the snapshots, and deploy 4.0.
+15. [After the cutover](#after-the-migration), use the stream ids that the MariaDB migration reports, append after the actual version of streams with gaps when they conflict, and drop the MariaDB backups when you are satisfied.
+
+## 1. Database server versions [#database-versions]
+
+4.0 is tested on PostgreSQL 14 and later and on MongoDB 7 and later; see [Tested versions](/upgrading/versioning#tested-versions) for the full list, MariaDB included. PostgreSQL 13 and MongoDB 6 are no longer tested: their vendors ended support for them in 2025 ([PostgreSQL](https://www.postgresql.org/support/versioning/), [MongoDB](https://www.mongodb.com/legal/support-policy/lifecycles)). 4.0 doesn't refuse them, but 4.x isn't tested on them, so a later 4.x release can stop working on them.
+
+If you run one of them, upgrade the database server while the application is still on 3.x, which is tested on PostgreSQL 14 to 17 and on MongoDB 7 and 8 too. The server upgrade and the move to 4.0 then stay separate steps, and the [data migration](#data-migration) runs on the upgraded server.
+
+## 2. NestJS 12, Node.js 22.12 and TypeScript 5.4 [#nestjs-and-node]
+
+The core peers on `@nestjs/common` and `@nestjs/core` `^12.0.0`, on `rxjs` `^7.8.0` and on `reflect-metadata` `^0.2.0`. All packages require Node.js 22.12 or later (`engines.node` is `>=22.12`). The type declarations of the buses use `NoInfer`, so TypeScript projects need TypeScript 5.4 or later (see [Typed buses](#typed-buses)).
+
+Upgrade the application itself first, following the [NestJS migration guide](https://docs.nestjs.com/migration-guide). NestJS 11 applications stay on 3.x.
+
+## 3. Install the 4.0 packages [#installing]
+
+Install the core and the integrations you use, together with the database driver of each integration. For example, for PostgreSQL:
 
 <Tabs syncKey="package-manager">
 <TabItem label="pnpm">
 
 ```bash
-pnpm add --save-exact @ocoda/event-sourcing@next @ocoda/event-sourcing-postgres@next
+pnpm add @ocoda/event-sourcing@4 @ocoda/event-sourcing-postgres@4
 pnpm add pg pg-cursor
 ```
 
@@ -28,7 +72,7 @@ pnpm add pg pg-cursor
 <TabItem label="npm">
 
 ```bash
-npm install --save-exact @ocoda/event-sourcing@next @ocoda/event-sourcing-postgres@next
+npm install @ocoda/event-sourcing@4 @ocoda/event-sourcing-postgres@4
 npm install pg pg-cursor
 ```
 
@@ -36,52 +80,18 @@ npm install pg pg-cursor
 <TabItem label="yarn">
 
 ```bash
-yarn add --exact @ocoda/event-sourcing@next @ocoda/event-sourcing-postgres@next
+yarn add @ocoda/event-sourcing@4 @ocoda/event-sourcing-postgres@4
 yarn add pg pg-cursor
 ```
 
 </TabItem>
 </Tabs>
 
-The core and the integrations are released together with the same version number, so keep them on the same prerelease. The driver for each store is listed under [Database drivers are peer dependencies](#drivers).
+The core and the integrations are released together with the same version number: keep them on the same version.
 
-From the next prerelease on, Vitest 4 or 5 is an optional peer dependency of the core. With npm, a project that has another major of Vitest gets `ERESOLVE` from this install: see [Testing a custom store](#custom-store-conformance).
+`vitest` 4 or 5 is an optional peer dependency of the core, for the [conformance suites](#custom-store-conformance). With npm, a project that has another major of Vitest gets `ERESOLVE` from this install until it moves to Vitest 4 or 5, or installs with `--legacy-peer-deps`. pnpm and Yarn only warn. `class-transformer` is an optional peer dependency too: see [Serialization](#serialization).
 
-## Upgrade steps [#upgrade-steps]
-
-1. Upgrade the application to [NestJS 12 and Node.js 22.12 or later](#nestjs-and-node). If the database runs PostgreSQL 13 or MongoDB 6, upgrade the server first: see [Database server versions](#database-versions).
-2. Install `@ocoda/event-sourcing` and your integrations from the `next` tag, as shown in [Installing the prerelease](#installing-the-prerelease).
-3. Install the [driver](#drivers) of every integration you use.
-4. Replace [imports of paths inside the packages](#imports) with imports from the package name.
-5. Match library errors on their [code and fields](#errors) instead of their message or constructor.
-6. On MariaDB, check code that depends on the [order of `loadAll`](#mariadb-snapshot-order).
-7. If you use DynamoDB, read [DynamoDB is not part of 4.0](#dynamodb) first.
-
-The stored event and snapshot formats are unchanged up to `4.0.0-next.1`, so these steps need no data migration.
-
-The next prerelease adds these steps. Make the code changes first, and migrate the data last, when you deploy:
-
-8. Adapt to the [module configuration](#module-configuration): move code that appends or reads events, executes commands or queries, or publishes events from a provider factory or a constructor to `onModuleInit` or later, and fix every problem that the bootstrap now reports in one `EventSourcingConfigurationException`, such as two handlers for one command or a request-scoped subscriber.
-9. Save aggregates in three steps: `getUncommittedEvents()`, then `appendEvents(stream, events, { expectedVersion: account.committedVersion, pool })`, then `markCommitted(events)` once the append succeeded, instead of `commit()` and the positional `appendEvents(stream, account.version, events, pool)`. `expectedVersion` is the version the stream had before the append. The 3.x forms keep working until 5.0, and the positional `appendEvents` emits a deprecation warning. See [Event store API](#event-store-api), and [Aggregates and ids](#aggregates-and-ids) for the other aggregate and id changes: event handlers run before the version moves, an event that a handler applies is applied after the handler returns, and ids of different classes are no longer equal.
-10. Adapt to the [publishing](#publishing) changes: `eventBus.publish()` returns a promise, and publishers are awaited. In tests, `await eventBus.whenIdle()` instead of waiting for a fixed time, and register a publisher or subscribe to the bus instead of spying on `eventBus.publish`.
-11. Adapt to the [typed buses](#typed-buses): assert the failures of `execute()` as rejections, and make the `execute()` of every decorated handler return a promise. Type-checking needs TypeScript 5.4 or later.
-12. Replace `DefaultEventSerializer` with `JsonEventSerializer`, the new default. If your events, or the classes of the values they hold, use class-transformer decorators, install `class-transformer@^0.5.1` and set `defaultEventSerializer: ClassTransformerEventSerializer`: otherwise the application fails to bootstrap, or the append of such an event fails. See [Serialization](#serialization).
-13. Replace `getAllEnvelopes()` with [`readAll()`](#read-all), and `ULID.yearMonth` with `id.date.toISOString().slice(0, 7)`: both are removed. A custom event store implements the driver methods instead of `appendEvents`, and runs the [conformance suites](#custom-store-conformance): see [Migrating a 3.x store](/advanced/custom-stores#migrating-a-3x-store).
-14. Migrate the data of the PostgreSQL, MariaDB and MongoDB stores to schema v2 before you deploy: run the store's `migrate()` with `dryRun: true` first and review the report, stop every 3.x instance, then run `migrate()` for the events and then for the snapshots. See [Data migration](#data-migration).
-
-## NestJS 12 and Node.js 22.12 [#nestjs-and-node]
-
-The core peers on `@nestjs/common` and `@nestjs/core` `^12.0.0`, on `rxjs` `^7.8.0` and on `reflect-metadata` `^0.2.0`. All packages require Node.js 22.12 or later (`engines.node` is `>=22.12`).
-
-Upgrade the application itself first, following the [NestJS migration guide](https://docs.nestjs.com/migration-guide). NestJS 11 applications stay on 3.x.
-
-## Database server versions [#database-versions]
-
-4.0 is tested on PostgreSQL 14 and later and on MongoDB 7 and later; see [Tested versions](/upgrading/versioning#tested-versions) for the full list, MariaDB included. PostgreSQL 13 and MongoDB 6 are no longer tested: their vendors ended support for them in 2025 ([PostgreSQL](https://www.postgresql.org/support/versioning/), [MongoDB](https://www.mongodb.com/legal/support-policy/lifecycles)). 4.0 doesn't refuse them, but 4.x isn't tested on them, so a later 4.x release can stop working on them.
-
-If you run one of them, upgrade the database server while the application is still on 3.x, which is tested on PostgreSQL 14 to 17 and on MongoDB 7 and 8 too. The server upgrade and the move to 4.0 then stay separate steps, and the [data migration](#data-migration) runs on the upgraded server.
-
-## ES modules only [#esm-only]
+### ES modules only [#esm-only]
 
 Every package ships a single ES module build (`"type": "module"`). The `exports` map points `import`, `require` and `default` at the same file, so there is no separate CommonJS build.
 
@@ -91,15 +101,15 @@ Every package ships a single ES module build (`"type": "module"`). The `exports`
 
 Because there is only one build, Nest never sees two copies of a class such as `EventStore`, which could happen when a package shipped both a CommonJS and an ES module build.
 
-## Database drivers are peer dependencies [#drivers]
+### Database drivers are peer dependencies [#drivers]
 
 In 3.x each integration installed its own driver. In 4.0 the driver is a peer dependency: install it next to the integration and choose its version within the supported range.
 
 | Integration | Driver | Supported range |
 | --- | --- | --- |
 | `@ocoda/event-sourcing-postgres` | `pg`, `pg-cursor` | `pg` `^8.15.0` (the first release with an ES module entry), `pg-cursor` `^2.14.0` |
-| `@ocoda/event-sourcing-mongodb` | `mongodb` | `^6.10.0 \|\| ^7.0.0` |
-| `@ocoda/event-sourcing-mariadb` | `mariadb` | `^3.5.3` |
+| `@ocoda/event-sourcing-mongodb` | `mongodb` | `^6.10.0 \|\| ^7.0.0`; MongoDB 8.3 and 9.0 need 7.3 or later |
+| `@ocoda/event-sourcing-mariadb` | `mariadb` | `^3.5.3`: older connectors are affected by security advisories |
 
 <Tabs syncKey="package-manager">
 <TabItem label="pnpm">
@@ -157,26 +167,65 @@ yarn add mariadb
 
 The `@types/pg` and `@types/pg-cursor` packages are only needed in TypeScript projects. If the application already depends on one of these drivers, check that its version is within the supported range.
 
-## Integrations peer on the core with a caret range [#core-peer]
+### Integrations peer on the core with a caret range [#core-peer]
 
-In 3.x each integration required one exact version of `@ocoda/event-sourcing`. In 4.0 the integrations peer on `@ocoda/event-sourcing` with a caret range of their own version (for example `^4.0.0-next.1`) and on `@nestjs/common` `^12.0.0`. They no longer list `@nestjs/core`, `rxjs` or `reflect-metadata`, which they don't import.
+In 3.x each integration required one exact version of `@ocoda/event-sourcing`. In 4.0 the integrations peer on `@ocoda/event-sourcing` with a caret range of their own version and on `@nestjs/common` `^12.0.0`. They no longer list `@nestjs/core`, `rxjs` or `reflect-metadata`, which they don't import.
 
 The packages are still released together, so upgrade the core and the integrations at the same time.
 
-## Import from the package name [#imports]
+### Import from the package name [#imports]
 
-The root entry shims (the `index.js`, `index.d.ts` and `index.ts` files next to each `package.json`) are gone, and `exports` only exposes the package root and `package.json`. Paths into a package, such as `@ocoda/event-sourcing/dist/...`, no longer resolve:
+The root entry shims (the `index.js`, `index.d.ts` and `index.ts` files next to each `package.json`) are gone. `exports` exposes the package root, `package.json` and, for the core, two subpaths: `@ocoda/event-sourcing/class-transformer` (see [Serialization](#serialization)) and `@ocoda/event-sourcing/testing` (see [Testing a custom store](#custom-store-conformance)). Paths into a package, such as `@ocoda/event-sourcing/dist/...`, no longer resolve:
 
 ```diff
 - import { ... } from '@ocoda/event-sourcing/dist/...';
 + import { ... } from '@ocoda/event-sourcing';
 ```
 
-The same applies to the integrations: import from `@ocoda/event-sourcing-postgres`, `@ocoda/event-sourcing-mongodb` or `@ocoda/event-sourcing-mariadb`.
+The same applies to the integrations: import from `@ocoda/event-sourcing-postgres`, `@ocoda/event-sourcing-mongodb` or `@ocoda/event-sourcing-mariadb`. `EventRegistry`, `ExplorerService` and `getOptionsToken()`, which were only reachable through such paths, are removed: see [Module configuration](#module-configuration).
 
-## Errors have a code and fields [#errors]
+## 4. Module configuration [#module-configuration]
 
-Since `4.0.0-next.1`, every exception class the library exports, except `DomainException` (the base class for your own errors), is an `EventSourcingError`: it extends the new abstract class, or, for `InvalidIdException`, is branded as one. Each one has a stable `code`, the fields that describe the failure, and the original error as its `cause`.
+See [Module configuration](/start/module-configuration).
+
+- **Registration moves to `onModuleInit`.** The handlers, subscribers, publishers and serializers are registered in the module's `onModuleInit`, or on the first use of the event store or a bus if a provider of another module (your own `@Global()` module, say) uses them from its `onModuleInit` first. 3.x registered them in `onApplicationBootstrap`, so events appended from `onModuleInit` were never published. Commands, queries and appends now work from `onModuleInit` on.
+- **Provider factories can't use the library yet.** Appending events (pre-built envelopes and `publish: false` included), reading events (`getEvent`, `getEvents`), executing or publishing from a provider factory or a constructor fails with an `EventSourcingNotReadyException` (`ES_EVENT_SOURCING_NOT_READY`), before any I/O: the handlers don't exist yet. Move that code to `onModuleInit` or later. Reading envelopes (`getEnvelope`, `getEnvelopes`, `readAll`) and `getStreamVersion` still work there.
+- **The stores connect while the providers are instantiated**, the snapshot store after the event store, and create their default pools right after. A wrong connection, or a 3.x table that still needs its [data migration](#data-migration), fails the bootstrap before any `onModuleInit` runs, and a store that fails is disconnected again, as is the event store when the snapshot store fails. The error is thrown while `NestFactory.create()` instantiates the providers: with Nest's default `abortOnError: true`, Nest logs it and exits with code 1 instead of rejecting `app.listen()`. Pass `NestFactory.create(AppModule, { abortOnError: false })` to catch it; `Test.createTestingModule().compile()` rejects with it. The stores disconnect in their own `onApplicationShutdown`, after the `EventBus` has drained.
+- **Misconfiguration fails the bootstrap** with one `EventSourcingConfigurationException` (`ES_EVENT_SOURCING_CONFIGURATION`) whose `issues` list every problem: two event classes with one name, two handlers for one command or query, two serializers for one event, a serializer or subscriber for an unregistered event, missing decorator metadata, request-scoped or transient subscribers, publishers and serializers, and events with class-transformer decorators on the JSON serializer (see [Serialization](#serialization)). 3.x kept one of the duplicates, or dropped the provider, silently. Providing one class in several modules, or listing an event twice, is still fine. See [Configuration checks](/start/module-configuration#configuration-checks).
+- **Request-scoped command and query handlers work**: the bus resolves them per call, and `execute(message, { request })` lets them inject the request with `@Inject(REQUEST)`. 3.x registered their bare prototype. A request-scoped handler provided with `useFactory` must use the handler class as its token. See [request-scoped handlers](/start/module-configuration#request-scoped-handlers).
+- **Handlers provided with `useFactory` or `useValue` are discovered**, by the class of their instance.
+- **`forFeature` is no longer global state.** Its events belong to the applications that import the feature module; 3.x put them in a registry shared by the whole process, so several applications in one process (tests) now each see only their own events. `forFeature({ serializers, imports })` provides the serializers of the feature's events.
+- **One global module.** `forRoot` and `forRootAsync` return the global `EventSourcingModule` itself, built with Nest's `ConfigurableModuleBuilder`; there is no separate core module to import or reference. The options token (`EVENT_SOURCING_OPTIONS`), `@InjectEventSourcingOptions()`, the flat `{ driver, ...driverOptions }` store configs and the typed `forRoot<PostgresEventStoreConfig, …>()` stay the same. The snapshot store's driver no longer receives `useDefaultPool`.
+- **`forRootAsync({ useValue })` is deprecated** (`DeprecationWarning` `OCODA_ES_FOR_ROOT_ASYNC_USE_VALUE`): use `forRoot(options)`. Without `useFactory`, `useClass` or `useExisting`, `forRootAsync` throws an `EventSourcingConfigurationException` instead of a plain `Error`.
+- **Implicit in-memory stores warn in production.** When `NODE_ENV` is `production` and `eventStore` or `snapshotStore` is left out, the module logs a warning.
+- **Removed:** `EventRegistry`, `ExplorerService` and `getOptionsToken()`, which were reachable through paths inside the package in 3.x. Inject the options with `@InjectEventSourcingOptions()`.
+
+To migrate:
+
+1. Move code that appends, reads, executes or publishes from a provider factory or a constructor to `onModuleInit` or a later lifecycle hook:
+
+   ```ts
+   // 3.x: appended from a provider factory, never published
+   { provide: 'SEED', inject: [EventStore], useFactory: (store: EventStore) => seed(store) }
+
+   // 4.0: from a lifecycle hook
+   @Injectable()
+   export class Seeder implements OnModuleInit {
+   	constructor(private readonly eventStore: EventStore) {}
+   	onModuleInit() {
+   		return seed(this.eventStore);
+   	}
+   }
+   ```
+
+2. Fix what the bootstrap reports in `EventSourcingConfigurationException.issues`: keep one handler per command or query and one serializer per event, register the events your subscribers and serializers name, and make subscribers, publishers and serializers singletons (resolve request-scoped dependencies with `ModuleRef.resolve()`).
+3. Pass the request to request-scoped handlers: `commandBus.execute(command, { request })`.
+4. Replace `forRootAsync({ useValue: options })` with `forRoot(options)`, and `getOptionsToken()` with `EVENT_SOURCING_OPTIONS` or `@InjectEventSourcingOptions()`.
+5. Tests that create several applications in one process no longer share the events of `forFeature`: import the feature module in each application that needs its events.
+
+## 5. Errors have a code and fields [#errors]
+
+Every exception class the library exports, except `DomainException` (the base class for your own errors), is an `EventSourcingError`: it extends the new abstract class, or, for `InvalidIdException`, is branded as one. Each one has a stable `code`, the fields that describe the failure, and the original error as its `cause`.
 
 - **Codes.** Each class has a literal `name`, which survives minification, and a unique `code` from `EventSourcingErrorCode`, for example `EventSourcingErrorCode.EventStoreVersionConflict` (`'ES_EVENT_STORE_VERSION_CONFLICT'`). The class names are unchanged, so `instanceof` checks keep working.
 - **`isEventSourcingError(error, code?)`** narrows an unknown error, to the class of the code when you pass one. It recognises errors from a second copy of the package, and so does `error instanceof EventSourcingError`.
@@ -184,7 +233,7 @@ Since `4.0.0-next.1`, every exception class the library exports, except `DomainE
 - **Stores.** A version conflict from the PostgreSQL, MariaDB and MongoDB stores carries the pool and the version the stream was at, and leaves `actualVersion` out when the append lost a race on the unique key. MongoDB throws an `EventStorePersistenceException` with `outcome: 'unknown'` (its `cause` is an `AggregateError`) instead of a version conflict when an append that lost a race can't remove the events it already stored. Not-found exceptions name the pool they searched.
 - **Messages changed**, for version conflicts in particular.
 - **The stack is kept.** A wrapping exception no longer replaces its own stack with the stack of the driver error. The driver error is its `cause`.
-- **`UnsupportedOperationException` replaces `NotImplementedException`.** In 3.x, `SnapshotRepository.loadMany()` and `loadAll()` threw the `NotImplementedException` of `@nestjs/common` when the snapshot store lacked the method they need. `loadMany()` now works with every store (see [Snapshot store](#snapshot-store)). `loadAll()` throws `UnsupportedOperationException`, with the method name in `operation`, when the store keeps the base `getLastEnvelopesForAggregate`. An HTTP exception filter that relied on the 501 status of the Nest exception should map the new code.
+- **`UnsupportedOperationException` replaces `NotImplementedException`.** In 3.x, `SnapshotRepository.loadMany()` and `loadAll()` threw the `NotImplementedException` of `@nestjs/common` when the snapshot store lacked the method they need. `loadMany()` now works with every store (see [Snapshot stores](#snapshot-store)). `loadAll()` throws `UnsupportedOperationException`, with the method name in `operation`, when the store keeps the base `getLastEnvelopesForAggregate`. An HTTP exception filter that relied on the 501 status of the Nest exception should map the new code.
 - **`DomainException`** gets a `name`, the class name of your subclass, and takes the standard error options as a third argument: `super(message, id, { cause })`. It has no `code`, so your subclasses compile unchanged. `InvalidIdException` still extends it, and is also an `EventSourcingError` with a code.
 - **One object argument.** Every exported exception is constructed with a single details object, plus the error options for the `cause`. The 3.x static factories, such as `InvalidIdException.becauseInvalid()` and `IdNotFoundException.withId()`, still work, but are deprecated and will be removed in 5.0.
 - **`ExpectedVersion`** is a new export: `ExpectedVersion.NoStream` (0) and `ExpectedVersion.Any`, and the type of an expected version.
@@ -221,19 +270,9 @@ To migrate:
 3. Where you catch the errors of `SnapshotRepository.loadAll()`, replace `NotImplementedException` with `UnsupportedOperationException`, or match `EventSourcingErrorCode.UnsupportedOperation`. `loadMany()` no longer throws it.
 4. Read the underlying error of a wrapping exception from `error.cause` instead of from its stack.
 
-## MariaDB: snapshot order of `loadAll` [#mariadb-snapshot-order]
+## 6. Typed command and query buses [#typed-buses]
 
-On MariaDB, `getLastEnvelopesForAggregate`, and so `SnapshotRepository.loadAll`, now returns the streams in descending order of their stream id, like the other stores. The query had no `ORDER BY`, so MariaDB returned them in index order, which in practice was ascending.
-
-This reverses the order of `loadAll` on MariaDB, and a `limit` now returns the streams with the highest stream ids instead of the lowest. If you relied on the old order, sort the results yourself. This change is not in 3.x.
-
-## Typed command and query buses [#typed-buses]
-
-<Aside type="note" title="Not released yet">
-The changes in this section ship in the next prerelease. The design is in [ADR 0001](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0001-v4-core-api.md#7-typed-buses).
-</Aside>
-
-`commandBus.execute()` and `queryBus.execute()` take their result type from the command or query, and reject instead of throwing.
+`commandBus.execute()` and `queryBus.execute()` take their result type from the command or query, and reject instead of throwing. See [Commands](/start/commands) and [Queries](/start/queries).
 
 - **`Command<TResult>` and `Query<TResult>`** are new base classes. For `OpenAccountCommand extends Command<AccountId>`, `commandBus.execute(new OpenAccountCommand())` resolves to an `AccountId` without a type argument, `ICommandHandler<OpenAccountCommand>` resolves to it, and `@CommandHandler(OpenAccountCommand)` rejects a handler whose `execute()` resolves to something else. `Command` without a type argument is `Command<void>`, and `Query` needs one. The result type exists for the compiler only: the classes add no property, so the payloads are unchanged. `ResultOf<T>` is the result type of a command or query class.
 - **3.x commands and queries keep compiling.** A class that doesn't extend `Command` or `Query` still works, and `execute()` resolves to `any` for it. Both 3.x generic forms compile: `execute<AddBookCommand>(command)` resolves to `any`, and `execute<OpenAccountCommand, AccountId>(command)` to an `AccountId`. The result type is not inferred from the variable it is assigned to, so `const id: Promise<string> = commandBus.execute(new OpenAccountCommand())` is a compile error for a typed command.
@@ -278,257 +317,13 @@ To migrate:
 
    In a file that also imports the `@Query()` decorator of `@nestjs/common`, import one of the two under another name, such as `import { Query as QueryParam } from '@nestjs/common'`.
 
-## Event store, snapshots and schema v2 [#store-and-schema]
+## 7. Aggregates, appends and ids [#aggregates-and-ids]
 
-<Aside type="note" title="Not released yet">
-The changes in this section ship in the next prerelease. The design is in [ADR 0001](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0001-v4-core-api.md) and, for the database schema and the migration, [ADR 0002](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0002-schema-v2.md).
-</Aside>
+See [Aggregates](/start/aggregates#versions), [Repositories](/start/repositories), [Event Store](/under-the-hood/event-store) and [Ids](/start/value-objects#ids).
 
-### Event store API [#event-store-api]
+### Saving aggregates [#saving-aggregates]
 
-*Ships in the next prerelease, with the in-memory store and the PostgreSQL, MariaDB and MongoDB stores on schema v2.* See [Event Store](/under-the-hood/event-store).
-
-`appendEvents` takes the events and an options object. `expectedVersion` is the version of the stream **before** the append:
-
-```ts
-// 3.x: the version of the aggregate after the append
-await this.eventStore.appendEvents(stream, account.version, events, pool);
-// 4.0: the version of the stream before the append
-await this.eventStore.appendEvents(stream, events, { expectedVersion: account.version - events.length, pool });
-```
-
-With the new aggregate API, where the events come from `getUncommittedEvents()`, that version is `account.committedVersion`: see [Aggregates and ids](#aggregates-and-ids).
-
-`ExpectedVersion.NoStream` (0) expects a new stream. `ExpectedVersion.Any` appends whatever the version is: it makes up to 16 attempts while concurrent appends take the versions, with the same event ids, and can still conflict under sustained contention on one stream, so retry such a conflict in your application. `publish: false` stores without publishing, for imports and migrations. The returned envelopes carry their `globalPosition`.
-
-The 3.x form still works, but is deprecated and will be removed in 5.0. It emits a `DeprecationWarning` with the code `OCODA_ES_POSITIONAL_APPEND` once per process. In both forms, on the stores that implement the new contract:
-
-- **An empty append does nothing.** It returns `[]` without reading or writing, and publishes nothing. 3.x could conflict on an empty save.
-- **An append that leaves a gap conflicts.** 3.x accepted an append whose first version was above the next version of the stream. The version check now requires the stream to be exactly at the expected version, and the conflict carries its `actualVersion`.
-- **Pre-built envelopes must continue the stream**: the aggregate id of the stream, the versions `expectedVersion + 1`, `+ 2`, …, and a numeric expected version. Otherwise the append throws an `InvalidEventEnvelopeException`. They keep their id, `occurredOn` and metadata.
-- **Invalid arguments throw before any I/O**: an `InvalidAppendOptionsException` for a negative or fractional expected version (in the 3.x form, an aggregate version below the number of events) or an empty pool name, and an `InvalidEventEnvelopeException` for a stream id, aggregate id or event name over 255 characters.
-- **The failure of the version check's read** is an `EventStorePersistenceException` with `outcome: 'not-persisted'`.
-
-**Publishing.** The module hands the store the `EventBus` when it creates it, and `eventStore.publish = …` is gone. Events appended before the application bootstrapped are no longer held back with a warning. The publishers and subscribers are registered in the module's `onModuleInit`, so they receive the events appended from a lifecycle hook, and appending from a provider factory throws: see [Module configuration](#module-configuration). The store calls `eventBus.publishAll(envelopes)`, so a test double that replaces the `EventBus` must implement it. The bus no longer passes the envelopes of an append through `eventBus.publish`, so a spy on it sees nothing: see [Publishing](#publishing).
-
-**Reads.** `getEvent()` and `getEnvelope()` always return a promise, also on the in-memory store. On the in-memory store now, and on the database stores with schema v2, every read of a pool whose collection doesn't exist throws an `EventCollectionNotFoundException`; the in-memory store's `getEvents()` and `getEnvelopes()` yielded nothing and its `getEvent()` threw an `EventNotFoundException`. An append to such a pool throws an `EventStorePersistenceException` with `outcome: 'not-persisted'`, whose `cause` is the `EventCollectionNotFoundException`.
-
-**Custom stores.** The store is constructed with `(context, options)`, where `context` holds the event map and the publisher, and `options` no longer includes `useDefaultPool`. `EventStoreDriver` is now the type of that constructor rather than an interface of the store instance. A store implements the driver methods (`getStreamVersion`, `getEnvelope`, `getEnvelopes`, `readAll`, `persistEvents`) and declares its `capabilities`; the base class implements `appendEvents`, `getEvent` and `getEvents`, and a store that overrides one of them fails the bootstrap with an `InvalidEventStoreImplementationException`. `this.eventMap` is gone: the base class serializes and deserializes the events. See [Custom Event and Snapshot Stores](/advanced/custom-stores#migrating-a-3x-store), and check the store with the [conformance suites](#custom-store-conformance).
-
-### Metadata and headers [#metadata-headers]
-
-*Ships in the next prerelease, with the in-memory store and the PostgreSQL, MariaDB and MongoDB stores on schema v2.* See [Envelopes](/under-the-hood/envelopes#headers).
-
-An append can set a `correlationId`, a `causationId` and `headers` for all its events:
-
-```ts
-await eventStore.appendEvents(stream, events, {
-	expectedVersion: account.version - events.length,
-	metadata: { correlationId: request.id, causationId: command.id, headers: { tenant: 'acme' } },
-});
-```
-
-- The envelopes store and return them, together with the new `eventVersion` and `globalPosition` fields of the metadata.
-- **`JSON.stringify(envelope)` writes the event id as a string**, such as `"01JA50F56AM0CCDBNVQW3TTWNY"`, where 3.x wrote `{ "props": { "value": … } }`, and the `globalPosition` as a decimal string. If you send envelopes as JSON, read `metadata.eventId` instead of `metadata.eventId.props.value` in the consumers. What the stores write is unchanged: see [Envelopes](/under-the-hood/envelopes#json).
-- Header keys are not empty and don't start with `$`, which is reserved for the library; values are strings, finite numbers, booleans or `null`; the headers of an event are at most 8 KiB of JSON. The correlation and causation ids are at most 255 characters. Invalid metadata throws an `InvalidEventMetadataException` before any I/O.
-- A store without the `headers` capability rejects headers with an `UnsupportedOperationException` instead of dropping them.
-- Pre-built envelopes keep their own metadata, `$` headers included; the metadata of the append only fills the fields they lack.
-
-### Reading all events [#read-all]
-
-*Ships in the next prerelease, with the in-memory store and the PostgreSQL, MariaDB and MongoDB stores on schema v2, whose migration adds the positions to existing events.* See [Reading all events](/under-the-hood/event-store#reading-all-events).
-
-`readAll({ fromPosition, batch, pool })` replaces `getAllEnvelopes({ since, until })`. Every stored event has a `globalPosition`, a bigint per pool, starting at `1n`; `readAll` yields a pool in that order, from `fromPosition` on (inclusive), in batches of `batch` (a positive integer, or a `RangeError`). Store the position of the last envelope you processed and resume at `checkpoint + 1n`. To read a period, filter on `metadata.occurredOn`.
-
-```ts
-// 3.x
-for await (const envelopes of eventStore.getAllEnvelopes({ since: { year: 2024, month: 1 } })) { … }
-// 4.0
-for await (const envelopes of eventStore.readAll({ fromPosition: checkpoint + 1n })) { … }
-```
-
-`getAllEnvelopes`, `IAllEventsFilter`, `EventStore.getYearMonthRange` and `ULID.yearMonth` are removed. For `ULID.yearMonth`, also on `EventId`, use `id.date.toISOString().slice(0, 7)`. `capabilities.globalOrder` says whether a reader that tails the store can miss an event (`'best-effort'`) or not (`'gap-safe'`); the in-memory store, PostgreSQL, MariaDB on InnoDB and MongoDB replica sets are gap-safe.
-
-### Snapshot store [#snapshot-store]
-
-*Ships in the next prerelease, with schema v2 for the PostgreSQL, MariaDB and MongoDB stores.* See [Snapshot store](/under-the-hood/snapshot-store) for the whole contract.
-
-- **Promises only.** Every method of a snapshot store returns a promise (or an async generator), and fails by rejecting. The in-memory store's `getSnapshot`, `getLastSnapshot`, `getLastSnapshots`, `getLastEnvelope`, `getEnvelope` and `getManyLastSnapshotEnvelopes` returned their result directly in 3.x: `await` them. A failure, such as the `SnapshotNotFoundException` of `getSnapshot`, is now a rejection instead of a synchronous throw. `SnapshotRepository` already awaited them, so repositories need no change.
-- **`SnapshotStoreDriver` is the class of a store**, `new (options) => SnapshotStore`, and `SnapshotStoreConfig.driver` has that type. In 3.x it was an interface for the store instance, with `connect`, `disconnect` and `ensureCollection`. Type a store instance as `SnapshotStore` instead.
-- **Base defaults.** `getManyLastSnapshotEnvelopes` has a default in the base class, which reads the streams one by one with `getLastEnvelope`, so `SnapshotRepository.loadMany()` works with every store. `getLastEnvelopesForAggregate` has a default that rejects with an `UnsupportedOperationException` when it's read, which `loadAll()` passes on. The repository no longer checks whether the store has these methods.
-- **The last snapshot is the highest version.** The in-memory store's `getLastSnapshot`, `getLastEnvelope` and their bulk forms read the snapshot with the highest version of the stream, and appends to one stream keep a single latest snapshot even when they race. The PostgreSQL, MariaDB and MongoDB stores read the highest version with their schema v2, which enforces a single latest snapshot per stream with a unique index, also when appends race.
-- **`loadAll` pages in binary order.** `getLastEnvelopesForAggregate`, and so `loadAll`, reads the streams in descending binary order of their aggregate ids, which is case-sensitive: uppercase letters come before lowercase ones. The `aggregateId` of the filter is an exclusive cursor: pass the aggregate id of the last envelope of a page to read the next page. The in-memory store ordered the ids ignoring case in 3.x; the PostgreSQL, MariaDB and MongoDB stores ignore the cursor in 3.x and get it, in binary order, with their schema v2.
-
-For custom snapshot stores:
-
-1. Make every method `async`. `getEnvelope` and `getEnvelopes` are required now.
-2. Drop your `getManyLastSnapshotEnvelopes` if it only looped over `getLastEnvelope`: the base class does that.
-3. If you implement `getLastEnvelopesForAggregate`, order by the aggregate id in binary, descending order, and treat `filter.aggregateId` as an exclusive cursor.
-4. Replace uses of the `SnapshotStoreDriver` interface with `SnapshotStore`.
-
-### Testing a custom store [#custom-store-conformance]
-
-*Ships in the next prerelease.* See [Test your Event Store](/advanced/custom-stores#test-your-event-store).
-
-The conformance suites that every built-in store runs are published as `@ocoda/event-sourcing/testing`. They register [Vitest](https://vitest.dev) tests, so `vitest` (4 or 5) is an optional peer dependency of `@ocoda/event-sourcing`: install it next to the prerelease to use the subpath. The suites import Vitest's API, so they need no `globals: true`, and the root entry point never loads Vitest.
-
-npm checks an optional peer whenever the project has that package: a project on another major of Vitest gets `ERESOLVE` from `npm install @ocoda/event-sourcing@next`, even if it never imports the subpath, until it moves to Vitest 4 or 5 or installs with `--legacy-peer-deps`. pnpm and Yarn only warn.
-
-As the last step of moving a custom store to 4.0, run the suites against it:
-
-```ts
-import { describeEventStoreConformance, describeSnapshotStoreConformance } from '@ocoda/event-sourcing/testing';
-
-describeEventStoreConformance('FooEventStore', async (context) => {
-	const store = new FooEventStore(context, { ... });
-	await store.connect();
-	return { store, cleanup: async (collections) => { /* drop them, then disconnect */ } };
-});
-
-describeSnapshotStoreConformance('FooSnapshotStore', async () => {
-	const store = new FooSnapshotStore({ ... });
-	await store.connect();
-	return { store, cleanup: async (collections) => { /* drop them, then disconnect */ } };
-});
-```
-
-- Declare `capabilities` instead of skipping cases: a case that needs a guarantee your store doesn't claim is skipped with `capability: <flag>`. `skip` remains for real gaps, and each skip needs a reason.
-- A snapshot store that keeps the base class's `getLastEnvelopesForAggregate` skips the cases of that read the same way.
-- The subpath also has `createInMemoryEventStore()`, `createInMemorySnapshotStore()`, `createTestEventStoreContext()` and the `RecordingPublisher`, for tests that use the in-memory stores or construct a store without the module.
-
-### PostgreSQL schema v2 [#postgres-schema-v2]
-
-*Ships in the next prerelease.* See [PostgreSQL](/integrations/postgres) for the schema, the privileges and the throughput per pool.
-
-The PostgreSQL stores implement the new contract natively: global positions, `readAll`, headers, `ExpectedVersion.Any` and the metadata options, with the capabilities `{ atomicAppend: true, headers: true, globalOrder: 'gap-safe' }`. Their tables change:
-
-- **Events.** The tables gain `global_position` (a `BIGINT`, unique per pool), `headers` (`JSONB`) and `event_version`, and lose `event_date` and its index. The text columns become `TEXT`. `getAllEnvelopes` is gone: use [`readAll`](#read-all).
-- **The catalog.** A table `event_sourcing_collections` in the schema registers the tables and counts the positions of each pool. `listCollections()` lists the tables it registers, so 3.x tables no longer show up until they are migrated.
-- **Snapshots.** `registered_on` becomes a `TIMESTAMPTZ`, and a unique index keeps one `latest` flag per stream. The last snapshot of a stream is the one with the highest version, and `loadAll` pages in descending binary order of the aggregate ids, with `aggregateId` as an exclusive cursor.
-- **A 3.x event table is refused.** `ensureCollection` throws an `EventStoreSchemaException` with `found: 'v1'`, so the application doesn't bootstrap on a 3.x default pool until you [migrate the data](#data-migration). A 3.x snapshot table keeps working, with a warning, until it is migrated.
-- **New option `ddl`**: `'auto'` (default) creates missing tables and the catalog; `'none'` never runs DDL and throws with the statements to run instead.
-- **Reads of a pool without a table** throw an `EventCollectionNotFoundException`, and an append to a pool that isn't registered throws an `EventStorePersistenceException` with `outcome: 'not-persisted'`. A pool name whose table name is over 63 bytes is rejected.
-- **A `bigint` in an event payload** fails the append (`not-persisted`); store large integers as strings.
-- **Throughput.** Appends to one pool serialize on the pool's position counter. Spread heavy write loads over pools, and set an `idle_in_transaction_session_timeout` for the store's role, so that a writer that stalls in an append can't hold up its pool for long.
-
-### MariaDB schema v2 [#mariadb-schema-v2]
-
-*Ships in the next prerelease.* The `MariaDBEventStore` and `MariaDBSnapshotStore` implement the 4.0 store contract on schema v2. See [MariaDB](/integrations/mariadb) for the schema, the capabilities and the privileges.
-
-- **The event store implements the whole [event store API](#event-store-api)**: the options form of `appendEvents` with `ExpectedVersion.Any`, [metadata and headers](#metadata-headers), global positions and [`readAll`](#read-all). Its capabilities are `{ atomicAppend: true, headers: true, globalOrder: 'gap-safe' }`, and `'best-effort'` on a Galera cluster. `getAllEnvelopes` is gone from it.
-- **The event tables** gain `global_position`, `headers` and `event_version` columns and lose `event_date`. `occurred_on` keeps milliseconds (3.x truncated it to the second) as the UTC wall time, whatever the time zone of the application or the connector's `timezone` option.
-- **Stream ids are case-sensitive.** The tables compare text in binary (`utf8mb4_bin`), like the other stores; the 3.x tables used the database's default collation, which usually ignores case. The migration gives a 3.x stream whose rows have ids that differ in case only (`account-Acc-1` version 1, `account-acc-1` version 2) one stream id, the id of its lowest version, and its snapshots the id of its events; **from then on the application must use those ids**. The dry run lists them (`canonicalizedStreams`). Stream ids, aggregate ids and event names can be up to 255 characters.
-- **`event_sourcing_collections`**, a catalog table in the database, registers every event and snapshot table and holds each event pool's position counter. `listCollections()` reads it, so it lists 3.x tables only once they are migrated.
-- **`ensureCollection()` refuses a 3.x event table** with an `EventStoreSchemaException` (`found: 'v1'`): an application whose default pool has one fails its bootstrap until the table is migrated (see [Data migration](#data-migration)). Reads of a pool without a table throw an `EventCollectionNotFoundException`, and appends to it an `EventStorePersistenceException` with `outcome: 'not-persisted'`.
-- **A new `ddl` option**: `'auto'` (the default) creates the tables, `'none'` only checks and registers them, for users without `CREATE` privileges, and reports the statements to run.
-- **Snapshots**: `getLastEnvelope` and its bulk forms read the snapshot with the highest version, a unique key keeps one latest snapshot per stream also when appends race, and `loadAll` pages in descending binary order with an exclusive cursor. `registered_on` keeps milliseconds. A 3.x snapshot table keeps working, with a warning, until it is migrated.
-- **Appends to one pool are serialized** by the pool's position counter, one commit at a time. Use pools to scale writes (see [Throughput](/integrations/mariadb#appends)).
-- **The stores' sessions run in `READ COMMITTED`**, added after your `initSql`. `readAll` must read from the server the appends run on: don't route the event store through a proxy that sends reads to replicas.
-
-### MongoDB schema v2 [#mongodb-schema-v2]
-
-*Ships in the next prerelease.* See [MongoDB](/integrations/mongodb) for the schema, the capabilities per topology and the privileges.
-
-- **The MongoDB event store implements the store contract.** Everything in [Event store API](#event-store-api), [Metadata and headers](#metadata-headers) and [Reading all events](#read-all) applies to it: the options form of `appendEvents` with `ExpectedVersion.Any` and metadata, `readAll` instead of `getAllEnvelopes`, which is gone from it, and `EventCollectionNotFoundException` for every read of a pool that was never ensured. On a variable typed as `MongoDBEventStore`, the options form now type-checks.
-- **Event documents** gain a 64-bit `globalPosition`, `headers` and `eventVersion`, and lose `eventDate`. Absent metadata is left out instead of stored as `null`. A validator requires the position, so 3.x writers fail loudly on a migrated collection.
-- **Capabilities depend on the topology**, which `connect()` detects: a replica set (a single-node one is enough) is `{ atomicAppend: true, globalOrder: 'gap-safe' }`, a sharded cluster is atomic but `'best-effort'`, and a standalone server is `{ atomicAppend: false, globalOrder: 'best-effort' }`, with a warning when the store connects. Run MongoDB as a replica set.
-- **A catalog**, the `event_sourcing_collections` collection, holds the position counter of each pool and the schema version of each collection. `listCollections()` reads it, so it lists only collections that `ensureCollection` or `migrate()` registered.
-- **`ensureCollection` never migrates.** A 3.x event collection throws an `EventStoreSchemaException` (`found: 'v1'`), so an application whose default pool is a 3.x collection fails its bootstrap until you run `MongoDBEventStore.migrate()`. A 3.x snapshot collection keeps working, with a warning, until you migrate it. See [Data migration](#data-migration).
-- **`ddl: 'none'`** is a new option of both stores: `ensureCollection` then only checks and registers collections, and names the mongosh statements that create a missing one.
-- **Snapshots.** A unique index keeps a single latest snapshot per stream, also when appends race; `getLastSnapshot` and `getLastEnvelope` read the highest version; `getLastEnvelopesForAggregate` pages in descending binary order of the aggregate ids, with `aggregateId` as an exclusive cursor. An unflagged snapshot has no `latest` field (3.x stored `null`).
-- **`disconnect()`** can be called more than once, and before `connect()`.
-
-### Data migration [#data-migration]
-
-*Ships in the next prerelease.* A one-time, offline migration of the event and snapshot tables, run with the store's `migrate()` after a dry run, while no 3.x instance is running.
-
-**PostgreSQL.** Follow the [runbook](/integrations/postgres#migrating-from-3x). In short:
-
-1. Take a backup.
-2. Run `PostgresEventStore.migrate(config, { dryRun: true })` and `PostgresSnapshotStore.migrate(config, { dryRun: true, legacyTimeZone })`, where `legacyTimeZone` is the time zone your 3.x instances ran in. They need no Nest application and write nothing. Review `blocking`, `gappedStreams`, `dependents` and `warnings`.
-3. Stop every 3.x instance.
-4. Run the two migrations again without `dryRun`: the events first, then the snapshots. A `blocked` table is reported, not thrown: stop the cutover while any table is `blocked`.
-5. Deploy 4.0.
-
-Each table is migrated in one transaction under an exclusive lock, keeps its OID (grants and publications survive) and the columns you added, and gets positions in 3.x's order with every stream kept in version order. Plan for about 0.5 minutes per million events under the lock (a provisional figure, extrapolated from 100,000 events), 3 times the table's size in free disk, and a `TRUNCATE` plus an insert of every row in publications; migrate the tables of a logical replication subscriber first. A 3.x instance that still writes afterwards fails instead of writing events without positions. A stream with a gap in its versions conflicts on its next append.
-
-**MongoDB.** Take a backup, run `MongoDBEventStore.migrate(config, { dryRun: true })` and `MongoDBSnapshotStore.migrate(config, { dryRun: true })` and review the reports, stop every 3.x instance, run `MongoDBEventStore.migrate(config)`, then `MongoDBSnapshotStore.migrate(config)`, and deploy 4.0. The events keep 3.x's order, `(eventDate, _id)`, as their global positions `1n…`, with every stream in version order; a stream with gaps in its versions conflicts on its next append until you append with its actual version. The migration took about a minute per million events, measured with 100,000 events (larger collections sort on disk and take longer), and writes about half a GB of oplog per million; a run that stopped resumes. See [Migrating from 3.x](/integrations/mongodb#migrating-from-3x) for the steps, the room it needs and what blocks a collection.
-
-**MariaDB.** Follow the [runbook](/integrations/mariadb#runbook). In short, take a backup, run the dry runs with the 4.0 package, stop every 3.x instance, migrate, then deploy 4.0:
-
-```ts
-import { MariaDBEventStore, MariaDBSnapshotStore } from '@ocoda/event-sourcing-mariadb';
-
-await MariaDBEventStore.migrate(config, { dryRun: true }); // writes nothing: review blocking, gappedStreams, canonicalizedStreams
-await MariaDBSnapshotStore.migrate(config, { dryRun: true });
-// stop every 3.x instance, then:
-await MariaDBEventStore.migrate(config);
-await MariaDBSnapshotStore.migrate(config);
-// deploy 4.0; once satisfied, drop the 3.x backups:
-await MariaDBEventStore.migrate(config, { keepBackup: false });
-```
-
-- The event tables are copied into schema v2 and swapped in, numbered in 3.x's order with every stream in version order; the 3.x tables are kept as `<table>__es_v1` backups until a run with `keepBackup: false` drops them (keep them until the snapshots are migrated). `occurred_on` is restored to the millisecond from the event ids, which also corrects the hours 3.x was off when the application ran in another time zone than the database server.
-- The snapshot tables are converted in place, and every stream gets exactly one latest snapshot, its highest version.
-- After the migration, a 3.x instance that still runs fails to append events (error 1136) instead of writing rows without positions. Its snapshot writes still succeed, so stop every 3.x instance before you migrate.
-- Plan for about 3 minutes per million events (a provisional estimate: a million events were not measured with the copy that ships), and free space of 1.5 times the event tables in the data directory and again in `tmpdir`. A failed migration can be run again: it continues where it stopped.
-- A 3.x stream whose rows have ids that differ in case only keeps being one stream: every row takes the stream id of the stream's lowest version, and its snapshots take the id of its events. Use those ids after the migration; the dry run lists them (`canonicalizedStreams`, see [Stream ids that differ in case only](/integrations/mariadb#case-variants)). The data needs no fixing by hand.
-- A stream with a gap in its versions conflicts on its next append; the dry run lists them (`gappedStreams`).
-- The migration needs no server settings changed, only room for the copy (disk and `tmpdir` space, and for a very large table a buffer pool that holds its row locks): a user with `ALL PRIVILEGES` on the database runs it, a missing privilege of the copy or the swap fails it before the copy, and on Galera it sizes its replication fragments for `wsrep_max_ws_size`.
-
-## Publishing [#publishing]
-
-*Ships in the next prerelease.* See [Event Publishers and Subscribers](/advanced/event-pubsub#delivery-semantics).
-
-- **Publishers are awaited.** The bus awaits the promise that a publisher's `publish` returns before it passes that publisher the next envelope of the append, and `appendEvents` resolves once every publisher is done. 3.x fired them and forgot. The publishers run concurrently, and each call may take at most `publishing.publisherTimeout` milliseconds (30 s by default, `0` disables it): after that the bus logs and reports a timeout and moves on. Each publisher gets the appends of a stream in the order in which they were stored, one after the other, even when they run concurrently; appends to other streams don't wait for each other. A slow publisher now slows down your commands: each call up to that timeout, and an append to a stream also waits for the calls of the earlier appends to that stream that the publisher still handles. A publisher may implement `publishAll(envelopes)` to get the envelopes of an append in one call.
-- **`eventBus.publish()` returns a promise**, which resolves once the publishers are done and never rejects because of a publisher or subscriber. The envelopes of an append go through `eventBus.publishAll()`, not through `publish()`: to see what an append published in a test, register a publisher or subscribe to the bus instead of spying on `eventBus.publish`.
-- **`eventBus.whenIdle()`** resolves once no publisher or subscriber is running. In tests, `await eventBus.whenIdle()` replaces waiting for a fixed time for the subscribers.
-- **`eventBus.deliveryErrors$`** emits every publisher and subscriber failure, a timeout included. They are still logged.
-- **Shutdown.** `app.close()` waits for the running publishers and subscribers, for at most `publishing.shutdownTimeout` milliseconds (10 s by default), then unsubscribes the subscribers and disconnects the stores. 3.x unsubscribed and disconnected in `onModuleDestroy`, which dropped the deliveries in flight. NestJS still runs `onModuleDestroy` first, so if your subscribers use providers that clean up there, `await eventBus.whenIdle()` before `app.close()`.
-- **`IEventPublisher.publish`** returns `unknown` instead of `any` and no longer declares rest parameters, which the bus never passed. `IEventBus.publish` returns `Promise<void>`.
-
-```ts
-EventSourcingModule.forRoot({
-	events: [AccountOpenedEvent],
-	publishing: { publisherTimeout: 5_000, shutdownTimeout: 30_000 },
-});
-```
-
-## Module configuration [#module-configuration]
-
-*Ships in the next prerelease.* See [Module configuration](/start/module-configuration).
-
-- **Registration moves to `onModuleInit`.** The handlers, subscribers, publishers and serializers are registered in the module's `onModuleInit`, or on the first use of the event store or a bus if a provider of another module (your own `@Global()` module, say) uses them from its `onModuleInit` first. 3.x registered them in `onApplicationBootstrap`, so events appended from `onModuleInit` were never published. Commands, queries and appends now work from `onModuleInit` on.
-- **Provider factories can't use the library yet.** Appending events (pre-built envelopes and `publish: false` included), reading events (`getEvent`, `getEvents`), executing or publishing from a provider factory or a constructor fails with an `EventSourcingNotReadyException` (`ES_EVENT_SOURCING_NOT_READY`), before any I/O: the handlers don't exist yet. Move that code to `onModuleInit` or later. Reading envelopes (`getEnvelope`, `getEnvelopes`, `readAll`) still works there.
-- **The stores connect while the providers are instantiated**, the snapshot store after the event store, and create their default pools right after. A wrong connection still fails the bootstrap, but now before any `onModuleInit` runs, and a store that fails is disconnected again, as is the event store when the snapshot store fails. The error is thrown while `NestFactory.create()` instantiates the providers: with Nest's default `abortOnError: true`, Nest logs it and exits with code 1 instead of rejecting `app.listen()`. Pass `NestFactory.create(AppModule, { abortOnError: false })` to catch it; `Test.createTestingModule().compile()` rejects with it. They disconnect in their own `onApplicationShutdown`, after the `EventBus` has drained.
-- **Misconfiguration fails the bootstrap** with one `EventSourcingConfigurationException` (`ES_EVENT_SOURCING_CONFIGURATION`) whose `issues` list every problem: two event classes with one name, two handlers for one command or query, two serializers for one event, a serializer or subscriber for an unregistered event, missing decorator metadata, request-scoped or transient subscribers, publishers and serializers, and events with class-transformer decorators on the JSON serializer (see [Serialization](#serialization)). 3.x kept one of the duplicates, or dropped the provider, silently. Providing one class in several modules, or listing an event twice, is still fine. See [Configuration checks](/start/module-configuration#configuration-checks).
-- **Request-scoped command and query handlers work**: the bus resolves them per call, and `execute(message, { request })` lets them inject the request with `@Inject(REQUEST)`. 3.x registered their bare prototype. A request-scoped handler provided with `useFactory` must use the handler class as its token. See [request-scoped handlers](/start/module-configuration#request-scoped-handlers).
-- **Handlers provided with `useFactory` or `useValue` are discovered**, by the class of their instance.
-- **`forFeature` is no longer global state.** Its events belong to the applications that import the feature module; 3.x put them in a registry shared by the whole process, so several applications in one process (tests) now each see only their own events. `forFeature({ serializers, imports })` provides the serializers of the feature's events.
-- **One global module.** `forRoot` and `forRootAsync` return the global `EventSourcingModule` itself, built with Nest's `ConfigurableModuleBuilder`; there is no separate core module to import or reference. The options token (`EVENT_SOURCING_OPTIONS`), `@InjectEventSourcingOptions()`, the flat `{ driver, ...driverOptions }` store configs and the typed `forRoot<PostgresEventStoreConfig, …>()` stay the same.
-- **`forRootAsync({ useValue })` is deprecated** (`DeprecationWarning` `OCODA_ES_FOR_ROOT_ASYNC_USE_VALUE`): use `forRoot(options)`. Without `useFactory`, `useClass` or `useExisting`, `forRootAsync` throws an `EventSourcingConfigurationException` instead of a plain `Error`.
-- **Implicit in-memory stores warn in production.** When `NODE_ENV` is `production` and `eventStore` or `snapshotStore` is left out, the module logs a warning.
-- **Removed:** `EventRegistry`, `ExplorerService` and `getOptionsToken()`, which were reachable through paths inside the package in 3.x. Inject the options with `@InjectEventSourcingOptions()`.
-
-```ts
-// 3.x: appended from a provider factory, never published
-{ provide: 'SEED', inject: [EventStore], useFactory: (store: EventStore) => seed(store) }
-
-// 4.0: from a lifecycle hook
-@Injectable()
-export class Seeder implements OnModuleInit {
-	constructor(private readonly eventStore: EventStore) {}
-	onModuleInit() {
-		return seed(this.eventStore);
-	}
-}
-```
-
-## Aggregates and ids [#aggregates-and-ids]
-
-*Ships in the next prerelease.* See [Aggregates](/start/aggregates#versions), [Repositories](/start/repositories) and [Ids](/start/value-objects#ids).
-
-**Saving aggregates.** `AggregateRoot` gets `committedVersion`, `getUncommittedEvents()` and `markCommitted()`. A repository saves in three steps, and marks the events as committed only once the append succeeded:
+`AggregateRoot` gets `committedVersion`, `getUncommittedEvents()` and `markCommitted()`. A repository saves in three steps, and marks the events as committed only once the append succeeded:
 
 ```ts
 // 3.x
@@ -548,23 +343,95 @@ account.markCommitted(events);
 - **`loadFromHistory()` and the `version` setter throw an `UncommittedEventsException`** (`ES_UNCOMMITTED_EVENTS`) while the aggregate has uncommitted events, and so does `applyEvent(event, true)`: load the aggregate before you apply new events. `loadFromHistory()` also takes an array of events.
 - **`@Aggregate({ missingHandler: 'ignore' })`** applies the events the aggregate has no handler for, where `'throw'`, the default, throws a `MissingEventHandlerException` as before.
 
-**Snapshots.**
+### Appending events [#event-store-api]
+
+`appendEvents` takes the events and an options object. `expectedVersion` is the version of the stream **before** the append; with the three steps above, that is `account.committedVersion`:
+
+```ts
+// 3.x: the version of the aggregate after the append
+await this.eventStore.appendEvents(stream, account.version, events, pool);
+// 4.0: the version of the stream before the append
+await this.eventStore.appendEvents(stream, events, { expectedVersion: account.committedVersion, pool });
+```
+
+`ExpectedVersion.NoStream` (0) expects a new stream. `ExpectedVersion.Any` appends whatever the version is: it makes up to 16 attempts while concurrent appends take the versions, with the same event ids, and can still conflict under sustained contention on one stream, so retry such a conflict in your application. `publish: false` stores without publishing, for imports and migrations. The returned envelopes carry their `globalPosition`.
+
+The 3.x form still works, but is deprecated and will be removed in 5.0. It emits a `DeprecationWarning` with the code `OCODA_ES_POSITIONAL_APPEND` once per process. In both forms, on every built-in store:
+
+- **An empty append does nothing.** It returns `[]` without reading or writing, and publishes nothing. 3.x could conflict on an empty save.
+- **An append that leaves a gap conflicts.** 3.x accepted an append whose first version was above the next version of the stream. The version check now requires the stream to be exactly at the expected version, and the conflict carries its `actualVersion`.
+- **Pre-built envelopes must continue the stream**: the aggregate id of the stream, the versions `expectedVersion + 1`, `+ 2`, …, and a numeric expected version. Otherwise the append throws an `InvalidEventEnvelopeException`. They keep their id, `occurredOn` and metadata.
+- **Invalid arguments throw before any I/O**: an `InvalidAppendOptionsException` for a negative or fractional expected version (in the 3.x form, an aggregate version below the number of events) or an empty pool name, and an `InvalidEventEnvelopeException` for a stream id, aggregate id or event name over 255 characters.
+- **The failure of the version check's read** is an `EventStorePersistenceException` with `outcome: 'not-persisted'`.
+
+**Publishing.** The module hands the store the `EventBus` when it creates it, and `eventStore.publish = …` is gone. Events appended before the application bootstrapped are no longer held back with a warning. The store calls `eventBus.publishAll(envelopes)`, so a test double that replaces the `EventBus` must implement it, and a spy on `eventBus.publish` sees nothing: see [Publishing](#publishing).
+
+**Reads.** `getEvent()` and `getEnvelope()` always return a promise, also on the in-memory store. Every read of a pool whose collection doesn't exist throws an `EventCollectionNotFoundException`, where the in-memory store's `getEvents()` and `getEnvelopes()` yielded nothing in 3.x and its `getEvent()` threw an `EventNotFoundException`. An append to such a pool throws an `EventStorePersistenceException` with `outcome: 'not-persisted'`, whose `cause` is the `EventCollectionNotFoundException`.
+
+### Snapshot repositories [#snapshot-repositories]
 
 - **`SnapshotRepository.save()` never rejects.** When the snapshot can't be serialized or stored, it logs the failure: a version conflict, which means that the stream already has that snapshot or a newer one, as a warning, and anything else as an error. The events are stored by then, and the aggregate still loads from them. 3.x rejected, which failed a command whose events were already stored.
 - **The versions a save covers come from `markCommitted()`** (the deprecated `commit()` calls it), so call it before `save()`. With an interval of 10, a save from version 9 to 11 still takes a snapshot, and a save whose `markCommitted()` committed nothing takes none, even at a multiple of the interval. While the aggregate has uncommitted events, `save()` logs a warning and takes no snapshot: 3.x stored a snapshot ahead of the stored events, and every later save of the stream conflicted.
 
-**Ids.**
+### Ids [#ids]
 
 - **`generate()`, `from()` and `ULID.factory()` create an instance of the class they are called on.** `AccountId.generate()` returns an `AccountId`, where 3.x returned a `UUID`, also when the factory is passed around, as in `values.map(AccountId.from)`. They call `new this(value)`, so an id class whose constructor takes anything other than the id alone must declare its own `generate()`, `from()` and `factory()`. TypeScript doesn't catch this when the first parameter is a string: `from()` then passes your value to that parameter and returns an id with a different value. Make a `private` constructor `protected`, or the inherited factories no longer compile. Passed around, a factory is typed as the base class (`values.map(AccountId.from)` is a `UUID[]` that holds `AccountId`s): write `values.map((value) => AccountId.from(value))` for an `AccountId[]`.
 - **Ids of different classes are never equal**, even with the same value: `AccountId.from(value).equals(UUID.from(value))` is `false`, where 3.x compared two `UUID`s. Compare the `value`s instead.
 - **`ULID.from()` requires Crockford's base32**: 26 digits and letters without I, L, O and U, in either case, starting with 0 to 7. 3.x accepted any 26 letters and digits. The event ids that a store reads are not validated, so stored events stay readable, and the dry run of the data migration counts the event ids that aren't canonical.
 - **`InvalidIdException.idType`** names the class the value was given to, such as `'AccountId'`, instead of `'UUID'`, and so does the message.
+- **`ULID.yearMonth` is removed**, also on `EventId`: use `id.date.toISOString().slice(0, 7)`.
 - **`ulidFactory` is deprecated**: it has always been a no-op. Use `ULID.factory()`. It is removed in 5.0.
 - **`ValueObject.equals()`** returns `false` for `null` and `undefined` instead of throwing a `TypeError`, and compares the keys of the props, not only their number.
 
-## Serialization [#serialization]
+To migrate:
 
-*Ships in the next prerelease.* See [Event Serialization](/advanced/event-serialization).
+1. Save aggregates in the three steps above, and call `markCommitted()` before `snapshotRepository.save()`.
+2. Load an aggregate (`loadFromHistory()`, or the `version` of a snapshot) before you apply new events to it.
+3. Where a handler reads `this.version`, add one to get the version of its event, as in 3.x. Where a handler applies an event and then reads state that the handler of that event changes, move that code into the handler of the applied event.
+4. Where you compared ids of different classes with `equals()`, compare their `value`s. Where you matched `InvalidIdException.idType` against `'UUID'` or `'ULID'`, expect the name of your id class.
+5. Give an id class whose constructor takes more than the id its own `generate()`, `from()` and `factory()`.
+6. If you relied on `SnapshotRepository.save()` rejecting, watch the logs instead.
+
+## 8. Publishing [#publishing]
+
+See [Event Publishers and Subscribers](/advanced/event-pubsub#delivery-semantics).
+
+- **Publishers are awaited.** The bus awaits the promise that a publisher's `publish` returns before it passes that publisher the next envelope of the append, and `appendEvents` resolves once every publisher is done. 3.x fired them and forgot. The publishers run concurrently, and each call may take at most `publishing.publisherTimeout` milliseconds (30 s by default, `0` disables it): after that the bus logs and reports a timeout and moves on. Each publisher gets the appends of a stream in the order in which they were stored, one after the other, even when they run concurrently; appends to other streams don't wait for each other. A slow publisher now slows down your commands: each call up to that timeout, and an append to a stream also waits for the calls of the earlier appends to that stream that the publisher still handles. A publisher may implement `publishAll(envelopes)` to get the envelopes of an append in one call.
+- **`eventBus.publish()` returns a promise**, which resolves once the publishers are done and never rejects because of a publisher or subscriber. The envelopes of an append go through `eventBus.publishAll()`, not through `publish()`: to see what an append published in a test, register a publisher or subscribe to the bus instead of spying on `eventBus.publish`.
+- **`eventBus.whenIdle()`** resolves once no publisher or subscriber is running. In tests, `await eventBus.whenIdle()` replaces waiting for a fixed time for the subscribers.
+- **`eventBus.deliveryErrors$`** emits every publisher and subscriber failure, a timeout included. They are still logged.
+- **Shutdown.** `app.close()` waits for the running publishers and subscribers, for at most `publishing.shutdownTimeout` milliseconds (10 s by default), then unsubscribes the subscribers and disconnects the stores. 3.x unsubscribed and disconnected in `onModuleDestroy`, which dropped the deliveries in flight. NestJS still runs `onModuleDestroy` first, so if your subscribers use providers that clean up there, `await eventBus.whenIdle()` before `app.close()`.
+- **`IEventPublisher.publish`** returns `unknown` instead of `any` and no longer declares rest parameters, which the bus never passed. `IEventBus.publish` returns `Promise<void>`.
+- **Invalid timeouts** (negative, `NaN`, not a number) fail the bootstrap with a `RangeError`.
+
+To migrate:
+
+1. In tests, wait for the subscribers with `await eventBus.whenIdle()` instead of a fixed delay:
+
+   ```ts
+   // 3.x
+   await commandBus.execute(command);
+   await new Promise((resolve) => setTimeout(resolve, 50));
+   // 4.0
+   await commandBus.execute(command);
+   await eventBus.whenIdle();
+   ```
+
+2. Replace spies on `eventBus.publish` with a publisher of your own or a subscription to the bus, and `await eventBus.publish(envelope)` where you publish directly.
+3. If a publisher can take longer than 30 s, raise `publishing.publisherTimeout`, or set it to `0`:
+
+   ```ts
+   EventSourcingModule.forRoot({
+   	events: [AccountOpenedEvent],
+   	publishing: { publisherTimeout: 60_000, shutdownTimeout: 30_000 },
+   });
+   ```
+
+4. If your subscribers use providers that clean up in `onModuleDestroy`, which NestJS runs before the bus drains, call `await eventBus.whenIdle()` before `app.close()`.
+
+## 9. Serialization [#serialization]
+
+See [Event Serialization](/advanced/event-serialization).
 
 - **A JSON serializer is the default.** `JsonEventSerializer` replaces class-transformer as the serializer of every event without an `@EventSerializer()` of its own. For events that use no class-transformer decorators, neither on the event class nor on the classes of the values it holds, it stores the same payloads and reads back the same events as 3.x, so stored events need no migration: nested class instances, value objects such as ids included, are stored and read back as plain objects, a `Date` stays a `Date` in the payload (the SQL stores read back its ISO string), a `Set` becomes an array and a `Map` an object. The values that the MongoDB driver returns as instances of its classes (a `Binary` for a buffer, a `Long` for an integer beyond 2^53, an `ObjectId`) read back as those instances, as in 3.x; so does a `Decimal128`, which 3.x failed to read.
 - **class-transformer decorators can't lose their effect silently.** The JSON serializer ignores them, so the events whose payload they would change fail with an error that names the event, the decorators and the fix:
@@ -591,15 +458,223 @@ To migrate:
 2. Look for class-transformer decorators on your event classes and on the classes of the values they hold (value objects, DTOs). If you find any, install `class-transformer@^0.5.1` and set `defaultEventSerializer: ClassTransformerEventSerializer`, or give those events an `@EventSerializer()` of their own. The bootstrap fails for an event class with decorators, and an append fails for an event that holds an instance of a class with decorators; both name the event.
 3. If you bundle the application, the checks may not see the decorators: rely on step 2.
 
+## 10. Reading all events [#read-all]
+
+See [Reading all events](/under-the-hood/event-store#reading-all-events).
+
+`readAll({ fromPosition, batch, pool })` replaces `getAllEnvelopes({ since, until })`. Every stored event has a `globalPosition`, a bigint per pool, starting at `1n`; `readAll` yields a pool in that order, from `fromPosition` on (inclusive), in batches of `batch` (a positive integer, or a `RangeError`). Store the position of the last envelope you processed and resume at `checkpoint + 1n`. To read a period, filter on `metadata.occurredOn`. The [data migration](#data-migration) gives the stored 3.x events their positions, in the order in which `getAllEnvelopes` returned them.
+
+```ts
+// 3.x
+for await (const envelopes of eventStore.getAllEnvelopes({ since: { year: 2024, month: 1 } })) { … }
+// 4.0
+for await (const envelopes of eventStore.readAll({ fromPosition: checkpoint + 1n })) { … }
+```
+
+`getAllEnvelopes`, `IAllEventsFilter`, `EventStore.getYearMonthRange` and `ULID.yearMonth` are removed. For `ULID.yearMonth`, also on `EventId`, use `id.date.toISOString().slice(0, 7)`. `capabilities.globalOrder` says whether a reader that tails the store can miss an event (`'best-effort'`) or not (`'gap-safe'`); the in-memory store, PostgreSQL, MariaDB on InnoDB and MongoDB replica sets are gap-safe.
+
+## 11. Envelope metadata and JSON [#metadata-headers]
+
+See [Envelopes](/under-the-hood/envelopes#headers).
+
+An append can set a `correlationId`, a `causationId` and `headers` for all its events:
+
+```ts
+await eventStore.appendEvents(stream, events, {
+	expectedVersion: account.committedVersion,
+	metadata: { correlationId: request.id, causationId: command.id, headers: { tenant: 'acme' } },
+});
+```
+
+- The envelopes store and return them, together with the new `eventVersion` and `globalPosition` fields of the metadata.
+- **`JSON.stringify(envelope)` writes the event id as a string**, such as `"01JA50F56AM0CCDBNVQW3TTWNY"`, where 3.x wrote `{ "props": { "value": … } }`, and the `globalPosition` as a decimal string. If you send envelopes as JSON, read `metadata.eventId` instead of `metadata.eventId.props.value` in the consumers, and turn it back into an id with `EventId.from()`. What the stores write is unchanged: see [Envelopes](/under-the-hood/envelopes#json).
+- Header keys are not empty and don't start with `$`, which is reserved for the library; values are strings, finite numbers, booleans or `null`; the headers of an event are at most 8 KiB of JSON. The correlation and causation ids are at most 255 characters. Invalid metadata throws an `InvalidEventMetadataException` before any I/O.
+- A store without the `headers` capability rejects headers with an `UnsupportedOperationException` instead of dropping them. Every built-in store has it.
+- Pre-built envelopes keep their own metadata, `$` headers included; the metadata of the append only fills the fields they lack.
+- `EventEnvelope.create()` keeps the generated event id when `eventId` is `undefined`, and takes an optional `occurredOn`.
+
+## 12. Snapshot stores [#snapshot-store]
+
+See [Snapshot store](/under-the-hood/snapshot-store) for the whole contract. `SnapshotRepository` already awaited the store, so a repository needs no change for this step; code that calls a snapshot store directly does.
+
+- **Promises only.** Every method of a snapshot store returns a promise (or an async generator), and fails by rejecting. The in-memory store's `getSnapshot`, `getLastSnapshot`, `getLastSnapshots`, `getLastEnvelope`, `getEnvelope` and `getManyLastSnapshotEnvelopes` returned their result directly in 3.x: `await` them. A failure, such as the `SnapshotNotFoundException` of `getSnapshot`, is now a rejection instead of a synchronous throw.
+- **`SnapshotStoreDriver` is the class of a store**, `new (options) => SnapshotStore`, and `SnapshotStoreConfig.driver` has that type. In 3.x it was an interface for the store instance, with `connect`, `disconnect` and `ensureCollection`. Type a store instance as `SnapshotStore` instead.
+- **Base defaults.** `getManyLastSnapshotEnvelopes` has a default in the base class, which reads the streams one by one with `getLastEnvelope`, so `SnapshotRepository.loadMany()` works with every store. `getLastEnvelopesForAggregate` has a default that rejects with an `UnsupportedOperationException` when it's read, which `loadAll()` passes on. The repository no longer checks whether the store has these methods.
+- **The last snapshot is the highest version.** `getLastSnapshot`, `getLastEnvelope` and their bulk forms read the snapshot with the highest version of the stream, and appends to one stream keep a single latest snapshot even when they race: the PostgreSQL, MariaDB and MongoDB stores enforce it with a unique index of their schema v2.
+- **`loadAll` pages in binary order.** `getLastEnvelopesForAggregate`, and so `loadAll`, reads the streams in descending binary order of their aggregate ids, which is case-sensitive: uppercase letters come before lowercase ones. The `aggregateId` of the filter is an exclusive cursor: pass the aggregate id of the last envelope of a page to read the next page. The in-memory store ordered the ids ignoring case in 3.x, and the PostgreSQL, MariaDB and MongoDB stores ignored the cursor.
+
+```ts
+// 3.x
+const snapshot = snapshotStore.getSnapshot(stream, 10);
+// 4.0
+const snapshot = await snapshotStore.getSnapshot(stream, 10);
+```
+
+### MariaDB: snapshot order of `loadAll` [#mariadb-snapshot-order]
+
+On MariaDB, `getLastEnvelopesForAggregate`, and so `SnapshotRepository.loadAll`, returns the streams in descending order of their stream id, like the other stores. The 3.x query had no `ORDER BY`, so MariaDB returned them in index order, which in practice was ascending.
+
+This reverses the order of `loadAll` on MariaDB, and a `limit` now returns the streams with the highest stream ids instead of the lowest. If you relied on the old order, sort the results yourself.
+
+## 13. Custom stores [#custom-stores]
+
+See [Custom Event and Snapshot Stores](/advanced/custom-stores#migrating-a-3x-store).
+
+- **Event stores implement driver methods.** The store is constructed with `(context, options)`, where `context` holds the event map and the publisher, and `options` no longer includes `useDefaultPool`. `EventStoreDriver` is now the type of that constructor rather than an interface of the store instance. A store implements the driver methods (`getStreamVersion`, `getEnvelope`, `getEnvelopes`, `readAll`, `persistEvents`) and declares its `capabilities`; the base class implements `appendEvents`, `getEvent` and `getEvents`, and a store that overrides one of them fails the bootstrap with an `InvalidEventStoreImplementationException`. `this.eventMap` is gone: the base class serializes and deserializes the events.
+- **Snapshot stores are async.** Every method returns a promise, `getEnvelope` and `getEnvelopes` are required, and `getLastEnvelopesForAggregate` orders by the aggregate id in binary, descending order, with `filter.aggregateId` as an exclusive cursor. See [Snapshot stores](#snapshot-store).
+- **Exceptions** are constructed with one object argument: see [Errors](#errors).
+
+To migrate an event store:
+
+1. The constructor becomes `(context, options)`. Remove yours, or pass both arguments on.
+2. Delete `appendEvents`, `getEvents`, `getEvent` and every use of `this.eventMap`.
+3. Implement `getStreamVersion`, `getEnvelope`, `getEnvelopes`, `readAll` and `persistEvents`. `readAll` replaces `getAllEnvelopes`, and with it the year-month column, `getYearMonthRange` and `IAllEventsFilter`. `persistEvents` stores the envelopes all or nothing, assigns their global positions, and maps a duplicate `(stream, version)` key to `{ status: 'conflict' }`.
+4. Make every method `async`, store the correlation id, causation id, headers and event version, and declare your `capabilities`.
+5. To decorate the appends of a built-in store, for tracing for instance, extend it and override `persistEvents` instead of `appendEvents`.
+
+To migrate a snapshot store:
+
+1. Make every method `async`. Implement `getEnvelope` and `getEnvelopes`.
+2. Drop your `getManyLastSnapshotEnvelopes` if it only looped over `getLastEnvelope`: the base class does that.
+3. If you implement `getLastEnvelopesForAggregate`, order by the aggregate id in binary, descending order, and treat `filter.aggregateId` as an exclusive cursor.
+4. Replace uses of the `SnapshotStoreDriver` interface with `SnapshotStore`.
+
+### Testing a custom store [#custom-store-conformance]
+
+See [Test your Event Store](/advanced/custom-stores#test-your-event-store).
+
+The conformance suites that every built-in store runs are published as `@ocoda/event-sourcing/testing`. They register [Vitest](https://vitest.dev) tests, so `vitest` (4 or 5) is an optional peer dependency of `@ocoda/event-sourcing`: install it to use the subpath. The suites import Vitest's API, so they need no `globals: true`, and the root entry point never loads Vitest.
+
+npm checks an optional peer whenever the project has that package: a project on another major of Vitest gets `ERESOLVE` from `npm install @ocoda/event-sourcing`, even if it never imports the subpath, until it moves to Vitest 4 or 5 or installs with `--legacy-peer-deps`. pnpm and Yarn only warn.
+
+As the last step of moving a custom store to 4.0, run the suites against it:
+
+```ts
+import { describeEventStoreConformance, describeSnapshotStoreConformance } from '@ocoda/event-sourcing/testing';
+
+describeEventStoreConformance('FooEventStore', async (context) => {
+	const store = new FooEventStore(context, { ... });
+	await store.connect();
+	return { store, cleanup: async (collections) => { /* drop them, then disconnect */ } };
+});
+
+describeSnapshotStoreConformance('FooSnapshotStore', async () => {
+	const store = new FooSnapshotStore({ ... });
+	await store.connect();
+	return { store, cleanup: async (collections) => { /* drop them, then disconnect */ } };
+});
+```
+
+- Declare `capabilities` instead of skipping cases: a case that needs a guarantee your store doesn't claim is skipped with `capability: <flag>`. `skip` remains for real gaps, and each skip needs a reason.
+- A snapshot store that keeps the base class's `getLastEnvelopesForAggregate` skips the cases of that read the same way.
+- The subpath also has `createInMemoryEventStore()`, `createInMemorySnapshotStore()`, `createTestEventStoreContext()` and the `RecordingPublisher`, for tests that use the in-memory stores or construct a store without the module.
+
+## 14. Schema v2 and the data migration [#data-migration]
+
+The PostgreSQL, MariaDB and MongoDB stores keep their events and snapshots in schema v2: the event tables gain a global position per pool, `headers` and `event_version`, and lose the 3.x year-month column; a catalog, `event_sourcing_collections`, registers every table and counts the positions of each pool; and a unique index keeps one latest snapshot per stream. The design is in [ADR 0002](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0002-schema-v2.md).
+
+The stores never migrate on their own. The event store refuses a 3.x event table with an `EventStoreSchemaException` (`found: 'v1'`), so an application whose default pool is a 3.x table fails its bootstrap until the table is migrated. A 3.x snapshot table keeps working, with a warning, until it is migrated. Each store has a static `migrate(config, options)` that needs no Nest application (and `store.migrate(options)` on a connected store), with a `dryRun` that writes nothing, and each package ships the same migration as a script for DBAs: `migrations/4.0.sql`, or `migrations/4.0.mongosh.js` for MongoDB. A migration that stopped halfway can be run again: it continues where it stopped.
+
+For every store, the cutover has the same shape:
+
+1. **Rehearse.** On a copy of the production data, run the dry runs with the 4.0 package and review the reports: what blocks a table (`blocking`), the streams with gaps in their versions (`gappedStreams`), the time and space the migration needs, and the exact statements.
+2. **Take a backup.**
+3. **Stop every 3.x instance.** The migration is offline, and a 3.x instance that still writes afterwards fails instead of writing events without positions.
+4. **Migrate the events, then the snapshots.** Stop the cutover while a table is reported `blocked`.
+5. **Deploy 4.0.**
+
+The events keep 3.x's order as their global positions, `1n`, `2n`, …, with every stream in version order, so `readAll` returns them the way `getAllEnvelopes` did.
+
+### PostgreSQL [#postgres-schema-v2]
+
+See [PostgreSQL](/integrations/postgres), with the [runbook](/integrations/postgres#migrating-from-3x), the schema, the privileges and the throughput per pool.
+
+```ts
+import { PostgresEventStore, PostgresSnapshotStore } from '@ocoda/event-sourcing-postgres';
+
+// Rehearse: writes nothing. legacyTimeZone is the time zone your 3.x instances ran in.
+await PostgresEventStore.migrate(config, { dryRun: true });
+await PostgresSnapshotStore.migrate(config, { dryRun: true, legacyTimeZone: 'Europe/Brussels' });
+// Back up, stop every 3.x instance, then:
+await PostgresEventStore.migrate(config);
+await PostgresSnapshotStore.migrate(config, { legacyTimeZone: 'Europe/Brussels' });
+```
+
+- **Events.** The tables gain `global_position` (a `BIGINT`, unique per pool), `headers` (`JSONB`) and `event_version`, and lose `event_date` and its index. The text columns become `TEXT`.
+- **Snapshots.** `registered_on` becomes a `TIMESTAMPTZ`, converted from `legacyTimeZone`, and a unique index keeps one `latest` flag per stream.
+- **The migration** runs one transaction per table under an exclusive lock, and keeps the table's OID (grants and publications survive) and the columns you added. A `blocked` table is reported, not thrown. Plan for about 0.5 minutes per million events under the lock (a provisional figure, extrapolated from 100,000 events), 3 times the table's size in free disk, and a `TRUNCATE` plus an insert of every row in publications; migrate the tables of a logical replication subscriber first. A 3.x instance that still writes afterwards fails (`column "event_date" does not exist`).
+- **The catalog.** `listCollections()` lists the tables the catalog registers, so 3.x tables no longer show up until they are migrated.
+- **New option `ddl`**: `'auto'` (default) creates missing tables and the catalog; `'none'` never runs DDL and throws with the statements to run instead. With `'none'`, grant `USAGE` on the schema, `SELECT`, `INSERT` and `UPDATE` on `event_sourcing_collections` and the snapshot tables, and `SELECT` and `INSERT` on the event tables.
+- **Reads of a pool without a table** throw an `EventCollectionNotFoundException`, and an append to a pool that isn't registered throws an `EventStorePersistenceException` with `outcome: 'not-persisted'`. A pool name whose table name is over 63 bytes is rejected.
+- **A `bigint` in an event payload** fails the append (`not-persisted`); store large integers as strings.
+- **Throughput.** Appends to one pool serialize on the pool's position counter. Spread heavy write loads over pools, and set an `idle_in_transaction_session_timeout` for the store's role, so that a writer that stalls in an append can't hold up its pool for long. An append is no longer limited to about 6,500 events.
+
+### MariaDB [#mariadb-schema-v2]
+
+See [MariaDB](/integrations/mariadb), with the [runbook](/integrations/mariadb#runbook), the schema, the capabilities and the privileges.
+
+```ts
+import { MariaDBEventStore, MariaDBSnapshotStore } from '@ocoda/event-sourcing-mariadb';
+
+// Rehearse: writes nothing. Review blocking, gappedStreams and canonicalizedStreams.
+await MariaDBEventStore.migrate(config, { dryRun: true });
+await MariaDBSnapshotStore.migrate(config, { dryRun: true });
+// Back up, stop every 3.x instance, then:
+await MariaDBEventStore.migrate(config);
+await MariaDBSnapshotStore.migrate(config);
+// Deploy 4.0. Once satisfied, drop the 3.x backups:
+await MariaDBEventStore.migrate(config, { keepBackup: false });
+```
+
+- **Events.** The event tables are copied into schema v2 and swapped in. They gain `global_position`, `headers` and `event_version` and lose `event_date`. The 3.x tables are kept as `<table>__es_v1` backups until a run with `keepBackup: false` drops them: keep them until the snapshots are migrated, which take the stream ids of their events from them. `occurred_on` keeps milliseconds (3.x truncated it to the second) as the UTC wall time; the migration restores it to the millisecond from the event ids, which also corrects the hours 3.x was off when the application ran in another time zone than the database server.
+- **Snapshots.** The snapshot tables are converted in place, and every stream gets exactly one latest snapshot, its highest version. `registered_on` keeps milliseconds.
+- **Stream ids are case-sensitive.** The tables compare text in binary (`utf8mb4_bin`), like the other stores; the 3.x tables used the database's default collation, which usually ignores case. The migration gives a 3.x stream whose rows have ids that differ in case only (`account-Acc-1` version 1, `account-acc-1` version 2) one stream id, the id of its lowest version, and its snapshots the id of its events; **from then on the application must use those ids**. The dry run lists them (`canonicalizedStreams`, see [Stream ids that differ in case only](/integrations/mariadb#case-variants)). Stream ids, aggregate ids and event names can be up to 255 characters.
+- **The migration** needs no server settings changed, only room for the copy: plan for about 3 minutes per million events (a provisional estimate), and free space of 1.5 times the event tables in the data directory and again in `tmpdir`. A user with `ALL PRIVILEGES` on the database runs it; a missing privilege of the copy or the swap fails it before the copy. On Galera it sizes its replication fragments for `wsrep_max_ws_size`. After the migration, a 3.x instance fails to append events (error 1136), but its snapshot writes still succeed, so stop every 3.x instance before you migrate.
+- **The catalog**, `event_sourcing_collections`, registers every event and snapshot table and holds each event pool's position counter. `listCollections()` reads it, so it lists 3.x tables only once they are migrated.
+- **A new `ddl` option**: `'auto'` (the default) creates the tables, `'none'` only checks and registers them, for users without `CREATE` privileges, and reports the statements to run.
+- **Capabilities**: `{ atomicAppend: true, headers: true, globalOrder: 'gap-safe' }`, and `'best-effort'` on a Galera cluster.
+- **Appends to one pool are serialized** by the pool's position counter, one commit at a time. Use pools to scale writes (see [Throughput](/integrations/mariadb#appends)).
+- **The stores' sessions run in `READ COMMITTED`**, added after your `initSql`. `readAll` must read from the server the appends run on: don't route the event store through a proxy that sends reads to replicas.
+
+### MongoDB [#mongodb-schema-v2]
+
+See [MongoDB](/integrations/mongodb), with the [migration steps](/integrations/mongodb#migrating-from-3x), the schema, the capabilities per topology and the privileges.
+
+```ts
+import { MongoDBEventStore, MongoDBSnapshotStore } from '@ocoda/event-sourcing-mongodb';
+
+// Rehearse: writes nothing.
+await MongoDBEventStore.migrate(config, { dryRun: true });
+await MongoDBSnapshotStore.migrate(config, { dryRun: true });
+// Back up, stop every 3.x instance, then:
+await MongoDBEventStore.migrate(config);
+await MongoDBSnapshotStore.migrate(config);
+```
+
+- **Events.** Event documents gain a 64-bit `globalPosition`, `headers` and `eventVersion`, and lose `eventDate`. Absent metadata is left out instead of stored as `null`. A validator requires the position, so 3.x writers fail loudly on a migrated collection. The events keep 3.x's order, `(eventDate, _id)`.
+- **Snapshots.** A unique index keeps a single latest snapshot per stream, also when appends race. An unflagged snapshot has no `latest` field (3.x stored `null`).
+- **The migration** took about a minute per million events, measured with 100,000 events (larger collections sort on disk and take longer), and writes about half a GB of oplog per million; a run that stopped resumes. A sharded collection, a server before MongoDB 5.0 and ids that aren't strings block it: see [Migrating from 3.x](/integrations/mongodb#migrating-from-3x) for the room it needs and everything that blocks a collection.
+- **Capabilities depend on the topology**, which `connect()` detects: a replica set (a single-node one is enough) is `{ atomicAppend: true, globalOrder: 'gap-safe' }`, a sharded cluster is atomic but `'best-effort'`, and a standalone server is `{ atomicAppend: false, globalOrder: 'best-effort' }`, with a warning when the store connects. Run MongoDB as a replica set.
+- **A catalog**, the `event_sourcing_collections` collection, holds the position counter of each pool and the schema version of each collection. `listCollections()` reads it, so it lists only collections that `ensureCollection` or `migrate()` registered.
+- **`ddl: 'none'`** is a new option of both stores: `ensureCollection` then only checks and registers collections, and names the mongosh statements that create a missing one.
+- **`disconnect()`** can be called more than once, and before `connect()`.
+
+### After the migration [#after-the-migration]
+
+- **Streams with a gap in their versions** conflict on their next append: 3.x accepted appends that left a gap, and 4.0 requires the stream to be at the expected version. The dry runs list them (`gappedStreams`), and the conflict's `actualVersion` is the version to append after.
+- **MariaDB stream ids**: use the ids that the report lists in `canonicalizedStreams`. 4.0 reads a stream id that differs from them in case only as another, empty stream.
+- **MariaDB backups**: once you are satisfied, run `MariaDBEventStore.migrate(config, { keepBackup: false })` to drop the `<table>__es_v1` backups.
+- **Event ids that aren't canonical ULIDs** stay readable; the dry runs count them.
+
 ## DynamoDB is not part of 4.0 [#dynamodb]
 
-The DynamoDB store (`@ocoda/event-sourcing-dynamodb`) is not released for 4.0. DynamoDB can't give the events a gap-free global order, which the read side planned for 4.0 relies on. You have two options:
+The DynamoDB store (`@ocoda/event-sourcing-dynamodb`) is not released for 4.0. DynamoDB can't give the events a gap-free global order, which the 4.0 read side relies on. You have two options:
 
-- **Stay on 3.x.** 3.x keeps receiving security and critical fixes. Install `@ocoda/event-sourcing@3` with `@ocoda/event-sourcing-dynamodb@3`, on NestJS 11.
-- **Move your data to another store**: PostgreSQL, MariaDB or MongoDB. There is no tool that exports the events from DynamoDB. From the next prerelease on, a 4.0 store can import them as pre-built envelopes: build the envelope of each event with `EventEnvelope.create()`, and append the envelopes of a stream in version order, with a numeric `expectedVersion` and `publish: false`. They keep their event ids, `occurredOn` and metadata, and get global positions in the order you append them. See [Event store API](#event-store-api).
+- **Stay on 3.x.** 3.x keeps receiving security and critical fixes until at least 2027-03-31. Install `@ocoda/event-sourcing@3` with `@ocoda/event-sourcing-dynamodb@3`, on NestJS 11.
+- **Move your data to another store**: PostgreSQL, MariaDB or MongoDB. There is no tool that exports the events from DynamoDB. A 4.0 store can import them as pre-built envelopes: build the envelope of each event with `EventEnvelope.create()`, and append the envelopes of a stream in version order, with a numeric `expectedVersion` and `publish: false`. They keep their event ids, `occurredOn` and metadata, and get global positions in the order you append them. See [Appending events](#event-store-api).
 
-## Before 4.0.0 [#coming-next]
+## Further reading [#further-reading]
 
-Every change that [ADR 0001: v4 core API](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0001-v4-core-api.md) plans for 4.0 ships in the next prerelease, and this guide describes it above. The ADR is still a proposal with open questions, so a later prerelease can still change details, or break something again; this guide will describe any such change, and the [changelog](https://github.com/ocoda/event-sourcing/blob/master/packages/core/CHANGELOG.md) lists it.
-
-The ADR's [migration guide](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0001-v4-core-api.md#migration-guide) summarizes the steps, including those for custom store authors.
+- The changelog of each package has an entry per change, with its migration steps: the [core](https://github.com/ocoda/event-sourcing/blob/master/packages/core/CHANGELOG.md), [PostgreSQL](https://github.com/ocoda/event-sourcing/blob/master/packages/integration/postgres/CHANGELOG.md), [MariaDB](https://github.com/ocoda/event-sourcing/blob/master/packages/integration/mariadb/CHANGELOG.md) and [MongoDB](https://github.com/ocoda/event-sourcing/blob/master/packages/integration/mongodb/CHANGELOG.md).
+- [ADR 0001: v4 core API](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0001-v4-core-api.md) and [ADR 0002: schema v2](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0002-schema-v2.md) record the design and the reasons behind these changes.
+- The [example application](https://github.com/ocoda/event-sourcing/tree/master/example) is a NestJS 12 application on PostgreSQL that uses the 4.0 API throughout.

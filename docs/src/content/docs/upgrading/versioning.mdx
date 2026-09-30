@@ -11,17 +11,21 @@ This page lists the release lines of Ocoda Event Sourcing, how to install each o
 | Line | npm dist-tag | Branch | Status | Fixes |
 | --- | --- | --- | --- | --- |
 | 4.x | `next` | `master` | Prerelease | Fixes and breaking changes ship in the next `4.0.0-next.N`. No stability or support guarantee until 4.0.0 is released. |
-| 3.x | `latest` | `3.x` | Supported | Security and critical bug fixes, released as 3.x patch versions. |
-| 2.x and older | none | none | Not supported | None. Upgrade to 3.x. |
+| 3.x | `latest` | `3.x` | Supported until at least 2027-03-31 | Security and critical bug fixes, released as 3.x patch versions. |
+| 2.x and older | none | none | Not supported | None. Upgrade to 3.x or 4.x. |
 
-To move an application from 3.x to 4.0, follow [Migrating from 3.x to 4.0](/upgrading/v4).
+To move an application from 3.x to 4.0, follow [Migrating from 3.x to 4.0](/upgrading/v4). The documentation of 3.x is at [ocoda.github.io/event-sourcing/v3](https://ocoda.github.io/event-sourcing/v3/).
+
+## 3.x support [#3x-support]
+
+3.x receives security and critical bug fixes until at least 2027-03-31, released as 3.x patch versions from the `3.x` branch. That includes the DynamoDB store, which 4.x doesn't have. New features go into 4.x only. The end of 3.x support will be announced here and in [SECURITY.md](https://github.com/ocoda/event-sourcing/blob/master/SECURITY.md) before it happens.
 
 ## npm dist-tags [#dist-tags]
 
 - **`latest`** points to 3.x. Until 4.0.0 is released, `npm install @ocoda/event-sourcing` installs 3.x.
 - **`next`** points to the newest 4.0 prerelease. Install it with `npm install @ocoda/event-sourcing@next`.
 
-To stay on a line regardless of the tags, install it by major version, for example `npm install @ocoda/event-sourcing@3`.
+To stay on a line regardless of the tags, install it by major version, for example `npm install @ocoda/event-sourcing@3`, or `@4` once 4.0.0 is released.
 
 <Aside type="caution">
 A later prerelease can contain breaking changes. When you install from `next`, pin the exact version (`npm install --save-exact`) and read the changelog before you move to the next one.
@@ -50,15 +54,17 @@ CI runs the tests of the core on Node.js 22 and 24, and the tests of each store 
 | Module format | ES modules only; CommonJS applications load them through `require()` | CommonJS |
 | PostgreSQL | 14, 15, 16, 17, 18 | 13, 14, 15, 16, 17 |
 | MariaDB | 10.11, 11.4, 11.8, 12.3 (long-term releases), 13.0 (rolling release) | 10.11, 11.4 |
-| MongoDB | 7, 8 (the newest 8.x, 8.3), 9.0; 8.3 and 9.0 with `mongodb` 7.3 or later | 6, 7, 8 (the newest 8.x, 8.3) |
+| MongoDB | 7, 8 (the newest 8.x, 8.3), 9.0; 8.3 and 9.0 with `mongodb` 7.3 or later | 6, 7, 8.2 |
 | DynamoDB | Not available | DynamoDB Local 3.3.1 |
 | Database drivers | Peer dependencies, installed by you | Installed by the integration |
+
+TypeScript projects on 4.x need TypeScript 5.4 or later: the type declarations of the command and query buses use `NoInfer`.
 
 MariaDB supports a rolling release only until the next one, so the 4.x tests move on to each new rolling release. PostgreSQL 13 and MongoDB 6 reached their end of life at their vendors in 2025, so 4.x is no longer tested on them; 3.x still is. See [Database server versions](/upgrading/v4#database-versions).
 
 On 4.x the drivers are peer dependencies with these ranges: `pg` `^8.15.0` with `pg-cursor` `^2.14.0`, `mongodb` `^6.10.0 || ^7.0.0`, and `mariadb` `^3.5.3`. See [Database drivers are peer dependencies](/upgrading/v4#drivers).
 
-Each driver release supports the database servers up to a version of its own, so a new server can need a newer driver than the lowest one the range allows. MongoDB 8.3 and 9.0 need `mongodb` 7.3 or later: 6.21, the last 6.x release, and 7.0 to 7.2 support MongoDB up to 8.2 (see [MongoDB](/integrations/mongodb)). 3.x installs the 6.x driver itself, so it supports MongoDB up to 8.2, even though its tests run on the newest 8.x release.
+Each driver release supports the database servers up to a version of its own, so a new server can need a newer driver than the lowest one the range allows. MongoDB 8.3 and 9.0 need `mongodb` 7.3 or later: 6.21, the last 6.x release, and 7.0 to 7.2 support MongoDB up to 8.2 (see [MongoDB](/integrations/mongodb)). 3.x installs the 6.x driver itself, so it supports MongoDB up to 8.2, the newest version its tests run on.
 
 ## Semantic versioning [#semver]
 
@@ -70,7 +76,7 @@ The packages follow [semantic versioning](https://semver.org):
 
 Every change to a published package comes with a [changeset](https://github.com/changesets/changesets), which becomes its entry in the changelog. The changelog of each package is in its folder on GitHub, for example [the core's CHANGELOG.md](https://github.com/ocoda/event-sourcing/blob/master/packages/core/CHANGELOG.md).
 
-- **4.x:** until 4.0.0 is released, every release is a `4.0.0-next.N` prerelease under the `next` tag. Prereleases carry no compatibility promise, so each one can contain breaking changes. They are listed in the changelog with the steps to migrate, and in [Migrating from 3.x to 4.0](/upgrading/v4).
+- **4.x:** until 4.0.0 is released, every release is a `4.0.0-next.N` prerelease under the `next` tag. Prereleases carry no compatibility promise, so each one can contain breaking changes. They are listed in the changelog with the steps to migrate, and in [Migrating from 3.x to 4.0](/upgrading/v4). The 3.x APIs that 4.0 deprecates, such as the positional `appendEvents` and `commit()`, keep working until 5.0.
 - **3.x:** only patch releases, from the `3.x` branch.
 
 ## Getting help and reporting problems [#help]

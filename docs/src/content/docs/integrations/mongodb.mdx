@@ -10,8 +10,8 @@ import { Aside } from '@astrojs/starlight/components';
 Use `mongodb` 7.3 or later with MongoDB 8.3 or 9.0: it's the first driver release whose supported servers go beyond 8.2, up to 9.0. The last 6.x release, 6.21, and 7.0 to 7.2 support MongoDB up to 8.2. An older driver still connects to a newer server, because a driver only refuses a server that requires a newer wire protocol than it speaks, but MongoDB doesn't support that combination, and the tests on 8.3 and 9.0 use a 7.x driver that does. The peer range stays `^6.10` or `^7`, for the servers up to 8.2.
 </Aside>
 
-<Aside type="note" title="4.0 prerelease">
-This page describes schema v2, which the MongoDB stores use from the next prerelease on. Collections that 3.x created must be migrated once, offline: see [Migrating from 3.x](#migrating-from-3x). The design is in [ADR 0002](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0002-schema-v2.md).
+<Aside type="caution" title="Coming from 3.x?">
+4.0 stores events and snapshots in a new schema (schema v2). Collections that 3.x created must be migrated once, offline: see [Migrating from 3.x](#migrating-from-3x). The design is in [ADR 0002](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0002-schema-v2.md).
 </Aside>
 
 ## Configuration [#configuration]

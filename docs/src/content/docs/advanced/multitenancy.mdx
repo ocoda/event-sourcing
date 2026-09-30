@@ -20,8 +20,8 @@ By default the event- and snapshot-store create a shared collection of streams f
    import { Module } from '@nestjs/common';
    import {
        EventSourcingModule,
-       InMemoryEventStore, // exported since 3.0.1
-       InMemorySnapshotStore, // exported since 3.0.1
+       InMemoryEventStore,
+       InMemorySnapshotStore,
    } from '@ocoda/event-sourcing';
 
    @Module({
@@ -41,10 +41,6 @@ By default the event- and snapshot-store create a shared collection of streams f
    })
    export class AppModule {}
    ```
-
-   <Aside>
-   `InMemoryEventStore` and `InMemorySnapshotStore` are exported from `@ocoda/event-sourcing` since 3.0.1. In earlier versions they can't be imported from the package.
-   </Aside>
 
    </TabItem>
    <TabItem label="PostgreSQL">
@@ -79,7 +75,7 @@ By default the event- and snapshot-store create a shared collection of streams f
    export class AppModule {}
    ```
 
-   Every pool is stored in its own pair of tables in the same database, e.g. `tenant-1-events` and `tenant-1-snapshots`.
+   Every pool is stored in its own pair of tables in the same database, e.g. `tenant-1-events` and `tenant-1-snapshots`, and has its own global positions: `readAll({ pool })` reads one pool. The MariaDB and MongoDB stores work the same way, with tables or collections.
 
    </TabItem>
    </Tabs>
@@ -121,10 +117,6 @@ By default the event- and snapshot-store create a shared collection of streams f
 
    <Aside type="caution">
    The name of a pool becomes part of the name of a collection or table in your database. Validate the tenant identifiers you turn into pool names, and keep them short. PostgreSQL, for instance, limits the length of a table name to 63 bytes.
-   </Aside>
-
-   <Aside>
-   The in-memory stores only leave an existing pool untouched when `ensureCollection` is called again since 3.0.1. In earlier versions calling it for an existing pool emptied that pool.
    </Aside>
 
 3. ### Provide a pool when interacting with the event-store or snapshot-repository

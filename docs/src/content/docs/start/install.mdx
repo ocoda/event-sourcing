@@ -4,11 +4,15 @@ title: Installation
 
 import { Aside, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
 
+<Aside type="caution" title="4.0 is in prerelease">
+Until 4.0.0 is released, `npm install @ocoda/event-sourcing` installs 3.x. Install 4.0 from the `next` tag and pin the exact version: `npm install --save-exact @ocoda/event-sourcing@next`, and the same for the integration. See [Versioning and support](/upgrading/versioning#dist-tags).
+</Aside>
+
 This library consists of a core module `@ocoda/event-sourcing` that provides the building blocks and can be complemented with an integration library for setting up a persistence layer for your events using a specific database provider.
 
 By default the core library will use an in-memory event- and snapshot-store, which is useful for testing and prototyping, but not recommended for production use.
 
-The packages require Node.js 22.12 or later and NestJS 12. They are published as ES modules only: CommonJS applications can keep using `require()` (or TypeScript's CommonJS output), which Node.js supports for ES modules since 22.12. From the next prerelease on, TypeScript projects need TypeScript 5.4 or later: the [typed buses](/upgrading/v4#typed-buses) use `NoInfer` in their type declarations.
+The packages require Node.js 22.12 or later and NestJS 12. They are published as ES modules only: CommonJS applications can keep using `require()` (or TypeScript's CommonJS output), which Node.js supports for ES modules since 22.12. TypeScript projects need TypeScript 5.4 or later: the [typed buses](/upgrading/v4#typed-buses) use `NoInfer` in their type declarations.
 
 The database drivers are peer dependencies of the integration libraries, so you install the driver next to the integration and choose its version yourself. TypeScript projects using PostgreSQL also need `@types/pg` and `@types/pg-cursor`.
 
@@ -96,7 +100,7 @@ Upgrading an application from 3.x? Follow [Migrating from 3.x to 4.0](/upgrading
    </Tabs>
 
    <Aside title="DynamoDB">
-   The DynamoDB store is not part of 4.0: DynamoDB can't give the events a gap-free global order, which the 4.0 read side relies on. It remains available on the 3.x line (NestJS 11, CommonJS), which still receives fixes: install `@ocoda/event-sourcing@3` with `@ocoda/event-sourcing-dynamodb@3`. On 3.x the AWS SDK clients ship as dependencies of the integration, so there is no driver peer to add.
+   The DynamoDB store is not part of 4.0: DynamoDB can't give the events a gap-free global order, which the 4.0 read side relies on. It remains available on the 3.x line (NestJS 11, CommonJS), which receives security and critical fixes until at least 2027-03-31: install `@ocoda/event-sourcing@3` with `@ocoda/event-sourcing-dynamodb@3`. On 3.x the AWS SDK clients ship as dependencies of the integration, so there is no driver peer to add.
    </Aside>
 
 </Steps>
@@ -106,7 +110,7 @@ Upgrading an application from 3.x? Follow [Migrating from 3.x to 4.0](/upgrading
 ### Basic setup [#basic-setup]
 For setting up the module you need to import the `EventSourcingModule` and configure it.
 
-For the basic setup you don't need to configure a store, the module falls back to an in-memory event- and snapshot-store. The `events` array, an array of event classes that are used to define the events, is optional since 3.0.0: you can also register the events per feature module, see [Module configuration](/start/module-configuration#for-feature).
+For the basic setup you don't need to configure a store, the module falls back to an in-memory event- and snapshot-store. The `events` array, an array of event classes that are used to define the events, is optional: you can also register the events per feature module, see [Module configuration](/start/module-configuration#for-feature).
 While this is great for testing and prototyping, you won't be able to persist the events and snapshots. If you require persistence skip to the [advanced setup](/start/install#advanced-setup).
 
 ```typescript {14-19}

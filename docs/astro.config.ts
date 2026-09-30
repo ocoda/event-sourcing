@@ -115,6 +115,11 @@ export default defineConfig({
 				// Fails the build on a broken internal link or heading anchor.
 				starlightLinksValidator(),
 				starlightLlmsTxt({
+					details: [
+						'- These pages document `@ocoda/event-sourcing` 4.x and its store integrations: NestJS 12, ES modules only, Node.js 22.12 or later.',
+						'- To upgrade an application from 3.x, follow "Migrating from 3.x to 4.0", which lists every breaking change in the order in which to apply them.',
+						'- The 3.x documentation (NestJS 11, CommonJS) is at https://ocoda.github.io/event-sourcing/v3/.',
+					].join('\n'),
 					// Pages in the order of the sidebar, without the heading anchor links.
 					promote: pages,
 					customSelectors: { all: ['.sl-anchor-link'] },

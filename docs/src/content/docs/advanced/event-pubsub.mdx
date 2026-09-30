@@ -9,7 +9,7 @@ Whenever the `EventStore` appends events, the produced `EventEnvelope`s get publ
 - an **event subscriber** reacts to specific events inside your application, e.g. to update a read model or to send an email.
 - an **event publisher** receives every envelope, e.g. to push it to Redis, SNS or Kafka.
 
-Both receive the `EventEnvelope`, not the event instance. Next to the serialized `payload` of the event, the envelope carries the name of the event (`event`) and its `metadata`: the `eventId`, the `aggregateId`, the `version` of the aggregate, when the event `occurredOn`, and optionally a `correlationId` and `causationId`.
+Both receive the `EventEnvelope`, not the event instance. Next to the serialized `payload` of the event, the envelope carries the name of the event (`event`) and its `metadata`: the `eventId`, the `aggregateId`, the `version` of the aggregate, when the event `occurredOn`, its `globalPosition` in the pool, and optionally a `correlationId`, a `causationId` and `headers` (see [Envelopes](/under-the-hood/envelopes)).
 
 ## Event subscribers [#event-subscribers]
 
@@ -80,10 +80,6 @@ export class BatchEventPublisher implements IEventPublisher {
 
 ## Delivery semantics [#delivery-semantics]
 
-<Aside type="note" title="4.0 prerelease">
-The awaited publishers, their order per stream, `publisherTimeout`, `deliveryErrors$`, `whenIdle()` and the drained shutdown described below ship in the next prerelease. See [Publishing](/upgrading/v4#publishing).
-</Aside>
-
 Knowing how events are delivered matters, especially when you publish them to other systems.
 
 - **In-process:** the envelopes are published in the process that appended the events. Subscribers in other instances of your application don't receive them, and neither do consumers outside your application unless you add an event publisher that sends them there.
@@ -93,11 +89,7 @@ Knowing how events are delivered matters, especially when you publish them to ot
 - **Publisher timeout:** a call to `publish` or `publishAll` may take at most `publishing.publisherTimeout` milliseconds, 30 s by default. After that the bus reports a timeout and moves on to the next envelope; set it to `0` to wait as long as a publisher takes. An append waits up to that timeout for each call to each publisher, and for the calls of earlier appends to the same stream that the publisher still handles.
 - **Publishers that publish:** a publisher may append events, or call `eventBus.publish()`, from inside its `publish`. It gets those envelopes at once, instead of after the call that waits for them. The other publishers and the subscribers get them as usual. Two publishers that each append to the same stream from inside their own call, and await it, wait for each other until their calls time out, or for good with a `publisherTimeout` of `0`. The subscribers are fed after the other publishers, so what a subscriber appends to a stream in reaction to an event reaches the publishers after that event.
 - **Subscribers are not awaited:** they are started while the envelopes are being published, in the order in which the envelopes were appended, and run in parallel. `appendEvents` doesn't wait for the promises they return, so they can still be running when it resolves. They can overlap and finish in any order, so make them idempotent and don't depend on the order in which they complete.
-- **Failures are isolated (since 3.0.1):** an error thrown by a subscriber, or a promise it rejects, is logged (logger context `EventBus`, with the name of the event and the subscriber) and doesn't affect anything else. The subscriber keeps receiving later events and the other subscribers still get theirs. A publisher that fails or times out is logged as well, it still gets the later envelopes, the other publishers aren't affected, and `appendEvents` still resolves, because the events are already stored. Every failure is also reported on [`deliveryErrors$`](#delivery-errors).
-
-<Aside type="caution">
-Before 3.0.1 a subscriber that threw, or returned a rejected promise, was unsubscribed for good and its error was rethrown as an uncaught exception, which stops the Node.js process by default. Rejections from asynchronous publishers were unhandled, and a publisher that threw synchronously made `appendEvents` fail after the events had been stored. Upgrade to 3.0.1 or handle errors inside your subscribers and publishers.
-</Aside>
+- **Failures are isolated:** an error thrown by a subscriber, or a promise it rejects, is logged (logger context `EventBus`, with the name of the event and the subscriber) and doesn't affect anything else. The subscriber keeps receiving later events and the other subscribers still get theirs. A publisher that fails or times out is logged as well, it still gets the later envelopes, the other publishers aren't affected, and `appendEvents` still resolves, because the events are already stored. Every failure is also reported on [`deliveryErrors$`](#delivery-errors).
 
 Since a failure is only logged and reported, handle errors that matter inside your subscriber or publisher, for example by retrying or by storing what failed. If you can't afford to lose an envelope, use the outbox pattern below.
 
@@ -139,7 +131,7 @@ EventSourcingModule.forRoot({
 
 The library doesn't come with an outbox. Publishing happens after the events are stored, and the two aren't part of one transaction: the process can stop in between, and the envelope is lost for your subscribers and publishers. If you need every event to reach an external system, you can add that guarantee yourself:
 
-- **A custom event store that writes an outbox.** Implement your own [event store](/advanced/custom-stores), or extend an existing one and override `persistEvents` (the built-in database stores call `persistEvents` from schema v2 on), so that the events and the outbox rows are inserted in the same database transaction. A separate process reads the unsent rows, sends them to your broker and marks them as sent.
+- **A custom event store that writes an outbox.** Implement your own [event store](/advanced/custom-stores), or extend an existing one and override `persistEvents`, which every store implements, so that the events and the outbox rows are inserted in the same database transaction. A separate process reads the unsent rows, sends them to your broker and marks them as sent.
 - **Change data capture (CDC).** The events table or collection is append-only, so a CDC tool such as Debezium (or the change streams of MongoDB) can forward every new row to your broker, without your application being involved in the publishing.
 - **Pull instead of push.** A consumer can catch up, or rebuild a read model, by reading the stored envelopes with `eventStore.readAll({ fromPosition })` and storing the `globalPosition` of the last envelope it processed as its checkpoint. See [Reading all events](/under-the-hood/event-store#reading-all-events). On a store whose global order is `'gap-safe'`, a consumer that resumes after its checkpoint misses no event; one that stops before it saved its checkpoint reads the last events again.
 

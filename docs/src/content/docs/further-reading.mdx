@@ -2,10 +2,20 @@
 title: Further reading
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+Want to learn more about the concepts used in this library? These resources are a good place to start.
 
-Want to learn more about the concepts used in this library? We've got you covered. Here's a list of resources that can help you get started:
+## Domain-Driven Design
 
-<Aside type="caution" title="Under construction">
-This page is under construction.
-</Aside>
+- Eric Evans, *Domain-Driven Design: Tackling Complexity in the Heart of Software*: the book that introduced the approach. See [domainlanguage.com](https://www.domainlanguage.com/ddd/) for the reference and other material.
+- Vaughn Vernon, *Implementing Domain-Driven Design*: aggregates, value objects, repositories and domain events in practice.
+
+## CQRS and Event Sourcing
+
+- Martin Fowler on [Event Sourcing](https://martinfowler.com/eaaDev/EventSourcing.html) and [CQRS](https://martinfowler.com/bliki/CQRS.html).
+- The [Event Sourcing](https://learn.microsoft.com/en-us/azure/architecture/patterns/event-sourcing) and [CQRS](https://learn.microsoft.com/en-us/azure/architecture/patterns/cqrs) patterns in the Azure Architecture Center, with their trade-offs.
+- Greg Young, [*Versioning in an Event Sourced System*](https://leanpub.com/esversioning): how to change events once they are stored.
+
+## NestJS
+
+- The [CQRS recipe](https://docs.nestjs.com/recipes/cqrs) of the NestJS documentation, whose `@nestjs/cqrs` inspired this library.
+- The [example application](https://github.com/ocoda/event-sourcing/tree/master/example) of this repository: a NestJS 12 application on PostgreSQL with aggregates, typed commands and queries, snapshots, subscribers, a publisher and `readAll`.
