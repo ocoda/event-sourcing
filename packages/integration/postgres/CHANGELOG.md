@@ -1,5 +1,32 @@
 # @ocoda/event-sourcing-postgres
 
+## 4.0.0-next.2
+
+### Major Changes
+
+- [#570](https://github.com/ocoda/event-sourcing/pull/570) [`466b520`](https://github.com/ocoda/event-sourcing/commit/466b5201d318bf6be3ff205c330580b846a530e1) Thanks [@drieshooghe](https://github.com/drieshooghe)! - **PostgreSQL schema v2: global positions, `readAll`, headers, and `migrate()` for 3.x tables.** The PostgreSQL stores now implement the 4.0 store contract natively. Existing 3.x tables must be migrated once, offline: the event store refuses them. See the [PostgreSQL page](https://ocoda.github.io/event-sourcing/integrations/postgres) and its [migration runbook](https://ocoda.github.io/event-sourcing/integrations/postgres#migrating-from-3x).
+  
+  - **Events.** Every event gets a `globalPosition` (a bigint per pool, from `1n`), returned by the append and by every read. `readAll({ fromPosition, batch, pool })` reads a pool in that order and replaces `getAllEnvelopes`, which is removed. Appends store the `correlationId`, `causationId` and `headers` of the options, and the `eventVersion` of pre-built envelopes, and support `ExpectedVersion.Any`. The capabilities are `{ atomicAppend: true, headers: true, globalOrder: 'gap-safe' }`: appends to a pool serialize on its position counter, so a reader that tails `readAll` never misses an event.
+  - **Schema.** Event tables gain `global_position` (unique), `headers` and `event_version`, lose `event_date` and its index, and their text columns become `TEXT`. A catalog table, `event_sourcing_collections`, registers the tables and counts the positions of each pool; `listCollections()` lists what it registers. Snapshot tables get a `TIMESTAMPTZ` `registered_on` and a unique index that keeps one `latest` flag per stream.
+  - **3.x tables.** `ensureCollection` throws an `EventStoreSchemaException` (`found: 'v1'`) for a 3.x event table, so the application doesn't bootstrap on a 3.x default pool until it is migrated; it never migrates by itself. A 3.x snapshot table keeps working, with a warning, until it is migrated.
+  - **`PostgresEventStore.migrate(config, options)` and `PostgresSnapshotStore.migrate(config, options)`** (also on a connected store: `store.migrate(options)`) migrate the 3.x tables of the schema, one transaction per table, keeping the table's OID and the columns you added. A `dryRun: true` run writes nothing and reports each table's blocking issues (views, policies, triggers, publications or generated columns on the changed columns, missing privileges, truncated table names), gapped streams, dependents and the exact statements. Events are numbered in 3.x's order, with every stream kept in version order. Snapshots: pass `legacyTimeZone`, the time zone your 3.x instances ran in, to convert `registered_on`. `migrations/4.0.sql` in the package holds the same statements for the default pools, for DBAs using psql; it can run again after a failure.
+  - **New option `ddl: 'auto' | 'none'`.** `'auto'` (default) creates missing tables and the catalog. `'none'` never runs DDL: a missing table or catalog throws, with the statements that create it.
+  - **Snapshots.** The last snapshot of a stream is the one with the highest version. `getLastEnvelopesForAggregate` (so `loadAll`) orders the streams in descending binary order of their aggregate ids, and `filter.aggregateId` is an exclusive cursor; it was ignored.
+  - **Errors.** Reads of a pool whose table doesn't exist throw an `EventCollectionNotFoundException`. An append to a pool that isn't registered in the catalog, or whose payload can't be stored (a `bigint`, for instance: store large integers as strings), throws an `EventStorePersistenceException` with `outcome: 'not-persisted'`. A pool name whose table name is longer than 63 bytes is rejected instead of being truncated by PostgreSQL.
+  - **An append is no longer limited to about 6,500 events**, and `disconnect()` is idempotent and does nothing before `connect()`.
+  
+  **Migration**
+  
+  1. Take a backup, then run `PostgresEventStore.migrate(config, { dryRun: true })` and `PostgresSnapshotStore.migrate(config, { dryRun: true, legacyTimeZone: 'Europe/Brussels' })` and review the reports.
+  2. Stop every 3.x instance, then run both without `dryRun`: the events first. Stop the cutover while a table is reported `blocked`. Each table is locked while it is migrated (about 0.5 minutes per million events, a provisional figure) and needs up to 3 times its size in free disk.
+  3. Deploy 4.0. A 3.x instance that still writes fails (`column "event_date" does not exist`), and a stream with a gap in its versions conflicts on its next append.
+  4. With `ddl: 'none'`, grant `USAGE` on the schema, `SELECT`, `INSERT` and `UPDATE` on `event_sourcing_collections` and the snapshot tables, and `SELECT` and `INSERT` on the event tables.
+
+### Patch Changes
+
+- Updated dependencies [[`c62d7ce`](https://github.com/ocoda/event-sourcing/commit/c62d7ce1f93007b73437888c42c32d5b1a6547e3), [`f124698`](https://github.com/ocoda/event-sourcing/commit/f1246981d8e46ec56157e7e15e36a1f63538fac2), [`6443fae`](https://github.com/ocoda/event-sourcing/commit/6443fae132e584776fa75cda6e9d3a8798647da8), [`7f1e82c`](https://github.com/ocoda/event-sourcing/commit/7f1e82cb91dff9eb458cfcca8600889e865ba52d), [`117cb88`](https://github.com/ocoda/event-sourcing/commit/117cb88f62796521fc28e8bb9f962a674d12139b), [`37c679c`](https://github.com/ocoda/event-sourcing/commit/37c679ca62393c8c3cc6208a995eadc2f83fd5f8), [`65303fc`](https://github.com/ocoda/event-sourcing/commit/65303fc99a48f65ec2b3f8c104f4f9b3b6d1644e), [`433e151`](https://github.com/ocoda/event-sourcing/commit/433e1516810e0e654deda995fcd366755a3a288d), [`c63ab9b`](https://github.com/ocoda/event-sourcing/commit/c63ab9bda8224fd8ba1d682525e92c8c588cad23), [`29aa8fe`](https://github.com/ocoda/event-sourcing/commit/29aa8fee3d881524e37095a281c592b0b1f1464b), [`11dacb2`](https://github.com/ocoda/event-sourcing/commit/11dacb2f7a146245c19a3efd76e254b09fb4294e), [`57b20c5`](https://github.com/ocoda/event-sourcing/commit/57b20c55a6dbed7632e0e0511f0cfba3efb5a519), [`ee00755`](https://github.com/ocoda/event-sourcing/commit/ee007553983d7cdebba6bdf23bf557a83eebe834)]:
+  - @ocoda/event-sourcing@4.0.0-next.2
+
 ## 4.0.0-next.1
 
 ### Patch Changes

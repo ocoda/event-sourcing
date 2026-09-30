@@ -1,5 +1,52 @@
 # @ocoda/event-sourcing-mariadb
 
+## 4.0.0-next.2
+
+### Major Changes
+
+- [#597](https://github.com/ocoda/event-sourcing/pull/597) [`8c98184`](https://github.com/ocoda/event-sourcing/commit/8c9818402947d165e2f9c02717e12f084270e5a0) Thanks [@drieshooghe](https://github.com/drieshooghe)! - The `mariadb` peer dependency now requires `^3.5.3` (was `^3.0.0`). Connector versions below it are affected by three advisories: the cleartext password can leak to a man-in-the-middle despite `ssl: true` (GHSA-cqhc-2h57-wpxf, high), credentials can be sent unprotected (GHSA-42r5-vhpq-m858) and `Buffer` parameters can be escaped unsafely under some multi-byte client character sets (GHSA-g5xc-5w98-jfvm). Upgrade the driver with your package manager, for example `npm install mariadb@^3.5.3`.
+
+- [#571](https://github.com/ocoda/event-sourcing/pull/571) [`11d0fb3`](https://github.com/ocoda/event-sourcing/commit/11d0fb3e0fea554e82bda920c4f2e93e50caba46) Thanks [@drieshooghe](https://github.com/drieshooghe)! - **MariaDB schema v2: the MariaDB stores implement the 4.0 store contract.** `MariaDBEventStore` stores global positions, metadata and headers and reads all events with `readAll`; `MariaDBSnapshotStore` keeps one latest snapshot per stream. Tables created by 3.x must be migrated once with `migrate()`. See [MariaDB](https://ocoda.github.io/event-sourcing/integrations/mariadb) and the [4.0 migration guide](https://ocoda.github.io/event-sourcing/upgrading/v4#mariadb-schema-v2).
+  
+  - **Event store.** The options form of `appendEvents` with `ExpectedVersion.Any`, `correlationId`, `causationId` and `headers`, and `readAll({ fromPosition, batch, pool })` with a `globalPosition` per pool from `1n`. Capabilities: `{ atomicAppend: true, headers: true, globalOrder: 'gap-safe' }` on InnoDB, `'best-effort'` on a Galera cluster. `getAllEnvelopes` is removed: use `readAll({ fromPosition, batch, pool })`. Appends run in `READ COMMITTED` and take their positions from a counter per pool, so the appends to one pool are serialized; use pools to scale writes. The stores' sessions run in `READ COMMITTED` (added after your `initSql`), and `readAll` must read from the server the appends run on, not from a replica behind a read/write-splitting proxy.
+  - **Schema v2.** Event tables gain `global_position`, `headers` and `event_version` and lose `event_date`; `occurred_on` and `registered_on` are `DATETIME(3)` in UTC (milliseconds, independent of the application's time zone); text compares in binary (`utf8mb4_bin`), so **stream ids are case-sensitive**; ids and names can be up to 255 characters. A catalog table, `event_sourcing_collections`, registers every table and holds the position counters; `listCollections()` reads it.
+  - **3.x event tables are refused** by `ensureCollection()` with an `EventStoreSchemaException` (`found: 'v1'`), so an application whose default pool has one fails its bootstrap until it is migrated. Reads of a pool without a table throw an `EventCollectionNotFoundException`; appends to it an `EventStorePersistenceException` with `outcome: 'not-persisted'`.
+  - **`ddl: 'auto' | 'none'`.** `'none'` never creates or alters tables: `ensureCollection()` checks and registers them, and reports the statements to run.
+  - **Snapshots.** The last snapshot of a stream is its highest version, a unique key allows one latest snapshot per stream also when appends race, and `getLastEnvelopesForAggregate` (`loadAll`) pages in descending binary order with an exclusive `aggregateId` cursor. A 3.x snapshot table keeps working, with a warning, until it is migrated.
+  - **`migrate()`.** `MariaDBEventStore.migrate(config, options)` and `MariaDBSnapshotStore.migrate(config, options)` (static, no NestJS application needed; also on a connected store) migrate the 3.x tables, with a `dryRun` that writes nothing and reports the exact statements, gapped streams, case-variant stream ids and the `occurred_on` repair. Event tables are copied, numbered in 3.x's order and swapped in, keeping the 3.x table as `<table>__es_v1`; `occurred_on` is restored to the millisecond from the event ids, which also corrects values that 3.x stored hours off when the application ran in another time zone than the server. Snapshot tables are converted in place. A failed run continues where it stopped. `migrations/4.0.sql` holds the statements for the default pool.
+  - `connect()` fails the bootstrap on a bad connection, and `disconnect()` can be called more than once.
+  
+  **Migration**
+  
+  1. Take a backup, then run the dry runs with the 4.0 package and review the reports:
+  
+     ```ts
+     await MariaDBEventStore.migrate(config, { dryRun: true });
+     await MariaDBSnapshotStore.migrate(config, { dryRun: true });
+     ```
+  
+  2. Stop every 3.x instance: the migration is offline. 3.x event appends fail afterwards (error 1136), but 3.x snapshot writes would still succeed.
+  3. Run `MariaDBEventStore.migrate(config)`, then `MariaDBSnapshotStore.migrate(config)`, then deploy 4.0. Plan for about 3 minutes per million events, and free space of 1.5 times the event tables in the data directory and again in `tmpdir`.
+  4. Drop the `<table>__es_v1` backups when you are satisfied: run `MariaDBEventStore.migrate(config, { keepBackup: false })` once more.
+  5. A 3.x stream whose rows have ids that differ in case only is one stream under the id of its lowest version, which the dry run lists (`canonicalizedStreams`): use those ids from now on. A stream with a gap in its versions conflicts on its next append; append after the conflict's `actualVersion`.
+
+### Minor Changes
+
+- [#596](https://github.com/ocoda/event-sourcing/pull/596) [`f124698`](https://github.com/ocoda/event-sourcing/commit/f1246981d8e46ec56157e7e15e36a1f63538fac2) Thanks [@drieshooghe](https://github.com/drieshooghe)! - **The MariaDB migration keeps 3.x streams whose ids differ in case only as one stream, and needs less work by hand.** The 3.x tables compared stream ids case-insensitively, so one 3.x stream could hold `account-Acc-1` version 1 and `account-acc-1` version 2. Schema v2 compares stream ids in binary, and the migration used to split such a stream into two, one of them starting at version 2.
+  
+  - **One stream id per 3.x stream.** `MariaDBEventStore.migrate()` gives every row of such a stream the stream id of its lowest version (`account-Acc-1`), and a renamed row the aggregate id of that version when the two differ in case only. `MariaDBSnapshotStore.migrate()` gives every snapshot stream the stream id of its events, from the pool's 3.x event table or its `__es_v1` backup, or else the id of its lowest snapshot. It is deterministic, and a rerun after a crash ends in the same state. **After the migration, use those stream ids**: 4.0 reads `account-acc-1` as another, empty stream. Keep the events' backups (the default) until the snapshots are migrated.
+  - **The report lists them.** A new `canonicalizedStreams: { total, rows, sample }` on `MigrationCollectionReport` gives, per stream, the id it takes, the ids it replaces and the rows that change (a sample of up to 1,000 streams), in the dry run and in the migration's report, with a warning that shows a few. `caseVariantStreams` now also counts snapshot streams. `gappedStreams` and `snapshotFlags` count a 3.x stream once, so a case-variant stream no longer shows up as gapped.
+  - **A missing privilege fails before the copy.** The event migration renames the empty copy and back (`probe-swap`), which needs the swap's privileges, so a user without `ALTER` fails there instead of at the swap after the whole copy. The dry run still can't check privileges.
+  - **Lock waits name the sessions.** With the `PROCESS` privilege, a step that times out on a lock lists the sessions with an open transaction (`KILL <id>` ends one).
+  - **Galera.** The migration replicates in fragments of 64 MiB, or of half the node's `wsrep_max_ws_size` when that is smaller, so it no longer fails on a smaller `wsrep_max_ws_size`.
+  - **Dropping the backups** needs no SQL: run `MariaDBEventStore.migrate(config, { keepBackup: false })` again, after the snapshots are migrated. When `keepBackup: false` would drop the backup of a pool whose snapshot table isn't migrated yet, the dry run and the report warn about it.
+  - `migrations/4.0.sql` has the new statements, and suggests dropping the events' backup only after the snapshots.
+
+### Patch Changes
+
+- Updated dependencies [[`c62d7ce`](https://github.com/ocoda/event-sourcing/commit/c62d7ce1f93007b73437888c42c32d5b1a6547e3), [`f124698`](https://github.com/ocoda/event-sourcing/commit/f1246981d8e46ec56157e7e15e36a1f63538fac2), [`6443fae`](https://github.com/ocoda/event-sourcing/commit/6443fae132e584776fa75cda6e9d3a8798647da8), [`7f1e82c`](https://github.com/ocoda/event-sourcing/commit/7f1e82cb91dff9eb458cfcca8600889e865ba52d), [`117cb88`](https://github.com/ocoda/event-sourcing/commit/117cb88f62796521fc28e8bb9f962a674d12139b), [`37c679c`](https://github.com/ocoda/event-sourcing/commit/37c679ca62393c8c3cc6208a995eadc2f83fd5f8), [`65303fc`](https://github.com/ocoda/event-sourcing/commit/65303fc99a48f65ec2b3f8c104f4f9b3b6d1644e), [`433e151`](https://github.com/ocoda/event-sourcing/commit/433e1516810e0e654deda995fcd366755a3a288d), [`c63ab9b`](https://github.com/ocoda/event-sourcing/commit/c63ab9bda8224fd8ba1d682525e92c8c588cad23), [`29aa8fe`](https://github.com/ocoda/event-sourcing/commit/29aa8fee3d881524e37095a281c592b0b1f1464b), [`11dacb2`](https://github.com/ocoda/event-sourcing/commit/11dacb2f7a146245c19a3efd76e254b09fb4294e), [`57b20c5`](https://github.com/ocoda/event-sourcing/commit/57b20c55a6dbed7632e0e0511f0cfba3efb5a519), [`ee00755`](https://github.com/ocoda/event-sourcing/commit/ee007553983d7cdebba6bdf23bf557a83eebe834)]:
+  - @ocoda/event-sourcing@4.0.0-next.2
+
 ## 4.0.0-next.1
 
 ### Patch Changes
