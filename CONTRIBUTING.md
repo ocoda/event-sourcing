@@ -16,10 +16,12 @@ The repository uses Docker Compose to spin up local database services for integr
 
 ```text
 Postgres: postgres:14
-MongoDB: mongo:8
+MongoDB: mongo:8.2
 MariaDB: mariadb:10.11
-DynamoDB Local: amazon/dynamodb-local:1.15.0
+DynamoDB Local: amazon/dynamodb-local:3.3.1
 ```
+
+The MongoDB services stop at 8.2 because the 3.x MongoDB store uses the 6.x driver, and 8.2 is the newest server version that driver declares support for. CI also tests MongoDB 6 and 7.
 
 To start one or more of the pinned services locally:
 

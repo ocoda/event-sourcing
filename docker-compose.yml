@@ -1,7 +1,9 @@
 services:
+  # The 3.x MongoDB store uses the 6.x driver (mongodb ^6.19.0). The newest server version it declares support for
+  # (MAX_SUPPORTED_SERVER_VERSION) is 8.2. mongo:8 floats to newer 8.x minor releases, so the 8.x services pin 8.2.
   mongodb:
     container_name: es-mongodb
-    image: mongo:8
+    image: mongo:8.2
     ports:
       - 27017:27017
     volumes:
@@ -43,7 +45,7 @@ services:
 
   mongodb-8:
     container_name: es-mongodb-8
-    image: mongo:8
+    image: mongo:8.2
     ports:
       - 27017:27017
     volumes:

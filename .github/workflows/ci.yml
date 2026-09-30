@@ -97,7 +97,7 @@ jobs:
             {"database":"postgres","service":"postgres-17","version":"17"},
             {"database":"mongodb","service":"mongodb-6","version":"6"},
             {"database":"mongodb","service":"mongodb-7","version":"7"},
-            {"database":"mongodb","service":"mongodb-8","version":"8"},
+            {"database":"mongodb","service":"mongodb-8","version":"8.2"},
             {"database":"mariadb","service":"mariadb-10","version":"10"},
             {"database":"mariadb","service":"mariadb-11","version":"11"},
             {"database":"dynamodb","service":"dynamodb","version":"local"}
