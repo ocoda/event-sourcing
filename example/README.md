@@ -12,7 +12,7 @@ A small NestJS 12 application (ES modules) that runs `@ocoda/event-sourcing` 4.0
 | Snapshots every 5 versions | [`book.snapshot-repository.ts`](src/catalogue/application/repositories/book.snapshot-repository.ts) |
 | Subscribers that keep a read model | [`src/catalogue/application/projections`](src/catalogue/application/projections) |
 | A publisher that receives every event | [`src/event-log/logging.event-publisher.ts`](src/event-log/logging.event-publisher.ts) |
-| Reading all events in order with `readAll`, from a global position | [`src/event-log/event-log.controller.ts`](src/event-log/event-log.controller.ts) |
+| Reading all events in order with `readAll`, from a global position, and sending the envelopes as JSON | [`src/event-log/event-log.controller.ts`](src/event-log/event-log.controller.ts) |
 | Version conflicts as `409 Conflict`, matched on the error `code` | [`src/event-sourcing-exception.filter.ts`](src/event-sourcing-exception.filter.ts) |
 
 The guide behind it is the [documentation](https://ocoda.github.io/event-sourcing/start/install/).
@@ -55,7 +55,7 @@ curl -s 'localhost:3000/events?from=1&limit=10'   # every event, in order; read 
 | `DELETE /books/:id` | Removes a book, with an optional `reason` in the body. |
 | `POST /loans`, `GET /loans/:id` | Lends a book (`bookId`, `libraryMemberId`, `dueOn`), reads a loan. |
 | `POST /loans/:id/extend`, `POST /loans/:id/return` | Extends a loan (`dueOn`), returns the book. |
-| `GET /events?from=&limit=` | The events of all streams from a global position, and the position to read on from. |
+| `GET /events?from=&limit=` | The events of all streams from a global position, as the JSON of their envelopes (`{ event, payload, metadata }`), and the position to read on from. |
 
 ## Tests
 

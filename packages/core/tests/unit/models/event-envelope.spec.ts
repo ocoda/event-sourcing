@@ -128,7 +128,7 @@ describe(EventEnvelope, () => {
 			expect(envelope.toJSON().payload).toEqual({ amount: '12', nested: [{ big: '-3' }] });
 		});
 
-		it('renders everything else as JSON.stringify renders a plain object with the same fields', () => {
+		it('renders the event id as its value, and everything else as JSON.stringify renders a plain object', () => {
 			const envelope = EventEnvelope.create(
 				'foo-created',
 				{ bar: 'bar', at: new Date('2024-01-01T00:00:00.000Z'), skipped: undefined },
@@ -136,12 +136,14 @@ describe(EventEnvelope, () => {
 			);
 			const { event, payload, metadata } = envelope;
 
-			expect(JSON.stringify(envelope)).toBe(JSON.stringify({ event, payload, metadata }));
+			expect(JSON.stringify(envelope)).toBe(
+				JSON.stringify({ event, payload, metadata: { ...metadata, eventId: '01JA50F56AM0CCDBNVQW3TTWNY' } }),
+			);
 			expect(envelope.toJSON()).toEqual({
 				event: 'foo-created',
 				payload: { bar: 'bar', at: '2024-01-01T00:00:00.000Z' },
 				metadata: {
-					eventId: { props: { value: '01JA50F56AM0CCDBNVQW3TTWNY' } },
+					eventId: '01JA50F56AM0CCDBNVQW3TTWNY',
 					occurredOn: '2024-10-14T07:56:45.642Z',
 					aggregateId: 'a',
 					version: 1,
@@ -149,6 +151,93 @@ describe(EventEnvelope, () => {
 					headers: { tenant: 'acme', user: null },
 				},
 			});
+		});
+
+		it('renders an event id that a store read back as its value', () => {
+			const envelope = EventEnvelope.from(
+				'foo-created',
+				{},
+				{
+					eventId: EventId.fromTrusted('01JA50F56AM0CCDBNVQW3TTWNY'),
+					aggregateId: 'a',
+					version: 1,
+					occurredOn: new Date('2024-10-14T07:56:45.642Z'),
+					globalPosition: 7n,
+				},
+			);
+
+			expect(JSON.parse(JSON.stringify(envelope)).metadata).toEqual({
+				eventId: '01JA50F56AM0CCDBNVQW3TTWNY',
+				aggregateId: 'a',
+				version: 1,
+				occurredOn: '2024-10-14T07:56:45.642Z',
+				globalPosition: '7',
+			});
+		});
+
+		it('keeps the order of the metadata fields', () => {
+			const envelope = EventEnvelope.from(
+				'foo-created',
+				{},
+				{ aggregateId: 'a', version: 1, eventId, occurredOn: eventId.date, globalPosition: 1n },
+			);
+
+			expect(Object.keys(envelope.toJSON().metadata)).toEqual([
+				'aggregateId',
+				'version',
+				'eventId',
+				'occurredOn',
+				'globalPosition',
+			]);
+		});
+
+		it('renders the payload as the stores write it, so a value object in it stays { props: { value } }', () => {
+			// The SQL stores write JSON.stringify(payload), so an id that a serializer leaves in the payload is stored,
+			// and read back, as { props: { value } }. The JSON of the envelope shows the payload the way it is stored.
+			const fooId = FooId.from('0b2f36f4-6ec4-4d6b-9e57-5d0f0b0a3d1c');
+			const envelope = EventEnvelope.create('foo-created', { fooId }, { aggregateId: 'a', version: 1 });
+
+			expect(envelope.toJSON().payload).toEqual({
+				fooId: { props: { value: '0b2f36f4-6ec4-4d6b-9e57-5d0f0b0a3d1c' } },
+			});
+			expect(envelope.toJSON().payload).toEqual(JSON.parse(JSON.stringify(envelope.payload)));
+		});
+
+		it('leaves the envelope and the JSON of the event id itself as they are', () => {
+			const envelope = EventEnvelope.create('foo-created', {}, { aggregateId: 'a', version: 1, eventId });
+
+			envelope.toJSON();
+
+			expect(envelope.metadata.eventId).toBe(eventId);
+			expect(JSON.stringify(eventId)).toBe('{"props":{"value":"01JA50F56AM0CCDBNVQW3TTWNY"}}');
+		});
+
+		it('round-trips: the JSON holds everything needed to rebuild the envelope', () => {
+			const envelope = EventEnvelope.create(
+				'foo-created',
+				{ bar: 'bar', count: 2, tags: ['x'], nested: { ok: true } },
+				{
+					aggregateId: 'a',
+					version: 3,
+					eventId,
+					correlationId: 'c',
+					causationId: 'd',
+					headers: { tenant: 'acme', retries: 1, dryRun: false, user: null },
+					eventVersion: 2,
+				},
+			).withGlobalPosition(9007199254740993n);
+
+			const json = JSON.parse(JSON.stringify(envelope));
+			const rebuilt = EventEnvelope.from(json.event, json.payload, {
+				...json.metadata,
+				eventId: EventId.from(json.metadata.eventId),
+				occurredOn: new Date(json.metadata.occurredOn),
+				globalPosition: BigInt(json.metadata.globalPosition),
+			});
+
+			expect(rebuilt).toStrictEqual(envelope);
+			expect(rebuilt.metadata.eventId.equals(envelope.metadata.eventId)).toBe(true);
+			expect(JSON.stringify(rebuilt)).toBe(JSON.stringify(envelope));
 		});
 	});
 });

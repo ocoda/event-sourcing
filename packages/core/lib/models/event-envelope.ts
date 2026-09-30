@@ -1,8 +1,17 @@
 import type { EventEnvelopeMetadata, IEvent, IEventPayload } from '../interfaces/index.js';
 import { EventId } from './event-id.js';
+import { Id } from './id.js';
 
 const bigintAsString = (_key: string, value: unknown): unknown =>
 	typeof value === 'bigint' ? value.toString() : value;
+
+/**
+ * The metadata, in the same key order, with every id (the `eventId`) replaced by its value. `ValueObject` itself has no
+ * `toJSON`, on purpose: the SQL stores write snapshots and the payloads of custom serializers with `JSON.stringify`,
+ * so a `toJSON` there would change what they store for a value object (`{ props: { value } }`, as in 3.x).
+ */
+const withIdValues = (metadata: EventEnvelopeMetadata): Record<string, unknown> =>
+	Object.fromEntries(Object.entries(metadata).map(([key, value]) => [key, value instanceof Id ? value.value : value]));
 
 export class EventEnvelope<E extends IEvent = IEvent> {
 	private constructor(
@@ -50,8 +59,12 @@ export class EventEnvelope<E extends IEvent = IEvent> {
 
 	/**
 	 * The JSON form of the envelope, which `JSON.stringify(envelope)` writes. It is what `JSON.stringify` writes for a
-	 * plain object with the fields of the envelope, except that a bigint, such as the `globalPosition`, becomes a
-	 * decimal string instead of making `JSON.stringify` throw.
+	 * plain object with the fields of the envelope, except that:
+	 * - the `eventId` becomes its value, a string, instead of `{ props: { value } }`;
+	 * - a bigint, such as the `globalPosition`, becomes a decimal string instead of making `JSON.stringify` throw.
+	 *
+	 * A `Date`, such as the `occurredOn`, becomes an ISO 8601 string. The payload is rendered as the SQL stores write it,
+	 * so a value object that a serializer left in it stays `{ props: { value } }`.
 	 *
 	 * It builds that object with a `JSON.stringify` and `JSON.parse` round trip (so the result is exactly what
 	 * `JSON.stringify` makes of every nested value), which means `JSON.stringify(envelope)` serializes the envelope twice.
@@ -59,7 +72,10 @@ export class EventEnvelope<E extends IEvent = IEvent> {
 	 */
 	toJSON(): { event: string; payload: Record<string, unknown>; metadata: Record<string, unknown> } {
 		return JSON.parse(
-			JSON.stringify({ event: this.event, payload: this.payload, metadata: this.metadata }, bigintAsString),
+			JSON.stringify(
+				{ event: this.event, payload: this.payload, metadata: withIdValues(this.metadata) },
+				bigintAsString,
+			),
 		);
 	}
 }
