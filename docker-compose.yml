@@ -13,20 +13,6 @@ services:
       timeout: 5s
       retries: 6
 
-  mongodb-6:
-    container_name: es-mongodb-6
-    image: mongo:6
-    ports:
-      - 27017:27017
-    volumes:
-      - type: tmpfs
-        target: /data/db
-    healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.runCommand({ ping: 1 })"]
-      interval: 10s
-      timeout: 5s
-      retries: 6
-
   mongodb-7:
     container_name: es-mongodb-7
     image: mongo:7
@@ -78,30 +64,6 @@ services:
   # is set (e2e stays on the standalone server). The member advertises localhost:27018, so clients on the host reach
   # it through the published port. The first health check initiates the replica set, and the service is healthy once
   # the member is a writable primary.
-  mongodb-6-rs:
-    container_name: es-mongodb-6-rs
-    image: mongo:6
-    command: ["--replSet", "rs0", "--bind_ip_all", "--port", "27018"]
-    ports:
-      - 27018:27018
-    volumes:
-      - type: tmpfs
-        target: /data/db
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "mongosh",
-          "--port",
-          "27018",
-          "--quiet",
-          "--eval",
-          "try { rs.status() } catch (e) { rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'localhost:27018' }] }) } quit(db.runCommand({ hello: 1 }).isWritablePrimary ? 0 : 1)",
-        ]
-      interval: 5s
-      timeout: 5s
-      retries: 12
-
   mongodb-7-rs:
     container_name: es-mongodb-7-rs
     image: mongo:7
@@ -180,25 +142,6 @@ services:
     image: postgres:14
     # Docker's default 64 MB /dev/shm is too small for parallel VACUUM (and large sorts): 53100 could not resize shared
     # memory segment. The schema v2 migration vacuums the tables it rewrote.
-    shm_size: 256mb
-    ports:
-      - 5432:5432
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: postgres
-    volumes:
-      - type: tmpfs
-        target: /var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 6
-
-  postgres-13:
-    container_name: es-postgres-13
-    image: postgres:13
     shm_size: 256mb
     ports:
       - 5432:5432
