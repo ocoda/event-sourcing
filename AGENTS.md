@@ -11,9 +11,9 @@ Commands live in the root and package `package.json` scripts. Run the ones below
 
 ## Branches
 
-- `master` is the **v4 line**: NestJS 12, ESM-only, Node ≥ 22.12, work in progress. Breaking changes are allowed here, but they need a changeset and a migration note.
-- `3.x` is the **maintenance line**: NestJS 11, CommonJS. It takes patch changesets only. CI rejects anything else, because with the fixed version group and `workspace:*` peers, a `minor` there would publish an accidental major.
-- The DynamoDB store (`@ocoda/event-sourcing-dynamodb`) exists on `3.x` only. It was dropped from v4 because DynamoDB can't give the events a gap-free global order, which the v4 read side relies on. The 4.0 migration guide must say so; until it exists, the note is on the docs install page.
+- `master` is the **v4 line**: NestJS 12, ESM-only, Node ≥ 22.12, released as stable 4.x on the npm dist-tag `latest`. A breaking change needs a `major` changeset, a migration note and a maintainer's decision to start 5.0.
+- `3.x` is the **maintenance line**: NestJS 11, CommonJS, security and critical fixes until at least 2027-03-31, released under the npm dist-tag `v3`. It takes patch changesets only. CI rejects anything else, because with the fixed version group and `workspace:*` peers, a `minor` there would publish an accidental major.
+- The DynamoDB store (`@ocoda/event-sourcing-dynamodb`) exists on `3.x` only. It was dropped from v4 because DynamoDB can't give the events a gap-free global order, which the v4 read side relies on. The 4.0 migration guide and the docs install page say so.
 
 ## Done means `ci-ok` would pass
 
@@ -46,8 +46,7 @@ The `ci-ok` check is the only required check on `master` and `3.x`. Before openi
 
 - Every change to a published package needs a changeset (`pnpm exec changeset`). It is the user-facing CHANGELOG entry, so write it for users and call out behaviour changes. On `master`, the `Changesets` CI job requires one when a PR changes `lib/` or the runtime fields of `package.json` in `packages/core` or `packages/integration/*`. Only a maintainer can waive that, with the `no-changeset` label.
 - A changeset may only name the four published packages, never a private one.
-- `master` is in changesets pre mode with the tag `next` (`.changeset/pre.json`). It releases `4.0.0-next.N` prereleases under the npm dist-tag `next`, and `latest` stays on 3.x. `.github/scripts/release-guard.sh` fails the release workflow for anything else.
-- Versioned changesets move to `.changeset/pre/`. At 4.0 GA they become the 4.0.0 changelog, so fix an outdated one there.
+- `master` is out of changesets pre mode (no `.changeset/pre.json`). It releases stable 4.x versions under the npm dist-tag `latest`, and `.github/scripts/release-guard.sh` fails the release workflow for anything else, a prerelease included.
 - Keep `` $` `` out of changeset text. Changesets 2 on `3.x`, where fixes get backported, treats it as a `String.replace` pattern and corrupts the entry.
 
 ## Maintenance skills
@@ -74,6 +73,6 @@ Claude Code skills in `.claude/skills/`, each with a `SKILL.md`. Other agents ca
 These need a maintainer's explicit OK:
 - Publishing: never run `npm publish`, `pnpm publish` or `changeset publish` locally. Only the `publish` job of `.github/workflows/release.yml` publishes, through npm trusted publishing. It runs in the `npm` GitHub environment and waits until a maintainer approves that deployment ("Review deployments" on the Release run). Approving it is publishing, so it is the maintainer's call.
 - Renaming `release.yml` or the `npm` environment: npm's trusted publishers are bound to that exact filename and environment, so renaming either breaks publishing.
-- Exiting pre mode on `master` (`changeset pre exit`) or loosening `release-guard.sh`. That is the 4.0 GA decision, and it moves `latest` to 4.x.
+- Entering pre mode on `master` (`changeset pre enter`), a `major` changeset on `master`, or loosening `release-guard.sh`. Each starts a new major line or lets a release through that the guard stops today.
 - Force-pushing `master` or `3.x`.
 - Changing rulesets or repo settings.

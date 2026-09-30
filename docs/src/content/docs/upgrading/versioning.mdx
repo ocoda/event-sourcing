@@ -2,16 +2,14 @@
 title: Versioning and support
 ---
 
-import { Aside } from '@astrojs/starlight/components';
-
 This page lists the release lines of Ocoda Event Sourcing, how to install each one, and which versions of NestJS, Node.js and the databases they are tested with. The support policy itself lives in [SECURITY.md](https://github.com/ocoda/event-sourcing/blob/master/SECURITY.md) and [SUPPORT.md](https://github.com/ocoda/event-sourcing/blob/master/SUPPORT.md) on GitHub.
 
 ## Release lines [#release-lines]
 
 | Line | npm dist-tag | Branch | Status | Fixes |
 | --- | --- | --- | --- | --- |
-| 4.x | `next` | `master` | Prerelease | Fixes and breaking changes ship in the next `4.0.0-next.N`. No stability or support guarantee until 4.0.0 is released. |
-| 3.x | `latest` | `3.x` | Supported until at least 2027-03-31 | Security and critical bug fixes, released as 3.x patch versions. |
+| 4.x | `latest` | `master` | Supported | Bug fixes, security fixes and new features, released as 4.x minor and patch versions. |
+| 3.x | `v3` | `3.x` | Supported until at least 2027-03-31 | Security and critical bug fixes, released as 3.x patch versions. |
 | 2.x and older | none | none | Not supported | None. Upgrade to 3.x or 4.x. |
 
 To move an application from 3.x to 4.0, follow [Migrating from 3.x to 4.0](/upgrading/v4). The documentation of 3.x is at [ocoda.github.io/event-sourcing/v3](https://ocoda.github.io/event-sourcing/v3/).
@@ -22,14 +20,11 @@ To move an application from 3.x to 4.0, follow [Migrating from 3.x to 4.0](/upgr
 
 ## npm dist-tags [#dist-tags]
 
-- **`latest`** points to 3.x. Until 4.0.0 is released, `npm install @ocoda/event-sourcing` installs 3.x.
-- **`next`** points to the newest 4.0 prerelease. Install it with `npm install @ocoda/event-sourcing@next`.
+- **`latest`** points to 4.x: `npm install @ocoda/event-sourcing` installs it.
+- **`v3`** points to the newest 3.x release. Install it with `npm install @ocoda/event-sourcing@v3`.
+- **`next`** carried the 4.0 prereleases (`4.0.0-next.N`), which 4.0.0 supersedes: move to 4.0.0.
 
-To stay on a line regardless of the tags, install it by major version, for example `npm install @ocoda/event-sourcing@3`, or `@4` once 4.0.0 is released.
-
-<Aside type="caution">
-A later prerelease can contain breaking changes. When you install from `next`, pin the exact version (`npm install --save-exact`) and read the changelog before you move to the next one.
-</Aside>
+To stay on a line regardless of the tags, install it by major version, for example `npm install @ocoda/event-sourcing@4` or `npm install @ocoda/event-sourcing@3`.
 
 ## Packages [#packages]
 
@@ -76,8 +71,8 @@ The packages follow [semantic versioning](https://semver.org):
 
 Every change to a published package comes with a [changeset](https://github.com/changesets/changesets), which becomes its entry in the changelog. The changelog of each package is in its folder on GitHub, for example [the core's CHANGELOG.md](https://github.com/ocoda/event-sourcing/blob/master/packages/core/CHANGELOG.md).
 
-- **4.x:** until 4.0.0 is released, every release is a `4.0.0-next.N` prerelease under the `next` tag. Prereleases carry no compatibility promise, so each one can contain breaking changes. They are listed in the changelog with the steps to migrate, and in [Migrating from 3.x to 4.0](/upgrading/v4). The 3.x APIs that 4.0 deprecates, such as the positional `appendEvents` and `commit()`, keep working until 5.0.
-- **3.x:** only patch releases, from the `3.x` branch.
+- **4.x:** minor and patch releases from `master`, under the `latest` tag. The 3.x APIs that 4.0 deprecates, such as the positional `appendEvents` and `commit()`, keep working until 5.0.
+- **3.x:** only patch releases, from the `3.x` branch, under the `v3` tag.
 
 ## Getting help and reporting problems [#help]
 

@@ -91,11 +91,11 @@ git add -N .changeset/<slug>.md
 pnpm exec changeset status --since=origin/<base> --verbose
 ```
 
-Read the computed versions in the `changeset status` output. Two known effects:
+Read the computed versions in the `changeset status` output. Three known effects:
 
-- **Amplification.** With changesets 2.x, the fixed group and the integrations' `workspace:*` peer on core, any `minor` computes as the next `major` for all five packages. Keep the semver-correct bump in the file and report the computed version next to it. Before 4.0.0 GA this lands in the planned major. After GA it would publish an accidental major, so flag it for the maintainer.
+- **Amplification on `3.x`.** `3.x` uses changesets 2.x: with the fixed group and the integrations' `workspace:*` peer on core, any `minor` computes as the next `major` for all five packages, which is why `3.x` takes patch changesets only. If one computes as a major there, flag it for the maintainer. `master` uses changesets 3, which bumps a dependent only when the new version leaves its peer range, so a `minor` stays a minor.
 - **Pre mode.** If `.changeset/pre.json` exists, report its `tag`. Merging then produces a prerelease (for example `4.0.0-next.N`) instead of a stable version.
-- **A `3.x` version computed on master.** Without pre mode or a pending major, a `patch` on master computes as the next `3.0.x`. Releasing it would ship v4-line code under a 3.x number that the `3.x` branch also needs. Keep the bump and flag this for the maintainer.
+- **A `major` on master after 4.0.0.** It computes as 5.0.0, which the release guard refuses: starting 5.0 is a maintainer's decision. Keep the semver-correct bump and flag it for the maintainer.
 
 ## Report
 

@@ -4,8 +4,8 @@ title: Migrating from 3.x to 4.0
 
 import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
 
-<Aside type="caution" title="4.0 is in prerelease">
-Until 4.0.0 is released, 4.0 is published as prereleases (`4.0.0-next.N`) under the npm `next` tag, and `latest` stays on 3.x. In the commands of this guide, install `@next` instead of `@4`, with `--save-exact`, and read the [changelog](https://github.com/ocoda/event-sourcing/blob/master/packages/core/CHANGELOG.md) before you move to a later prerelease: it can still change what this guide describes.
+<Aside type="note" title="4.0 is released">
+4.0.0 is on the npm `latest` tag. 3.x stays available under the `v3` tag, or as `@3`.
 </Aside>
 
 4.0 is a major release. It moves to NestJS 12, ES modules and Node.js 22.12 or later, and gives the event and snapshot stores a new contract: global positions and `readAll` for the read side, metadata and headers, and a stored schema (schema v2) that 3.x data is migrated to once. Publishers are awaited, the command and query buses are typed, and a JSON serializer is the default. This guide lists every breaking change, in the order in which you apply them.

@@ -1,24 +1,26 @@
 #!/usr/bin/env bash
-# Release guard for master. Until 4.0 GA, master only ships 4.0.0-next.N prereleases under the npm
-# dist-tag `next`, never `latest`. Exiting pre mode (`changeset pre exit`) therefore fails this guard
-# until the GA pull request changes it on purpose.
+# Release guard for master. Since 4.0 GA, master only ships stable 4.x releases under the npm dist-tag `latest`:
+# no prereleases, and no other major (a 5.0 needs a change to this guard). Entering changesets pre mode on master
+# (`changeset pre enter`) therefore fails this guard until a pull request changes it on purpose.
 #
-#   release-guard.sh plan           Before changesets/action: pre mode is on, and the pending changesets
-#                                   only produce 4.0.0-next.N versions.
+#   release-guard.sh plan           Before changesets/action: master is not in pre mode (`.changeset/pre.json` is
+#                                   missing, or in `exit` mode while the 4.0.0 version PR is pending), and the
+#                                   pending changesets only produce stable 4.x versions.
 #   release-guard.sh needs-publish  The version job, when no changesets are pending: runs the checks of
 #                                   `publish` (without publishing), then writes needsPublish=true to
 #                                   $GITHUB_OUTPUT when npm lacks a version that changesets would publish.
-#   release-guard.sh publish        The publish job's publish script: pre mode is on, every publishable package
-#                                   is at 4.0.0-next.N, changesets plans to publish them under `next`, and no
-#                                   dist-tag moves back to an older version; then it runs `changeset publish`.
+#   release-guard.sh publish        The publish job's publish script: `.changeset/pre.json` is gone, every
+#                                   publishable package is at a stable 4.x version, changesets plans to publish them
+#                                   under `latest`, and no dist-tag moves back to an older version; then it runs
+#                                   `changeset publish`.
 #
 # Every registry lookup fails closed: a registry that stays unreachable fails the job instead of deciding what gets
 # published.
 set -euo pipefail
 shopt -s inherit_errexit
 
-readonly PRE_TAG='next'
-readonly VERSION_PATTERN='^4\.0\.0-next\.[0-9]+$'
+readonly RELEASE_TAG='latest'
+readonly VERSION_PATTERN='^4\.[0-9]+\.[0-9]+$'
 readonly ATTEMPTS=3
 # jq: a sort key with semver precedence. Numeric prerelease identifiers compare as numbers and below alphanumeric
 # ones, and a release sorts above its prereleases. A version that is not semver yields nothing.
@@ -35,11 +37,23 @@ tmp_dir() {
 	if [ -n "${RUNNER_TEMP:-}" ]; then echo "$RUNNER_TEMP"; else mktemp -d; fi
 }
 
-check_pre_mode() {
-	[ -f .changeset/pre.json ] || fail "master must be in changesets pre mode ('$PRE_TAG'), but .changeset/pre.json is missing."
-	jq -e --arg tag "$PRE_TAG" '.mode == "pre" and .tag == $tag' .changeset/pre.json >/dev/null ||
-		fail "master must be in changesets pre mode with the '$PRE_TAG' tag; .changeset/pre.json is $(jq -c . .changeset/pre.json)."
-	echo "Pre mode: on, tag '$PRE_TAG'."
+# Before versioning: master is out of pre mode. `exit` mode is the 4.0 GA state, until the version PR deletes
+# .changeset/pre.json.
+check_not_in_pre_mode() {
+	if [ ! -f .changeset/pre.json ]; then
+		echo "Pre mode: off."
+		return 0
+	fi
+	jq -e '.mode == "exit"' .changeset/pre.json >/dev/null ||
+		fail "master releases stable 4.x versions under '$RELEASE_TAG' and must not be in changesets pre mode; .changeset/pre.json is $(jq -c . .changeset/pre.json). Entering pre mode needs a change to .github/scripts/release-guard.sh."
+	echo "Pre mode: exiting (the version PR removes .changeset/pre.json)."
+}
+
+# Before publishing: no pre state at all, so a commit that is still in or exiting pre mode never publishes.
+check_no_pre_state() {
+	[ ! -f .changeset/pre.json ] ||
+		fail "master only publishes once changesets pre mode is fully exited, but .changeset/pre.json is $(jq -c . .changeset/pre.json). Merge the version PR first."
+	echo "Pre mode: off."
 }
 
 check_plan() {
@@ -53,7 +67,7 @@ check_plan() {
 	bad=$(jq -r --arg re "$VERSION_PATTERN" \
 		'[.releases[] | select(.type != "none") | select((.newVersion // "") | test($re) | not) | "\(.name)@\(.newVersion)"] | join(", ")' \
 		"$status_file")
-	[ -z "$bad" ] || fail "master only releases 4.0.0-next.N prereleases, but the pending changesets would release: $bad"
+	[ -z "$bad" ] || fail "master only releases stable 4.x versions, but the pending changesets would release: $bad"
 }
 
 # Writes changesets' publish plan to $1. changesets asks the registry which versions exist and exits non-zero on any
@@ -116,14 +130,14 @@ check_publish() {
 	# Every package changesets may publish: the workspace packages that are not private.
 	bad=$(pnpm ls --recursive --depth -1 --json | jq -r --arg re "$VERSION_PATTERN" \
 		'[.[] | select(.private != true) | select((.version // "") | test($re) | not) | "\(.name)@\(.version)"] | join(", ")')
-	[ -z "$bad" ] || fail "master only publishes 4.0.0-next.N prereleases, but these packages are at: $bad"
+	[ -z "$bad" ] || fail "master only publishes stable 4.x versions, but these packages are at: $bad"
 
 	PLAN_FILE="$(tmp_dir)/publish-plan.json"
 	write_publish_plan "$PLAN_FILE"
-	bad=$(jq -r --arg tag "$PRE_TAG" --arg re "$VERSION_PATTERN" \
+	bad=$(jq -r --arg tag "$RELEASE_TAG" --arg re "$VERSION_PATTERN" \
 		'[.plan[][] | select(.kind == "publish") | select(.tag != $tag or ((.version // "") | test($re) | not)) | "\(.name)@\(.version) (tag \(.tag))"] | join(", ")' \
 		"$PLAN_FILE")
-	[ -z "$bad" ] || fail "master only publishes under the '$PRE_TAG' dist-tag, but changesets would publish: $bad"
+	[ -z "$bad" ] || fail "master only publishes stable 4.x versions under the '$RELEASE_TAG' dist-tag, but changesets would publish: $bad"
 	jq -r '.plan[][] | select(.kind == "publish") | "  publish \(.name)@\(.version) --tag \(.tag)"' "$PLAN_FILE"
 
 	local name version tag
@@ -143,16 +157,16 @@ report_needs_publish() {
 
 case "${1:-}" in
 plan)
-	check_pre_mode
+	check_not_in_pre_mode
 	check_plan
 	;;
 needs-publish)
-	check_pre_mode
+	check_no_pre_state
 	check_publish
 	report_needs_publish
 	;;
 publish)
-	check_pre_mode
+	check_no_pre_state
 	check_publish
 	exec pnpm exec changeset publish
 	;;

@@ -1,6 +1,6 @@
 # ADR 0002: Schema v2 (global position, catalog, migration)
 
-- **Status:** Proposed
+- **Status:** Accepted (4.0.0)
 - **Date:** 2026-09-29
 - **Scope:** plan milestone M7: the 4.0 event and snapshot schemas of the PostgreSQL, MariaDB and MongoDB stores, the global position technique behind [ADR 0001](./0001-v4-core-api.md) §9, and the one-time `migrate()` from 3.x
 - **Depends on:** ADR 0001 §1, §8 and §9, and its [store contract amendments](./0001-v4-core-api.md#amendments-store-contract) (D1–D35)
