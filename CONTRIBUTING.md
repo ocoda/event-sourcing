@@ -151,6 +151,16 @@ On `master`, the `Changesets` CI check requires a changeset when a pull request 
 
 `master` is in changesets pre mode: until 4.0.0 is released, its changesets ship as `4.0.0-next.N` prereleases under the npm dist-tag `next` (`npm install @ocoda/event-sourcing@next`), and `latest` stays on 3.x. Maintainers decide when to leave pre mode for the 4.0.0 release.
 
+## Releases
+
+The `Release` workflow (`.github/workflows/release.yml`) runs on every push to `master` and `3.x`:
+
+1. Its `Version` job turns the pending changesets into a version PR, `[ci] release (next)` on `master` (`[ci] release` on `3.x`), and keeps that PR up to date.
+2. Merging the version PR starts a run with nothing pending. When npm lacks one of the new versions, the run's `Publish` job asks for a deployment to the `npm` environment and waits.
+3. A maintainer approves it: open the run, choose **Review deployments**, tick `npm` and choose **Approve and deploy**. The job then builds, checks the packed packages (publint and arethetypeswrong), and publishes through npm trusted publishing, with provenance. It creates the git tags and GitHub releases too.
+
+npm only accepts a publish from `release.yml` running in the `npm` environment. To skip a release, reject the deployment; the next push that still finds unpublished versions asks again. A rejected or failed publish is retried by re-running the `Publish` job.
+
 ## Conventions
 
 The conventions that no linter enforces are in [AGENTS.md](AGENTS.md), and they apply to humans too. For example:

@@ -14,7 +14,7 @@ Work through the checklist top to bottom for the release line in $ARGUMENTS (def
 
 - **Publishing happens only in CI.** `.github/workflows/release.yml` publishes through npm trusted publishing (OIDC, with provenance). Local publish commands are denied in `.claude/settings.json`. Even when a CI publish fails, the fix is to re-run the workflow, never to publish from a laptop.
 - **GitHub changes need the maintainer's yes.** Opening the version PR, re-running workflows and merging change GitHub state. Each one needs the maintainer's explicit "yes" for that specific action, in this session.
-- **Keep `release.yml` as it is.** npm's trusted publisher is bound to that exact filename.
+- **Keep `release.yml` as it is.** npm's trusted publishers are bound to that exact filename and the `npm` environment of its `Publish` job.
 
 ## Checklist
 
@@ -44,8 +44,8 @@ Work through the checklist top to bottom for the release line in $ARGUMENTS (def
    - **No `pre.json` and a computed major on master:** this publishes 4.0.0 as `latest`. It is red unless the maintainer confirms GA.
 
 5. **Version PR.**
-   - After the push to `<line>`, release.yml runs changesets/action. Check it with `gh run list --workflow release.yml --branch <line> --limit 1`.
-   - Expect a PR titled `[ci] release` from `changeset-release/<line>`. Find it with `gh pr list --head changeset-release/<line> --json number,state,headRefOid`.
+   - After the push to `<line>`, release.yml's `Version` job runs changesets/action. Check it with `gh run list --workflow release.yml --branch <line> --limit 1`.
+   - Expect a PR from `changeset-release/<line>` titled `[ci] release`, or `[ci] release (next)` in pre mode. Find it with `gh pr list --head changeset-release/<line> --json number,state,headRefOid`.
    - **The run log says Actions may not create pull requests, but `git ls-remote origin changeset-release/<line>` shows the branch.** Open the PR by hand, after the maintainer says yes: `gh pr create --base <line> --head changeset-release/<line> --title "[ci] release" --body "Version packages (opened manually: Actions cannot create PRs in this repo)."`
    - **A PR created with `GITHUB_TOKEN` doesn't trigger `ci.yml`.** If `ci-ok` never reports on it, ask the maintainer to close and reopen the PR, or push to its branch.
    - **Review the diff (`gh pr diff <n>`).** All five `package.json` versions must be equal (fixed group). CHANGELOG entries must match the changesets. Consumed changeset files must be deleted. No unexpected major.
@@ -66,6 +66,7 @@ Work through the checklist top to bottom for the release line in $ARGUMENTS (def
 7. **Merge.** The maintainer merges. Present the PR number, head SHA, versions and target dist-tag. If the maintainer asks you to merge, first confirm that the head SHA hasn't changed since the checks.
 
 8. **Publish run.** Run `gh run list --workflow release.yml --branch <line> --limit 1`, then `gh run view <id> --log-failed` if it failed. Report a failure. Re-running it is the maintainer's call.
+   - Status `waiting` means the `Publish` job waits for its `npm` deployment. The maintainer approves it on the run page (**Review deployments**). Give them the run URL; the approval is theirs.
 
 9. **Verify on npm.** Use `--prefer-online` so the local cache can't answer. For each of the five packages:
    - `npm view <pkg>@<version> version _npmUser.name dist.attestations.provenance.predicateType peerDependencies --json --prefer-online`. The publisher must be `GitHub Actions`, and the provenance `https://slsa.dev/provenance/v1`.
