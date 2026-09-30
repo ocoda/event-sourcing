@@ -45,9 +45,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Until 4.0 GA, master only ships 4.0.0-next.N prereleases under the `next` dist-tag.
+      # Since 4.0 GA, master only ships stable 4.x releases under the `latest` dist-tag (no prereleases, no 5.x).
       # The same script guards the publish job, right before `changeset publish`.
-      - name: Guard - master only ships 4.0.0-next prereleases
+      - name: Guard - master only ships stable 4.x releases
         run: bash .github/scripts/release-guard.sh plan
 
       # A GitHub App installation token, because GITHUB_TOKEN cannot open pull requests here and pull requests it
@@ -162,9 +162,9 @@ jobs:
       - name: Build packages
         run: pnpm build --filter="./packages/**"
 
-      # The guard checks pre mode, the versions and the dist-tags again, then runs `changeset publish`. The action
-      # keeps the read-only GITHUB_TOKEN, which it hands to the publish script as GITHUB_TOKEN: the App token is
-      # created only after the publish, so it never reaches npm or a package's scripts.
+      # The guard checks that pre mode is fully exited, the versions and the dist-tags again, then runs
+      # `changeset publish`. The action keeps the read-only GITHUB_TOKEN, which it hands to the publish script as
+      # GITHUB_TOKEN: the App token is created only after the publish, so it never reaches npm or a package's scripts.
       - name: Publish to npm
         id: changesets
         uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
