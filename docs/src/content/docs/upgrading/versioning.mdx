@@ -50,7 +50,7 @@ CI runs the tests of the core on Node.js 22 and 24, and the tests of each store 
 | Module format | ES modules only; CommonJS applications load them through `require()` | CommonJS |
 | PostgreSQL | 13, 14, 15, 16, 17, 18 | 13, 14, 15, 16, 17 |
 | MariaDB | 10.11, 11.4, 11.8, 12.3 (long-term releases), 13.0 (rolling release) | 10.11, 11.4 |
-| MongoDB | 6, 7, 8 (the newest 8.x, 8.3), 9.0 (with `mongodb` 7.3 or later) | 6, 7, 8 |
+| MongoDB | 6, 7, 8 (the newest 8.x, 8.3), 9.0; 8.3 and 9.0 with `mongodb` 7.3 or later | 6, 7, 8 (the newest 8.x, 8.3) |
 | DynamoDB | Not available | DynamoDB Local 3.3.1 |
 | Database drivers | Peer dependencies, installed by you | Installed by the integration |
 
@@ -58,7 +58,7 @@ MariaDB supports a rolling release only until the next one, so the 4.x tests mov
 
 On 4.x the drivers are peer dependencies with these ranges: `pg` `^8.15.0` with `pg-cursor` `^2.14.0`, `mongodb` `^6.10.0 || ^7.0.0`, and `mariadb` `^3.0.0`. See [Database drivers are peer dependencies](/upgrading/v4#drivers).
 
-Each driver release supports the database servers up to a version of its own, so a new server can need a newer driver than the lowest one the range allows. MongoDB 9.0 needs `mongodb` 7.3 or later: 6.21, the last 6.x release, and 7.0 to 7.2 support MongoDB up to 8.2 (see [MongoDB](/integrations/mongodb)). 3.x installs the 6.x driver itself, so it supports MongoDB up to 8.2.
+Each driver release supports the database servers up to a version of its own, so a new server can need a newer driver than the lowest one the range allows. MongoDB 8.3 and 9.0 need `mongodb` 7.3 or later: 6.21, the last 6.x release, and 7.0 to 7.2 support MongoDB up to 8.2 (see [MongoDB](/integrations/mongodb)). 3.x installs the 6.x driver itself, so it supports MongoDB up to 8.2, even though its tests run on the newest 8.x release.
 
 ## Semantic versioning [#semver]
 
