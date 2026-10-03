@@ -7,10 +7,10 @@ packages:
 # Versions shared by several workspace packages, referenced as `catalog:` in their package.json (pnpm replaces it
 # with the version on pack and publish). The peer dependency ranges of the published packages stay explicit.
 catalog:
-  '@nestjs/common': 12.1.1
-  '@nestjs/core': 12.1.1
-  '@nestjs/platform-express': 12.1.1
-  '@nestjs/testing': 12.1.1
+  '@nestjs/common': 12.1.2
+  '@nestjs/core': 12.1.2
+  '@nestjs/platform-express': 12.1.2
+  '@nestjs/testing': 12.1.2
   '@types/node': 22.20.4
   '@types/pg': ^8.23.1
   '@types/pg-cursor': ^2.7.2
