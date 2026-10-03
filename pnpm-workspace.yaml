@@ -20,7 +20,7 @@ catalog:
   reflect-metadata: 0.2.2
   rxjs: 7.8.2
   typescript: 7.0.2
-  vitest: 5.0.2
+  vitest: 5.0.3
 
 catalogs:
   # The docs stay on TypeScript 6: `astro check` (@astrojs/check 0.9) supports typescript ^5 || ^6 only.
