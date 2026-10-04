@@ -28,7 +28,7 @@
 		"@changesets/cli": "3.0.3",
 		"@nestjs/common": "catalog:",
 		"@types/node": "catalog:",
-		"@vitest/coverage-v8": "5.0.2",
+		"@vitest/coverage-v8": "5.0.3",
 		"oxfmt": "0.71.0",
 		"oxlint": "1.86.0",
 		"publint": "0.3.24",
