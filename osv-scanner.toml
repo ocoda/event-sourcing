@@ -1,0 +1,18 @@
+# Known vulnerabilities the `OSV scan` job in .github/workflows/ci.yml accepts. Each entry needs a reason and an
+# ignoreUntil date: when it passes, the scan fails again and the finding has to be fixed or re-reviewed.
+
+# braces 3.0.3 (no patched version yet): stack exhaustion on deeply nested brace patterns. It reaches the lockfile only
+# through starlight-llms-txt > micromatch in the private docs site, at build time, where it expands the glob patterns
+# written in docs/astro.config.ts. No published package depends on it and it never sees untrusted input.
+[[IgnoredVulns]]
+id = "GHSA-vfj7-8cjw-p6xm"
+ignoreUntil = 2027-01-04
+reason = "Build-time dependency of the private docs site only (starlight-llms-txt > micromatch), fed our own glob patterns; no fix released yet."
+
+# http-cache-semantics 4.2.0 (no patched version yet): a shared cache can serve another user's response to a request
+# with a large max-stale. It reaches the lockfile only through astro in the private docs site, which is built into
+# static files for GitHub Pages: no server, no shared cache, and no published package depends on it.
+[[IgnoredVulns]]
+id = "GHSA-ch52-4w7c-c8xp"
+ignoreUntil = 2027-01-04
+reason = "Dependency of astro in the private docs site, which builds static files and runs no shared HTTP cache; no fix released yet."
