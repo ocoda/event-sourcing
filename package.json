@@ -34,7 +34,7 @@
 		"publint": "0.3.25",
 		"reflect-metadata": "catalog:",
 		"rxjs": "catalog:",
-		"turbo": "2.11.6",
+		"turbo": "2.11.7",
 		"typescript": "catalog:",
 		"vite": "8.3.2",
 		"vitest": "catalog:"
