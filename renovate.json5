@@ -27,9 +27,11 @@
 	vulnerabilityAlerts: {
 		labels: ['dependencies', 'security'],
 	},
+	// Weekly: vulnerability alerts don't fix transitive dependencies in a pnpm lockfile, and the OSV scan in ci.yml fails
+	// every pull request until the lockfile moves past a new advisory.
 	lockFileMaintenance: {
 		enabled: true,
-		schedule: ['before 6am on the first day of the month'],
+		schedule: ['before 6am on monday'],
 	},
 	packageRules: [
 		{
