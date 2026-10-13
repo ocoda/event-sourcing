@@ -38,6 +38,7 @@ import {
 	inspectEventTable,
 	registerEventTable,
 } from './mariadb.schema.js';
+import { type MariaDBServer, probeServer } from './mariadb.server.js';
 import {
 	MariaDBErrorNumber,
 	duplicateKeyOf,
@@ -61,10 +62,11 @@ const ENVELOPE_COLUMNS = `event, payload, event_id, aggregate_id, version, CAST(
 const INSERT_COLUMNS =
 	'stream_id, version, event, payload, event_id, aggregate_id, occurred_on, correlation_id, causation_id, global_position, headers, event_version';
 
-const MIGRATE_REMEDY = 'Run MariaDBEventStore.migrate(config, { dryRun: true }), review the report, then migrate().';
+const MIGRATE_REMEDY =
+	'Run MariaDBEventStore.migrate(config, { dryRun: true }), review the report, then migrate() (MariaDB only).';
 
 /**
- * An event store on MariaDB (InnoDB), with schema v2 (ADR 0002 §3).
+ * An event store on MariaDB or MySQL (InnoDB), with schema v2 (ADR 0002 §3).
  *
  * - Every pool has a table, `events` or `<pool>-events`, registered in the `event_sourcing_collections` catalog, whose
  *   row counts the pool's global positions.
@@ -85,10 +87,13 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 	};
 
 	private pool: Pool | undefined;
+	private server: MariaDBServer | undefined;
 
 	/**
 	 * Migrates the event tables of a 3.x store to schema v2, without a NestJS application: inspects every table (or the
 	 * tables of `options.pools`), plans, and, unless `dryRun`, migrates them one by one. Stop every 3.x instance first.
+	 *
+	 * MariaDB only: on MySQL it throws an `UnsupportedOperationException` before it changes anything.
 	 */
 	static migrate(
 		config: Omit<MariaDBEventStoreConfig, 'driver'>,
@@ -111,8 +116,10 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 		const pool = createPool(withReadCommitted(poolConfig));
 
 		// Also makes a bad connection fail the bootstrap
+		let server: MariaDBServer;
 		let galera: boolean;
 		try {
+			server = await probeServer(pool);
 			galera = await isGaleraNode(pool);
 		} catch (error) {
 			await pool.end().catch(() => undefined);
@@ -124,6 +131,7 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 				"Galera (wsrep_on) orders the global positions per node only: globalOrder is 'best-effort' on this cluster",
 			);
 		}
+		this.server = server;
 		this.pool = pool;
 	}
 
@@ -134,6 +142,7 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 		}
 		this.logger.log('Stopping store');
 		this.pool = undefined;
+		this.server = undefined;
 		await pool.end();
 	}
 
@@ -153,7 +162,7 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 					throw new EventStoreSchemaException({
 						collection,
 						found: 'missing',
-						remedy: `The catalog ${CATALOG_TABLE} doesn't exist. ${eventSchemaRemedy(collection)}`,
+						remedy: `The catalog ${CATALOG_TABLE} doesn't exist. ${eventSchemaRemedy(collection, this.server?.flavour)}`,
 					});
 				}
 			} else {
@@ -167,10 +176,10 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 						throw new EventStoreSchemaException({
 							collection,
 							found: 'missing',
-							remedy: eventSchemaRemedy(collection),
+							remedy: eventSchemaRemedy(collection, this.server?.flavour),
 						});
 					}
-					await db.query(eventTableDdl(collection));
+					await db.query(eventTableDdl(collection, { flavour: this.server?.flavour }));
 					break;
 				case 'v1':
 				case 'v1-partial':

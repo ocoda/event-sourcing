@@ -40,13 +40,21 @@ import {
 	v1Events,
 	v1Snapshots,
 } from '../fixtures/v1-corpus.js';
-import { createEventStore, createSnapshotStore, createTestDatabase, rootConnection } from '../support/stores.js';
+import {
+	createEventStore,
+	createSnapshotStore,
+	createTestDatabase,
+	onMySQL,
+	rootConnection,
+} from '../support/stores.js';
 
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 
 const CATALOG = 'event_sourcing_collections';
 
-describe('MariaDB migration from 3.x to schema v2', () => {
+// TODO(mysql): migrate() runs on MariaDB only, and refuses MySQL before it changes anything (mariadb.mysql.spec.ts).
+// Port it when 3.x users on MySQL ask for it.
+describe.skipIf(onMySQL)('MariaDB migration from 3.x to schema v2', () => {
 	let database: Awaited<ReturnType<typeof createTestDatabase>>;
 	let root: Connection;
 	let tableCount = 0;

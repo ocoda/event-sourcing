@@ -12,6 +12,7 @@
  * | `ES_TEST_MARIADB_HOST`, `ES_TEST_MARIADB_PORT` | `127.0.0.1`, `3306` |
  * | `ES_TEST_MARIADB_USER`, `ES_TEST_MARIADB_PASSWORD`, `ES_TEST_MARIADB_DATABASE` | `mariadb` |
  * | `ES_TEST_MARIADB_ROOT_PASSWORD` | `mariadb` |
+ * | `ES_TEST_MARIADB_FLAVOR` | `mariadb`; `mysql` when the server is MySQL |
  * | `ES_TEST_MONGODB_URL` | `mongodb://localhost:27017` (a standalone server) |
  * | `ES_TEST_MONGODB_RS_URL` | unset: no replica-set run (e.g. `mongodb://localhost:27018/?replicaSet=rs0`) |
  *
@@ -27,6 +28,17 @@ export interface SqlTestConfig {
 	password: string;
 	database: string;
 }
+
+/**
+ * The connection settings of a MariaDB or MySQL database. `allowPublicKeyRetrieval` lets the connector authenticate
+ * over plain TCP with MySQL's `caching_sha2_password`, the only built-in authentication of MySQL 9.
+ */
+export interface MariaDBTestConfig extends SqlTestConfig {
+	allowPublicKeyRetrieval: boolean;
+}
+
+/** The server the MariaDB specs run against: MariaDB, or MySQL. */
+export type MariaDBTestFlavor = 'mariadb' | 'mysql';
 
 /** A MongoDB deployment the MongoDB specs run against. */
 export interface MongoDBTestTopology {
@@ -59,23 +71,36 @@ export const postgresTestConfig = (): SqlTestConfig => ({
 });
 
 /** The MariaDB connection settings of the unprivileged user (`ES_TEST_MARIADB_*`). */
-export const mariadbTestConfig = (): SqlTestConfig => ({
+export const mariadbTestConfig = (): MariaDBTestConfig => ({
 	host: env('ES_TEST_MARIADB_HOST', '127.0.0.1'),
 	port: port('ES_TEST_MARIADB_PORT', 3306),
 	user: env('ES_TEST_MARIADB_USER', 'mariadb'),
 	password: env('ES_TEST_MARIADB_PASSWORD', 'mariadb'),
 	database: env('ES_TEST_MARIADB_DATABASE', 'mariadb'),
+	allowPublicKeyRetrieval: true,
 });
 
 /**
  * The MariaDB connection settings of `root` on the same server and database (`ES_TEST_MARIADB_ROOT_PASSWORD`), for
  * setup that needs privileges the test user lacks.
  */
-export const mariadbRootConfig = (): SqlTestConfig => ({
+export const mariadbRootConfig = (): MariaDBTestConfig => ({
 	...mariadbTestConfig(),
 	user: 'root',
 	password: env('ES_TEST_MARIADB_ROOT_PASSWORD', 'mariadb'),
 });
+
+/**
+ * The server the MariaDB specs run against (`ES_TEST_MARIADB_FLAVOR`): `mariadb` by default, `mysql` for MySQL. The
+ * specs check it against the server they connect to, so a MySQL run can't pass as a MariaDB one, or the reverse.
+ */
+export const mariadbTestFlavor = (): MariaDBTestFlavor => {
+	const flavor = env('ES_TEST_MARIADB_FLAVOR', 'mariadb');
+	if (flavor !== 'mariadb' && flavor !== 'mysql') {
+		throw new Error(`ES_TEST_MARIADB_FLAVOR must be 'mariadb' or 'mysql', got '${flavor}'`);
+	}
+	return flavor;
+};
 
 /**
  * The MongoDB deployments to run the MongoDB specs against: always the standalone server (`ES_TEST_MONGODB_URL`),

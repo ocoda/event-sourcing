@@ -28,7 +28,15 @@ import {
 	snapshotsAccountB,
 } from '@ocoda/event-sourcing-testing/unit';
 import type { Pool } from 'mariadb';
-import { CATALOG, createSnapshotStore, createTestDatabase, dropTables, poolOf } from '../support/stores.js';
+import { fromJson } from '../../lib/mariadb.utils.js';
+import {
+	CATALOG,
+	createSnapshotStore,
+	createTestDatabase,
+	dropTables,
+	isolationOf,
+	poolOf,
+} from '../support/stores.js';
 
 describe(MariaDBSnapshotStore, () => {
 	let snapshotStore: MariaDBSnapshotStore;
@@ -85,7 +93,8 @@ describe(MariaDBSnapshotStore, () => {
 		expect(entitiesCustomer).toHaveLength(2);
 		for (const [index, entity] of entitiesAccountA.entries()) {
 			expect(entity.stream_id).toEqual(snapshotStreamAccountA.streamId);
-			expect(entity.payload).toEqual(envelopesAccountA[index].payload);
+			// Parsed from MariaDB's JSON, text from MySQL's LONGTEXT (jsonColumnTypeOf)
+			expect(fromJson(entity.payload)).toEqual(envelopesAccountA[index].payload);
 			expect(entity.aggregate_id).toEqual(envelopesAccountA[index].metadata.aggregateId);
 			expect(entity.registered_on).toBeInstanceOf(Date);
 			expect(entity.version).toEqual(envelopesAccountA[index].metadata.version);
@@ -393,9 +402,7 @@ describe(MariaDBSnapshotStore, () => {
 			});
 			await uncommitted.connect();
 			try {
-				await expect(poolOf(uncommitted).query('SELECT @@tx_isolation AS isolation')).resolves.toEqual([
-					{ isolation: 'READ-COMMITTED' },
-				]);
+				await expect(isolationOf(poolOf(uncommitted))).resolves.toBe('READ-COMMITTED');
 			} finally {
 				await uncommitted.disconnect();
 			}

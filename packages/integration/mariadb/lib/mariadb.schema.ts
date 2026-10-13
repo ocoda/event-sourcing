@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import type { ServerFlavour } from './mariadb.server.js';
 
 /**
  * Schema v2 of the MariaDB stores (ADR 0002 §1 and §3): the catalog, the DDL of the event and snapshot tables, and the
@@ -109,22 +110,39 @@ export const catalogDdl = (): string =>
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin`;
 
 /**
+ * The type of the JSON columns (`payload`, `headers`) on a server. MariaDB's `JSON` is an alias of `LONGTEXT` with a
+ * `JSON_VALID` check, which keeps the text as written. MySQL's `JSON` is a binary format that sorts the keys of objects
+ * and prints doubles with 16 significant digits only (`0.9999999999999999` comes back as `1`), so on MySQL the JSON
+ * columns are `LONGTEXT`, which keeps the text that `JSON.stringify` wrote. The stores parse both (`fromJson`).
+ */
+export const jsonColumnTypeOf = (flavour: ServerFlavour = 'mariadb'): 'JSON' | 'LONGTEXT' =>
+	flavour === 'mysql' ? 'LONGTEXT' : 'JSON';
+
+/** The options of the DDL of a table. */
+export interface TableDdlOptions {
+	/** `CREATE TABLE IF NOT EXISTS`; `true` by default. */
+	ifNotExists?: boolean;
+	/** The server the table is for, which decides the type of its JSON columns; `mariadb` by default. */
+	flavour?: ServerFlavour;
+}
+
+/**
  * The DDL of an event table. The 3.x columns come first, then `global_position`, `headers` and `event_version`, so
  * that created and migrated tables are the same.
  */
-export const eventTableDdl = (table: string, { ifNotExists = true } = {}): string =>
+export const eventTableDdl = (table: string, { ifNotExists = true, flavour }: TableDdlOptions = {}): string =>
 	`CREATE TABLE ${ifNotExists ? 'IF NOT EXISTS ' : ''}${escapeId(table)} (
   stream_id VARCHAR(255) NOT NULL,
   version INT NOT NULL,
   event VARCHAR(255) NOT NULL,
-  payload JSON NOT NULL,
+  payload ${jsonColumnTypeOf(flavour)} NOT NULL,
   event_id VARCHAR(40) NOT NULL,
   aggregate_id VARCHAR(255) NOT NULL,
   occurred_on DATETIME(3) NOT NULL,
   correlation_id VARCHAR(255) NULL,
   causation_id VARCHAR(255) NULL,
   global_position BIGINT NOT NULL,
-  headers JSON NULL,
+  headers ${jsonColumnTypeOf(flavour)} NULL,
   event_version INT NULL,
   PRIMARY KEY (stream_id, version),
   UNIQUE KEY ${GLOBAL_POSITION_INDEX} (global_position)
@@ -135,11 +153,11 @@ export const eventTableDdl = (table: string, { ifNotExists = true } = {}): strin
  * `(aggregate_name, latest)` allows one flagged snapshot per stream: unflagged snapshots have a `NULL` latest, and
  * `NULL`s are distinct.
  */
-export const snapshotTableDdl = (table: string): string =>
+export const snapshotTableDdl = (table: string, { flavour }: Pick<TableDdlOptions, 'flavour'> = {}): string =>
 	`CREATE TABLE IF NOT EXISTS ${escapeId(table)} (
   stream_id VARCHAR(255) NOT NULL,
   version INT NOT NULL,
-  payload JSON NOT NULL,
+  payload ${jsonColumnTypeOf(flavour)} NOT NULL,
   snapshot_id VARCHAR(40) NOT NULL,
   aggregate_id VARCHAR(255) NOT NULL,
   registered_on DATETIME(3) NOT NULL,
@@ -168,10 +186,12 @@ export const registerEventTable = async (db: Queryable, table: string): Promise<
 	const [{ last }] = await db.query<{ last: string }[]>(
 		`SELECT CAST(COALESCE(MAX(global_position), 0) AS CHAR) AS last FROM ${escapeId(table)}`,
 	);
+	// The position is bound twice rather than read back with VALUES(), which MySQL deprecates; CAST compares it as a
+	// number, where GREATEST of a BIGINT and a string would compare them as strings or doubles
 	await db.query(
 		`INSERT INTO ${escapeId(CATALOG_TABLE)} (name, kind, schema_version, last_position) VALUES (?, 'events', 2, ?)
-		 ON DUPLICATE KEY UPDATE schema_version = 2, last_position = GREATEST(last_position, VALUES(last_position))`,
-		[table, last],
+		 ON DUPLICATE KEY UPDATE schema_version = 2, last_position = GREATEST(last_position, CAST(? AS SIGNED))`,
+		[table, last, last],
 	);
 };
 
@@ -228,7 +248,8 @@ export interface IndexInfo {
  * The columns of a table of the current database, by name; empty when the table doesn't exist.
  *
  * The lookups of `information_schema` compare the name as it is (the server finds the table directly) and in binary
- * (the name's case matters, like MariaDB's own lookups with `lower_case_table_names = 0`).
+ * (the name's case matters, like the server's own lookups with `lower_case_table_names = 0`). `CAST(… AS BINARY)`
+ * rather than the `BINARY` operator, which MySQL deprecates.
  */
 export const tableColumns = async (db: Queryable, table: string): Promise<Map<string, ColumnInfo>> => {
 	const rows = await db.query<
@@ -244,7 +265,7 @@ export const tableColumns = async (db: Queryable, table: string): Promise<Map<st
 	>(
 		`SELECT COLUMN_NAME, DATA_TYPE, COLUMN_TYPE, IS_NULLABLE, COLLATION_NAME, CHARACTER_MAXIMUM_LENGTH, EXTRA
 		 FROM information_schema.COLUMNS
-		 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND BINARY TABLE_NAME = ? ORDER BY ORDINAL_POSITION`,
+		 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND CAST(TABLE_NAME AS BINARY) = ? ORDER BY ORDINAL_POSITION`,
 		[table, table],
 	);
 	return new Map(
@@ -265,9 +286,10 @@ export const tableColumns = async (db: Queryable, table: string): Promise<Map<st
 
 /** The indexes of a table of the current database. */
 export const tableIndexes = async (db: Queryable, table: string): Promise<IndexInfo[]> => {
-	const rows = await db.query<{ INDEX_NAME: string; NON_UNIQUE: bigint | number; COLUMN_NAME: string }[]>(
+	// COLUMN_NAME is NULL for a key part that is an expression (MySQL's functional indexes)
+	const rows = await db.query<{ INDEX_NAME: string; NON_UNIQUE: bigint | number; COLUMN_NAME: string | null }[]>(
 		`SELECT INDEX_NAME, NON_UNIQUE, COLUMN_NAME FROM information_schema.STATISTICS
-		 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND BINARY TABLE_NAME = ? ORDER BY INDEX_NAME, SEQ_IN_INDEX`,
+		 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND CAST(TABLE_NAME AS BINARY) = ? ORDER BY INDEX_NAME, SEQ_IN_INDEX`,
 		[table, table],
 	);
 	const indexes = new Map<string, IndexInfo>();
@@ -277,7 +299,7 @@ export const tableIndexes = async (db: Queryable, table: string): Promise<IndexI
 			unique: Number(row.NON_UNIQUE) === 0,
 			columns: [],
 		};
-		index.columns.push(row.COLUMN_NAME.toLowerCase());
+		index.columns.push(row.COLUMN_NAME?.toLowerCase() ?? '(expression)');
 		indexes.set(row.INDEX_NAME, index);
 	}
 	return [...indexes.values()];
@@ -290,7 +312,7 @@ export const existingTables = async (db: Queryable, tables: readonly string[]): 
 	}
 	const rows = await db.query<{ TABLE_NAME: string }[]>(
 		`SELECT TABLE_NAME FROM information_schema.TABLES
-		 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN (?) AND BINARY TABLE_NAME IN (?)`,
+		 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN (?) AND CAST(TABLE_NAME AS BINARY) IN (?)`,
 		[tables, tables],
 	);
 	return new Set(rows.map(({ TABLE_NAME }) => TABLE_NAME));
@@ -445,8 +467,8 @@ export const inspectSnapshotTable = async (db: Queryable, table: string): Promis
 };
 
 /** How to create the schema by hand, for `ddl: 'none'`. */
-export const eventSchemaRemedy = (table: string): string =>
-	`Create it with ddl: 'auto', or run:\n${catalogDdl()};\n${eventTableDdl(table)};\n${registerEventTableSql(table)};`;
+export const eventSchemaRemedy = (table: string, flavour?: ServerFlavour): string =>
+	`Create it with ddl: 'auto', or run:\n${catalogDdl()};\n${eventTableDdl(table, { flavour })};\n${registerEventTableSql(table)};`;
 
-export const snapshotSchemaRemedy = (table: string): string =>
-	`Create it with ddl: 'auto', or run:\n${catalogDdl()};\n${snapshotTableDdl(table)};\n${registerSnapshotTableSql(table, 2)};`;
+export const snapshotSchemaRemedy = (table: string, flavour?: ServerFlavour): string =>
+	`Create it with ddl: 'auto', or run:\n${catalogDdl()};\n${snapshotTableDdl(table, { flavour })};\n${registerSnapshotTableSql(table, 2)};`;

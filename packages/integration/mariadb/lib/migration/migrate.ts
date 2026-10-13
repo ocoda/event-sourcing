@@ -7,6 +7,7 @@ import {
 	type MigrationReport,
 	type MigrationStep,
 	SnapshotCollection,
+	UnsupportedOperationException,
 } from '@ocoda/event-sourcing';
 import { type Connection, type ConnectionConfig, createConnection } from 'mariadb';
 import {
@@ -26,6 +27,7 @@ import {
 	tableColumns,
 	tableIndexes,
 } from '../mariadb.schema.js';
+import { probeServer } from '../mariadb.server.js';
 import { MariaDBErrorNumber, errorNumberOf, isFatalConnectionError, isGaleraNode } from '../mariadb.utils.js';
 import {
 	type MigrationPlan,
@@ -160,6 +162,15 @@ const migrate = async (
 	options: MigrationOptions,
 	hooks: MigrationHooks,
 ): Promise<MigrationReport> => {
+	// The migration's session settings and checks are MariaDB's. 3.x on MySQL is not supported yet
+	const server = await probeServer(connection);
+	if (server.flavour !== 'mariadb') {
+		throw new UnsupportedOperationException({
+			operation: `servers other than MariaDB, and this one is ${server.comment || 'MySQL'} ${server.version}`,
+			component: 'MariaDB migration from 3.x',
+		});
+	}
+
 	const dryRun = options.dryRun ?? false;
 	const environment = await environmentOf(connection);
 	const planOptions: PlanOptions = {

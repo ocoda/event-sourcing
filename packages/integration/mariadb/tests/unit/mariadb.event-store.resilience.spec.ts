@@ -21,7 +21,7 @@ import {
 } from '@ocoda/event-sourcing-testing/unit';
 import type { Pool, PoolConnection } from 'mariadb';
 import type { MockInstance } from 'vitest';
-import { CATALOG, createEventStore, dropTables, poolOf } from '../support/stores.js';
+import { CATALOG, createEventStore, dropTables, hasOpenTransaction, poolOf } from '../support/stores.js';
 
 // Pool exhaustion and concurrency scenarios: allow slow tests and setup/teardown hooks.
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
@@ -539,8 +539,7 @@ describe(`${MariaDBEventStore.name} resilience`, () => {
 					impatient.appendEvents(newStream(), events.slice(0, 1), { expectedVersion: 0, pool: eventPool }),
 				).rejects.toMatchObject({ outcome: 'not-persisted', cause: expect.objectContaining({ errno: 1205 }) });
 				// The store's only connection has no transaction left open
-				const [{ open }] = await poolOf(impatient).query<{ open: number }[]>('SELECT @@in_transaction AS open');
-				expect(Number(open)).toBe(0);
+				await expect(hasOpenTransaction(poolOf(impatient))).resolves.toBe(false);
 
 				await holder.rollback();
 				// InnoDB rolls back only the statement on a timeout: the store rolled back the rest
