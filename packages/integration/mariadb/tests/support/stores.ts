@@ -164,19 +164,17 @@ export const isolationOf = async (db: Pool | Connection): Promise<string> => {
 };
 
 /**
- * Whether the connection that `db` runs its next query on has an InnoDB transaction open, from
- * `information_schema.INNODB_TRX`, which root reads on MariaDB and MySQL alike. Use it with a pool of one connection.
+ * Whether the next connection of a pool (use a pool of one connection) has a transaction open: the `IN_TRANS` flag of
+ * the server's status in its answer to a statement, which MariaDB and MySQL both send. Not `INNODB_TRX`: InnoDB
+ * refreshes it only once it went unread for 100 ms, so a spec that polls it keeps it stale for the others.
  */
-export const hasOpenTransaction = async (db: Pool | Connection): Promise<boolean> => {
-	const [{ id }] = await db.query<{ id: bigint | number }[]>('SELECT CONNECTION_ID() AS id');
-	const root = await rootConnection();
+export const hasOpenTransaction = async (db: Pool): Promise<boolean> => {
+	const connection = await db.getConnection();
 	try {
-		const rows = await root.query<unknown[]>(
-			'SELECT trx_id FROM information_schema.INNODB_TRX WHERE trx_mysql_thread_id = ?',
-			[id],
-		);
-		return rows.length > 0;
+		await connection.query('DO 0');
+		// SERVER_STATUS_IN_TRANS
+		return ((connection.info?.status ?? 0) & 1) !== 0;
 	} finally {
-		await root.end();
+		await connection.release();
 	}
 };
