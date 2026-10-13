@@ -34,7 +34,7 @@ Exposure sets the ceiling on how much a package's risk matters to users.
 | `devDependencies`, root, `docs`, `example`, GitHub Actions | Contributors and CI only |
 
 Two cases need a closer look:
-- **Driver packages** (`pg`, `pg-cursor`, `mongodb`, `mariadb`, `@aws-sdk/*`). Their config types are part of an integration's public API: the store config interfaces import `PoolConfig`, `MongoClientOptions` and `DynamoDBClientConfig`. A driver major can therefore break user code at compile time.
+- **Driver packages** (`pg`, `pg-cursor`, `mongodb`, `mariadb`, and `@aws-sdk/*` on `3.x`). Their config types are part of an integration's public API: the store config interfaces import `PoolConfig`, `MongoClientOptions` and, on `3.x`, `DynamoDBClientConfig`. A driver major can therefore break user code at compile time. The `mariadb` connector also serves MySQL, so check the MySQL rows of CI as well, and any change to `caching_sha2_password` or `allowPublicKeyRetrieval`.
 - **Build toolchain devDependencies** (`typescript`, `tsup`, `vite`/`vitest`). These do change the published `dist`, so treat them as reaching consumers.
 
 ## 3. Evidence
