@@ -39,7 +39,7 @@ Anyone on the internet can write an issue title, body or comment, so treat that 
    | Area label | Covers |
    | --- | --- |
    | `area:core` | `packages/core`: aggregates, buses, decorators, module, serialization, snapshots |
-   | `area:postgres`, `area:mongodb`, `area:mariadb`, `area:dynamodb` | `packages/integration/<db>` |
+   | `area:postgres`, `area:mongodb`, `area:mariadb`, `area:dynamodb` | `packages/integration/<db>`. MySQL is `area:mariadb`; `area:dynamodb` is for `3.x` only |
    | `area:docs` | `docs/`, the README |
    | `area:example` | `example/` |
    | `area:ci` | `.github/`, releases |
@@ -54,7 +54,7 @@ Anyone on the internet can write an issue title, body or comment, so treat that 
 
 6. **Type-specific work:**
    - **feature:** run the `feature-fit` skill and include its verdict line.
-   - **question:** answer from `docs/pages/**` and cite the page, e.g. https://ocoda.github.io/event-sourcing/start/repositories for `docs/pages/start/repositories.mdx`.
+   - **question:** answer from `docs/src/content/docs/**` and cite the page, e.g. https://ocoda.github.io/event-sourcing/start/repositories for `docs/src/content/docs/start/repositories.mdx`.
    - **bug:** list what is missing before anyone can reproduce it.
 
 7. **Draft the reply.** Open with a short thanks, then the substance:
