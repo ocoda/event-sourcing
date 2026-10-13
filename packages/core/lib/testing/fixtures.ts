@@ -102,6 +102,19 @@ export const createJsonPayloadProbe = (): Record<string, unknown> => ({
 });
 
 /**
+ * Doubles that need 16 or 17 significant digits to round-trip. A store that parses or prints numbers with less
+ * precision changes their last digit, which the short decimals of `createJsonPayloadProbe` don't reveal.
+ */
+export const createNumberPrecisionProbe = (): Record<string, number> => ({
+	sum: 0.1 + 0.2,
+	negativeSum: -(0.1 + 0.2),
+	belowOne: 1 - Number.EPSILON / 2,
+	small: 2 ** -44,
+	large: 123_456_789.123_456_79,
+	max: Number.MAX_VALUE,
+});
+
+/**
  * Dates in a payload, and the ISO-8601 strings the stores return for them (what `JSON.stringify()` produces).
  */
 export const createDatePayloadProbe = () => {

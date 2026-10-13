@@ -1,6 +1,6 @@
 import { setTimeout as sleep } from 'node:timers/promises';
 import {
-	type EventEnvelope,
+	EventEnvelope,
 	type EventStoreContext,
 	EventStorePersistenceException,
 	type IEventCollection,
@@ -99,6 +99,28 @@ class LostUniquenessEventStore extends InMemoryEventStore {
 	}
 }
 
+/**
+ * Stores payloads with doubles rounded to 15 significant digits, like a store that parses or prints JSON numbers with
+ * less than full precision.
+ */
+class LossyDoublesEventStore extends InMemoryEventStore {
+	protected override persistEvents(
+		envelopes: readonly EventEnvelope[],
+		target: PersistTarget,
+	): Promise<PersistOutcome> {
+		const lossy = envelopes.map(({ event, payload, metadata }) =>
+			EventEnvelope.from(
+				event,
+				JSON.parse(JSON.stringify(payload), (_key, value: unknown) =>
+					typeof value === 'number' ? Number(value.toPrecision(15)) : value,
+				),
+				metadata,
+			),
+		);
+		return super.persistEvents(lossy, target);
+	}
+}
+
 const negativeControl = (
 	name: string,
 	createStore: (context: EventStoreContext) => InMemoryEventStore,
@@ -138,4 +160,8 @@ negativeControl(
 
 negativeControl('lost-uniqueness', (context) => new LostUniquenessEventStore(context, { driver: InMemoryEventStore }), {
 	'conflict-concurrent-appends': /the number of appends that succeeded/,
+});
+
+negativeControl('lossy-doubles', (context) => new LossyDoublesEventStore(context, { driver: InMemoryEventStore }), {
+	'payload-number-precision': /the doubles read by getEvent/,
 });

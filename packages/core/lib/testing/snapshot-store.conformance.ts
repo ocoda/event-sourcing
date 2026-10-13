@@ -32,6 +32,7 @@ import {
 	conformanceTest,
 	createDatePayloadProbe,
 	createJsonPayloadProbe,
+	createNumberPrecisionProbe,
 	drain,
 	expectRejection,
 	expectRejectionOfClass,
@@ -86,6 +87,7 @@ export const SNAPSHOT_STORE_CONFORMANCE_CASES = [
 	'consumer-throws',
 	'nested-calls-during-iteration',
 	'payload-json-fidelity',
+	'payload-number-precision',
 	'payload-dates-as-iso-strings',
 ] as const;
 
@@ -1054,6 +1056,22 @@ export const describeSnapshotStoreConformance = (
 				expect(
 					(await call(() => store.getManyLastSnapshotEnvelopes([stream], pool))).get(stream)?.payload,
 				).toStrictEqual(snapshot);
+			});
+
+			test('payload-number-precision', 'returns doubles with all their significant digits', async () => {
+				const stream = newSnapshotStream();
+				const snapshot: ConformanceSnapshot = { state: createNumberPrecisionProbe() };
+
+				await call(() => store.appendSnapshot(stream, 1, snapshot, pool));
+
+				await expect(
+					call(() => store.getSnapshot(stream, 1, pool)),
+					'the doubles read by getSnapshot',
+				).resolves.toStrictEqual(snapshot);
+				await expect(call(() => store.getLastSnapshot(stream, pool))).resolves.toStrictEqual(snapshot);
+				expect(await drain(readSnapshots(stream))).toStrictEqual([snapshot]);
+				expect((await call(() => store.getEnvelope(stream, 1, pool))).payload).toStrictEqual(snapshot);
+				expect((await call(() => store.getLastSnapshots([stream], pool))).get(stream)).toStrictEqual(snapshot);
 			});
 
 			test('payload-dates-as-iso-strings', 'returns dates in payloads as ISO-8601 strings', async () => {
