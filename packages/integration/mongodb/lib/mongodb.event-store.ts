@@ -46,7 +46,14 @@ import {
 	hasUniqueIndex,
 	readCollectionShape,
 } from './mongodb.schema.js';
-import { type MongoDBTopology, capabilitiesOf, detectTopology, warnStandaloneOnce } from './mongodb.topology.js';
+import {
+	type MongoDBEngine,
+	type MongoDBTopology,
+	capabilitiesOf,
+	detectServer,
+	warnEngineOnce,
+	warnStandaloneOnce,
+} from './mongodb.topology.js';
 import {
 	APPEND_LIMITS,
 	backoff,
@@ -80,7 +87,8 @@ type EventDocument = MongoDBEventEntity;
  * counter. On a replica set, an append is one transaction that updates the counter first: appends are atomic, and a
  * reader never misses an event that commits late (`globalOrder: 'gap-safe'`). A standalone server has no
  * transactions: the store reserves the positions, inserts, and removes what it inserted when the insert fails
- * (`atomicAppend: false`, `globalOrder: 'best-effort'`).
+ * (`atomicAppend: false`, `globalOrder: 'best-effort'`). An engine that speaks the protocol but is not MongoDB
+ * (FerretDB, DocumentDB, Amazon DocumentDB, Azure Cosmos DB) gets `'best-effort'` whatever topology it reports.
  */
 export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 	/** The weakest guarantees until `connect()` detected the topology. */
@@ -123,18 +131,20 @@ export class MongoDBEventStore extends EventStore<MongoDBEventStoreConfig> {
 		this.logger.log('Starting store');
 		const { url, ddl: _ddl, useDefaultPool: _useDefaultPool, driver: _driver, ...params } = this.options;
 		const client = await new MongoClient(url, params).connect();
+		let engine: MongoDBEngine;
 		try {
-			this.topology = await detectTopology(client);
+			({ topology: this.topology, engine } = await detectServer(client));
 		} catch (error) {
 			await client.close().catch(() => undefined);
 			throw error;
 		}
 		this.client = client;
 		this.database = client.db();
-		Object.assign(this.capabilities, capabilitiesOf(this.topology));
+		Object.assign(this.capabilities, capabilitiesOf(this.topology, engine));
 		if (this.topology === 'standalone') {
 			warnStandaloneOnce(this.logger);
 		}
+		warnEngineOnce(engine, this.logger);
 	}
 
 	public async disconnect(): Promise<void> {

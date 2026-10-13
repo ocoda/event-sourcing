@@ -355,6 +355,42 @@ describe(`${MariaDBSnapshotStore.name} resilience`, () => {
 				}
 			});
 
+			it('should run an append again when MySQL Group Replication refuses its commit (3101)', async () => {
+				const snapshotPool = await newPool('commit-3101');
+				const getConnection = pool.getConnection.bind(pool);
+				let refused = 0;
+				const getConnectionSpy = vi.spyOn(pool, 'getConnection').mockImplementation(async () => {
+					const connection: PoolConnection = await getConnection();
+					const commit = connection.commit.bind(connection);
+					vi.spyOn(connection, 'commit').mockImplementation(async () => {
+						if (refused < 2) {
+							refused++;
+							// What GR does: the transaction is rolled back, and COMMIT answers 3101
+							await connection.rollback();
+							throw Object.assign(new Error('Plugin instructed the server to rollback the current transaction.'), {
+								errno: 3101,
+								code: 'ER_TRANSACTION_ROLLBACK_DURING_COMMIT',
+							});
+						}
+						return commit();
+					});
+					return connection;
+				});
+
+				try {
+					const stream = newStream();
+					await expect(snapshotStore.appendSnapshot(stream, 1, { balance: 1 }, snapshotPool)).resolves.toMatchObject({
+						metadata: { version: 1 },
+					});
+					expect(refused).toBe(2);
+					await expect(snapshotStore.getLastEnvelope(stream, snapshotPool)).resolves.toMatchObject({
+						metadata: { version: 1 },
+					});
+				} finally {
+					getConnectionSpy.mockRestore();
+				}
+			});
+
 			it('should run an append again when InnoDB picks it as the victim of a deadlock, up to 10 times', async () => {
 				const snapshotPool = await newPool('deadlock');
 				const getConnection = pool.getConnection.bind(pool);

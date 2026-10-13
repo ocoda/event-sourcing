@@ -32,6 +32,11 @@ export const MariaDBErrorNumber = {
 	SpecificAccessDenied: 1227,
 	/** `ER_SUBQUERY_NO_1_ROW`: what the migration's lock statement raises when another migration holds the lock. */
 	SubqueryReturnsMoreThanOneRow: 1242,
+	/**
+	 * `ER_TRANSACTION_ROLLBACK_DURING_COMMIT`: MySQL Group Replication refused the transaction at `COMMIT` (it conflicts
+	 * with a transaction of another member) and rolled it back.
+	 */
+	TransactionRollbackDuringCommit: 3101,
 } as const;
 
 /** The error number of an error of the `mariadb` connector, if it has one. */
@@ -62,21 +67,57 @@ export const duplicateKeyOf = (error: unknown): string | undefined => {
 };
 
 /**
- * Whether the server is a Galera node (`@@wsrep_on`), whose row locks don't order the commits of other nodes. A server
- * without the variable (1193) isn't one.
+ * The value of a system variable of the session (`@@<name>`), or `undefined` when the server doesn't know it (1193).
+ * One statement per variable: an unknown variable fails the whole statement.
  * @throws what the query throws otherwise, such as a connection error
  */
-export const isGaleraNode = async (db: Queryable): Promise<boolean> => {
-	let wsrep: unknown;
+export const systemVariableOf = async (db: Queryable, name: string): Promise<unknown> => {
+	if (!/^[a-z0-9_]+$/.test(name)) {
+		throw new Error(`Not a system variable name: ${name}`);
+	}
 	try {
-		[{ wsrep }] = await db.query<{ wsrep: unknown }[]>('SELECT @@wsrep_on AS wsrep');
+		const [{ value }] = await db.query<{ value: unknown }[]>(`SELECT @@${name} AS value`);
+		return value;
 	} catch (error) {
 		if (errorNumberOf(error) === MariaDBErrorNumber.UnknownSystemVariable) {
-			return false;
+			return undefined;
 		}
 		throw error;
 	}
-	return wsrep === 1 || wsrep === 1n || wsrep === true || String(wsrep).toUpperCase() === 'ON';
+};
+
+/** Whether the value of a boolean system variable is on (`1`, `ON` or `true`, as the servers and the connector read it). */
+export const isOn = (value: unknown): boolean =>
+	value === 1 || value === 1n || value === true || ['1', 'ON'].includes(String(value).toUpperCase());
+
+/** Whether the value of a boolean system variable is explicitly off (`0`, `OFF` or `false`). */
+export const isOff = (value: unknown): boolean =>
+	value === 0 || value === 0n || value === false || ['0', 'OFF'].includes(String(value).toUpperCase());
+
+/**
+ * Whether the server is a Galera node, whose row locks don't order the commits of other nodes: `@@wsrep_on` is on (the
+ * session's value: on Percona XtraDB Cluster it is a session variable only), and a provider is loaded. A standalone
+ * MariaDB server started with `wsrep_on=ON` and no provider (`none`) reads 1 too. A server without the variable (1193)
+ * isn't one.
+ * @throws what a query throws otherwise, such as a connection error
+ */
+export const isGaleraNode = async (db: Queryable): Promise<boolean> => {
+	if (!isOn(await systemVariableOf(db, 'wsrep_on'))) {
+		return false;
+	}
+	const provider = String((await systemVariableOf(db, 'wsrep_provider')) ?? '')
+		.trim()
+		.toLowerCase();
+	return provider !== '' && provider !== 'none';
+};
+
+/**
+ * Whether the server rolled the transaction back when it refused its `COMMIT`: a deadlock (1213, also how Galera reports
+ * a failed certification) or a MySQL Group Replication conflict (3101). Nothing of the transaction is stored then.
+ */
+export const isRolledBackByServer = (error: unknown): boolean => {
+	const errno = errorNumberOf(error);
+	return errno === MariaDBErrorNumber.Deadlock || errno === MariaDBErrorNumber.TransactionRollbackDuringCommit;
 };
 
 /**

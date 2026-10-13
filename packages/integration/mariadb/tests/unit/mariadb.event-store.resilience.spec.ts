@@ -417,28 +417,50 @@ describe(`${MariaDBEventStore.name} resilience`, () => {
 			expect(pool.activeConnections()).toBe(0);
 		});
 
-		it("should report a 'not-persisted' outcome when the commit is refused with a deadlock (a Galera certification failure)", async () => {
-			const eventPool = await newPool('commit-deadlock');
-			const cause = Object.assign(new Error('Deadlock found when trying to get lock; try restarting transaction'), {
-				errno: 1213,
+		it.each([
+			{ errno: 1213, refusal: 'a deadlock (a Galera certification failure)' },
+			{ errno: 3101, refusal: 'a MySQL Group Replication conflict' },
+		])(
+			"should report a 'not-persisted' outcome when the commit is refused with $refusal ($errno)",
+			async ({ errno }) => {
+				const eventPool = await newPool(`commit-${errno}`);
+				const cause = Object.assign(new Error('The server rolled the transaction back'), { errno });
+				const { statements, restore } = failNextConnection('commit', cause);
+
+				try {
+					await expect(
+						eventStore.appendEvents(newStream(), events.slice(0, 1), { expectedVersion: 0, pool: eventPool }),
+					).rejects.toMatchObject({
+						code: EventSourcingErrorCode.EventStorePersistence,
+						outcome: 'not-persisted',
+						cause,
+					});
+					expect(statements.at(-1)).toBe('COMMIT');
+				} finally {
+					restore();
+				}
+				expect(pool.activeConnections()).toBe(0);
+				// Rolled back: the next append takes the first position
+				expect(await nextPosition(eventPool)).toBe(1n);
+			},
+		);
+
+		it("should report an 'unknown' outcome when the commit fails in a way that doesn't say it was rolled back (3100)", async () => {
+			const eventPool = await newPool('commit-3100');
+			// ER_ERROR_DURING_COMMIT: a replication hook failed, after the commit may have happened
+			const cause = Object.assign(new Error("Error on observer while running replication hook 'before_commit'"), {
+				errno: 3100,
 			});
-			const { statements, restore } = failNextConnection('commit', cause);
+			const { restore } = failNextConnection('commit', cause);
 
 			try {
 				await expect(
 					eventStore.appendEvents(newStream(), events.slice(0, 1), { expectedVersion: 0, pool: eventPool }),
-				).rejects.toMatchObject({
-					code: EventSourcingErrorCode.EventStorePersistence,
-					outcome: 'not-persisted',
-					cause,
-				});
-				expect(statements.at(-1)).toBe('COMMIT');
+				).rejects.toMatchObject({ code: EventSourcingErrorCode.EventStorePersistence, outcome: 'unknown', cause });
 			} finally {
 				restore();
 			}
 			expect(pool.activeConnections()).toBe(0);
-			// Rolled back: the next append takes the first position
-			expect(await nextPosition(eventPool)).toBe(1n);
 		});
 
 		it("should report a 'not-persisted' outcome when the connection is lost before the commit, and discard it", async () => {
