@@ -36,6 +36,7 @@ import {
 	snapshotTableDdl,
 	tableColumns,
 } from './mariadb.schema.js';
+import { type MariaDBServer, probeServer } from './mariadb.server.js';
 import {
 	MariaDBErrorNumber,
 	errorNumberOf,
@@ -62,7 +63,7 @@ const DEADLOCK_ATTEMPTS = 10;
 type SchemaVersion = 1 | 2;
 
 /**
- * A snapshot store on MariaDB (InnoDB), with schema v2 (ADR 0002 §3).
+ * A snapshot store on MariaDB or MySQL (InnoDB), with schema v2 (ADR 0002 §3).
  *
  * - One flagged (latest) snapshot per stream, which a unique index enforces; the last snapshot of a stream is the one
  *   with the highest version, which is also the flagged one.
@@ -71,6 +72,7 @@ type SchemaVersion = 1 | 2;
  */
 export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConfig> {
 	private pool: Pool | undefined;
+	private server: MariaDBServer | undefined;
 
 	/** The schema version of the tables this store read or wrote, by table. */
 	private readonly schemaVersions = new Map<ISnapshotCollection, SchemaVersion>();
@@ -78,6 +80,8 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 	/**
 	 * Migrates the snapshot tables of a 3.x store to schema v2, without a NestJS application: converts every table (or
 	 * the tables of `options.pools`) in place and repairs its latest flags. Stop every 3.x instance first.
+	 *
+	 * MariaDB only: on MySQL it throws an `UnsupportedOperationException` before it changes anything.
 	 */
 	static migrate(
 		config: Omit<MariaDBSnapshotStoreConfig, 'driver'>,
@@ -102,13 +106,15 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 		this.logger.log('Starting store');
 		const { driver: _driver, useDefaultPool: _useDefaultPool, ddl: _ddl, ...poolConfig } = this.options ?? {};
 		const pool = createPool(withReadCommitted(poolConfig));
-		// Makes a bad connection fail the bootstrap
+		// Also makes a bad connection fail the bootstrap
+		let server: MariaDBServer;
 		try {
-			await pool.query('SELECT 1');
+			server = await probeServer(pool);
 		} catch (error) {
 			await pool.end().catch(() => undefined);
 			throw error;
 		}
+		this.server = server;
 		this.pool = pool;
 	}
 
@@ -119,6 +125,7 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 		}
 		this.logger.log('Stopping store');
 		this.pool = undefined;
+		this.server = undefined;
 		await pool.end();
 	}
 
@@ -136,7 +143,7 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 			// SnapshotStoreCollectionCreationException has no message of its own: the statements to run are logged, and
 			// in its cause
 			const missing = (what: string) => {
-				const message = `${what} doesn't exist and ddl is 'none'. ${snapshotSchemaRemedy(collection)}`;
+				const message = `${what} doesn't exist and ddl is 'none'. ${snapshotSchemaRemedy(collection, this.server?.flavour)}`;
 				this.logger.error(message);
 				return new Error(message);
 			};
@@ -154,11 +161,11 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 				if (none) {
 					throw missing(`The ${collection} table`);
 				}
-				await db.query(snapshotTableDdl(collection));
+				await db.query(snapshotTableDdl(collection, { flavour: this.server?.flavour }));
 			} else if (state !== 'v2') {
 				version = 1;
 				this.logger.warn(
-					`The ${collection} table has the 3.x snapshot schema. It keeps working, without the unique latest flag and with registered_on to the second; migrate it with MariaDBSnapshotStore.migrate().`,
+					`The ${collection} table has the 3.x snapshot schema. It keeps working, without the unique latest flag and with registered_on to the second; migrate it with MariaDBSnapshotStore.migrate() (MariaDB only).`,
 				);
 			}
 			await db.query(registerSnapshotTableSql(collection, version));

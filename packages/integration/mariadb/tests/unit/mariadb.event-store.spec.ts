@@ -21,12 +21,14 @@ import {
 	getEvents,
 } from '@ocoda/event-sourcing-testing/unit';
 import type { Pool, PoolConnection } from 'mariadb';
+import { fromJson } from '../../lib/mariadb.utils.js';
 import { v1EventTableDdl } from '../fixtures/schema-v1.js';
 import {
 	CATALOG,
 	createEventStore,
 	createTestDatabase,
 	dropTables,
+	isolationOf,
 	poolOf,
 	rootConnection,
 } from '../support/stores.js';
@@ -97,11 +99,14 @@ describe(MariaDBEventStore, () => {
 				metadata: { correlationId: 'corr', headers: { tenant: 'other' } },
 			});
 
-			const rows = await pool.query<Record<string, unknown>[]>(
-				`SELECT stream_id, version, event, payload, event_id, aggregate_id, CAST(occurred_on AS CHAR) AS occurred_on,
-					correlation_id, causation_id, CAST(global_position AS CHAR) AS global_position, headers, event_version
-				 FROM ${pool.escapeId(EventCollection.get(eventPool))} ORDER BY version`,
-			);
+			// The JSON columns come back parsed from MariaDB's JSON, and as text from MySQL's LONGTEXT (jsonColumnTypeOf)
+			const rows = (
+				await pool.query<Record<string, unknown>[]>(
+					`SELECT stream_id, version, event, payload, event_id, aggregate_id, CAST(occurred_on AS CHAR) AS occurred_on,
+						correlation_id, causation_id, CAST(global_position AS CHAR) AS global_position, headers, event_version
+					 FROM ${pool.escapeId(EventCollection.get(eventPool))} ORDER BY version`,
+				)
+			).map((row) => ({ ...row, payload: fromJson(row.payload), headers: fromJson(row.headers) }));
 			expect(rows).toEqual([
 				{
 					stream_id: stream.streamId,
@@ -202,6 +207,18 @@ describe(MariaDBEventStore, () => {
 				pool: eventPool,
 			});
 			expect(appended.metadata.globalPosition).toBe(4n);
+		});
+
+		it('keeps a counter that is ahead of the stored positions: it compares them as numbers (10 > 9)', async () => {
+			const eventPool = await newPool('ahead');
+			const collection = EventCollection.get(eventPool);
+			for (let appended = 0; appended < 9; appended += 3) {
+				await store.appendEvents(newStream(), events.slice(0, 3), { expectedVersion: 0, pool: eventPool });
+			}
+			await pool.query(`UPDATE ${CATALOG} SET last_position = 10 WHERE name = ?`, [collection]);
+
+			await expect(store.ensureCollection(eventPool)).resolves.toBe(collection);
+			await expect(catalogRow(collection)).resolves.toMatchObject({ last_position: '10' });
 		});
 
 		it('registers the table while appends to it run, without a deadlock (an instance that boots while others write)', async () => {
@@ -711,10 +728,7 @@ describe(MariaDBEventStore, () => {
 			const collection = EventCollection.get(eventPool);
 			const holder = await pool.getConnection();
 			try {
-				const [{ isolation }] = await poolOf(uncommitted).query<{ isolation: string }[]>(
-					'SELECT @@tx_isolation AS isolation',
-				);
-				expect(isolation).toBe('READ-COMMITTED');
+				await expect(isolationOf(poolOf(uncommitted))).resolves.toBe('READ-COMMITTED');
 
 				// An append that may still roll back, and give its position to another one
 				const stream = newStream();
@@ -736,11 +750,17 @@ describe(MariaDBEventStore, () => {
 		});
 
 		it('appends in sessions with innodb_snapshot_isolation on, also when they race', async (context) => {
-			const [{ supported }] = await pool.query<{ supported: bigint | number }[]>(
-				"SELECT COUNT(*) AS supported FROM information_schema.SYSTEM_VARIABLES WHERE VARIABLE_NAME = 'INNODB_SNAPSHOT_ISOLATION'",
+			const supported = await pool.query('SELECT @@innodb_snapshot_isolation').then(
+				() => true,
+				(error: { errno?: number }) => {
+					if (error?.errno !== 1193) {
+						throw error;
+					}
+					return false;
+				},
 			);
-			if (Number(supported) === 0) {
-				context.skip('innodb_snapshot_isolation needs MariaDB 10.6.18, 10.11.8, 11.4.2 or later');
+			if (!supported) {
+				context.skip('innodb_snapshot_isolation needs MariaDB 10.6.18, 10.11.8, 11.4.2 or later (MySQL has none)');
 				return;
 			}
 			const { store: isolated } = createEventStore(

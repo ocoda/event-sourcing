@@ -19,6 +19,15 @@ export default mergeConfig(
 			// The cross-version specs read a corpus that the published 3.0.2 packages write first:
 			// scripts/test-cross-version.mjs runs them with vitest.cross-version.mts.
 			exclude: [...configDefaults.exclude, 'tests/cross-version/**'],
+			// The migration from 3.x runs on MariaDB only: on MySQL its live specs are skipped, and so is the coverage of
+			// its steps and statements (the planner's specs need no database, and run on both)
+			...(process.env.ES_TEST_MARIADB_FLAVOR === 'mysql'
+				? {
+						coverage: {
+							exclude: [...(base.test?.coverage?.exclude ?? []), 'lib/migration/migrate.ts', 'lib/migration/sql.ts'],
+						},
+					}
+				: {}),
 		},
 	}),
 );

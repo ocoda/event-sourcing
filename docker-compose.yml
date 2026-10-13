@@ -370,3 +370,67 @@ services:
       interval: 10s
       timeout: 5s
       retries: 6
+
+  # MySQL, which the MariaDB stores also run on (ES_TEST_MARIADB_FLAVOR=mysql): the LTS releases, and the newest
+  # Innovation release, which MySQL maintains only until the next one (26.10: October 2026, see
+  # https://dev.mysql.com/doc/refman/9.7/en/mysql-releases.html). Move mysql-innovation to the next one once it is out.
+  # Binary logging is on, as it is by default.
+  mysql-8-4:
+    container_name: es-mysql-8-4
+    image: mysql:8.4
+    ports:
+      - 3306:3306
+    environment:
+      MYSQL_ROOT_PASSWORD: mariadb
+      MYSQL_DATABASE: mariadb
+      MYSQL_USER: mariadb
+      MYSQL_PASSWORD: mariadb
+    volumes:
+      - type: tmpfs
+        target: /var/lib/mysql
+    healthcheck:
+      # Over TCP: the image's first start runs a temporary server without networking until the users exist
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -pmariadb --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  mysql-9-7:
+    container_name: es-mysql-9-7
+    image: mysql:9.7
+    ports:
+      - 3306:3306
+    environment:
+      MYSQL_ROOT_PASSWORD: mariadb
+      MYSQL_DATABASE: mariadb
+      MYSQL_USER: mariadb
+      MYSQL_PASSWORD: mariadb
+    volumes:
+      - type: tmpfs
+        target: /var/lib/mysql
+    healthcheck:
+      # Over TCP: the image's first start runs a temporary server without networking until the users exist
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -pmariadb --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  mysql-innovation:
+    container_name: es-mysql-innovation
+    image: mysql:26.7
+    ports:
+      - 3306:3306
+    environment:
+      MYSQL_ROOT_PASSWORD: mariadb
+      MYSQL_DATABASE: mariadb
+      MYSQL_USER: mariadb
+      MYSQL_PASSWORD: mariadb
+    volumes:
+      - type: tmpfs
+        target: /var/lib/mysql
+    healthcheck:
+      # Over TCP: the image's first start runs a temporary server without networking until the users exist
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -pmariadb --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 6

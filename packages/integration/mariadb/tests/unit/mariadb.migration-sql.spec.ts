@@ -13,7 +13,7 @@ import {
 	v1SnapshotTableDdl,
 } from '../fixtures/schema-v1.js';
 import { v1Events, v1Snapshots } from '../fixtures/v1-corpus.js';
-import { createTestDatabase } from '../support/stores.js';
+import { createTestDatabase, onMySQL } from '../support/stores.js';
 
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 
@@ -50,7 +50,8 @@ describe('migrations/4.0.sql', () => {
 		expect(sql.match(/^SELECT RELEASE_LOCK/gm)).toHaveLength(2);
 	});
 
-	describe('run as a file', () => {
+	// TODO(mysql): the migration runs on MariaDB only (see mariadb.migration.spec.ts)
+	describe.skipIf(onMySQL)('run as a file', () => {
 		/** A database with the 3.x tables of the default pools, and a root connection to it that runs whole files. */
 		const seeded = async (label: string) => {
 			const database = await createTestDatabase(label);

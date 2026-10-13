@@ -93,7 +93,8 @@ jobs:
           # specs run on both, e2e on the standalone server. mongo:8 is the newest 8.x release (8.3 in September 2026).
           # crossVersion: the job also runs the cross-version test (3.0.2 writes, this code reads): on the oldest and
           # the newest PostgreSQL, on the newest MongoDB, on every MariaDB LTS release, and on PostgreSQL 17 and
-          # MongoDB 8, the newest versions 3.x is tested on.
+          # MongoDB 8, the newest versions 3.x is tested on. The MariaDB package also runs on MySQL (flavor: mysql): its
+          # LTS releases and the newest Innovation release; 3.x on MySQL has no migration, so no cross-version test.
           matrix='[
             {"database":"postgres","service":"postgres-14","version":"14","crossVersion":true},
             {"database":"postgres","service":"postgres-15","version":"15"},
@@ -107,7 +108,10 @@ jobs:
             {"database":"mariadb","service":"mariadb-11","version":"11.4","crossVersion":true},
             {"database":"mariadb","service":"mariadb-11-8","version":"11.8","crossVersion":true},
             {"database":"mariadb","service":"mariadb-12","version":"12.3","crossVersion":true},
-            {"database":"mariadb","service":"mariadb-rolling","version":"13.0 rolling"}
+            {"database":"mariadb","service":"mariadb-rolling","version":"13.0 rolling"},
+            {"database":"mariadb","flavor":"mysql","service":"mysql-8-4","version":"8.4"},
+            {"database":"mariadb","flavor":"mysql","service":"mysql-9-7","version":"9.7"},
+            {"database":"mariadb","flavor":"mysql","service":"mysql-innovation","version":"26.7 innovation"}
           ]'
 
           selected=()
@@ -229,7 +233,7 @@ jobs:
           flags: core
 
   test-integration:
-    name: Test ${{ matrix.database }} ${{ matrix.version }}
+    name: Test ${{ matrix.flavor || matrix.database }} ${{ matrix.version }}
     needs: [changes]
     if: ${{ needs.changes.outputs.integrations != '[]' && needs.changes.outputs.integrations != '' }}
     runs-on: ubuntu-latest
@@ -264,6 +268,8 @@ jobs:
           # The MongoDB unit, resilience and conformance specs also run on this replica set (required in CI, see
           # packages/testing/unit/db.ts); e2e stays on the standalone server (the default URL).
           ES_TEST_MONGODB_RS_URL: ${{ matrix.database == 'mongodb' && 'mongodb://localhost:27018/?replicaSet=rs0' || '' }}
+          # The server the MariaDB specs run on, which they check (packages/testing/unit/db.ts)
+          ES_TEST_MARIADB_FLAVOR: ${{ matrix.flavor || 'mariadb' }}
         run: pnpm test:cov --filter="@ocoda/event-sourcing-$DATABASE"
 
       # The cross-version writer installs the published 3.0.2 packages with npm ci, from its own lockfile. This step

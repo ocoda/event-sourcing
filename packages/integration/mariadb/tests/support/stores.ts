@@ -2,11 +2,12 @@ import { randomBytes } from 'node:crypto';
 import type { EventEnvelope, EventMap, EventStoreContext, IEvent } from '@ocoda/event-sourcing';
 import { MariaDBEventStore, MariaDBSnapshotStore } from '@ocoda/event-sourcing-mariadb';
 import {
-	type SqlTestConfig,
+	type MariaDBTestConfig,
 	createTestContext,
 	getEventMap,
 	mariadbRootConfig,
 	mariadbTestConfig,
+	mariadbTestFlavor,
 } from '@ocoda/event-sourcing-testing/unit';
 import { type Connection, type Pool, createConnection } from 'mariadb';
 import type { Mock } from 'vitest';
@@ -16,6 +17,12 @@ type SnapshotStoreOptions = Omit<ConstructorParameters<typeof MariaDBSnapshotSto
 
 /** The catalog of the stores (see lib/mariadb.schema.ts). */
 export const CATALOG = 'event_sourcing_collections';
+
+/**
+ * Whether the specs run against MySQL (`ES_TEST_MARIADB_FLAVOR=mysql`) rather than MariaDB. `mariadb.server.spec.ts`
+ * checks it against the server.
+ */
+export const onMySQL = mariadbTestFlavor() === 'mysql';
 
 export interface TestEventStore {
 	store: MariaDBEventStore;
@@ -80,18 +87,28 @@ export const failInsertsOf = async (
 	collection: string,
 	eventName: string,
 ): Promise<() => Promise<void>> => {
-	const pool = poolOf(store);
 	const trigger = `es_fault_${randomBytes(6).toString('hex')}`;
-	await pool.query(
-		`CREATE TRIGGER ${escapeId(trigger)} BEFORE INSERT ON ${escapeId(collection)} FOR EACH ROW
-		 BEGIN
-			IF NEW.event = ${pool.escape(eventName)} THEN
-				SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'conformance: injected insert failure';
-			END IF;
-		 END`,
-	);
+	// As root: with binary logging on (MySQL's default), creating a trigger takes SUPER or SET_ANY_DEFINER
+	const root = await rootConnection(store['options'].database);
+	try {
+		await root.query(
+			`CREATE TRIGGER ${escapeId(trigger)} BEFORE INSERT ON ${escapeId(collection)} FOR EACH ROW
+			 BEGIN
+				IF NEW.event = ${root.escape(eventName)} THEN
+					SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'conformance: injected insert failure';
+				END IF;
+			 END`,
+		);
+	} finally {
+		await root.end();
+	}
 	return async () => {
-		await pool.query(`DROP TRIGGER IF EXISTS ${escapeId(trigger)}`);
+		const connection = await rootConnection(store['options'].database);
+		try {
+			await connection.query(`DROP TRIGGER IF EXISTS ${escapeId(trigger)}`);
+		} finally {
+			await connection.end();
+		}
 	};
 };
 
@@ -105,7 +122,7 @@ export const rootConnection = (database?: string): Promise<Connection> =>
  */
 export const createTestDatabase = async (
 	label: string,
-): Promise<{ name: string; config: SqlTestConfig; drop: () => Promise<void> }> => {
+): Promise<{ name: string; config: MariaDBTestConfig; drop: () => Promise<void> }> => {
 	const config = mariadbTestConfig();
 	const name = `${config.database}_${label}_${randomBytes(3).toString('hex')}`.slice(0, 64);
 	const root = await rootConnection();
@@ -127,4 +144,39 @@ export const createTestDatabase = async (
 			}
 		},
 	};
+};
+
+/**
+ * The isolation level of a session: `@@transaction_isolation` (MySQL, MariaDB 11.1 and later), or `@@tx_isolation`
+ * on the servers that don't know it (1193).
+ */
+export const isolationOf = async (db: Pool | Connection): Promise<string> => {
+	try {
+		const [{ isolation }] = await db.query<{ isolation: string }[]>('SELECT @@transaction_isolation AS isolation');
+		return isolation;
+	} catch (error) {
+		if ((error as { errno?: number })?.errno !== 1193) {
+			throw error;
+		}
+		const [{ isolation }] = await db.query<{ isolation: string }[]>('SELECT @@tx_isolation AS isolation');
+		return isolation;
+	}
+};
+
+/**
+ * Whether the connection that `db` runs its next query on has an InnoDB transaction open, from
+ * `information_schema.INNODB_TRX`, which root reads on MariaDB and MySQL alike. Use it with a pool of one connection.
+ */
+export const hasOpenTransaction = async (db: Pool | Connection): Promise<boolean> => {
+	const [{ id }] = await db.query<{ id: bigint | number }[]>('SELECT CONNECTION_ID() AS id');
+	const root = await rootConnection();
+	try {
+		const rows = await root.query<unknown[]>(
+			'SELECT trx_id FROM information_schema.INNODB_TRX WHERE trx_mysql_thread_id = ?',
+			[id],
+		);
+		return rows.length > 0;
+	} finally {
+		await root.end();
+	}
 };
