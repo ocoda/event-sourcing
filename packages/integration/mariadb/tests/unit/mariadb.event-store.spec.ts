@@ -514,8 +514,8 @@ describe(MariaDBEventStore, () => {
 		};
 
 		/**
-		 * Polls INNODB_TRX until a transaction waits for a lock in a `LOCK IN SHARE MODE` read of the collection's
-		 * counter, while `pending()` holds, for up to `timeout` ms. InnoDB refreshes the rows of INNODB_TRX only once
+		 * Polls INNODB_TRX until a transaction waits for a lock in a statement on the collection's counter that contains
+		 * `marker` (by default the `LOCK IN SHARE MODE` read), while `pending()` holds, for up to `timeout` ms. InnoDB refreshes the rows of INNODB_TRX only once
 		 * they went unread for 100 ms (`CACHE_MIN_IDLE_TIME_NS` in trx0i_s.cc): a faster poll reads the rows of its first
 		 * read again and again, and misses a wait that began after it. So the polls are 250 ms apart. Resolves with
 		 * whether it saw the wait, and the last rows it read: the waiting transactions and those that name the collection.
@@ -523,6 +523,7 @@ describe(MariaDBEventStore, () => {
 		const counterReadWaits = async (
 			collection: string,
 			pending: () => boolean,
+			marker = 'LOCK IN SHARE MODE',
 			timeout = 10_000,
 		): Promise<{ waited: boolean; rows: { trx_state: string; trx_query: string | null }[] }> => {
 			const root = await rootConnection();
@@ -536,9 +537,7 @@ describe(MariaDBEventStore, () => {
 					);
 					const waited = rows.some(
 						({ trx_state, trx_query }) =>
-							trx_state === 'LOCK WAIT' &&
-							trx_query?.includes('LOCK IN SHARE MODE') === true &&
-							trx_query.includes(collection),
+							trx_state === 'LOCK WAIT' && trx_query?.includes(marker) === true && trx_query.includes(collection),
 					);
 					if (waited || !pending() || Date.now() >= deadline) {
 						return { waited, rows };
@@ -641,6 +640,119 @@ describe(MariaDBEventStore, () => {
 			} finally {
 				spy.mockRestore();
 				await plain.disconnect();
+			}
+		});
+
+		/** The positions of a pool that a plain read shows: what a reader that trusts every batch would hand out. */
+		const visiblePositions = async (collection: string): Promise<bigint[]> =>
+			(
+				await pool.query<{ position: string }[]>(
+					`SELECT CAST(global_position AS CHAR) AS position FROM ${pool.escapeId(collection)} ORDER BY global_position`,
+				)
+			).map(({ position }) => BigInt(position));
+
+		/** The positions that don't continue a committed prefix 1..n: what a reader that resumes after them skips. */
+		const outOfOrder = (positions: readonly bigint[]): bigint[] =>
+			positions.filter((position, index) => position !== BigInt(index + 1));
+
+		it('commits the appends to a pool in the order of their positions: the next append waits for the counter', async () => {
+			const eventPool = await newPool('commit-order');
+			const collection = EventCollection.get(eventPool);
+			// An append held at its COMMIT: it took positions 1 and 2 and wrote them
+			const { store: holding } = createEventStore({ connectionLimit: 1 }, eventMap);
+			await holding.connect();
+			const holdingPool = poolOf(holding);
+			const getConnection = holdingPool.getConnection.bind(holdingPool);
+			let reachCommit = () => {};
+			const atCommit = new Promise<void>((resolve) => {
+				reachCommit = resolve;
+			});
+			let releaseCommit = () => {};
+			const commitReleased = new Promise<void>((resolve) => {
+				releaseCommit = resolve;
+			});
+			vi.spyOn(holdingPool, 'getConnection').mockImplementationOnce(async () => {
+				const connection = await getConnection();
+				const commit = connection.commit.bind(connection);
+				vi.spyOn(connection, 'commit').mockImplementationOnce(async () => {
+					reachCommit();
+					await commitReleased;
+					return commit();
+				});
+				return connection;
+			});
+			try {
+				const first = holding.appendEvents(newStream(), events.slice(0, 2), { expectedVersion: 0, pool: eventPool });
+				await atCommit;
+				let secondDone = false;
+				const second = store
+					.appendEvents(newStream(), events.slice(0, 1), { expectedVersion: 0, pool: eventPool })
+					.finally(() => {
+						secondDone = true;
+					});
+				// Awaited below: this only keeps a rejection during the polls from going unhandled
+				second.catch(() => undefined);
+
+				const wait = await counterReadWaits(collection, () => !secondDone, 'LAST_INSERT_ID(last_position');
+				expect(
+					wait.waited,
+					`INNODB_TRX shows the second append waiting for the counter; its last rows: ${JSON.stringify(wait.rows)}`,
+				).toBe(true);
+				expect(secondDone, 'the second append is still waiting').toBe(false);
+				expect(await visiblePositions(collection), 'nothing is committed yet').toEqual([]);
+				expect(await drain(store.readAll({ pool: eventPool }))).toEqual([]);
+
+				releaseCommit();
+				const [firstAppended, secondAppended] = await Promise.all([first, second]);
+				expect(firstAppended.map(({ metadata }) => metadata.globalPosition)).toEqual([1n, 2n]);
+				expect(secondAppended.map(({ metadata }) => metadata.globalPosition)).toEqual([3n]);
+				expect(outOfOrder(await visiblePositions(collection))).toEqual([]);
+				expect(
+					(await drain(store.readAll({ pool: eventPool }))).map(({ metadata }) => metadata.globalPosition),
+				).toEqual([1n, 2n, 3n]);
+			} finally {
+				releaseCommit();
+				await holding.disconnect();
+			}
+		});
+
+		it('negative control: positions taken apart from the append commit out of order, and a reader skips them', async () => {
+			const eventPool = await newPool('taken-apart');
+			const collection = EventCollection.get(eventPool);
+			/** Takes `count` positions from the counter in a statement of its own, which releases the counter at once. */
+			const take = async (db: PoolConnection, count: number): Promise<bigint> => {
+				await db.query(
+					`UPDATE ${CATALOG} SET last_position = LAST_INSERT_ID(last_position + ?) WHERE name = ? AND kind = 'events'`,
+					[count, collection],
+				);
+				const [{ last }] = await db.query<{ last: string }[]>('SELECT CAST(LAST_INSERT_ID() AS CHAR) AS last');
+				return BigInt(last);
+			};
+			const insert = (db: PoolConnection, position: bigint) =>
+				db.query(
+					`INSERT INTO ${pool.escapeId(collection)} (stream_id, version, event, payload, event_id, aggregate_id, occurred_on, global_position)
+					 VALUES (?, 1, 'account-opened', '{}', ?, ?, '2024-01-01 00:00:00.000', ?)`,
+					[`account-${position}`, EventId.generate().value, `account-${position}`, position],
+				);
+			const first = await pool.getConnection();
+			const second = await pool.getConnection();
+			try {
+				// The first writer takes 1 and 2, then writes them in a transaction it keeps open
+				const firstLast = await take(first, 2);
+				await first.beginTransaction();
+				await insert(first, firstLast - 1n);
+				await insert(first, firstLast);
+				// The second writer takes 3 without waiting, and commits it first
+				await insert(second, await take(second, 1));
+
+				const visible = await visiblePositions(collection);
+				expect(visible).toEqual([3n]);
+				expect(outOfOrder(visible), 'a reader that resumes after 3 never reads 1 and 2').toEqual([3n]);
+				await first.commit();
+			} finally {
+				await first.rollback().catch(() => undefined);
+				first.release();
+				second.release();
 			}
 		});
 

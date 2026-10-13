@@ -2,7 +2,7 @@ import { setImmediate as yieldToEventLoop } from 'node:timers/promises';
 import { EventCollection, type EventEnvelope, EventStream, type IEventPool } from '@ocoda/event-sourcing';
 import { Account, AccountId, getEventMap, getEvents } from '@ocoda/event-sourcing-testing/unit';
 import type { Connection, Pool } from 'mariadb';
-import { createEventStore, createTestDatabase, poolOf, rootConnection } from '../support/stores.js';
+import { createEventStore, createTestDatabase, onMySQL, poolOf, rootConnection } from '../support/stores.js';
 
 /**
  * `read-all-gap-safe` for MariaDB, amplified (ADR 0002 evidence, addendum M1).
@@ -18,6 +18,10 @@ import { createEventStore, createTestDatabase, poolOf, rootConnection } from '..
  * Torn read views are rare: with 1,000 prepared transactions CI has seen none so far, so this spec shows that readAll
  * stays exact under load, not that the high-water mark read closes a torn view. The event store spec proves that part
  * deterministically, with an append held in flight (`readAll` › "waits at a gap ...") and its negative control.
+ *
+ * MySQL's read views are atomic against commits: a commit leaves the list of active transactions under the mutex that
+ * a new read view copies it under, before it releases its locks (ADR 0002, evidence › MySQL). So on MySQL the plain
+ * keyset reader misses nothing and readAll settles no gap, and this spec asserts both.
  *
  * The prepared transactions are named after the spec's database (`ocoda-gap-safe-<database>/<n>`), so that runs on a
  * shared server only ever count and roll back their own.
@@ -227,6 +231,10 @@ describe('MariaDB readAll under amplified read views (prepared XA transactions)'
 			}
 		} finally {
 			await Promise.all([writer.disconnect(), reader.disconnect()]);
+		}
+		if (onMySQL) {
+			expect(plainMisses, 'events the plain keyset reader missed on MySQL').toBe(0);
+			expect(settledGaps, 'gaps readAll settled under the high-water mark on MySQL').toBe(0);
 		}
 		await context.annotate(
 			`${XA_TRANSACTIONS} prepared XA transactions: readAll settled ${settledGaps} gap(s) under the high-water mark; the plain keyset reader missed ${plainMisses} event(s) in ${ROUNDS} rounds`,
