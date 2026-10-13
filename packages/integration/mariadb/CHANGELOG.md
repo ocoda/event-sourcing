@@ -1,5 +1,26 @@
 # @ocoda/event-sourcing-mariadb
 
+## 4.1.0
+
+### Minor Changes
+
+- [#646](https://github.com/ocoda/event-sourcing/pull/646) [`e66ae41`](https://github.com/ocoda/event-sourcing/commit/e66ae41ad8a705551bf7f9d887cf85ad615a46e6) Thanks [@drieshooghe](https://github.com/drieshooghe)! - **MySQL support.** `MariaDBEventStore` and `MariaDBSnapshotStore` now run on MySQL 8.4 LTS, 9.7 LTS and the newest Innovation release (26.7), on the same `mariadb` connector, and CI tests every release. On a single MySQL server, or the primary of a replica set, the event store keeps `globalOrder: 'gap-safe'`: appends take their positions from the pool's counter row, so they commit in position order, as on MariaDB.
+  
+  - **Connecting.** MySQL authenticates with `caching_sha2_password`. Over plain TCP, the connector then needs `allowPublicKeyRetrieval: true` or the server's key (`cachingRsaPublicKey`). With TLS it needs neither.
+  - **JSON on MySQL.** New MySQL tables store `payload` and `headers` as `LONGTEXT`, the text `JSON.stringify` wrote. MySQL's `JSON` type sorts the keys of objects and prints doubles with 16 significant digits, so `0.9999999999999999` would come back as `1`. MariaDB tables keep `JSON`, MariaDB's alias of `LONGTEXT`. The stores read both column types.
+  - **`migrate()` is MariaDB only.** On MySQL, `MariaDBEventStore.migrate()` and `MariaDBSnapshotStore.migrate()` throw an `UnsupportedOperationException` before they change anything.
+  - **No more deprecated syntax.** The stores no longer use `VALUES()` in `ON DUPLICATE KEY UPDATE`, or the `BINARY` operator, which MySQL deprecates. Inspecting a table with a functional index (MySQL) no longer throws.
+
+### Patch Changes
+
+- [#648](https://github.com/ocoda/event-sourcing/pull/648) [`8ce1403`](https://github.com/ocoda/event-sourcing/commit/8ce140371311d171ae4cc73837c9195b1ee2dabf) Thanks [@drieshooghe](https://github.com/drieshooghe)! - **`globalOrder: 'gap-safe'` only on one InnoDB server.** `MariaDBEventStore` claimed `'gap-safe'` on every server except a Galera node. It now also reports `'best-effort'` on a MySQL Group Replication member in multi-primary mode, on TiDB and on Vitess (PlanetScale). There the counter row's lock doesn't order the commits of the whole deployment. On Vitess with any `transaction_mode` other than `SINGLE` or `TWOPC` (`MULTI` is the default), it also reports `atomicAppend: false`, because the counter and the events can sit on different shards. `connect()` tells these apart by system variables that only they have (`@@tidb_txn_mode`, `@@transaction_mode`, `@@group_replication_single_primary_mode`), and logs one warning per process and kind. The Galera warning is now logged once per process too, instead of on every connect. MariaDB, MySQL, a single-primary Group Replication group and Amazon Aurora keep `'gap-safe'`.
+  
+  - **Galera, precisely.** A Galera node is now one with `wsrep_on` on *and* a provider loaded. A standalone MariaDB server started with `wsrep_on=ON` and no provider (`wsrep_provider=none`) reads `@@wsrep_on = 1` too. It was taken for a Galera node, reported `'best-effort'`, and `migrate()` set Galera's session options on it. It now keeps `'gap-safe'`.
+  - **TiDB.** `readAll` reads the high-water mark without `LOCK IN SHARE MODE`, which TiDB refuses (1235), so it no longer throws at a gap.
+  - **Group Replication conflicts.** A `COMMIT` that Group Replication refuses (3101, a conflict with another member) is now a `'not-persisted'` outcome, like a deadlock: the transaction was rolled back. `appendSnapshot` runs again after one, as it does after a deadlock.
+- Updated dependencies [[`59672ca`](https://github.com/ocoda/event-sourcing/commit/59672ca2a8c79eb014e70a6fe3db61895d0feead)]:
+  - @ocoda/event-sourcing@4.1.0
+
 ## 4.0.0
 
 ### Major Changes

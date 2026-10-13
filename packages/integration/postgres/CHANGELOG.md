@@ -1,5 +1,12 @@
 # @ocoda/event-sourcing-postgres
 
+## 4.1.0
+
+### Patch Changes
+
+- Updated dependencies [[`59672ca`](https://github.com/ocoda/event-sourcing/commit/59672ca2a8c79eb014e70a6fe3db61895d0feead)]:
+  - @ocoda/event-sourcing@4.1.0
+
 ## 4.0.0
 
 ### Major Changes
