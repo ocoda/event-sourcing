@@ -1,6 +1,12 @@
 import type { EventStoreCapabilities } from '@ocoda/event-sourcing';
 import type { RunnerTestCase, TestAPI } from 'vitest';
-import { conformanceRepeat, conformanceTest, isSkippedCase, stringify } from '../../../lib/testing/fixtures.js';
+import {
+	conformanceRepeat,
+	conformanceTest,
+	createNumberPrecisionProbe,
+	isSkippedCase,
+	stringify,
+} from '../../../lib/testing/fixtures.js';
 
 // The harness of the conformance suites (lib/testing/fixtures.ts), which every store's conformance
 // spec runs through.
@@ -65,6 +71,16 @@ describe(stringify, () => {
 	it('describes values that have no JSON', () => {
 		expect(stringify(undefined)).toBe('undefined');
 		expect(stringify(() => 1)).toContain('=>');
+	});
+});
+
+describe(createNumberPrecisionProbe, () => {
+	it('holds doubles that survive JSON, but not a round trip through 15 significant digits', () => {
+		const probe = createNumberPrecisionProbe();
+		const rounded = Object.entries(probe).filter(([, value]) => Number(value.toPrecision(15)) === value);
+
+		expect(JSON.parse(JSON.stringify(probe))).toStrictEqual(probe);
+		expect(rounded).toEqual([]);
 	});
 });
 

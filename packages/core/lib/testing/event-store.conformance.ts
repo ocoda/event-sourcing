@@ -39,6 +39,7 @@ import {
 	createConformanceEventMap,
 	createDatePayloadProbe,
 	createJsonPayloadProbe,
+	createNumberPrecisionProbe,
 	drain,
 	expectRejectionOfClass,
 	newEventStream,
@@ -117,6 +118,7 @@ export const EVENT_STORE_CONFORMANCE_CASES = [
 	'store-throws-mid-stream',
 	'nested-calls-during-iteration',
 	'payload-json-fidelity',
+	'payload-number-precision',
 	'payload-dates-as-iso-strings',
 ] as const;
 
@@ -1788,6 +1790,20 @@ export const describeEventStoreConformance = (
 				expect(fromStream).toBeInstanceOf(ConformancePayloadProbed);
 				expect((fromStream as ConformancePayloadProbed).data).toStrictEqual(data);
 
+				expect((await call(() => store.getEnvelope(stream, 1, pool))).payload).toStrictEqual({ data });
+				expect((await drain(readEnvelopes(stream)))[0].payload).toStrictEqual({ data });
+			});
+
+			test('payload-number-precision', 'returns doubles with all their significant digits', async () => {
+				const stream = newEventStream();
+				const data = createNumberPrecisionProbe();
+
+				await append(stream, [new ConformancePayloadProbed(data)], ExpectedVersion.NoStream);
+
+				const event = await call(() => store.getEvent(stream, 1, pool));
+				expect((event as ConformancePayloadProbed).data, 'the doubles read by getEvent').toStrictEqual(data);
+				const [fromStream] = await drain(readEvents(stream));
+				expect((fromStream as ConformancePayloadProbed).data, 'the doubles read by getEvents').toStrictEqual(data);
 				expect((await call(() => store.getEnvelope(stream, 1, pool))).payload).toStrictEqual({ data });
 				expect((await drain(readEnvelopes(stream)))[0].payload).toStrictEqual({ data });
 			});
