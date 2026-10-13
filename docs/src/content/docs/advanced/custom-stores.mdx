@@ -2,6 +2,8 @@
 title: Custom Event and Snapshot Stores
 ---
 
+import { Aside } from '@astrojs/starlight/components';
+
 ## How to create your own Event Store
 An event store has two halves. The `EventStore` base class implements the contract that every store shares: it validates appends, serializes the events, checks the expected version, retries `ExpectedVersion.Any`, stamps the global positions on the envelopes and publishes them. Your store implements the **driver methods**, which read and write the database and never touch the event map. The [conformance suite](#test-your-event-store) checks that the two halves fit.
 
@@ -116,6 +118,10 @@ Every method returns a promise (or an async generator), and every read throws an
 
 The driver methods are abstract, so TypeScript reports the ones your store lacks.
 
+<Aside type="caution" title="Global positions are part of the contract">
+Every event store numbers the events of each pool and reads them back with `readAll`, also with `globalOrder: 'best-effort'`: positions start at `1n`, follow each other within an append and only increase, which `read-all-order` checks whatever the capabilities. `'best-effort'` only relaxes when a position becomes visible to readers. A database that can only read one stream at a time, or can't number a pool's events in the write that stores them, doesn't meet this contract: it can't serve `readAll`, and with it the consumers and read models of your application that catch up from a checkpoint ([Pull instead of push](/advanced/event-pubsub#outbox-pattern)). Such a database can still hold snapshots: a snapshot store needs no global positions.
+</Aside>
+
 **Don't override `appendEvents`, `getEvent` or `getEvents`.** The base class implements them for every store, and the module refuses a store that overrides one, also as a class field, with an `InvalidEventStoreImplementationException` when it creates the store, so the application fails to bootstrap. `assertEventStoreImplementation(store)` runs the same check. To decorate the appends of an existing store, for tracing, extend it (`PostgresEventStore`, for instance), override `persistEvents` and call `super.persistEvents(envelopes, target)`.
 
 #### Implement `persistEvents`
@@ -146,7 +152,7 @@ To tell errors apart, use `isEventSourcingError(error, EventSourcingErrorCode.Ev
 | `headers` | `false` | The store persists the `headers` of the events. Without it, an append with headers is rejected with an `UnsupportedOperationException` before anything is written. |
 | `globalOrder` | `'best-effort'` | `'gap-safe'`: once `readAll` yielded a position, no event at or below it commits later, so a reader that resumes after its last position never misses an event. `'best-effort'`: positions strictly increase, but an event may still commit below a position that was read. |
 
-Claim a capability only if its conformance cases pass. When the capabilities depend on the database (a MongoDB server without a replica set has no transactions, for instance), set them in `connect()`, with `Object.assign(this.capabilities, { ... })`.
+Claim a capability only if its conformance cases pass, and leave `globalOrder` at `'best-effort'` unless `read-all-gap-safe` passes. A passing case only shows something if it can fail for your store: keep a negative control next to it, a deliberately broken variant of your store that the case must catch. For `read-all-gap-safe`, that is a variant that takes its positions in a statement of its own and inserts the events a little later, in another transaction; for `append-atomic-partial-failure`, one that stores the events of an append one by one. Run it with `only` and `expectFailure` (see [Test your Event Store](#test-your-event-store)). When the capabilities depend on the database (a MongoDB server without a replica set has no transactions, for instance), set them in `connect()`, with `Object.assign(this.capabilities, { ... })`.
 
 #### Register your Event Store
 Register your store in the module, with its configuration:
@@ -212,6 +218,33 @@ Cases that need a capability your store doesn't claim are skipped with `capabili
 - The suite creates its own pools, named after the `pool` option, which defaults to a name unique to the run, and hands their collections to `cleanup` at the end. The list also names collections that were never created: ignore those.
 - `CONFORMANCE_RUN_SKIPPED=true` runs the cases you skipped, to check whether a skip is still needed. It doesn't lift a capability gate.
 - `CONFORMANCE_REPEAT=n` runs every case n times, to soak out flaky concurrency.
+- `expectFailure` turns the cases into negative controls: each one passes only when the case fails. Pass a pattern per case, so that only the failure that detects the defect counts, and `only` to register just those cases. A case that the store's capabilities gate off fails the control, since it proves nothing.
+
+```typescript
+// foo.event-store.negative-control.spec.ts
+import { describeEventStoreConformance } from '@ocoda/event-sourcing/testing';
+import { BrokenFooEventStore } from './broken-foo.event-store';
+
+// BrokenFooEventStore extends FooEventStore and still claims globalOrder: 'gap-safe', but its persistEvents takes
+// the positions in a statement of its own and inserts the events a few milliseconds later, in a second transaction
+describeEventStoreConformance(
+	'BrokenFooEventStore (negative control)',
+	async (context) => {
+		const store = new BrokenFooEventStore(context, { ... });
+		await store.connect();
+		return {
+			store,
+			cleanup: async (collections) => {
+				// Drop the collections, then disconnect
+			},
+		};
+	},
+	{
+		only: ['read-all-gap-safe'],
+		expectFailure: { 'read-all-gap-safe': /events the tailing reader never read/ },
+	},
+);
+```
 
 To construct your store outside the module, in a test of your own, `createTestEventStoreContext({ events })` builds a context with a `RecordingPublisher`, which records what the store publishes. `createInMemoryEventStore({ events })` and `createInMemorySnapshotStore()` return connected in-memory stores, for tests that don't boot the module.
 

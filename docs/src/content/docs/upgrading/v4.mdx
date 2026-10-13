@@ -46,7 +46,7 @@ Most 3.x APIs that 4.0 replaces keep working until 5.0, with a deprecation warni
 
 ## 1. Database server versions [#database-versions]
 
-4.0 is tested on PostgreSQL 14 and later and on MongoDB 7 and later; see [Tested versions](/upgrading/versioning#tested-versions) for the full list, MariaDB included. PostgreSQL 13 and MongoDB 6 are no longer tested: their vendors ended support for them in 2025 ([PostgreSQL](https://www.postgresql.org/support/versioning/), [MongoDB](https://www.mongodb.com/legal/support-policy/lifecycles)). 4.0 doesn't refuse them, but 4.x isn't tested on them, so a later 4.x release can stop working on them.
+4.0 is tested on PostgreSQL 14 and later and on MongoDB 7 and later; see [Tested versions](/upgrading/versioning#tested-versions) for the full list, MariaDB included, and MySQL from 4.1. PostgreSQL 13 and MongoDB 6 are no longer tested: their vendors ended support for them in 2025 ([PostgreSQL](https://www.postgresql.org/support/versioning/), [MongoDB](https://www.mongodb.com/legal/support-policy/lifecycles)). 4.0 doesn't refuse them, but 4.x isn't tested on them, so a later 4.x release can stop working on them.
 
 If you run one of them, upgrade the database server while the application is still on 3.x, which is tested on PostgreSQL 14 to 17 and on MongoDB 7 and 8 too. The server upgrade and the move to 4.0 then stay separate steps, and the [data migration](#data-migration) runs on the upgraded server.
 
@@ -471,7 +471,7 @@ for await (const envelopes of eventStore.getAllEnvelopes({ since: { year: 2024, 
 for await (const envelopes of eventStore.readAll({ fromPosition: checkpoint + 1n })) { … }
 ```
 
-`getAllEnvelopes`, `IAllEventsFilter`, `EventStore.getYearMonthRange` and `ULID.yearMonth` are removed. For `ULID.yearMonth`, also on `EventId`, use `id.date.toISOString().slice(0, 7)`. `capabilities.globalOrder` says whether a reader that tails the store can miss an event (`'best-effort'`) or not (`'gap-safe'`); the in-memory store, PostgreSQL, MariaDB on InnoDB and MongoDB replica sets are gap-safe.
+`getAllEnvelopes`, `IAllEventsFilter`, `EventStore.getYearMonthRange` and `ULID.yearMonth` are removed. For `ULID.yearMonth`, also on `EventId`, use `id.date.toISOString().slice(0, 7)`. `capabilities.globalOrder` says whether a reader that tails the store can miss an event (`'best-effort'`) or not (`'gap-safe'`); the in-memory store, PostgreSQL, MariaDB (and, from 4.1, MySQL) on a single InnoDB server or primary, and MongoDB replica sets are gap-safe. Multi-writer and distributed deployments, such as a Galera cluster, TiDB or Vitess, and the engines that speak MongoDB's protocol without being MongoDB report `'best-effort'`: see [Other databases](/integrations/other-databases).
 
 ## 11. Envelope metadata and JSON [#metadata-headers]
 
@@ -611,7 +611,7 @@ await PostgresSnapshotStore.migrate(config, { legacyTimeZone: 'Europe/Brussels' 
 
 ### MariaDB [#mariadb-schema-v2]
 
-See [MariaDB](/integrations/mariadb), with the [runbook](/integrations/mariadb#runbook), the schema, the capabilities and the privileges.
+See [MariaDB and MySQL](/integrations/mariadb), with the [runbook](/integrations/mariadb#runbook), the schema, the capabilities and the privileges.
 
 ```ts
 import { MariaDBEventStore, MariaDBSnapshotStore } from '@ocoda/event-sourcing-mariadb';
@@ -630,9 +630,10 @@ await MariaDBEventStore.migrate(config, { keepBackup: false });
 - **Snapshots.** The snapshot tables are converted in place, and every stream gets exactly one latest snapshot, its highest version. `registered_on` keeps milliseconds.
 - **Stream ids are case-sensitive.** The tables compare text in binary (`utf8mb4_bin`), like the other stores; the 3.x tables used the database's default collation, which usually ignores case. The migration gives a 3.x stream whose rows have ids that differ in case only (`account-Acc-1` version 1, `account-acc-1` version 2) one stream id, the id of its lowest version, and its snapshots the id of its events; **from then on the application must use those ids**. The dry run lists them (`canonicalizedStreams`, see [Stream ids that differ in case only](/integrations/mariadb#case-variants)). Stream ids, aggregate ids and event names can be up to 255 characters.
 - **The migration** needs no server settings changed, only room for the copy: plan for about 3 minutes per million events (a provisional estimate), and free space of 1.5 times the event tables in the data directory and again in `tmpdir`. A user with `ALL PRIVILEGES` on the database runs it; a missing privilege of the copy or the swap fails it before the copy. On Galera it sizes its replication fragments for `wsrep_max_ws_size`. After the migration, a 3.x instance fails to append events (error 1136), but its snapshot writes still succeed, so stop every 3.x instance before you migrate.
+- **The migration runs on MariaDB only.** On MySQL, `migrate()` throws an `UnsupportedOperationException` before it changes anything: see [Migrating 3.x tables](/integrations/mariadb#migration).
 - **The catalog**, `event_sourcing_collections`, registers every event and snapshot table and holds each event pool's position counter. `listCollections()` reads it, so it lists 3.x tables only once they are migrated.
 - **A new `ddl` option**: `'auto'` (the default) creates the tables, `'none'` only checks and registers them, for users without `CREATE` privileges, and reports the statements to run.
-- **Capabilities**: `{ atomicAppend: true, headers: true, globalOrder: 'gap-safe' }`, and `'best-effort'` on a Galera cluster.
+- **Capabilities**: `{ atomicAppend: true, headers: true, globalOrder: 'gap-safe' }`, and `'best-effort'` on a Galera cluster and the other deployments listed under [Topologies and capabilities](/integrations/mariadb#capabilities).
 - **Appends to one pool are serialized** by the pool's position counter, one commit at a time. Use pools to scale writes (see [Throughput](/integrations/mariadb#appends)).
 - **The stores' sessions run in `READ COMMITTED`**, added after your `initSql`. `readAll` must read from the server the appends run on: don't route the event store through a proxy that sends reads to replicas.
 
@@ -671,7 +672,7 @@ await MongoDBSnapshotStore.migrate(config);
 The DynamoDB store (`@ocoda/event-sourcing-dynamodb`) is not released for 4.0. DynamoDB can't give the events a gap-free global order, which the 4.0 read side relies on. You have two options:
 
 - **Stay on 3.x.** 3.x keeps receiving security and critical fixes until at least 2027-03-31. Install `@ocoda/event-sourcing@3` with `@ocoda/event-sourcing-dynamodb@3`, on NestJS 11.
-- **Move your data to another store**: PostgreSQL, MariaDB or MongoDB. There is no tool that exports the events from DynamoDB. A 4.0 store can import them as pre-built envelopes: build the envelope of each event with `EventEnvelope.create()`, and append the envelopes of a stream in version order, with a numeric `expectedVersion` and `publish: false`. They keep their event ids, `occurredOn` and metadata, and get global positions in the order you append them. See [Appending events](#event-store-api).
+- **Move your data to another store**: PostgreSQL, MariaDB, MySQL (with the MariaDB store, from 4.1) or MongoDB; for managed services and compatible servers, see [Other databases](/integrations/other-databases). There is no tool that exports the events from DynamoDB. A 4.0 store can import them as pre-built envelopes: build the envelope of each event with `EventEnvelope.create()`, and append the envelopes of a stream in version order, with a numeric `expectedVersion` and `publish: false`. They keep their event ids, `occurredOn` and metadata, and get global positions in the order you append them. See [Appending events](#event-store-api).
 
 ## Further reading [#further-reading]
 

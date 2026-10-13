@@ -4,10 +4,6 @@ title: Installation
 
 import { Aside, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
 
-<Aside type="caution" title="4.0 is in prerelease">
-Until 4.0.0 is released, `npm install @ocoda/event-sourcing` installs 3.x. Install 4.0 from the `next` tag and pin the exact version: `npm install --save-exact @ocoda/event-sourcing@next`, and the same for the integration. See [Versioning and support](/upgrading/versioning#dist-tags).
-</Aside>
-
 This library consists of a core module `@ocoda/event-sourcing` that provides the building blocks and can be complemented with an integration library for setting up a persistence layer for your events using a specific database provider.
 
 By default the core library will use an in-memory event- and snapshot-store, which is useful for testing and prototyping, but not recommended for production use.
@@ -51,7 +47,7 @@ Upgrading an application from 3.x? Follow [Migrating from 3.x to 4.0](/upgrading
    <Tabs syncKey="package-manager">
    <TabItem label="pnpm">
 
-   **MariaDB**
+   **MariaDB or MySQL**
    ```bash
    pnpm add @ocoda/event-sourcing-mariadb mariadb
    ```
@@ -67,7 +63,7 @@ Upgrading an application from 3.x? Follow [Migrating from 3.x to 4.0](/upgrading
    </TabItem>
    <TabItem label="npm">
 
-   **MariaDB**
+   **MariaDB or MySQL**
    ```bash
    npm install @ocoda/event-sourcing-mariadb mariadb
    ```
@@ -83,7 +79,7 @@ Upgrading an application from 3.x? Follow [Migrating from 3.x to 4.0](/upgrading
    </TabItem>
    <TabItem label="yarn">
 
-   **MariaDB**
+   **MariaDB or MySQL**
    ```bash
    yarn add @ocoda/event-sourcing-mariadb mariadb
    ```
@@ -98,6 +94,8 @@ Upgrading an application from 3.x? Follow [Migrating from 3.x to 4.0](/upgrading
 
    </TabItem>
    </Tabs>
+
+   From 4.1, the MariaDB integration also runs on MySQL, with the same `mariadb` connector. To sign in to MySQL over TCP without TLS, the connector needs `allowPublicKeyRetrieval: true` or the server's public key (`cachingRsaPublicKey`): see [Connecting to MySQL](/integrations/mariadb#mysql-auth). For managed services, servers that are compatible with one of these databases, and the databases that aren't supported, see [Other databases](/integrations/other-databases).
 
    <Aside title="DynamoDB">
    The DynamoDB store is not part of 4.0: DynamoDB can't give the events a gap-free global order, which the 4.0 read side relies on. It remains available on the 3.x line (NestJS 11, CommonJS), which receives security and critical fixes until at least 2027-03-31: install `@ocoda/event-sourcing@3` with `@ocoda/event-sourcing-dynamodb@3`. On 3.x the AWS SDK clients ship as dependencies of the integration, so there is no driver peer to add.

@@ -34,7 +34,7 @@ The repository is a pnpm + turbo monorepo:
 | Path                     | What it is                                                                   |
 | ------------------------ | ---------------------------------------------------------------------------- |
 | `packages/core`          | `@ocoda/event-sourcing`, the library                                         |
-| `packages/integration/*` | store drivers: `postgres`, `mongodb`, `mariadb`                              |
+| `packages/integration/*` | store drivers: `postgres`, `mongodb`, `mariadb` (MariaDB and MySQL)          |
 | `packages/testing`       | shared test fixtures and the end-to-end suite every store runs (private)     |
 | `packages/config`        | shared TypeScript and Vitest configuration (private)                         |
 | `docs/`                  | the documentation site                                                       |
@@ -68,8 +68,9 @@ Core tests need no database. Integration tests run against the services in `dock
 | `mongodb`            | `mongodb-7`, `mongodb-8` (the newest 8.x, 8.3), `mongodb-9` (9.0) (`mongodb` is 8) |
 | MongoDB replica sets | `mongodb-7-rs` … `mongodb-9-rs` (port 27018) |
 | `mariadb`            | `mariadb-10` (10.11), `mariadb-11` (11.4), `mariadb-11-8` (11.8), `mariadb-12` (12.3), `mariadb-rolling` (13.0) (`mariadb` is 10.11) |
+| MySQL                | `mysql-8-4` (8.4), `mysql-9-7` (9.7), `mysql-innovation` (26.7) |
 
-The services cover the PostgreSQL and MongoDB major versions and the MariaDB long-term releases that their vendors still support, plus the newest MariaDB rolling release, which MariaDB supports only until the next one. PostgreSQL 13 and MongoDB 6 reached their end of life in 2025 and were dropped before 4.0; the `3.x` branch still tests them. `mongo:8` is the newest 8.x release, so MongoDB 8.0 has no service of its own. MongoDB 9.0 runs MongoDB's own image (`mongodb/mongodb-community-server`) until a `mongo:9` Docker Official Image exists. A new server version gets a service and a CI row of its own. The image tags float within their release line (`postgres:18` to the newest 18.x, `mongo:8` to the newest 8.x). Renovate lists a new server version on its Dependency Dashboard instead of opening a pull request. Don't approve it there: Renovate groups these updates, so the approval would move every older service to the newest version too.
+The services cover the PostgreSQL and MongoDB major versions and the MariaDB and MySQL long-term releases that their vendors still support, plus the newest MariaDB rolling release and the newest MySQL Innovation release, which their vendors support only until the next one. PostgreSQL 13 and MongoDB 6 reached their end of life in 2025 and were dropped before 4.0; the `3.x` branch still tests them. `mongo:8` is the newest 8.x release, so MongoDB 8.0 has no service of its own. MongoDB 9.0 runs MongoDB's own image (`mongodb/mongodb-community-server`) until a `mongo:9` Docker Official Image exists. A new server version gets a service and a CI row of its own. The image tags float within their release line (`postgres:18` to the newest 18.x, `mongo:8` to the newest 8.x). Renovate lists a new server version on its Dependency Dashboard instead of opening a pull request. Don't approve it there: Renovate groups these updates, so the approval would move every older service to the newest version too.
 
 Start one and wait until it is healthy:
 
@@ -77,9 +78,16 @@ Start one and wait until it is healthy:
 docker compose up -d --wait postgres
 ```
 
-Versions of the same database share a port, so run one version at a time.
+Versions of the same database share a port, and the MySQL services use MariaDB's port 3306, so run one version at a time.
 
 The specs connect with the settings in `packages/testing/unit/db.ts`, whose defaults match these services. Override them with `ES_TEST_PG_*`, `ES_TEST_MARIADB_*` and `ES_TEST_MONGODB_URL`, for example to use a database of your own on a shared server (the specs use fixed table names, so two runs must not share a database).
+
+The MySQL services run the mariadb specs with `ES_TEST_MARIADB_FLAVOR=mysql`. The specs check the flavor against the server, so they fail on MySQL without it, and on MariaDB with it. The migration specs are skipped on MySQL, where `migrate()` refuses to run:
+
+```bash
+docker compose up -d --wait mysql-8-4
+ES_TEST_MARIADB_FLAVOR=mysql pnpm test:cov --filter=@ocoda/event-sourcing-mariadb
+```
 
 The MongoDB unit, resilience and conformance specs run on a standalone server and, when `ES_TEST_MONGODB_RS_URL` is set, on a replica set too; the e2e suite runs on the standalone server only. CI runs both topologies in every MongoDB job and fails if `ES_TEST_MONGODB_RS_URL` is missing:
 
@@ -88,7 +96,7 @@ docker compose up -d --wait mongodb mongodb-8-rs
 ES_TEST_MONGODB_RS_URL='mongodb://localhost:27018/?replicaSet=rs0' pnpm test:cov --filter=@ocoda/event-sourcing-mongodb
 ```
 
-The cross-version test checks that a driver reads what the published 3.0.2 packages wrote: the 3.0.2 writer in `fixtures/cross-version/v3` fills a schema or database of its own, then the driver's `tests/cross-version` specs read it back. CI runs it on the oldest and the newest PostgreSQL, on the newest MongoDB, on every MariaDB long-term release, and on PostgreSQL 17 and MongoDB 8, the newest versions 3.x is tested on. It needs npm and the same `ES_TEST_*` settings (for MariaDB also the root password, to create the database):
+The cross-version test checks that a driver reads what the published 3.0.2 packages wrote: the 3.0.2 writer in `fixtures/cross-version/v3` fills a schema or database of its own, then the driver's `tests/cross-version` specs read it back. CI runs it on the oldest and the newest PostgreSQL, on the newest MongoDB, on every MariaDB long-term release (not on MySQL, which has no migration from 3.x), and on PostgreSQL 17 and MongoDB 8, the newest versions 3.x is tested on. It needs npm and the same `ES_TEST_*` settings (for MariaDB also the root password, to create the database):
 
 ```bash
 pnpm test:cross-version --database postgres   # or mariadb, mongodb (both topologies with ES_TEST_MONGODB_RS_URL)

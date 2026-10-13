@@ -6,7 +6,7 @@ import { Aside } from '@astrojs/starlight/components';
 
 The snapshot store keeps the [snapshots](/start/snapshots) of your aggregates. A `SnapshotRepository` uses it behind the scenes, so you rarely call it yourself, unless you [build your own store](/advanced/custom-stores#how-to-create-your-own-snapshot-store).
 
-Every store extends the abstract `SnapshotStore` class and is registered as the `snapshotStore` of the module. The library ships an in-memory store, and PostgreSQL, MariaDB and MongoDB stores in their own packages.
+Every store extends the abstract `SnapshotStore` class and is registered as the `snapshotStore` of the module. The library ships an in-memory store, and PostgreSQL, MariaDB and MongoDB stores in their own packages. The MariaDB stores also run on MySQL.
 
 ## Promises only
 

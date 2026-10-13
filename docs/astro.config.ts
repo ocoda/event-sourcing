@@ -48,8 +48,9 @@ const sidebar: (SidebarLink | { label: string; items: SidebarLink[] })[] = [
 		label: 'Integrations',
 		items: [
 			{ label: 'PostgreSQL', slug: 'integrations/postgres' },
-			{ label: 'MariaDB', slug: 'integrations/mariadb' },
+			{ label: 'MariaDB and MySQL', slug: 'integrations/mariadb' },
 			{ label: 'MongoDB', slug: 'integrations/mongodb' },
+			{ label: 'Other databases', slug: 'integrations/other-databases' },
 		],
 	},
 	{
@@ -87,6 +88,7 @@ export default defineConfig({
 		'/further_reading': `${base}/further-reading/`,
 		'/advanced/event_pubsub': `${base}/advanced/event-pubsub/`,
 		'/advanced/event_serialization': `${base}/advanced/event-serialization/`,
+		'/integrations/mysql': `${base}/integrations/mariadb/`,
 	},
 	integrations: [
 		starlight({
