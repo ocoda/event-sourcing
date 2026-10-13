@@ -5,7 +5,7 @@
 - **Scope:** plan milestone M7: the 4.0 event and snapshot schemas of the PostgreSQL, MariaDB and MongoDB stores, the global position technique behind [ADR 0001](./0001-v4-core-api.md) §9, and the one-time `migrate()` from 3.x
 - **Depends on:** ADR 0001 §1, §8 and §9, and its [store contract amendments](./0001-v4-core-api.md#amendments-store-contract) (D1–D35)
 - **Baseline:** `origin/master` `0c345dd` (`4.0.0-next.1`); the 3.x schemas that 3.0.0 to 3.0.2 create
-- **Amendments:** 2026-09-29: §1 to §4 and §6 now describe the PostgreSQL (#570), MariaDB (#571) and MongoDB (#572) drivers as merged, where they follow the Wave 0 spikes and the reviews. The PostgreSQL append is one statement, and its migration rewrites the table. MariaDB reads with a hybrid reader, appends in `READ COMMITTED`, and its dry run doesn't check privileges. MongoDB numbers on the server. Each driver's [evidence](#evidence) gives the reasons. The [owner decisions](#owner-decisions) have defaults applied. 2026-09-30: after the module PR (#579), the event store's provider ensures the default pool while Nest instantiates the providers ([ADR 0001](./0001-v4-core-api.md) D38). 2026-09-30: the [owner decisions](#owner-decisions) are decided (keep `utf8mb4_bin` and `event_sourcing_collections`; the 3.x → 4 MariaDB migration needs minimal manual operations), and the MariaDB migration gives every 3.x stream one stream id, checks the swap's privileges before the copy, names the sessions behind a lock wait, and sizes its Galera fragments ([amendment](#amendment-minimal-manual-mariadb-operations)).
+- **Amendments:** 2026-09-29: §1 to §4 and §6 now describe the PostgreSQL (#570), MariaDB (#571) and MongoDB (#572) drivers as merged, where they follow the Wave 0 spikes and the reviews. The PostgreSQL append is one statement, and its migration rewrites the table. MariaDB reads with a hybrid reader, appends in `READ COMMITTED`, and its dry run doesn't check privileges. MongoDB numbers on the server. Each driver's [evidence](#evidence) gives the reasons. The [owner decisions](#owner-decisions) have defaults applied. 2026-09-30: after the module PR (#579), the event store's provider ensures the default pool while Nest instantiates the providers ([ADR 0001](./0001-v4-core-api.md) D38). 2026-09-30: the [owner decisions](#owner-decisions) are decided (keep `utf8mb4_bin` and `event_sourcing_collections`; the 3.x → 4 MariaDB migration needs minimal manual operations), and the MariaDB migration gives every 3.x stream one stream id, checks the swap's privileges before the copy, names the sessions behind a lock wait, and sizes its Galera fragments ([amendment](#amendment-minimal-manual-mariadb-operations)). 2026-10-13: the MariaDB stores also run on MySQL 8.4, 9.7 and the newest Innovation release (#646): there, §3's JSON columns are `LONGTEXT` and §6's `migrate()` refuses to run; the [evidence](#mysql) gives the gap-safety argument for MySQL.
 
 ## Context
 
@@ -198,6 +198,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS "<deriveIndexName(t, 'latest')>" ON "<t>" (agg
 ### 3. MariaDB
 
 *Amended:* this section describes the MariaDB driver as merged (#571). Where it departs from the plan, the [evidence](#mariadb) gives the reason, under "Amendments to §3 and §6".
+
+*Amended 2026-10-13:* the same stores run on MySQL (#646), which `connect()` tells from MariaDB by `@@version` and `@@version_comment`. On MySQL the JSON columns (`payload`, `headers`) are `LONGTEXT`: MySQL's `JSON` is a binary format that sorts object keys and prints doubles with 16 significant digits (`payload-number-precision` failed with it on 8.4), while MariaDB's `JSON` is an alias of `LONGTEXT` that keeps the text. Everything else below is the same SQL on both, without `VALUES()` in `ON DUPLICATE KEY UPDATE` and without the `BINARY` operator, which MySQL deprecates. The [evidence](#mysql) gives the gap-safety argument for MySQL.
 
 **Catalog**
 
@@ -503,6 +505,8 @@ The same migration lock, transaction settings, table lock and re-inspection as t
 
 #### MariaDB events: copy and swap, per table
 
+*Amended 2026-10-13:* MariaDB only. Its session settings and checks are MariaDB's (`tx_isolation`, `max_statement_time`, `wsrep_*`), so on MySQL `migrate()` throws an `UnsupportedOperationException` before it runs a statement. The snapshot migration below refuses MySQL the same way. A port waits for 3.x users on MySQL to ask for it.
+
 The copy never `UPDATE`s a 3.x row, so the `ON UPDATE` hazard can't fire. The `TIMESTAMP → DATETIME(3)` change needs a copy anyway, and the swap leaves a backup.
 
 The migration connects on a connection of its own with `socketTimeout: 0`: a copy runs for minutes without a byte on the socket. It sets the session, takes the named lock, then inspects and plans the table under the lock, so a run continues where the previous one stopped. Every step is one statement in autocommit. A failed step destroys the connection, which releases the lock and the session settings.
@@ -788,6 +792,54 @@ Appends per second per pool, 1–3 events per append, 8 writers unless noted (me
 - The acquire-lock step is `SELECT IF(GET_LOCK(<name>, 0) = 1, 1, (SELECT 1 UNION SELECT 2))`: a taken lock raises 1242, so `mariadb < migrations/4.0.sql` stops there (a `SELECT GET_LOCK` returning 0 didn't; `DO IF(…)` doesn't raise at all). The executor reads the 1242 as `blocked`.
 - `migrate()` connects with `socketTimeout: 0`: an application's socket timeout dropped the connection mid-copy while the server finished the step, and the rerun was `blocked` by the orphaned session's lock. After a lost connection the error names the `IS_USED_LOCK()` to wait on.
 - The dry run does not check privileges (§6 lists "missing privileges" as blocking): MariaDB grants through roles, `PUBLIC` and database patterns make an `information_schema` check prone to refusing users that have them. A step that lacks one fails with the privileges it needs in its error, and the rerun continues. *Decided 2026-09-30:* the dry run still doesn't check them (it writes nothing, and `PREPARE` checks `CREATE` and `UPDATE` but not `ALTER`, `DROP` or `RENAME`), and the migration checks the swap's privileges before the copy, so a missing privilege never costs a copy ([amendment](#amendment-minimal-manual-mariadb-operations)).
+
+### MySQL
+
+*Added 2026-10-13* (#646 and the evidence PR).
+
+**Verdict: `globalOrder: 'gap-safe'` on a single InnoDB server, and on the primary of a replica set, with the same append and reader as MariaDB. Unlike on MariaDB, a plain keyset reader would be gap-safe too.**
+
+**InnoDB source citation** (MySQL [8.4.11](https://github.com/mysql/mysql-server/tree/mysql-8.4.11); the same order in [9.7.2](https://github.com/mysql/mysql-server/tree/mysql-9.7.2)):
+
+- `trx_release_impl_and_expl_locks` ([trx0trx.cc l.1857–1959](https://github.com/mysql/mysql-server/blob/mysql-8.4.11/storage/innobase/trx/trx0trx.cc#L1857-L1959); 9.7.2 [l.1823–1931](https://github.com/mysql/mysql-server/blob/mysql-9.7.2/storage/innobase/trx/trx0trx.cc#L1823-L1931)) takes `trx_sys->mutex` for every read-write transaction (`trx->id > 0`). Under it, `trx_erase_lists` (l.1884) removes the transaction from `trx_sys->rw_trx_ids`, the list a new read view copies ("For consistent snapshot, we need to remove current transaction from running transaction id list for mvcc before doing commit and releasing locks"). Only after the mutex is released does `lock_trx_release_locks` (l.1959) release the counter row's lock.
+- `MVCC::view_open` ([read0read.cc l.501–552](https://github.com/mysql/mysql-server/blob/mysql-8.4.11/storage/innobase/read/read0read.cc#L501-L552); 9.7.2 l.499–637) builds a read view with `ReadView::prepare` (l.447), which copies `rw_trx_ids` (l.459) under the same mutex. Its one shortcut is for an autocommit read whose closed view saw no active transaction: it reuses that view only when no read-write transaction started since (an unchanged `m_low_limit_id`).
+- So a MySQL read view is atomic against commits. If T2 took the counter after T1 released it, T1 left `rw_trx_ids` first, and every view that shows T2 committed shows T1 committed too. MariaDB's lock-free walk can't promise that. With positions handed out in lock order, every `READ COMMITTED` statement sees a committed prefix. The hybrid reader stays, as one code path for both servers. On MySQL its settle path fires only at a permanent gap (a row deleted by hand).
+
+**CI** (MySQL 8.4, 9.7 and 26.7, binary logging on, as by default):
+
+- The conformance suite with the MariaDB skips only, including `read-all-gap-safe`, `append-atomic-partial-failure` (its trigger created as root, since binary logging asks for `SUPER` otherwise), `latest-unique-concurrent` and `payload-number-precision`.
+- **Commit order, deterministically** (`mariadb.event-store.spec.ts` › readAll, on MariaDB and MySQL):
+  - Append A is held at its `COMMIT` after it took positions 1 and 2 and wrote them.
+  - Append B waits for the counter row, which `INNODB_TRX` shows as a lock wait.
+  - While A is held, neither a plain read nor `readAll` sees anything. Once A commits, A has 1 and 2 and B has 3.
+  - Negative control: positions taken in an autocommit statement of their own release the counter at once. The second writer then commits 3 while 1 and 2 are not committed, and a plain read shows `[3]`.
+- **Amplified spec** (1,000 prepared XA transactions, 3 rounds of 8 writers): on MySQL it asserts that the plain keyset reader missed 0 events and `readAll` settled 0 gaps.
+  - This doesn't prove atomic views: a torn view is a race that the spec may never hit. On MariaDB, CI has never seen one with 1,000 prepared transactions.
+  - What it does: a MySQL release that broke the order above would turn it red whenever it hits that race.
+- **Local runs** (Docker on a macOS host, tmpfs):
+  - 1,000 prepared transactions, 5 rounds × 8 writers × 25 appends, on 8.4.11, 9.7.2 and 26.7.0: 0 misses and 0 settled gaps on each.
+  - 8,000 prepared transactions, 5 rounds × 8 writers × 100 appends, on 8.4.11: 0 misses.
+  - **Side by side, 16,000 prepared transactions** (about what the MariaDB spike needed), 5 rounds × 8 writers × 100 appends, with the servers on the same host:
+    - MariaDB 10.11.15: the plain keyset reader missed 3 and 4 events in 2 runs. Those were torn read views, and `readAll` had none.
+    - MySQL: 0 misses in 3 runs on 8.4.11 and in 2 runs on 9.7.2.
+    - The load that tears MariaDB's read views doesn't tear MySQL's. A run with 16,000 prepared transactions opens as many connections within seconds, which can exhaust the host's ephemeral ports (`EADDRNOTAVAIL`). Runs that failed that way aren't counted.
+  - `CONFORMANCE_REPEAT=50` on the concurrency cases and `read-all-gap-safe`, on 9.7.2: green.
+
+**Not claimed:**
+
+- **Group Replication in multi-primary mode.** Row locks are per member, and a conflict surfaces as 3101 at `COMMIT`. It gets `'best-effort'`, once connect() probes for it.
+- **Percona XtraDB Cluster.** It is Galera, which the existing `wsrep_on` probe catches.
+- **Aurora MySQL.** Expected but not proven, like Aurora PostgreSQL.
+- **Read/write-splitting routers** (MySQL Router, ProxySQL). As on MariaDB, both reads must reach the primary.
+- **Promoting an async replica.** After that, positions that readers already handed out can be handed out again, as on PostgreSQL and MariaDB.
+
+**Differences from MariaDB:**
+
+- **JSON columns.** They are `LONGTEXT`. With `JSON` on 8.4, `0.9999999999999999` came back as `1`, `2 ** -44` and `123456789.12345679` lost their last digit, and keys came back sorted.
+- **No deprecated syntax.** `VALUES()` and the `BINARY` operator are replaced (warning 1287). `mariadb.mysql.spec.ts` checks that no statement of the stores warns, from `performance_schema`'s per-digest counts.
+- **`migrate()`** refuses MySQL (§6).
+- **Authentication** is `caching_sha2_password`. The connector needs TLS, `allowPublicKeyRetrieval` or `cachingRsaPublicKey`.
+- **Throughput** with binary logging (on by default, `sync_binlog = 1`) was not measured on MySQL. On MariaDB, on disk, it halved one pool's appends (S1: 101/s with the binary log, 212/s without).
 
 ### MongoDB
 
