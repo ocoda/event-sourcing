@@ -45,6 +45,7 @@ import {
 	inBatches,
 	isDuplicateEntryError,
 	isFatalConnectionError,
+	isRolledBackByServer,
 	streamRows,
 	toDateTime,
 	withReadCommitted,
@@ -53,7 +54,10 @@ import { runMigration } from './migration/migrate.js';
 
 type Entity<A extends AggregateRoot> = MariaDBSnapshotEntity<A>;
 
-/** How often an append runs when InnoDB picks it as the victim of a deadlock. */
+/**
+ * How often an append runs when InnoDB picks it as the victim of a deadlock, or MySQL Group Replication refuses its
+ * commit.
+ */
 const DEADLOCK_ATTEMPTS = 10;
 
 /**
@@ -265,7 +269,8 @@ export class MariaDBSnapshotStore extends SnapshotStore<MariaDBSnapshotStoreConf
 					await this.writeSnapshot(connection, table, stream, aggregateVersion, row, pool);
 					return envelope;
 				} catch (error) {
-					if (errorNumberOf(error) !== MariaDBErrorNumber.Deadlock || attempt >= DEADLOCK_ATTEMPTS) {
+					// A deadlock victim, or a commit that MySQL Group Replication refused: the transaction was rolled back
+					if (!isRolledBackByServer(error) || attempt >= DEADLOCK_ATTEMPTS) {
 						throw error;
 					}
 					await connection.rollback();

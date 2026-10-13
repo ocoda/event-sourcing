@@ -38,7 +38,14 @@ import {
 	inspectEventTable,
 	registerEventTable,
 } from './mariadb.schema.js';
-import { type MariaDBServer, probeServer } from './mariadb.server.js';
+import {
+	type MariaDBDeployment,
+	type MariaDBServer,
+	capabilitiesOf,
+	probeDeployment,
+	probeServer,
+	warnDeploymentOnce,
+} from './mariadb.server.js';
 import {
 	MariaDBErrorNumber,
 	duplicateKeyOf,
@@ -48,7 +55,7 @@ import {
 	inBatches,
 	isDuplicateEntryError,
 	isFatalConnectionError,
-	isGaleraNode,
+	isRolledBackByServer,
 	streamRows,
 	toDateTime,
 	withReadCommitted,
@@ -77,8 +84,8 @@ const MIGRATE_REMEDY =
  */
 export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 	/**
-	 * Final once `connect()` resolved: a Galera cluster (`wsrep_on`) orders the positions per node only, so it gets
-	 * `'best-effort'`.
+	 * Final once `connect()` resolved: `'gap-safe'` on one InnoDB server (MariaDB, MySQL), `'best-effort'` on a Galera
+	 * node, a Group Replication member in multi-primary mode, TiDB and Vitess (`capabilitiesOf` in mariadb.server.ts).
 	 */
 	override readonly capabilities: EventStoreCapabilities = {
 		atomicAppend: true,
@@ -88,6 +95,7 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 
 	private pool: Pool | undefined;
 	private server: MariaDBServer | undefined;
+	private deployment: MariaDBDeployment | undefined;
 
 	/**
 	 * Migrates the event tables of a 3.x store to schema v2, without a NestJS application: inspects every table (or the
@@ -117,21 +125,18 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 
 		// Also makes a bad connection fail the bootstrap
 		let server: MariaDBServer;
-		let galera: boolean;
+		let deployment: MariaDBDeployment;
 		try {
 			server = await probeServer(pool);
-			galera = await isGaleraNode(pool);
+			deployment = await probeDeployment(pool, server);
 		} catch (error) {
 			await pool.end().catch(() => undefined);
 			throw error;
 		}
-		if (galera) {
-			Object.assign(this.capabilities, { globalOrder: 'best-effort' });
-			this.logger.warn(
-				"Galera (wsrep_on) orders the global positions per node only: globalOrder is 'best-effort' on this cluster",
-			);
-		}
+		Object.assign(this.capabilities, capabilitiesOf(deployment));
+		warnDeploymentOnce(deployment, this.logger);
 		this.server = server;
+		this.deployment = deployment;
 		this.pool = pool;
 	}
 
@@ -143,6 +148,7 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 		this.logger.log('Stopping store');
 		this.pool = undefined;
 		this.server = undefined;
+		this.deployment = undefined;
 		await pool.end();
 	}
 
@@ -414,13 +420,14 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 			return { status: 'committed', positions };
 		} catch (error) {
 			broken = isFatalConnectionError(error);
-			if (committing && (broken || errorNumberOf(error) !== MariaDBErrorNumber.Deadlock)) {
+			if (committing && (broken || !isRolledBackByServer(error))) {
 				// The commit was sent and got no answer, or one that doesn't say whether it happened
 				throw new EventStorePersistenceException({ collection, outcome: 'unknown' }, { cause: error });
 			}
-			// Nothing is stored: the failure came before the commit, or the commit was refused with a deadlock (a Galera
-			// certification failure), which rolled the transaction back. The rollback is explicit, because a lock wait
-			// timeout doesn't roll the transaction back (innodb_rollback_on_timeout is off).
+			// Nothing is stored: the failure came before the commit, or the server refused the commit and rolled the
+			// transaction back (a deadlock, which is how Galera reports a failed certification, or a MySQL Group
+			// Replication conflict). The rollback is explicit, because a lock wait timeout doesn't roll the transaction back
+			// (innodb_rollback_on_timeout is off).
 			await connection.rollback().catch(() => {
 				broken = true;
 			});
@@ -482,12 +489,15 @@ export class MariaDBEventStore extends EventStore<MariaDBEventStoreConfig> {
 	 * The last position of the pool's counter, read with a shared lock: it waits until the append that holds the counter
 	 * committed or rolled back, and every transaction that took a position up to it has left the set of active
 	 * transactions before it returns (InnoDB deregisters a committing transaction before it releases its locks).
+	 *
+	 * TiDB refuses `LOCK IN SHARE MODE` (1235) or ignores it, so there it is a plain read, and `readAll` is best-effort.
 	 */
 	private async readHighWaterMark(collection: IEventCollection, pool?: IEventPool): Promise<bigint> {
+		const lock = this.deployment?.kind === 'tidb' ? '' : ' LOCK IN SHARE MODE';
 		let rows: { last_position: string }[];
 		try {
 			rows = await this.connected().query<{ last_position: string }[]>(
-				`SELECT CAST(last_position AS CHAR) AS last_position FROM ${escapeId(CATALOG_TABLE)} WHERE name = ? AND kind = 'events' LOCK IN SHARE MODE`,
+				`SELECT CAST(last_position AS CHAR) AS last_position FROM ${escapeId(CATALOG_TABLE)} WHERE name = ? AND kind = 'events'${lock}`,
 				[collection],
 			);
 		} catch (error) {
