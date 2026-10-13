@@ -1,14 +1,25 @@
 ---
-title: MariaDB
+title: MariaDB and MySQL
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-`@ocoda/event-sourcing-mariadb` provides the `MariaDBEventStore` and the `MariaDBSnapshotStore`, on InnoDB. It needs the `mariadb` driver (`^3.5.3`), which is a peer dependency: see [Installation](/start/install) and [Database drivers are peer dependencies](/upgrading/v4#drivers). It is tested on MariaDB 10.11, 11.4, 11.8 and 12.3, and on the newest rolling release (13.0).
+`@ocoda/event-sourcing-mariadb` provides the `MariaDBEventStore` and the `MariaDBSnapshotStore`, on InnoDB, for MariaDB and, from 4.1, for MySQL. It needs the `mariadb` driver (`^3.5.3`), MariaDB's connector, which connects to MySQL too. The driver is a peer dependency: see [Installation](/start/install) and [Database drivers are peer dependencies](/upgrading/v4#drivers). The same classes and options serve both servers: `connect()` asks the server what it is (`@@version`, `@@version_comment`), and treats every server that doesn't name itself MariaDB as MySQL. The tested versions are in [Supported versions](#versions).
 
 <Aside type="caution" title="Coming from 3.x?">
-4.0 stores events and snapshots in a new schema (schema v2). Tables that 3.x created must be migrated once with `migrate()`: see [Migrating 3.x tables](#migration). The design is in [ADR 0002](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0002-schema-v2.md).
+4.0 stores events and snapshots in a new schema (schema v2). Tables that 3.x created must be migrated once with `migrate()`, which runs on MariaDB only: see [Migrating 3.x tables](#migration). The design is in [ADR 0002](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0002-schema-v2.md).
 </Aside>
+
+## Supported versions [#versions]
+
+| Server | Tested on |
+| --- | --- |
+| MariaDB | 10.11, 11.4, 11.8 and 12.3 (long-term releases), 13.0 (rolling release) |
+| MySQL | 8.4 and 9.7 (long-term releases), 26.7 (Innovation release) |
+
+- Every version runs the stores' tests and the shared conformance suite, `read-all-gap-safe` included. The MySQL servers run with the binary log on, as MySQL does by default. The tests of the 3.x migration run on MariaDB only, since [`migrate()`](#migration) does.
+- MariaDB supports a rolling release, and MySQL an Innovation release, only until the next one, so the tests move on to each new rolling and Innovation release. MySQL 8.0 reached its end of life in April 2026 and isn't tested.
+- Other servers that speak MySQL's protocol (Percona Server, Amazon Aurora MySQL, TiDB, Vitess) and clusters (Galera, Group Replication) aren't tested. See [Topologies and capabilities](#capabilities) for what the event store claims on them, and [Other databases](/integrations/other-databases#look-alikes) for an overview.
 
 ## Configuration [#configuration]
 
@@ -34,7 +45,31 @@ EventSourcingModule.forRoot<MariaDBEventStoreConfig, MariaDBSnapshotStoreConfig>
 - **`ddl: 'auto'`** (the default) lets `ensureCollection()` create the tables of a pool. **`ddl: 'none'`** only checks them and registers them in the catalog: see [Creating the tables yourself](#ddl-none).
 - `connect()` checks the connection, so a wrong host or password fails the application's bootstrap. `disconnect()` can be called more than once, and before `connect()`.
 - The store reads and writes times as UTC text, so the connector's `timezone` and the session's `time_zone` don't change them. Positions are read as text too, so `bigIntAsNumber` and `insertIdAsNumber` don't change them either.
-- The stores run their sessions in `READ COMMITTED`: they add `SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED` after your `initSql`, so a read never returns an append that could still roll back, whatever the server's default. When the binary log is on, its format must be `MIXED` (the default) or `ROW`: InnoDB refuses `READ COMMITTED` writes with `binlog_format=STATEMENT`.
+- The stores run their sessions in `READ COMMITTED`: they add `SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED` after your `initSql`, so a read never returns an append that could still roll back, whatever the server's default. When the binary log is on (MySQL turns it on by default), its format must be `MIXED` (MariaDB's default) or `ROW` (MySQL's default): InnoDB refuses `READ COMMITTED` writes with `binlog_format=STATEMENT`.
+
+### Connecting to MySQL [#mysql-auth]
+
+MySQL users log in with `caching_sha2_password`: MySQL 8.4 turns `mysql_native_password` off by default, and 9.0 removed it. When the server hasn't cached a user's password yet, which is the case for the first login after a restart, a `FLUSH PRIVILEGES` or a password change, the connector must send the password over TLS, or encrypted with the server's RSA public key. Over plain TCP, without one of the options below, the connection fails with `ER_CANNOT_RETRIEVE_RSA_KEY` ("RSA public key is not available client side"). A setup without them can seem to work while another client's login keeps the password cached, and then fail after the server restarts. Pick one:
+
+- **TLS** (`ssl`): the password goes over the encrypted connection, and no key is needed. The connector verifies the server's certificate, so pass the CA that signed it (`ssl: { ca }`); MySQL's auto-generated certificates are self-signed. A Unix socket (`socketPath`, not on Windows) needs no key either.
+- **`cachingRsaPublicKey`**: the server's RSA public key, as a file path or as the PEM text. `SHOW STATUS LIKE 'Caching_sha2_password_rsa_public_key'` prints it.
+- **`allowPublicKeyRetrieval: true`**: the connector asks the server for its key, over the unencrypted connection. Use it on a network you trust only: whoever can intercept the connection can hand the connector a key of their own and read the password.
+
+```ts
+import { readFileSync } from 'node:fs';
+
+const connection = {
+	host: 'mysql.internal',
+	port: 3306,
+	user: 'app',
+	password: process.env.DB_PASSWORD,
+	database: 'app',
+	// One of:
+	ssl: { ca: readFileSync('/etc/mysql/ca.pem', 'utf8') },
+	// cachingRsaPublicKey: '/etc/mysql/public_key.pem',
+	// allowPublicKeyRetrieval: true,
+};
+```
 
 ## Schema [#schema]
 
@@ -83,28 +118,53 @@ CREATE TABLE IF NOT EXISTS `snapshots` (
 - **Times** are `DATETIME(3)`: the UTC wall time, to the millisecond. 3.x stored a `TIMESTAMP` to the second.
 - **Stream ids are case-sensitive**: the tables compare text in binary (`utf8mb4_bin`), like the PostgreSQL, MongoDB and in-memory stores. `Acc-1` and `acc-1` are two streams. The 3.x tables used the database's default collation, which usually ignores case; `migrate()` gives a 3.x stream whose ids differ in case only one id (see [Stream ids that differ in case only](#case-variants)).
 - **Limits.** Stream ids, aggregate ids, event names, correlation ids and causation ids are at most 255 characters (the core checks them before any I/O), and the headers of an event at most 8 KiB of JSON. A table name is at most 64 characters, so a pool name is at most 57 characters (54 for a pool that also has snapshots); `ensureCollection()` rejects a longer one with an `EventStoreCollectionCreationException` or a `SnapshotStoreCollectionCreationException`.
-- **Pool names are table names**, compared with their case. On a server whose `lower_case_table_names` isn't 0 (the default on Windows and macOS), use lower-case pool names.
+- **Pool names are table names**, compared with their case, as the server does with `lower_case_table_names = 0`, the default on Linux. Where it isn't 0 (the default on Windows and macOS), the server doesn't tell table names apart by case: use lower-case pool names there, and never two pool names that differ only in case (`Orders` and `orders`). MySQL accepts the setting only when its data directory is initialized, so it can't be changed later.
 - **Payloads are JSON.** A `bigint` in a payload can't be stored: the append fails with `outcome: 'not-persisted'` before any I/O. Store big integers as strings.
+- **On MySQL, `payload` and `headers` are `LONGTEXT`**, in the tables the stores create, and hold the text that `JSON.stringify` wrote. MySQL's `JSON` type is a binary format that sorts the keys of objects and prints doubles with 16 significant digits, so `0.9999999999999999` would come back as `1`. MariaDB's `JSON`, shown above, is an alias of `LONGTEXT` with a `JSON_VALID` check, which keeps the text as written. The stores read both column types, but a table you create by hand with MySQL's `JSON` type is accepted as it is, and rounds doubles and sorts keys as described: use `LONGTEXT`.
 
-## Capabilities [#capabilities]
+## Topologies and capabilities [#capabilities]
 
-| Capability | `MariaDBEventStore` |
-| --- | --- |
-| `atomicAppend` | `true`: an append is one transaction. |
-| `headers` | `true`: stored in the `headers` column. |
-| `globalOrder` | `'gap-safe'` on InnoDB; `'best-effort'` on a Galera cluster (`wsrep_on`), where row locks are not cluster-wide. |
+`connect()` asks the server what it is and sets the event store's [capabilities](/under-the-hood/event-store#capabilities) to match. `headers` is `true` everywhere: headers are stored in the `headers` column.
+
+| Deployment | `atomicAppend` | `globalOrder` | Tested |
+| --- | --- | --- | --- |
+| One MariaDB or MySQL server on InnoDB | `true` | `'gap-safe'` | Yes, every [supported version](#versions) |
+| The primary of a replica set: asynchronous or semi-synchronous replication, MySQL Group Replication in single-primary mode | `true` | `'gap-safe'` | No; see [Failover and restores](#failover) |
+| Amazon Aurora MySQL, the writer | `true` | `'gap-safe'` | No: expected, not proven |
+| Galera: MariaDB Galera Cluster, Percona XtraDB Cluster | `true` | `'best-effort'` | No |
+| MySQL Group Replication in multi-primary mode | `true` | `'best-effort'` | No |
+| TiDB | `true` | `'best-effort'` | No |
+| Vitess or PlanetScale, `transaction_mode` `SINGLE` or `TWOPC` | `true` | `'best-effort'` | No |
+| Vitess or PlanetScale, any other `transaction_mode` (`MULTI` is the default) | `false` | `'best-effort'` | No |
+| Behind a router, proxy or endpoint that sends reads to replicas | `true` | Not supported: `readAll` can skip events, and the store still reports `'gap-safe'` | – |
+
+`'gap-safe'` rests on one InnoDB server ordering the commits of a pool by the lock on its counter row (below). `connect()` tells the other deployments apart by system variables that only they have, and logs one warning per process and kind of deployment:
+
+- **Galera**: `wsrep_on` is on and a provider is loaded (`wsrep_provider` isn't `none`). Row locks are not cluster-wide.
+- **Group Replication in multi-primary mode**: `group_replication_single_primary_mode` is off. Row locks are per member, and a conflict with another member surfaces as error 3101 when the append commits, which the store reports as `outcome: 'not-persisted'`: nothing was stored.
+- **TiDB**: `tidb_txn_mode` exists. TiDB isn't InnoDB: its locking reads don't wait for an append in flight, so there `readAll` reads the pool's counter at a gap without `LOCK IN SHARE MODE`, which TiDB refuses.
+- **Vitess** (`vtgate`, PlanetScale): `transaction_mode` exists, or `@@version` or `@@version_comment` is Vitess's. Vitess commits a transaction that spans shards shard by shard, and reads every shard at a snapshot of its own. With `MULTI`, the pool's counter and its events can sit on different shards, so an append isn't atomic.
+- **Amazon Aurora MySQL** reports itself as MySQL and keeps `'gap-safe'`: a cluster has one writer, on which the isolation levels work as in MySQL. That is expected, not tested: Aurora is closed source, and Aurora MySQL 3 is based on MySQL 8.0, which isn't tested. Connect the store to the cluster's writer endpoint; see the caution below about reader endpoints. An unplanned failover of a Global Database can lose recent commits: see [Failover and restores](#failover).
+
+Percona Server for MySQL, and managed services that run MariaDB or MySQL themselves (Amazon RDS, Azure Database for MySQL, Google Cloud SQL), count as one server or the primary of a replica set, and aren't tested.
 
 **Global positions.** An append takes its positions from its pool's row in the catalog, `UPDATE … SET last_position = LAST_INSERT_ID(last_position + n)`, as the first write of its transaction. The row lock is held until the append commits or rolls back, so the appends to a pool commit in the order of their positions, and a rolled-back append gives its positions back: a pool's positions have no holes. The counter never goes down: a pool whose table is dropped and created again continues after its last position, and `ensureCollection()` raises a counter that is behind the stored positions.
 
-**Why `readAll` is gap-safe.** InnoDB builds the read view of a statement from a walk over the active transactions that is not atomic against commits, so, rarely, a statement sees an append without the one that committed just before it. `readAll` therefore hands out a batch only as far as its positions follow on from where it is. At a gap, it reads the pool's counter with a shared lock, which waits for the append that holds it; every position up to that value has committed and is visible then, and a gap below it is permanent (a deleted event, or a pool that was dropped and created again). A reader that tails the store and resumes at `lastPosition + 1n` therefore never skips an event. Each batch is one statement; no transaction, cursor or connection is held between batches.
+**Why `readAll` is gap-safe.** On MariaDB, InnoDB builds the read view of a statement from a walk over the active transactions that is not atomic against commits, so, rarely, a statement sees an append without the one that committed just before it. `readAll` therefore hands out a batch only as far as its positions follow on from where it is. At a gap, it reads the pool's counter with a shared lock, which waits for the append that holds it; every position up to that value has committed and is visible then, and a gap below it is permanent (a deleted event, or a pool that was dropped and created again). A reader that tails the store and resumes at `lastPosition + 1n` therefore never skips an event. Each batch is one statement; no transaction, cursor or connection is held between batches.
 
-<Aside type="caution">
-`'gap-safe'` holds when every statement of `readAll` reaches the server the appends run on. Don't route the event store's pool through a proxy that splits reads from writes (MaxScale `readwritesplit`, ProxySQL), or pin it to the primary: a batch read on a replica that lags would pass the lag's gap off as a permanent one, and `readAll` would skip those events.
+On MySQL, a read view is atomic against commits: a committing transaction leaves the list of active transactions before it releases its locks, under the same mutex under which a new read view copies that list. So every statement sees the positions up to some point, without holes, and the counter read above only runs at a permanent gap. The store uses the same reader on both servers. The evidence is in ADR 0002, [for MariaDB](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0002-schema-v2.md#mariadb) and [for MySQL](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0002-schema-v2.md#mysql), the latter with the InnoDB source of 8.4 and 9.7 and a side-by-side run in which MariaDB's read views tore and MySQL's didn't.
+
+<Aside type="caution" title="Every read must reach the primary">
+`'gap-safe'` holds when every statement of `readAll`, the batch reads and the counter read at a gap, reaches the server the appends run on. Connect the event store to the primary, directly or through a route that sends every statement there. Don't route its pool through a router or proxy that splits reads from writes (MySQL Router's read/write splitting, ProxySQL query rules that send reads to replicas, MaxScale `readwritesplit`), or through a reader endpoint (Aurora's reader endpoint, a custom endpoint that includes readers): a batch read on a replica that lags would pass the lag's gap off as a permanent one, and `readAll` would skip those events.
 </Aside>
+
+### Failover and restores [#failover]
+
+MariaDB and MySQL replication is asynchronous unless you configure it otherwise, so a promoted replica can lack the newest commits; so can a restored backup, or an Aurora Global Database after an unplanned failover. A pool's counter (`last_position` in `event_sourcing_collections`) then lags behind positions that readers already read, and new appends take those positions again. [Failover and replicas](/under-the-hood/event-store#failover) explains what that does to readers, the replication settings that guard against it, and how to check the readers after a failover or a restore.
 
 ## Appends [#appends]
 
-An append runs on a connection of its own, in a `READ COMMITTED` transaction (set explicitly: with `innodb_snapshot_isolation`, the default from MariaDB 11.6.2, a `REPEATABLE READ` transaction could fail with error 1020):
+An append runs on a connection of its own, in a `READ COMMITTED` transaction (set explicitly, since MariaDB and MySQL both default to `REPEATABLE READ`: with `innodb_snapshot_isolation`, the default from MariaDB 11.6.2, a `REPEATABLE READ` transaction could fail with error 1020):
 
 1. the version check, outside the transaction (`SELECT MAX(version)`);
 2. the counter update, which takes the pool's row lock and the positions;
@@ -113,7 +173,7 @@ An append runs on a connection of its own, in a `READ COMMITTED` transaction (se
 
 - A duplicate on the primary key (`stream_id`, `version`) is a version conflict: another append took the version. A duplicate on `ux_global_position` means the counter is behind the stored positions; the append fails with `outcome: 'not-persisted'`, and `ensureCollection()` heals the counter.
 - `ensureCollection()` registers a table without locking its rows, so an instance can start while others append to the pool.
-- Every failure before the `COMMIT` rolls back (explicitly, also after a lock wait timeout, which InnoDB doesn't roll back) and throws an `EventStorePersistenceException` with `outcome: 'not-persisted'`. So does a deadlock in answer to the `COMMIT` (a Galera certification failure), which rolled the transaction back. Any other failure while committing, such as a lost connection, is `'unknown'`.
+- Every failure before the `COMMIT` rolls back (explicitly, also after a lock wait timeout, which InnoDB doesn't roll back) and throws an `EventStorePersistenceException` with `outcome: 'not-persisted'`. So does a `COMMIT` that the server refuses and rolls back: a deadlock (how Galera reports a failed certification), or error 3101 (a conflict with another member of a multi-primary Group Replication group). Any other failure while committing, such as a lost connection, is `'unknown'`.
 - An append to a pool without a catalog row (never ensured, or not migrated) fails with `outcome: 'not-persisted'` and an `EventCollectionNotFoundException` as its cause, and creates nothing.
 - `ExpectedVersion.Any` makes up to 16 attempts while concurrent appends take the versions, and can still conflict under sustained contention on one stream: retry such a conflict in your application.
 
@@ -126,16 +186,24 @@ An append runs on a connection of its own, in a `READ COMMITTED` transaction (se
 
 These are small machines under other load; measure your own. A single writer that waits for each append does 75 (on disk) to 345 (in memory) appends per second.
 
-**Locks and timeouts.** An append holds its pool's row in `event_sourcing_collections` from the counter update to its `COMMIT`, a few milliseconds. The next append to the pool waits for it, and so does a `readAll` that meets a gap; each permanent gap (a deleted event) costs a `readAll` that crosses it one locked read of the counter. A waiting append gives up after `innodb_lock_wait_timeout` (50 s by default) with `outcome: 'not-persisted'`. If a session stalls between the counter update and its commit (a frozen process, a network partition), the server keeps its transaction, and every append to the pool waits, until it ends the session, by default only after `wait_timeout` (8 hours). Bound that with `idle_write_transaction_timeout`, for the application's user or in the store options:
+**The binary log on MySQL.** MySQL turns the binary log on by default, with `sync_binlog = 1`, so every append also waits for a flush of the binary log while it holds its pool's counter (MariaDB leaves the binary log off by default). That wasn't measured on MySQL; on MariaDB, on disk, the binary log halved what one pool takes, from 212 to 101 appends/s (above). Spread write-heavy work over more pools, and turn the binary log off only on a server that needs it for nothing (replication, point-in-time recovery).
+
+**Locks and timeouts.** An append holds its pool's row in `event_sourcing_collections` from the counter update to its `COMMIT`, a few milliseconds. The next append to the pool waits for it, and so does a `readAll` that meets a gap; each permanent gap (a deleted event) costs a `readAll` that crosses it one locked read of the counter. A waiting append gives up after `innodb_lock_wait_timeout` (50 s by default) with `outcome: 'not-persisted'`. If a session stalls between the counter update and its commit (a frozen process, a network partition), the server keeps its transaction, and every append to the pool waits, until it ends the session, by default only after `wait_timeout` (8 hours). On MariaDB, bound that with `idle_write_transaction_timeout`, for the application's user or in the store options:
 
 ```ts
 eventStore: { driver: MariaDBEventStore, ...connection, initSql: 'SET SESSION idle_write_transaction_timeout = 30' },
 ```
 
+MySQL has no `idle_write_transaction_timeout`: there, this `initSql` fails every connection (error 1193, unknown system variable), and the bootstrap with it. On MySQL, lower `wait_timeout`, after which the server ends a session that sent nothing, whether or not it is in a transaction, and keep the pool's `idleTimeout` (1,800 s by default) below it with `minimumIdle: 0`, so that the pool closes idle connections before the server does (by default `minimumIdle` is the `connectionLimit`, and the pool closes none). The pool checks a connection before handing it out and replaces one that the server closed:
+
+```ts
+eventStore: { driver: MariaDBEventStore, ...connection, initSql: 'SET SESSION wait_timeout = 60', idleTimeout: 30, minimumIdle: 0 },
+```
+
 ## Snapshots [#snapshots]
 
 - The last snapshot of a stream is the one with the highest version. The store flags it as the latest (`latest = 'latest#<streamId>'`), and the unique key `ux_latest` allows one flagged snapshot per stream (unflagged snapshots have a `NULL` flag, and `NULL`s are distinct).
-- `appendSnapshot` locks the stream's flagged snapshot, checks that the new version is higher, unflags it and inserts the new snapshot, in one `READ COMMITTED` transaction. Concurrent appends to a stream wait for each other there; appends that race on a new stream end on the unique keys, with a `SnapshotStoreVersionConflictException` for all but one. Under load, InnoDB can pick an append as the victim of a deadlock on the unique key (also between streams of one aggregate); the store runs it again, up to 10 times.
+- `appendSnapshot` locks the stream's flagged snapshot, checks that the new version is higher, unflags it and inserts the new snapshot, in one `READ COMMITTED` transaction. Concurrent appends to a stream wait for each other there; appends that race on a new stream end on the unique keys, with a `SnapshotStoreVersionConflictException` for all but one. Under load, InnoDB can pick an append as the victim of a deadlock on the unique key (also between streams of one aggregate), and a multi-primary Group Replication group can refuse its `COMMIT` (3101); the store runs it again, up to 10 times.
 - `getLastEnvelopesForAggregate` (`SnapshotRepository.loadAll()`) reads the flagged snapshots in descending binary order of the aggregate ids, with `aggregateId` as an exclusive cursor.
 - A 3.x snapshot table keeps working until it is migrated: `ensureCollection()` logs a warning and registers it as schema version 1, and the store reads and writes `registered_on` the 3.x way, to the second, without the unique flag. The store decides this when it first uses the table, so restart the instances that use a 3.x snapshot table after you migrate it.
 
@@ -152,9 +220,15 @@ INSERT INTO `event_sourcing_collections` (name, kind, schema_version, last_posit
   ON DUPLICATE KEY UPDATE schema_version = 2;
 ```
 
-**Privileges.** With `ddl: 'none'`, the application's user needs `SELECT` and `INSERT` on the event tables, `SELECT`, `INSERT` and `UPDATE` on the snapshot tables, and `SELECT`, `INSERT` and `UPDATE` on `event_sourcing_collections`. With `ddl: 'auto'` it also needs `CREATE` on the database. `migrate()` needs `SELECT`, `INSERT`, `UPDATE`, `CREATE`, `ALTER` and `DROP` on the database (the event migration creates, renames and drops tables); a user with `ALL PRIVILEGES` on the database has them. The dry run writes nothing, so it can't check them. The event migration checks the privileges of the copy and the swap before it copies anything: its first steps drop and create the copy, then rename the empty copy and back (`probe-swap`), which needs what the swap needs. A step that lacks a privilege fails with the privileges in its error, and the migration continues from there once they are granted. With the `PROCESS` privilege, a lock wait timeout also names the sessions that hold a transaction open.
+On MySQL, the statements in the error create `payload` and `headers` as `LONGTEXT` (see [Schema](#schema)), and MySQL runs the event table's registration statement with a deprecation warning (1287) for `VALUES()`, which it still accepts. The stores themselves don't use `VALUES()`.
+
+**Privileges.** With `ddl: 'none'`, the application's user needs `SELECT` and `INSERT` on the event tables, `SELECT`, `INSERT` and `UPDATE` on the snapshot tables, and `SELECT`, `INSERT` and `UPDATE` on `event_sourcing_collections`. With `ddl: 'auto'` it also needs `CREATE` on the database. `migrate()`, on MariaDB, needs `SELECT`, `INSERT`, `UPDATE`, `CREATE`, `ALTER` and `DROP` on the database (the event migration creates, renames and drops tables); a user with `ALL PRIVILEGES` on the database has them. The dry run writes nothing, so it can't check them. The event migration checks the privileges of the copy and the swap before it copies anything: its first steps drop and create the copy, then rename the empty copy and back (`probe-swap`), which needs what the swap needs. A step that lacks a privilege fails with the privileges in its error, and the migration continues from there once they are granted. With the `PROCESS` privilege, a lock wait timeout also names the sessions that hold a transaction open.
 
 ## Migrating 3.x tables [#migration]
+
+<Aside type="caution" title="MariaDB only">
+`migrate()` and `migrations/4.0.sql` run on MariaDB only: their session settings and checks are MariaDB's (`tx_isolation`, `max_statement_time`, `wsrep_*`). On MySQL, `MariaDBEventStore.migrate()` and `MariaDBSnapshotStore.migrate()`, static or on a store, throw an `UnsupportedOperationException` before they change anything. To bring 3.x data on MySQL to 4.x, move the 3.x tables aside (`RENAME TABLE`), let 4.x create its own, and import the events as [pre-built envelopes](/under-the-hood/event-store#pre-built-envelopes), the way [DynamoDB users move their data](/upgrading/v4#dynamodb). This route isn't tested.
+</Aside>
 
 3.x tables can't be used as they are: they have no global positions, their inserts are positional, and they store times to the second. `ensureCollection()` refuses a 3.x event table with an `EventStoreSchemaException` (`found: 'v1'`), so an application whose default pool has a 3.x table fails its bootstrap, with a message that points here. The migration is **offline**: no 3.x instance may write while it runs. Afterwards every 3.x event append fails (error 1136), but 3.x snapshot writes still succeed, with `registered_on` off by the time zone of the 3.x process: stop every 3.x instance before you migrate the snapshots too.
 

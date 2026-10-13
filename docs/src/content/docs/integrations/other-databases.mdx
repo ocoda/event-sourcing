@@ -1,0 +1,64 @@
+---
+title: Other databases
+---
+
+The built-in stores are tested on PostgreSQL, MariaDB, MySQL and MongoDB, at the versions in [Tested versions](/upgrading/versioning#tested-versions). This page covers the rest: services and servers that an existing package serves, servers that speak a store's protocol with weaker guarantees, and databases without a store.
+
+**What a store claims on a server it wasn't tested on.** The MariaDB and MongoDB stores ask the server what it is when they connect. On a server they recognize as one of the look-alikes below, they report `globalOrder: 'best-effort'` and log a warning. A server they don't recognize is taken for MariaDB or MySQL, or for MongoDB, with the same [capabilities](/under-the-hood/event-store#capabilities). The PostgreSQL store doesn't ask: it claims `'gap-safe'` on every server. Check this page before you rely on `'gap-safe'` on a server that isn't tested.
+
+## Compatible servers [#compatible]
+
+These run on an existing package, with the same classes and options. Apart from MySQL, none of them is tested: they are expected to work because they run the same engine, and the store claims there what it claims on that engine.
+
+| Server | Package | `globalOrder` | Notes |
+| --- | --- | --- | --- |
+| MySQL 8.4, 9.7 and the newest Innovation release | `@ocoda/event-sourcing-mariadb` | `'gap-safe'` | Tested, from 4.1. The same `MariaDBEventStore` and `MariaDBSnapshotStore`, on the `mariadb` driver. On MySQL the JSON columns are `LONGTEXT`, `migrate()` refuses to run (it is MariaDB only), and a login over plain TCP needs [an option](/integrations/mariadb#mysql-auth). See [Supported versions](/integrations/mariadb#versions). |
+| Percona Server for MySQL | `@ocoda/event-sourcing-mariadb` | `'gap-safe'` | Not tested. The store takes it for MySQL. Percona XtraDB Cluster is a Galera cluster: see [Look-alikes](#look-alikes). |
+| Amazon RDS for MySQL and for MariaDB, Azure Database for MySQL, Google Cloud SQL for MySQL | `@ocoda/event-sourcing-mariadb` | `'gap-safe'` on the primary | Not tested. They run MySQL or MariaDB on InnoDB. Connect to the primary, not through a reader endpoint or a proxy that splits reads from writes: see [Topologies and capabilities](/integrations/mariadb#capabilities). |
+| Amazon Aurora MySQL | `@ocoda/event-sourcing-mariadb` | `'gap-safe'` on the writer | Expected, not proven: a cluster has one writer, but Aurora is closed source, and Aurora MySQL 3 is based on MySQL 8.0, which isn't tested. Connect to the cluster's writer endpoint. |
+| Amazon RDS for PostgreSQL, Google Cloud SQL for PostgreSQL, Azure Database for PostgreSQL, Supabase, Neon | `@ocoda/event-sourcing-postgres` | `'gap-safe'` on the primary | Not tested. They run PostgreSQL (Neon on an open-source storage layer of its own). Mind transaction-mode poolers and serverless drivers: see [Managed PostgreSQL](/integrations/postgres#managed-postgres). |
+| Amazon Aurora PostgreSQL, Google AlloyDB for PostgreSQL | `@ocoda/event-sourcing-postgres` | `'gap-safe'` on the writer | Expected, less certain: closed-source forks with storage of their own. See [Managed PostgreSQL](/integrations/postgres#managed-postgres). |
+
+On each of them, `'gap-safe'` is about reads from the server the appends run on. A failover to a replica that lacks the newest commits, or a restore, can hand positions out again: see [Failover and replicas](/under-the-hood/event-store#failover).
+
+## Look-alikes [#look-alikes]
+
+These servers and clusters speak MySQL's or MongoDB's protocol, but don't order or commit appends the way the store's `'gap-safe'` claim rests on. The store recognizes them when it connects, reports `globalOrder: 'best-effort'` (a reader that tails `readAll` can miss an event that commits late, see [Reading all events](/under-the-hood/event-store#reading-all-events)), and logs a warning once per process and kind of deployment. None of them is tested.
+
+**MySQL's protocol**, with `@ocoda/event-sourcing-mariadb` (details in [Topologies and capabilities](/integrations/mariadb#capabilities)):
+
+| Server | Why `'best-effort'` |
+| --- | --- |
+| Galera: MariaDB Galera Cluster, Percona XtraDB Cluster | Row locks aren't cluster-wide: a pool's counter row orders the appends of one node only. |
+| MySQL Group Replication in multi-primary mode | Row locks are per member. Appends to a pool on two members conflict when they commit (error 3101), which the store reports as `outcome: 'not-persisted'`. In single-primary mode the primary is `'gap-safe'`. |
+| TiDB | TiDB isn't InnoDB: its locking reads don't wait for an append in flight. |
+| Vitess, PlanetScale | Vitess commits a transaction that spans shards shard by shard, and reads every shard at a snapshot of its own. With `MULTI`, the default, a pool's counter and its events can sit on different shards, so appends aren't atomic. |
+
+**MongoDB's protocol**, with `@ocoda/event-sourcing-mongodb` (details in [MongoDB-compatible engines](/integrations/mongodb#compatible-engines)). Their transactions and reads aren't MongoDB's, and the gap-safe tests haven't run on them. The append path follows the topology an engine reports, so on some of them appends fail:
+
+| Engine | Status |
+| --- | --- |
+| DocumentDB (the open-source gateway), Azure DocumentDB (formerly Azure Cosmos DB for MongoDB vCore) | Appends run as transactions. |
+| Amazon DocumentDB, instance-based clusters | Appends run as transactions, from 4.0 on. On 3.6, which has no transactions, appends fail. |
+| Amazon DocumentDB, elastic clusters | Not supported: they present themselves as a sharded cluster (a `mongos`, as AWS's documentation shows; not tested), so appends run as transactions, which elastic clusters don't have. |
+| Azure Cosmos DB for MongoDB (request units) | Not supported: it reports a replica set, so appends run as transactions, and its transactions can't span the catalog and a pool's collection. |
+| FerretDB | Not supported: it has no multi-document transactions. When it reports a replica set, appends run as transactions; when it reports a standalone server, they take the store's path without transactions, which isn't tested on FerretDB. |
+
+## Not supported [#unsupported]
+
+There is no store for these, and the existing packages don't work on them:
+
+- **Amazon Aurora DSQL** (PostgreSQL's protocol): it has optimistic concurrency only, so of two appends to a pool that overlap, the one that commits last fails instead of waiting for the counter row. See [Managed PostgreSQL](/integrations/postgres#managed-postgres).
+- **CockroachDB** (PostgreSQL's protocol): the PostgreSQL store fails at its bootstrap. It keys advisory locks with `hashtext()`, which CockroachDB doesn't have (and before v26.3, CockroachDB's advisory locks are unsupported or do nothing); it tells a version conflict from other unique-key errors with `pg_partition_tree()`, which CockroachDB doesn't have either; and CockroachDB's `INTEGER` is 64-bit by default, which `pg` returns as a string.
+- **YugabyteDB** (PostgreSQL's protocol): not tested, and it needs more than PostgreSQL's settings. Releases before 2025.1 lack `pg_partition_tree()` and advisory locks. Later ones need Read Committed with wait-on-conflict (`yb_enable_read_committed_isolation`, `enable_wait_queues`), the default only for universes created on 2025.2 or later: without it, `READ COMMITTED` runs as snapshot isolation, and of two appends to a pool that overlap, one fails instead of waiting. Its default hash sharding of indexes also makes `readAll` sort the whole table for every batch.
+- **PGlite**: the PostgreSQL store connects through a `pg` pool, so it can't use a PGlite instance. Serving PGlite over TCP (`pglite-socket`) isn't tested.
+- **Firestore with MongoDB compatibility**: the MongoDB store doesn't recognize it, so it would claim what the topology Firestore reports allows. Google documents differences from MongoDB, such as the read concern of `find` and retryable writes, which the store hasn't been checked against.
+- **Azure Cosmos DB (NoSQL API), Google Cloud Firestore, Apache Cassandra and ScyllaDB**: they order writes and commit them atomically only within one partition (a Cosmos DB logical partition, a Firestore document, a Cassandra partition). A gap-free order per pool would send every append of a pool through that one partition, with its limits, such as 20 GB and 10,000 RU/s per Cosmos DB logical partition, or contention on one Firestore document. The Cosmos DB and Firestore emulators don't reproduce how the services order and commit transactions, so CI couldn't prove the order either.
+- **Amazon DynamoDB**: 3.x only. AWS documents a `Query` as only read-committed against `TransactWriteItems`: a read can return some of the items of an append in flight and not the others. A transaction also reaches the global secondary indexes, which the 3.x store read across streams through, gradually after it completes. 4.x's read side needs a gap-free global order: see [DynamoDB is not part of 4.0](/upgrading/v4#dynamodb) and AWS's [isolation levels for DynamoDB transactions](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/transaction-apis.html#transaction-isolation).
+
+## Your own store [#custom]
+
+You can back a store with any database: extend `EventStore` or `SnapshotStore`, implement the driver methods, and run the conformance suites that `@ocoda/event-sourcing/testing` publishes against it. See [Custom Event and Snapshot Stores](/advanced/custom-stores) and [Test your Event Store](/advanced/custom-stores#test-your-event-store). Claim `'gap-safe'` only when the `read-all-gap-safe` case passes on your database.
+
+- **An event store numbers its events.** Every event gets a global position: per pool, starting at `1n`, consecutive within an append, assigned in the write that stores the events, and never reused by the server the appends run on (see [Failover and replicas](/under-the-hood/event-store#failover)). `'best-effort'` relaxes when a position becomes visible to `readAll`, not whether positions exist.
+- **A store that reads one stream at a time isn't enough** for `readAll`, but such a database can still hold the snapshots: see [Global positions are part of the contract](/advanced/custom-stores#create-an-event-store).

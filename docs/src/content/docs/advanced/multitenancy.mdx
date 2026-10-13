@@ -75,7 +75,7 @@ By default the event- and snapshot-store create a shared collection of streams f
    export class AppModule {}
    ```
 
-   Every pool is stored in its own pair of tables in the same database, e.g. `tenant-1-events` and `tenant-1-snapshots`, and has its own global positions: `readAll({ pool })` reads one pool. The MariaDB and MongoDB stores work the same way, with tables or collections.
+   Every pool is stored in its own pair of tables in the same database, e.g. `tenant-1-events` and `tenant-1-snapshots`, and has its own global positions: `readAll({ pool })` reads one pool. The MariaDB stores, on MariaDB or MySQL, and the MongoDB stores work the same way, with tables or collections.
 
    </TabItem>
    </Tabs>

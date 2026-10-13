@@ -29,7 +29,7 @@ EventSourcingModule.forRoot<PostgresEventStoreConfig, PostgresSnapshotStoreConfi
 });
 ```
 
-The tables live in the current schema of the connection, the first schema of its `search_path` (usually `public`). To use another schema, set it for the connections: `options: '-c search_path=events_app'`.
+The tables live in the current schema of the connection, the first schema of its `search_path` (usually `public`). To use another schema, set it for the connections: `options: '-c search_path=events_app'`. Behind a connection pooler in transaction mode, set it for the role instead: see [Managed PostgreSQL](#managed-postgres).
 
 `connect()` fails when the database can't be reached. `disconnect()` ends the pool; calling it twice, or before `connect()`, does nothing.
 
@@ -98,7 +98,7 @@ CREATE UNIQUE INDEX "idx_snapshots_latest" ON "snapshots" (aggregate_name, lates
 | `headers` | `true` | Stored in the `headers` column. |
 | `globalOrder` | `'gap-safe'` | See below. |
 
-An append first moves the pool's counter row in the catalog, then inserts its events, in one `READ COMMITTED` transaction. The row lock on the counter is held until the transaction ends, so an append that takes later positions waits until the earlier one committed or rolled back. Appends therefore commit in the order of their positions, and a rolled-back append returns its positions, so there are no holes. A reader that tails `readAll()` and resumes after the last position it read never skips an event that commits later. `readAll()` reads in keyset batches (`WHERE global_position >= $1 ORDER BY global_position LIMIT $2`), each its own statement, and holds no connection while you process a batch. The evidence is in [ADR 0002](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0002-schema-v2.md#postgresql).
+An append first moves the pool's counter row in the catalog, then inserts its events, in one `READ COMMITTED` transaction. The row lock on the counter is held until the transaction ends, so an append that takes later positions waits until the earlier one committed or rolled back. Appends therefore commit in the order of their positions, and a rolled-back append returns its positions, so there are no holes. A reader that tails `readAll()` and resumes after the last position it read never skips an event that commits later. `readAll()` reads in keyset batches (`WHERE global_position >= $1 ORDER BY global_position LIMIT $2`), each its own statement, and holds no connection while you process a batch. The evidence is in [ADR 0002](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0002-schema-v2.md#postgresql). For managed services, see [Managed PostgreSQL](#managed-postgres).
 
 ## Limits and data types [#limits]
 
@@ -152,6 +152,38 @@ The stores also take advisory locks, which need no privilege. Advisory locks are
 `migrate()` works on the current schema: run it once per schema, with that schema first in the `search_path` of the connections. Migrations of different schemas can run at the same time.
 
 With `ddl: 'none'`, create the schema yourself: from the statements in the error of `ensureCollection`, from the `steps` of a dry-run `migrate()`, or, for the default pools of a 3.x database, from `node_modules/@ocoda/event-sourcing-postgres/migrations/4.0.sql`. Then call `ensureCollection`, which registers the tables in the catalog.
+
+## Managed PostgreSQL [#managed-postgres]
+
+The stores use plain PostgreSQL: `READ COMMITTED` transactions, the counter row, transaction-scoped advisory locks, keyset reads, and a server-side cursor for stream reads. CI tests community PostgreSQL 14 to 18; no managed service is tested.
+
+| Service | Status |
+| --- | --- |
+| Amazon RDS for PostgreSQL, Google Cloud SQL for PostgreSQL, Azure Database for PostgreSQL, Supabase, Neon | Expected to work, and to be gap-safe on the primary: they run PostgreSQL (Neon on an open-source storage layer of its own). |
+| Amazon Aurora PostgreSQL, Google AlloyDB for PostgreSQL | Expected to work, and to be gap-safe on the writer, but less certain: they are closed-source forks with storage of their own, and the [evidence](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0002-schema-v2.md#postgresql) is for community PostgreSQL. |
+| Amazon Aurora DSQL | Not compatible, see below. |
+| Serverless drivers over HTTP, such as Neon's | Not supported, see below. |
+
+**Connect to the primary.** Point both stores at the primary, or at the writer endpoint of a cluster: a read replica refuses appends. Don't send the stores' reads to replicas either, through a reader endpoint or a proxy that balances reads over replicas (Pgpool-II's load balancing, for instance): the version check before an append would read stale versions, and the gap-safe claim covers reads from the server the appends commit on. A failover to a replica that lacks the newest commits, or a restore, can hand positions out again: see [Failover and replicas](/under-the-hood/event-store#failover).
+
+**Connection poolers.** A pooler in session mode, which keeps a client on one server connection for as long as it is connected, changes nothing. In transaction mode (PgBouncer with `pool_mode = transaction`, or the transaction-mode endpoints of services such as Supabase and Neon), consecutive transactions of a client can run on different server connections, so what a session sets doesn't follow the client. Transaction mode isn't tested. What depends on the session:
+
+- **The schema.** The stores find their tables in the current schema. A `search_path` in the startup `options` (see [Configuration](#configuration)) reaches the server only when the pooler passes it on. Recent PgBouncer releases pass on the parameters they track: `search_path` on PostgreSQL 18 and later, or when it is listed in `track_extra_parameters`. Otherwise, and in older releases, PgBouncer refuses the connection, or, with `options` in `ignore_startup_parameters`, drops the setting, and the stores create and read their tables in the role's default schema. Set the schema for the role instead, which every new server connection of the role picks up:
+
+  ```sql
+  ALTER ROLE app SET search_path = events_app;
+  ```
+
+- **`migrate()`** keeps state on its connection from one transaction to the next: it sets `statement_timeout` and `work_mem` for the session (also for a dry run) and resets them at the end, and it holds a session advisory lock, which keeps a second migration of a table out, from before the table's transaction until after it. Through a transaction-mode pooler, those settings would reach the sessions of other clients, and the lock could stay on a server connection the migration no longer uses. Run `migrate()` over a direct connection or a session-mode endpoint.
+- **Stream reads** (`getEvents`, a stream's snapshots, `SnapshotRepository.loadAll()`) read a server-side cursor in batches, on one connection, outside a transaction. PgBouncer should keep the client on its server connection until the cursor is done (not tested); other poolers aren't verified.
+
+`readAll` runs one statement per batch, the stores' own advisory locks are transaction-scoped, and the stores use no named prepared statements, so none of these depends on the session.
+
+**Serverless drivers.** The stores create their own `pg` pool from the config, and speak PostgreSQL's protocol over TCP. They can't use a serverless driver, such as Neon's `@neondatabase/serverless` or `@vercel/postgres`, whose queries over HTTP have no interactive transactions and no cursors. On Neon, use the regular connection string, from a runtime that can open TCP connections.
+
+**Amazon Aurora DSQL is not compatible.** It takes no locks: it detects conflicts when a transaction commits, and fails the transaction that commits last with a serialization error (`40001`) instead of making it wait ([concurrency control in Aurora DSQL](https://docs.aws.amazon.com/aurora-dsql/latest/userguide/working-with-concurrency-control.html)). Every append to a pool updates the pool's counter row, so of two appends to a pool that overlap, one fails. `ensureCollection` fails too: it creates a table and its index and registers them in one transaction, and Aurora DSQL allows one DDL statement per transaction, and no other writes with it.
+
+For CockroachDB, YugabyteDB and other servers that speak PostgreSQL's protocol, see [Other databases](/integrations/other-databases#unsupported).
 
 ## Migrating from 3.x [#migrating-from-3x]
 

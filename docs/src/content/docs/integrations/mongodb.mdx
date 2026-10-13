@@ -4,7 +4,7 @@ title: MongoDB
 
 import { Aside } from '@astrojs/starlight/components';
 
-`@ocoda/event-sourcing-mongodb` provides the `MongoDBEventStore` and the `MongoDBSnapshotStore`. It needs the `mongodb` driver (`^6.10` or `^7`), which is a peer dependency: see [Installation](/start/install) and [Database drivers are peer dependencies](/upgrading/v4#drivers). It is tested on MongoDB 7, 8 and 9.0, each as a standalone server and as a replica set.
+`@ocoda/event-sourcing-mongodb` provides the `MongoDBEventStore` and the `MongoDBSnapshotStore`. It needs the `mongodb` driver (`^6.10` or `^7`), which is a peer dependency: see [Installation](/start/install) and [Database drivers are peer dependencies](/upgrading/v4#drivers). It is tested on MongoDB 7, 8 and 9.0, each as a standalone server and as a replica set. Databases that speak MongoDB's protocol but aren't MongoDB are not tested: see [MongoDB-compatible engines](#compatible-engines).
 
 <Aside title="MongoDB 8.3 and 9.0 need driver 7.3 or later">
 Use `mongodb` 7.3 or later with MongoDB 8.3 or 9.0: it's the first driver release whose supported servers go beyond 8.2, up to 9.0. The last 6.x release, 6.21, and 7.0 to 7.2 support MongoDB up to 8.2. An older driver still connects to a newer server, because a driver only refuses a server that requires a newer wire protocol than it speaks, but MongoDB doesn't support that combination, and the tests on 8.3 and 9.0 use a 7.x driver that does. The peer range stays `^6.10` or `^7`, for the servers up to 8.2.
@@ -32,7 +32,7 @@ EventSourcingModule.forRootAsync({
 
 ## Topologies and capabilities [#capabilities]
 
-`connect()` asks the server what it is (`hello`) and sets the event store's `capabilities` accordingly:
+`connect()` asks the server what it is (`hello`) and sets the event store's `capabilities` accordingly. On MongoDB:
 
 | Deployment | `atomicAppend` | `globalOrder` | `headers` |
 | --- | --- | --- | --- |
@@ -51,6 +51,31 @@ A standalone server has no transactions. The store warns once when it connects t
 - a snapshot append unflags the previous latest snapshot before it inserts the new one. A crash in between, or a failure to flag the previous one again, leaves the stream without a latest flag: `getLastSnapshot` still reads the highest version, but `getLastEnvelopesForAggregate` (and `SnapshotRepository.loadAll`) skip the stream until its next snapshot.
 
 On a sharded cluster, appends are transactions, but the visibility of positions across shards is unproven, so the global order is `'best-effort'`.
+
+### MongoDB-compatible engines [#compatible-engines]
+
+Some databases speak MongoDB's protocol without running MongoDB. `'gap-safe'` rests on MongoDB's transactions and majority reads, which these engines implement differently or not at all, and none of them is tested. So `connect()` also asks which engine it talks to, and gives each of the engines below `globalOrder: 'best-effort'`, whatever topology it reports:
+
+| Engine | What tells it apart | `atomicAppend` |
+| --- | --- | --- |
+| FerretDB | `buildInfo` has a `ferretdb` document (FerretDB 2) or a `ferretdbVersion` (FerretDB 1). | `false` |
+| DocumentDB (the open-source gateway) and Azure DocumentDB (formerly Azure Cosmos DB for MongoDB vCore) | `hello` has an `internal` document. | `true` |
+| Amazon DocumentDB | `getEngineVersion` answers an `engineVersion`. | `true` on an instance-based cluster (from 4.0 on; on 3.6, which has no transactions, appends fail), `false` on an elastic cluster |
+| Azure Cosmos DB for MongoDB (request units) | `getLastRequestStatistics` answers a `RequestCharge`. | `false` |
+
+- MongoDB answers `getEngineVersion` and `getLastRequestStatistics` with `CommandNotFound`. The store sends each one only to a replica set with the vendor's name (`rs0`, `globaldb`) or to a host of the vendor's, and a command that fails counts as no signal.
+- Without a signal, the host names of the managed services decide: `*.docdb.amazonaws.com` and `*.docdb-elastic.amazonaws.com` for Amazon DocumentDB, `*.mongocluster.cosmos.azure.com` for Azure DocumentDB, and `*.mongo.cosmos.azure.com` and `*.documents.azure.com` for Azure Cosmos DB (also under `azure.cn`).
+- The store logs a warning once per process and engine.
+
+The append path still follows the topology the engine reports, not the engine:
+
+- **FerretDB** reports a standalone server, unless it runs with a development flag that makes it report a replica set. As a standalone server, appends run without a transaction, as on a [standalone MongoDB server](#capabilities). As a replica set, every append runs as a transaction, which FerretDB doesn't implement.
+- **Azure Cosmos DB for MongoDB** reports a replica set (`globaldb`), so every append runs as a transaction that updates the catalog and inserts into the pool's collection. Cosmos DB has no transaction that spans two collections.
+- **An elastic Amazon DocumentDB cluster** presents itself as a sharded cluster (a `mongos`, as AWS's documentation shows; not tested), so appends run as transactions, which elastic clusters don't support.
+
+On those three, appends fail or aren't atomic. DocumentDB and Azure DocumentDB report a sharded cluster, and the instance-based clusters of Amazon DocumentDB a replica set (`rs0`). They support transactions (Amazon DocumentDB from 4.0 on), so appends run as transactions there, but the global order is still `'best-effort'`. Other engines, such as Firestore with MongoDB compatibility, aren't detected and aren't supported either: see [Other databases](/integrations/other-databases#unsupported).
+
+**Use MongoDB, as a replica set**, for atomic appends and a gap-safe order. A single-node replica set is enough.
 
 ## Schema v2 [#schema]
 
@@ -87,7 +112,7 @@ Absent fields are left out, never stored as `null`. The collection has a unique 
 
 On a replica set, an append is one transaction (`readConcern: 'snapshot'`, `writeConcern: 'majority'`) whose first write increments the pool's counter in the catalog; then it inserts the events. Two appends to the same pool conflict on the counter, so they commit in the order of their positions, and a rolled-back append also rolls back its positions: no holes. The store retries a transaction that fails with a transient error (a write conflict, a failover) with a short random backoff for up to 30 seconds, then throws an `EventStorePersistenceException` with `outcome: 'not-persisted'`. The commit waits for a majority of the replica set at most until those 30 seconds are over (at least one second, `maxCommitTimeMS`), so an append doesn't hang when the replica set has lost its majority, for instance a primary, a secondary and an arbiter with the secondary down. A commit whose result is unknown (a network error, a failover, that timeout) is retried up to three times, then reported as `outcome: 'unknown'`. The version check before an append reads the primary, whatever the read preference of the connection string.
 
-`readAll` reads with `readConcern: 'majority'` on replica sets and sharded clusters, so a failover can't take back a position a reader already saw.
+`readAll` reads with `readConcern: 'majority'` on replica sets and sharded clusters, so a failover can't take back a position a reader already saw. Restoring a backup still can: see [Failover and replicas](/under-the-hood/event-store#failover).
 
 **Throughput.** The appends of one pool serialize on its counter: each waits for the previous commit. On a single-node MongoDB 8.2 replica set in Docker on a laptop, one pool took about 300 appends per second with 8 concurrent writers (266 with one writer, 195 with 16), with about 1.8 retried write conflicts per append and a worst case of 1.7 seconds. Four pools took about 510 appends per second together. Pools are the unit of write scale: spread tenants or bounded contexts over pools. See the [evidence](https://github.com/ocoda/event-sourcing/blob/master/docs/decisions/0002-schema-v2.md#mongodb).
 

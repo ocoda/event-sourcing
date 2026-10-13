@@ -28,7 +28,7 @@
 - **An event store** with optimistic concurrency, correlation and causation ids, headers, and a global position per pool that `readAll()` reads in order, for projections and consumers that resume from a checkpoint.
 - **Snapshots** that a snapshot repository takes at an interval, so long streams load fast.
 - **Event publishers and subscribers**: publishers are awaited, in order per stream, and every delivery failure is reported on an observable.
-- **Stores** for PostgreSQL, MariaDB and MongoDB, and in-memory stores for tests, with pools to keep the data of tenants apart. The conformance suites that every store runs are published for your own stores.
+- **Stores** for PostgreSQL, MariaDB, MySQL (through the MariaDB store, from 4.1) and MongoDB, and in-memory stores for tests, with pools to keep the data of tenants apart. The conformance suites that every store runs are published for your own stores.
 
 > [!NOTE]
 > **4.0 is released**: NestJS 12, ES modules only, Node.js 22.12 or later, global positions and `readAll()`, typed buses and awaited publishers.
@@ -59,7 +59,7 @@ For persistence, add an integration. On 4.x the database driver is a peer depend
 # PostgreSQL
 npm install @ocoda/event-sourcing-postgres@4 pg pg-cursor
 
-# MariaDB
+# MariaDB or MySQL
 npm install @ocoda/event-sourcing-mariadb@4 mariadb
 
 # MongoDB

@@ -72,10 +72,31 @@ for await (const envelopes of eventStore.readAll({ fromPosition: checkpoint + 1n
 
 What a position guarantees depends on the store's `capabilities.globalOrder`:
 
-- **`'gap-safe'`**: once `readAll` yielded a position, no event at or below it commits later. A reader that resumes after its last position never misses an event, even while other appends are running. The in-memory store, PostgreSQL, MariaDB on InnoDB and MongoDB replica sets are gap-safe.
+- **`'gap-safe'`**: once `readAll` yielded a position, no event at or below it commits later. A reader that resumes after its last position never misses an event, even while other appends are running. The in-memory store, PostgreSQL, MariaDB and MySQL on InnoDB, and MongoDB replica sets are gap-safe, on the server the appends run on: see [Failover and replicas](#failover).
 - **`'best-effort'`**: positions strictly increase, but an event can still commit below a position that was already read, while appends run. Read again from an older position, or wait until the writers are done, to be sure to see every event.
 
 Every built-in store implements `readAll`. It replaces `getAllEnvelopes({ since, until })`, which is removed: to read a period, filter the envelopes on `metadata.occurredOn`.
+
+### Failover and replicas [#failover]
+
+A position is never handed out twice by the server the appends run on, the primary. A database that loses its newest commits can hand it out again:
+
+- **An asynchronous failover.** The replica that becomes the primary can lack the last appends of the old one, which readers may already have read. Its counter is behind their positions, so it hands those positions out again, to other events, and a reader whose checkpoint is past them never reads those events. The events the reader did read are gone. PostgreSQL streaming replication and MariaDB and MySQL replication are asynchronous unless you configure them otherwise, and the stores can't tell that a failover happened.
+- **A restore** of a backup, or to a point in time, takes the counters back the same way, on every database.
+
+On a MongoDB replica set, a failover can't take back a position that a reader has seen: appends commit with `w: 'majority'` and `readAll` reads with `readConcern: 'majority'`, so a reader only sees appends that a majority of the members have written, and an election keeps those.
+
+To fail over without losing commits that readers may have seen, replicate synchronously:
+
+- **PostgreSQL:** synchronous replication (`synchronous_standby_names`, with `synchronous_commit = on`), and promote only a standby that has confirmed every commit.
+- **MySQL:** semi-synchronous replication with `rpl_semi_sync_source_wait_point = AFTER_SYNC`, the default, so a commit becomes visible on the primary only once a replica has acknowledged it.
+- **MariaDB:** semi-synchronous replication with `rpl_semi_sync_master_wait_point = AFTER_SYNC`. MariaDB's default, `AFTER_COMMIT`, lets other sessions see a commit before a replica has it.
+
+Semi-synchronous replication falls back to asynchronous when no replica acknowledges in time (`rpl_semi_sync_source_timeout` or `rpl_semi_sync_master_timeout`), so a failover after such a fallback can still lose commits.
+
+After an unplanned failover without synchronous replication, and after any restore, check the readers. Save the `eventId` of the last envelope with each checkpoint, then read `readAll({ fromPosition: checkpoint, batch: 1 })`: if its first envelope isn't that event at that position, the reader has read events that the database lost, and their positions may now belong to other events. Rebuild what the reader built, for instance by replaying its read model from the first position.
+
+**Read from the primary.** The `'gap-safe'` claims and their tests are about reads from the server the appends run on. Don't send the event store's reads to replicas through a proxy that splits reads from writes: on MariaDB and MySQL, a lagging replica makes `readAll` skip events (see [MariaDB and MySQL](/integrations/mariadb#capabilities)). On MongoDB, a `readPreference` other than `primary` sends `readAll` to secondaries, which isn't tested.
 
 ## Capabilities [#capabilities]
 
@@ -89,17 +110,22 @@ Every built-in store implements `readAll`. It replaces `getAllEnvelopes({ since,
 
 The built-in stores declare:
 
-| Store | `atomicAppend` | `headers` | `globalOrder` |
+| Store, on | `atomicAppend` | `headers` | `globalOrder` |
 | --- | --- | --- | --- |
 | In-memory | `true` | `true` | `'gap-safe'` |
 | PostgreSQL | `true` | `true` | `'gap-safe'` |
-| MariaDB on InnoDB | `true` | `true` | `'gap-safe'` |
-| MariaDB on a Galera cluster | `true` | `true` | `'best-effort'` |
-| MongoDB replica set | `true` | `true` | `'gap-safe'` |
-| MongoDB sharded cluster | `true` | `true` | `'best-effort'` |
-| MongoDB standalone server | `false` | `true` | `'best-effort'` |
+| MariaDB, on MariaDB or MySQL (InnoDB) | `true` | `true` | `'gap-safe'` |
+| MariaDB, on Galera (MariaDB Galera Cluster, Percona XtraDB Cluster), MySQL Group Replication in multi-primary mode, or TiDB | `true` | `true` | `'best-effort'` |
+| MariaDB, on Vitess (PlanetScale) | `true` with `transaction_mode` `SINGLE` or `TWOPC`, `false` otherwise | `true` | `'best-effort'` |
+| MongoDB, on a replica set | `true` | `true` | `'gap-safe'` |
+| MongoDB, on a sharded cluster | `true` | `true` | `'best-effort'` |
+| MongoDB, on a standalone server | `false` | `true` | `'best-effort'` |
+| MongoDB, on DocumentDB, Azure DocumentDB or an instance-based Amazon DocumentDB cluster (4.0 and later) | `true` | `true` | `'best-effort'` |
+| MongoDB, on FerretDB, Azure Cosmos DB for MongoDB or an elastic Amazon DocumentDB cluster | `false` | `true` | `'best-effort'` |
 
-The MariaDB store detects a Galera cluster (`wsrep_on`) and the MongoDB store its topology when they connect; see [MariaDB](/integrations/mariadb#capabilities) and [MongoDB](/integrations/mongodb#capabilities). `resolveCapabilities(store.capabilities)` fills in the defaults of a store that leaves a flag out: `atomicAppend: true`, `headers: false`, `globalOrder: 'best-effort'`.
+The stores detect what they connect to. The MariaDB store tells MariaDB from MySQL, and recognizes Galera, Group Replication in multi-primary mode, TiDB and Vitess, where the lock on a pool's counter doesn't order the commits of the whole deployment. The MongoDB store detects its topology, and the [engines that speak MongoDB's protocol](/integrations/mongodb#compatible-engines) without being MongoDB. Both log a warning once per process and kind of deployment when they connect to one of these; see [MariaDB and MySQL](/integrations/mariadb#capabilities) and [MongoDB](/integrations/mongodb#capabilities). Galera, Group Replication, TiDB, Vitess and the MongoDB-compatible engines [aren't tested](/integrations/other-databases). Amazon Aurora MySQL isn't told apart from MySQL: it gets `'gap-safe'`, which is expected to hold but isn't tested.
+
+`resolveCapabilities(store.capabilities)` fills in the defaults of a store that leaves a flag out: `atomicAppend: true`, `headers: false`, `globalOrder: 'best-effort'`.
 
 ## Limits [#limits]
 
