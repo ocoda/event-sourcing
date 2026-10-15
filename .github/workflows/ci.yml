@@ -434,7 +434,7 @@ jobs:
       # entry with a reason and an ignoreUntil date. osv-scanner 2.6 reads every YAML document of pnpm-lock.yaml
       # (google/osv-scalibr#2385), so a pnpm 12 lockfile that records the pnpm version first is scanned in full.
       - name: Scan pnpm-lock.yaml
-        uses: google/osv-scanner-action/osv-scanner-action@a345acffa64b0eaede81a3d9aae6141214d9c8fc # v2.6.0
+        uses: google/osv-scanner-action/osv-scanner-action@b1d267aea5211fa648d9d442fa64b90dbdcbdd36 # v2.7.0
         with:
           scan-args: |-
             --lockfile=pnpm-lock.yaml
