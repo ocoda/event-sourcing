@@ -61,7 +61,7 @@ jobs:
 
       - name: Triage with Claude
         id: claude
-        uses: anthropics/claude-code-action@a26b07d8c778b0c43f64618e5fd29fd0f8af72e8 # v1.0.250
+        uses: anthropics/claude-code-action@d70510b174a1244958df0b03166a54912811f3e6 # v1.0.264
         env:
           # A re-run with debug logging would otherwise print Claude's full output, the report included, in the public
           # log.
