@@ -28,7 +28,7 @@
 		"@changesets/cli": "3.0.3",
 		"@nestjs/common": "catalog:",
 		"@types/node": "catalog:",
-		"@vitest/coverage-v8": "5.0.5",
+		"@vitest/coverage-v8": "5.1.0",
 		"oxfmt": "0.74.0",
 		"oxlint": "1.89.0",
 		"publint": "0.3.25",
@@ -36,7 +36,7 @@
 		"rxjs": "catalog:",
 		"turbo": "2.11.9",
 		"typescript": "catalog:",
-		"vite": "8.3.4",
+		"vite": "8.3.8",
 		"vitest": "catalog:"
 	},
 	"repository": {
