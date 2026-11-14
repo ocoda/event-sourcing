@@ -38,6 +38,8 @@ allowBuilds:
 minimumReleaseAge: 1440
 minimumReleaseAgeExclude:
   - '@ocoda/*'
+  # Renovate security update: astro@7.4.7
+  - astro@7.4.7
 trustPolicy: no-downgrade
 # Transitive versions that an earlier release outranks in trust evidence. Review an entry before adding one, and drop
 # it once the lockfile no longer resolves that version.
