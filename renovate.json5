@@ -1,11 +1,17 @@
 {
 	$schema: 'https://docs.renovatebot.com/renovate-schema.json',
-	extends: ['config:best-practices', 'helpers:pinGitHubActionDigestsToSemver'],
-	baseBranchPatterns: ['master', '3.x'],
-	labels: ['dependencies'],
+	extends: [
+		'config:best-practices',
+		'helpers:pinGitHubActionDigestsToSemver',
+	],
+	baseBranchPatterns: [
+		'master',
+		'3.x',
+	],
+	labels: [
+		'dependencies',
+	],
 	semanticCommits: 'enabled',
-	// The preset's list (:ignoreModulesAndTests, which this setting replaces) plus the cross-version writer: it pins the
-	// published 3.0.2 packages and their NestJS 11 peers on purpose (scripts/test-cross-version.mjs).
 	ignorePaths: [
 		'**/node_modules/**',
 		'**/bower_components/**',
@@ -17,83 +23,174 @@
 		'**/__fixtures__/**',
 		'fixtures/cross-version/v3/**',
 	],
-	// Updates open their pull requests on their own again since the dependency-freshness pass before 4.0.0 GA (M10).
-	// The dashboard stays: it lists the updates that still wait for approval (new database versions, below).
-	dependencyDashboard: true,
+	dependencyDashboard: {
+		enabled: true,
+	},
 	dependencyDashboardApproval: false,
-	// Longer than pnpm's minimumReleaseAge (1 day, pnpm-workspace.yaml), so pnpm never rejects a proposed version.
 	minimumReleaseAge: '3 days',
 	osvVulnerabilityAlerts: true,
 	vulnerabilityAlerts: {
-		labels: ['dependencies', 'security'],
+		labels: [
+			'dependencies',
+			'security',
+		],
 	},
-	// Weekly: vulnerability alerts don't fix transitive dependencies in a pnpm lockfile, and the OSV scan in ci.yml fails
-	// every pull request until the lockfile moves past a new advisory.
 	lockFileMaintenance: {
 		enabled: true,
-		schedule: ['before 6am on monday'],
+		schedule: [
+			'before 6am on monday',
+		],
 	},
 	packageRules: [
 		{
 			description: 'Library peers: widen ranges instead of dropping support for older versions',
-			matchDepTypes: ['peerDependencies'],
+			matchDepTypes: [
+				'peerDependencies',
+			],
 			rangeStrategy: 'widen',
 		},
-		{ groupName: 'nestjs', matchPackageNames: ['@nestjs/**'] },
-		// 3.x only now: the DynamoDB store, the only direct @aws-sdk dependant, was dropped from master (v4).
-		{ groupName: 'aws-sdk', matchPackageNames: ['@aws-sdk/**'] },
-		{ groupName: 'postgres driver', matchPackageNames: ['pg', 'pg-cursor', '@types/pg', '@types/pg-cursor'] },
-		{ groupName: 'mongodb driver', matchPackageNames: ['mongodb'] },
-		{ groupName: 'mariadb driver', matchPackageNames: ['mariadb'] },
-		{ groupName: 'oxc', matchPackageNames: ['oxlint', 'oxfmt', 'oxlint-tsgolint'] },
-		{ groupName: 'vitest', matchPackageNames: ['vitest', '@vitest/**', 'vite'] },
-		{ groupName: 'docs site', matchFileNames: ['docs/package.json'] },
+		{
+			groupName: 'nestjs',
+			matchPackageNames: [
+				'@nestjs/**',
+			],
+		},
+		{
+			groupName: 'aws-sdk',
+			matchPackageNames: [
+				'@aws-sdk/**',
+			],
+		},
+		{
+			groupName: 'postgres driver',
+			matchPackageNames: [
+				'pg',
+				'pg-cursor',
+				'@types/pg',
+				'@types/pg-cursor',
+			],
+		},
+		{
+			groupName: 'mongodb driver',
+			matchPackageNames: [
+				'mongodb',
+			],
+		},
+		{
+			groupName: 'mariadb driver',
+			matchPackageNames: [
+				'mariadb',
+			],
+		},
+		{
+			groupName: 'oxc',
+			matchPackageNames: [
+				'oxlint',
+				'oxfmt',
+				'oxlint-tsgolint',
+			],
+		},
+		{
+			groupName: 'vitest',
+			matchPackageNames: [
+				'vitest',
+				'@vitest/**',
+				'vite',
+			],
+		},
+		{
+			groupName: 'docs site',
+			matchFileNames: [
+				'docs/package.json',
+			],
+		},
 		{
 			description: "astro check (@astrojs/check) type-checks through the TypeScript JS API, which TypeScript 7 doesn't ship: keep docs on 6",
-			matchDepTypes: ['pnpm.catalog.ts6'],
-			matchPackageNames: ['typescript'],
+			matchDepTypes: [
+				'pnpm.catalog.ts6',
+			],
+			matchPackageNames: [
+				'typescript',
+			],
 			allowedVersions: '<7',
 		},
 		{
 			description: '@types/node follows the lowest supported Node.js (engines.node >=22.12), so the types never offer an API that Node 22 lacks. Raise allowedVersions together with engines.node.',
-			matchPackageNames: ['@types/node'],
+			matchPackageNames: [
+				'@types/node',
+			],
 			allowedVersions: '<23',
 		},
-		{ groupName: 'github actions', matchManagers: ['github-actions'] },
+		{
+			groupName: 'github actions',
+			matchManagers: [
+				'github-actions',
+			],
+		},
 		{
 			description: 'The compose services test fixed release lines, and their tags float to the newest release of the line, so no digest pins',
 			groupName: 'database images',
-			matchManagers: ['docker-compose'],
+			matchManagers: [
+				'docker-compose',
+			],
 			pinDigests: false,
 		},
 		{
 			description: 'Each compose service is one supported database version (CONTRIBUTING.md). A new server version gets a service and a CI row of its own instead of replacing one, so its update waits on the Dependency Dashboard. The updates are grouped: approving them would move every older service to the newest version, so add new versions by hand.',
-			matchManagers: ['docker-compose'],
-			matchUpdateTypes: ['major', 'minor'],
+			matchManagers: [
+				'docker-compose',
+			],
+			matchUpdateTypes: [
+				'major',
+				'minor',
+			],
 			dependencyDashboardApproval: true,
 		},
 		{
 			description: 'Tooling updates merge on their own once ci-ok is green. The catalogs only hold devDependencies of the published packages.',
-			matchDepTypes: ['devDependencies', 'pnpm.catalog.default', 'pnpm.catalog.ts6'],
-			matchUpdateTypes: ['minor', 'patch'],
+			matchDepTypes: [
+				'devDependencies',
+				'pnpm.catalog.default',
+				'pnpm.catalog.ts6',
+			],
+			matchUpdateTypes: [
+				'minor',
+				'patch',
+			],
 			automerge: true,
 		},
 		{
 			description: 'Action digest and patch/minor updates merge on their own once ci-ok is green',
-			matchManagers: ['github-actions'],
-			matchUpdateTypes: ['digest', 'pinDigest', 'minor', 'patch'],
+			matchManagers: [
+				'github-actions',
+			],
+			matchUpdateTypes: [
+				'digest',
+				'pinDigest',
+				'minor',
+				'patch',
+			],
 			automerge: true,
 		},
 		{
 			description: '3.x only receives security fixes and patch updates of runtime dependencies',
-			matchBaseBranches: ['3.x'],
-			matchUpdateTypes: ['major', 'minor'],
+			matchBaseBranches: [
+				'3.x',
+			],
+			matchUpdateTypes: [
+				'major',
+				'minor',
+			],
 			enabled: false,
 		},
 		{
 			description: '3.x keeps its tooling as released',
-			matchBaseBranches: ['3.x'],
-			matchDepTypes: ['devDependencies'],
+			matchBaseBranches: [
+				'3.x',
+			],
+			matchDepTypes: [
+				'devDependencies',
+			],
 			enabled: false,
 		},
 	],
