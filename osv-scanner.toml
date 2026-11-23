@@ -1,19 +1,2 @@
 # Known vulnerabilities the `OSV scan` job in .github/workflows/ci.yml accepts. Each entry needs a reason and an
 # ignoreUntil date: when it passes, the scan fails again and the finding has to be fixed or re-reviewed.
-
-# braces 3.0.3 (no patched version yet): stack exhaustion on deeply nested brace patterns. It reaches the lockfile only
-# through starlight-llms-txt > micromatch in the private docs site, at build time, where it expands the glob patterns
-# written in docs/astro.config.ts. No published package depends on it and it never sees untrusted input.
-[[IgnoredVulns]]
-id = "GHSA-vfj7-8cjw-p6xm"
-ignoreUntil = 2027-01-04
-reason = "Build-time dependency of the private docs site only (starlight-llms-txt > micromatch), fed our own glob patterns; no fix released yet."
-
-# postcss-selector-parser 6.1.4 (fixed only in 7.1.6): quadratic parsing time on long flat selectors. It reaches the
-# lockfile only through @astrojs/starlight > expressive-code > postcss-nested 6 in the private docs site, at build time,
-# where it parses the theme CSS we ship. postcss-nested 7 takes the fixed parser, but expressive-code 0.44 still requires
-# postcss-nested 6. No published package depends on it and it never sees untrusted input.
-[[IgnoredVulns]]
-id = "GHSA-rj75-hqrm-r3gf"
-ignoreUntil = 2027-01-04
-reason = "Build-time dependency of the private docs site only (expressive-code > postcss-nested 6), parsing our own CSS; fix only in the 7.x line."
